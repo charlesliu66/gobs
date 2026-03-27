@@ -1,0 +1,23 @@
+[
+  {
+    "id": "cat-harem",
+    "nameZh": "猫猫后宫剧",
+    "description": "橘座的三选一，4只猫争宠打脸",
+    "templateId": "cat-harem",
+    "defaultPrompt": "猫猫后宫剧《橘座的三选一》：橘猫男主被高冷白猫、撒娇布偶、傲娇黑猫三只追求。三猫争宠吃醋互相嘲讽，橘座淡定选中布偶并打脸。上传的主角图按顺序对应：@图片1=橘猫男主 @图片2=白猫 @图片3=布偶 @图片4=黑猫。请生成6镜30秒分镜。"
+  },
+  {
+    "id": "hidden-boss",
+    "nameZh": "隐藏大佬打脸",
+    "description": "总裁装穷被嘲讽，餐厅揭晓身份",
+    "templateId": "short-drama",
+    "defaultPrompt": "隐藏大佬总裁装穷体验生活，被前女友和现男友嘲讽。男主穿服务员制服端茶倒水，经理鞠躬喊顾总，前女友愣住被请出黑名单。请生成6镜30秒分镜。"
+  },
+  {
+    "id": "custom",
+    "nameZh": "自定义",
+    "description": "自由输入创意，按 drama-creator 方法论生成",
+    "templateId": "short-drama",
+    "defaultPrompt": ""
+  }
+]

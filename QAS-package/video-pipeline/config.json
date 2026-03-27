@@ -1,0 +1,9 @@
+{
+  "seedanceUrl": "https://jimeng.jianying.com/ai-tool/generate",
+  "materialFolder": "C:\\Users\\wei.liu\\Desktop\\cursor_try\\Ai test",
+  "outputFolder": "C:\\Users\\wei.liu\\Desktop\\cursor_try\\Ai Videos",
+  "timeoutMs": 7200000,
+  "pollIntervalMs": 10000,
+  "_comment_browserCache": "即梦登录缓存保存在 ~/.video-pipeline-browser，禁止删除",
+  "_comment_cdp": "cdpPort: 9222 时，脚本连接已打开的 Chrome（需先运行 launch-chrome-for-pipeline.bat），直接使用其登录状态"
+}

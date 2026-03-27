@@ -1,0 +1,12 @@
+{
+  "id": "viral-dance",
+  "name": "Viral Dance",
+  "nameZh": "Viral 舞蹈",
+  "description": "8秒，角色跳近期流行MV舞蹈，适合 TikTok/小红书",
+  "duration": 8,
+  "aspectRatio": "9:16",
+  "pipelineMode": "single",
+  "outputMode": "single-shot",
+  "systemPromptSuffix": "角色跳近期流行MV中的热门舞蹈，前3秒抓人，卡点节奏感强，适合社媒传播。可提及「近期爆款舞蹈」「TikTok 热门动作」等作为参考，但不要写具体艺人名或曲名（版权规避）。输出必须是**单段** prompt，**语言与用户输入一致**（用户用中文则输出中文，用英文则输出英文），直接用于 Google VEO text-to-video，不要分镜格式。",
+  "defaultSearchKeywords": ["dance", "viral", "trending"]
+}

@@ -1,0 +1,33 @@
+{
+  "appId": "N22X8P2SGCZDD6LRC5342A61SG",
+  "apiKey": "TI4YLJS5VBZ4BQGVT4HF7TIZ7O4G18",
+  "devices": [
+    {
+      "id": "609149762754576432",
+      "name": "Test 3",
+      "region": "印度尼西亚",
+      "android": "15"
+    },
+    {
+      "id": "609149209844645936",
+      "name": "Test 2",
+      "region": "印度尼西亚",
+      "android": "15"
+    },
+    {
+      "id": "608232396864618599",
+      "name": "Test 1",
+      "region": "美国",
+      "android": "12"
+    },
+    {
+      "id": "611149295432761754",
+      "name": "TH",
+      "region": "泰国",
+      "android": "15"
+    }
+  ],
+  "defaultEnvIds": ["609149762754576432", "609149209844645936", "608232396864618599"],
+  "aiVideosPath": "C:\\Users\\wei.liu\\Desktop\\cursor_try\\Ai Videos",
+  "latestJsonPath": "C:\\Users\\wei.liu\\Desktop\\cursor_try\\Ai Videos\\latest.json"
+}

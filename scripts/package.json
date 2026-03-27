@@ -1,0 +1,8 @@
+{
+  "name": "qas-scripts",
+  "private": true,
+  "dependencies": {
+    "imap": "^0.8.19",
+    "playwright": "^1.40.0"
+  }
+}

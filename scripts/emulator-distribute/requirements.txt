@@ -1,0 +1,2 @@
+# 参考 edde746/tiktok-uploader
+uiautomator>=1.0.0

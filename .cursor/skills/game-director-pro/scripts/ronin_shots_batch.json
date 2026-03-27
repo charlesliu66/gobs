@@ -1,0 +1,38 @@
+[
+  {
+    "shot_id": "01",
+    "video_prompt": "【原创数字艺术作品】日本浪人武士背对镜头站在雨夜废墟与城楼前，刀鞘轮廓清晰，画面偏暗高对比，电影级 CG 氛围，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 4,
+    "asset_source": "ai_generate"
+  },
+  {
+    "shot_id": "02",
+    "video_prompt": "【原创数字艺术作品】浪人武士手按刀柄或刀身缓缓出鞘，雨滴与烟尘，电影级 3D 渲染，黑暗幻想和风，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 4,
+    "asset_source": "ai_generate"
+  },
+  {
+    "shot_id": "03",
+    "video_prompt": "【原创数字艺术作品】浪人武士侧脸与剪影，眼神锐利，背景为火焰与城楼剪影，神秘压迫感，电影级 CG，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 4,
+    "asset_source": "ai_generate"
+  },
+  {
+    "shot_id": "04",
+    "video_prompt": "【原创数字艺术作品】和风武士挥刀斩击、闪避、刀光动作场面，电影级游戏 CG 风格，快节奏战斗，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 6,
+    "asset_source": "ai_generate"
+  },
+  {
+    "shot_id": "05",
+    "video_prompt": "【原创数字艺术作品】和风武士连招与处决、大范围斩击、刀光特效，电影级游戏 CG，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 4,
+    "asset_source": "ai_generate"
+  },
+  {
+    "shot_id": "06",
+    "video_prompt": "【原创数字艺术作品】浪人武士收刀入鞘或背对镜头离去，雨与烟，帅气定格，电影级 CG，适合全年龄段观看，无版权争议，无敏感元素。",
+    "duration": 5,
+    "asset_source": "ai_generate"
+  }
+]

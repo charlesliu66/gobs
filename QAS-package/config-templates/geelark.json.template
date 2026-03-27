@@ -1,0 +1,8 @@
+{
+  "appId": "YOUR_GEELARK_APP_ID",
+  "apiKey": "YOUR_GEELARK_API_KEY",
+  "devices": [],
+  "defaultEnvIds": [],
+  "aiVideosPath": "/path/to/Ai Videos",
+  "latestJsonPath": "/path/to/Ai Videos/latest.json"
+}

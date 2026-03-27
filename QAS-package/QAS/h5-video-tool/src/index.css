@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Deepix 风格：直接在 :root 定义，确保 var() 可解析 */
+:root {
+  --color-surface: #0f0f12;
+  --color-surface-elevated: #16161a;
+  --color-surface-hover: #1e1e24;
+  --color-border: #2a2a32;
+  --color-border-focus: #7c3aed;
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #7c3aed;
+  --color-primary-muted: #6d28d9;
+  --color-text: #f4f4f5;
+  --color-text-muted: #a1a1aa;
+  --color-text-subtle: #71717a;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@theme {
+  --color-surface: #0f0f12;
+  --color-surface-elevated: #16161a;
+  --color-primary: #8b5cf6;
+  --color-text: #f4f4f5;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--color-surface);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 可点击元素 */
+[role="button"],
+button:not(:disabled),
+a {
+  cursor: pointer;
+}
+
+/* 焦点可见性 */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 过渡 */
+button, a, input, textarea {
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}

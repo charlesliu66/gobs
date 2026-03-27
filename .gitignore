@@ -1,0 +1,27 @@
+gmail.env
+.env
+*.env
+!*.env.example
+
+# Node / 前端构建
+**/node_modules/
+**/dist/
+**/.vite/
+
+# 本地生成的大文件与输出目录
+h5-video-tool-api/output/
+output/
+out/
+viral-analysis-out/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 系统与 IDE
+.DS_Store
+Thumbs.db
+.idea/

@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/* 黑夜模式（默认） */
+:root,
+[data-theme="dark"] {
+  --color-surface: #0f0f12;
+  --color-surface-elevated: #16161a;
+  --color-surface-hover: #1e1e24;
+  --color-border: #2a2a32;
+  --color-border-focus: #7c3aed;
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #7c3aed;
+  --color-primary-muted: #6d28d9;
+  --color-text: #f4f4f5;
+  --color-text-muted: #a1a1aa;
+  --color-text-subtle: #71717a;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 白天模式 */
+[data-theme="light"] {
+  --color-surface: #fafafa;
+  --color-surface-elevated: #ffffff;
+  --color-surface-hover: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-border-focus: #7c3aed;
+  --color-primary: #7c3aed;
+  --color-primary-hover: #6d28d9;
+  --color-primary-muted: #5b21b6;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+  color-scheme: light;
+}
+
+@theme {
+  --color-surface: #0f0f12;
+  --color-surface-elevated: #16161a;
+  --color-primary: #8b5cf6;
+  --color-text: #f4f4f5;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--color-surface);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 可点击元素 */
+[role="button"],
+button:not(:disabled),
+a {
+  cursor: pointer;
+}
+
+/* 焦点可见性 */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 过渡 */
+button, a, input, textarea {
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+/* 排版规范 - 以 TikTok 矩阵为参考，各 tab 统一 */
+.page-title { font-size: 1.5rem; font-weight: 600; color: var(--color-text); }
+.page-subtitle { font-size: 0.875rem; color: var(--color-text-muted); margin-top: 0.25rem; }
+.section-title { font-size: 0.875rem; font-weight: 500; color: var(--color-text); margin-bottom: 0.75rem; }
+.card-title { font-size: 0.875rem; font-weight: 500; color: var(--color-text); margin-bottom: 0.5rem; }
+.body-muted { font-size: 0.875rem; color: var(--color-text-muted); }
+.label-muted { font-size: 0.75rem; color: var(--color-text-muted); }
+
+/* TikTok 矩阵 (SJ) 布局 - 绿色主题 */
+.geelark-layout {
+  --geelark-bg: oklch(0.13 0.005 260);
+  --geelark-sidebar: oklch(0.17 0.005 260);
+  --geelark-foreground: oklch(0.98 0 0);
+  --geelark-muted: oklch(0.65 0.01 260);
+  --geelark-border: oklch(0.28 0.005 260);
+  --geelark-primary: oklch(0.65 0.2 145);
+  --geelark-accent: oklch(0.22 0.005 260);
+  --geelark-accent-fg: oklch(0.98 0 0);
+  --geelark-secondary: oklch(0.22 0.005 260);
+  --geelark-secondary-fg: oklch(0.65 0.01 260);
+}
+
+[data-theme="light"] .geelark-layout {
+  --geelark-bg: oklch(0.98 0.005 260);
+  --geelark-sidebar: oklch(0.96 0.005 260);
+  --geelark-foreground: oklch(0.15 0.01 260);
+  --geelark-muted: oklch(0.45 0.01 260);
+  --geelark-border: oklch(0.88 0.005 260);
+  --geelark-accent: oklch(0.92 0.005 260);
+  --geelark-accent-fg: oklch(0.15 0.01 260);
+  --geelark-secondary: oklch(0.94 0.005 260);
+  --geelark-secondary-fg: oklch(0.45 0.01 260);
+}

@@ -1,0 +1,107 @@
+import { useSearchParams, Link } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { useCreateFlow } from '../context/CreateFlowContext';
+import { loadVideoHistory, getVideoFileUrl } from '../utils/videoHistory';
+
+export function Result() {
+  const [searchParams] = useSearchParams();
+  const taskId = searchParams.get('taskId');
+  const { videoUrl, taskId: contextTaskId, setVideoResult } = useCreateFlow();
+
+  const historyItem = useMemo(() => {
+    if (!taskId) return null;
+    return loadVideoHistory().find((x) => x.taskId === taskId) ?? null;
+  }, [taskId]);
+
+  const historyPlaybackUrl = useMemo(() => {
+    if (!historyItem) return null;
+    const u = historyItem.videoUrl?.trim();
+    if (u) return u;
+    const p = historyItem.videoPath?.trim();
+    if (p) return getVideoFileUrl(historyItem.videoPath);
+    return null;
+  }, [historyItem]);
+
+  /**
+   * URL 带 taskId 时以本机历史为准，避免沿用创作流程里上一条成片的 videoUrl（例如从可灵云端点进时）。
+   * 无历史记录时仍允许与 context 同 taskId 的成片（Studio 刚生成、尚未写入 storage 的极短窗口）。
+   */
+  const url =
+    taskId && historyPlaybackUrl
+      ? historyPlaybackUrl
+      : videoUrl && (!taskId || taskId === contextTaskId)
+        ? videoUrl
+        : historyPlaybackUrl;
+
+  // 将当前成片同步到 context，便于「去分发」与 taskId 一致
+  useEffect(() => {
+    if (!taskId || !historyItem) return;
+    const fromUrl = historyItem.videoUrl?.trim();
+    const fromPath = historyItem.videoPath?.trim();
+    if (fromUrl) {
+      setVideoResult(fromUrl, taskId, null);
+    } else if (fromPath) {
+      setVideoResult(getVideoFileUrl(fromPath), taskId, fromPath);
+    }
+  }, [taskId, historyItem?.videoUrl, historyItem?.videoPath, historyItem?.taskId, setVideoResult]);
+
+  return (
+    <div className="max-w-6xl w-full space-y-6">
+      <h1 className="page-title mb-4">成片预览</h1>
+      <div className="space-y-6">
+        {url ? (
+          <>
+            <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-black">
+              <video
+                src={url}
+                controls
+                className="w-full aspect-video"
+                poster=""
+              >
+                您的浏览器不支持视频播放
+              </video>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                to="/distribute"
+                className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                去分发
+              </Link>
+              <a
+                href={url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
+              >
+                下载视频
+              </a>
+              <Link
+                to="/"
+                className="px-4 py-2 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
+              >
+                返回创作
+              </Link>
+            </div>
+            {taskId && (
+              <p className="text-xs text-[var(--color-text-subtle)]">任务 ID: {taskId}</p>
+            )}
+          </>
+        ) : (
+          <div className="p-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-center">
+            <p className="text-[var(--color-text-muted)] mb-4">
+              暂无成片，请先在创作流程中完成视频生成
+            </p>
+            <Link
+              to="/"
+              className="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
+            >
+              返回创作
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

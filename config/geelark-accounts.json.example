@@ -1,0 +1,22 @@
+{
+  "accounts": [
+    {
+      "id": "acc1",
+      "username": "@senja66612",
+      "envId": "609149762754576432",
+      "region": "印尼",
+      "platform": "TT",
+      "remark": "ID（印尼）",
+      "canPost": true
+    },
+    {
+      "id": "acc2",
+      "username": "@another_account",
+      "envId": "609149209844645936",
+      "region": "美国",
+      "platform": "TT",
+      "remark": "Test 2 设备",
+      "canPost": true
+    }
+  ]
+}

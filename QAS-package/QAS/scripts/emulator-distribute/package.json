@@ -1,0 +1,10 @@
+{
+  "name": "emulator-distribute",
+  "version": "1.0.0",
+  "description": "TikTok upload via Android emulator + ADB (bypass GeeLark)",
+  "main": "distribute.js",
+  "scripts": {
+    "distribute": "node distribute.js",
+    "upload": "python upload_tiktok.py"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "cg-trailer",
+  "name": "CG Trailer",
+  "nameZh": "英雄宣传",
+  "description": "60秒，多镜头讲述角色故事，电影级叙事",
+  "duration": 60,
+  "aspectRatio": "16:9",
+  "pipelineMode": "multishot",
+  "outputMode": "multi-shot",
+  "systemPromptSuffix": "按英雄宣传/CG 史诗宣发型生成分镜：0–40% 电影级铺垫、40–80% 实机爽点、80–90% 收招定格、90–100% CTA。每镜头需含时间码、景别、运镜、首帧与尾帧描述，确保镜头间衔接。风格：Cinematic、8K、电影感、3D 渲染。适合全年龄段观看，无版权争议。",
+  "defaultSearchKeywords": ["character", "cinematic", "trailer"]
+}
