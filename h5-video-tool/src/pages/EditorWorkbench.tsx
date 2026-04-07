@@ -36,10 +36,8 @@ import {
   applyEditorAgentStream,
   chatEditorAgent,
   generateEditorMusic,
-  getEditorExportStatus,
   polishEditorMusicPrompt,
   routeEditorAgentMessage,
-  startEditorExport,
   type EditorAgentJobProgress,
   type EditorAssetDto,
 } from '../api/editor';
@@ -133,8 +131,6 @@ export function EditorWorkbench() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [libraryItems, setLibraryItems] = useState<EditorAssetDto[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportHint, setExportHint] = useState<string | null>(null);
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
   const [agentDeliverable, setAgentDeliverable] = useState<string | null>(null);
   /** Agent 自动配乐成功后同步到左下「配乐生成」文案 */
@@ -712,39 +708,7 @@ export function EditorWorkbench() {
     }
   }, []);
 
-  const handleExport = useCallback(async () => {
-    setExportBusy(true);
-    setExportHint(null);
-    try {
-      const { jobId } = await startEditorExport({ project, aspectRatio });
-      setExportHint(`任务 ${jobId} 已提交…`);
-      let tries = 0;
-      while (tries < 60) {
-        await new Promise((r) => setTimeout(r, 400));
-        const st = await getEditorExportStatus(jobId);
-        if (st.status === 'done') {
-          if (st.downloadUrl) {
-            setExportHint(`完成：${st.downloadUrl}`);
-          } else {
-            setExportHint('Mock：任务已完成（暂无真实 MP4 文件，后续接 FFmpeg）');
-          }
-          pushLog(`导出任务完成：${jobId}`);
-          break;
-        }
-        if (st.status === 'error') {
-          setExportHint(st.error || '导出失败');
-          break;
-        }
-        tries += 1;
-      }
-    } catch (e) {
-      setExportHint(e instanceof Error ? e.message : '导出请求失败');
-    } finally {
-      setExportBusy(false);
-    }
-  }, [project, aspectRatio, pushLog]);
-
-  const handleCaptureCover = useCallback(() => {
+    const handleCaptureCover = useCallback(() => {
     const video = document.querySelector<HTMLVideoElement>('video');
     if (!video) { toast.info('暂无视频可截取'); return; }
     const canvas = document.createElement('canvas');

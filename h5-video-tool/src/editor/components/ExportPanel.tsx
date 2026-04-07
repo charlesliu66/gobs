@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { TimelineProject } from '../types/timeline';
 import { startEditorExport, getEditorExportStatus } from '../../api/editor';
 import { toast } from '../../components/Toast';
@@ -22,6 +22,19 @@ const QUALITY_LABELS: Record<ExportQuality, string> = {
 export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProps) {
   const [open, setOpen] = useState(false);
   const [resolution, setResolution] = useState<ExportResolution>('1080p');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // 点击面板外部关闭
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
   const [format, setFormat] = useState<ExportFormat>('mp4');
   const [quality, setQuality] = useState<ExportQuality>('balanced');
   const [busy, setBusy] = useState(false);
@@ -66,7 +79,7 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
   }, [project, aspectRatio, resolution, format, quality, onPushLog]);
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div ref={panelRef} className="relative flex items-center gap-2">
       {downloadUrl && (
         <a
           href={downloadUrl}

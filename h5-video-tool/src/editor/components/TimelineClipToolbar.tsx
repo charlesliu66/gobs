@@ -264,7 +264,7 @@ export function TimelineClipToolbar({
             }`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            {clipSpeed !== 1 ? `${clipSpeed}x` : '速度'}
+            {clipSpeed !== 1 ? `${clipSpeed}×` : '速度'}
           </button>
           {speedOpen && hasSelection && (
             <div className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-2 shadow-xl">
@@ -281,7 +281,7 @@ export function TimelineClipToolbar({
                         : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                     }`}
                   >
-                    {s}x
+                    {s}×
                   </button>
                 ))}
               </div>
@@ -346,7 +346,7 @@ export function TimelineClipToolbar({
         </div>
 
         <div className="relative flex flex-shrink-0">
-          <IconBtn title="从播放头添加字幕" disabled={dis} onClick={() => setSubOpen((o) => !o)}>
+          <IconBtn title="从播放头添加字幕" disabled={dis} onClick={() => { setSubOpen((o) => !o); setTrimOpen(false); setSpeedOpen(false); }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 7h16M4 12h10M4 17h14" />
             </svg>

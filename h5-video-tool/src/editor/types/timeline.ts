@@ -257,7 +257,9 @@ export function snapVideoClipsSequential(project: TimelineProject): TimelineProj
     const clips = [...(t.clips as VideoClip[])].sort((a, b) => a.timelineStart - b.timelineStart);
     let cursor = 0;
     const nextClips = clips.map((c) => {
-      const len = Math.max(0.05, roundTimelineSec(c.sourceEnd - c.sourceStart));
+      const speed = c.speed && c.speed > 0 ? c.speed : 1;
+      const sourceDur = Math.max(0.05, c.sourceEnd - c.sourceStart);
+      const len = roundTimelineSec(sourceDur / speed);
       const ts = roundTimelineSec(cursor);
       const nc: VideoClip = { ...c, timelineStart: ts };
       cursor = roundTimelineSec(ts + len);
