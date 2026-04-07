@@ -9,7 +9,10 @@ import { TimelineClipToolbar } from '../editor/components/TimelineClipToolbar';
 import { AgentPanel } from '../editor/components/AgentPanel';
 import { MediaLibrary } from '../editor/components/MediaLibrary';
 import { BgmMixPanel } from '../editor/components/BgmMixPanel';
+import { TextClipEditor } from '../editor/components/TextClipEditor';
+import { TextOverlayRenderer } from '../editor/components/TextOverlayRenderer';
 import type { AudioClip, MediaAsset, TimelineProject, VideoClip } from '../editor/types/timeline';
+import type { TextClip } from '../editor/types/timeline';
 import {
   appendVideoClipToProject,
   computeDurationSec,
@@ -30,6 +33,12 @@ import {
   updateVideoClipSourceRange,
   upsertSubtitleCue,
   withSyncedDuration,
+  upsertTextClip,
+  removeTextClip,
+  getActiveTextClips,
+  getAllTextClips,
+  addIntroTextClip,
+  addOutroTextClip,
 } from '../editor/types/timeline';
 import { getNextVideoClipAfter } from '../editor/timelinePlayback';
 import {
@@ -143,6 +152,8 @@ export function EditorWorkbench() {
   const [agentJobProgress, setAgentJobProgress] = useState<EditorAgentJobProgress | null>(null);
   /** 时间轴上选中的视频片段（微调 / 溯源） */
   const [selectedVideoClipId, setSelectedVideoClipId] = useState<string | null>(null);
+  const [selectedTextClipId, setSelectedTextClipId] = useState<string | null>(null);
+  const [showTextPanel, setShowTextPanel] = useState(false);
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
@@ -658,6 +669,57 @@ export function EditorWorkbench() {
     [project, applyTimelineProject, pushLog],
   );
 
+  // ──────────────── 文字轨 handlers ────────────────
+
+  const handleUpsertTextClip = useCallback((clip: TextClip) => {
+    applyTimelineProject(upsertTextClip(project, clip));
+  }, [project, applyTimelineProject]);
+
+  const handleRemoveTextClip = useCallback((id: string) => {
+    applyTimelineProject(removeTextClip(project, id));
+    if (selectedTextClipId === id) setSelectedTextClipId(null);
+  }, [project, applyTimelineProject, selectedTextClipId]);
+
+  const handleAddIntro = useCallback(() => {
+    const p = addIntroTextClip(project, '片头标题', '副标题文字', 'intro-minimal');
+    applyTimelineProject(p);
+    const clips = getAllTextClips(p);
+    if (clips.length > 0) setSelectedTextClipId(clips[0].id);
+    setShowTextPanel(true);
+  }, [project, applyTimelineProject]);
+
+  const handleAddOutro = useCallback(() => {
+    const p = addOutroTextClip(project, '关注我们', '获取更多精彩内容', 'outro-follow');
+    applyTimelineProject(p);
+    const clips = getAllTextClips(p);
+    if (clips.length > 0) setSelectedTextClipId(clips[clips.length - 1].id);
+    setShowTextPanel(true);
+  }, [project, applyTimelineProject]);
+
+  const handleAddSubtitleText = useCallback(() => {
+    const id = `text_${Date.now()}`;
+    const clip: TextClip = {
+      id,
+      timelineStart: currentTime,
+      timelineEnd: Math.min(currentTime + 2, project.durationSec),
+      text: '字幕文字',
+      presetId: 'sub-bottom',
+    };
+    applyTimelineProject(upsertTextClip(project, clip));
+    setSelectedTextClipId(id);
+    setShowTextPanel(true);
+  }, [project, currentTime, applyTimelineProject]);
+
+  const activeTextClips = useMemo(
+    () => getActiveTextClips(project, currentTime),
+    [project, currentTime],
+  );
+
+  const selectedTextClip = useMemo(
+    () => getAllTextClips(project).find((c) => c.id === selectedTextClipId) ?? null,
+    [project, selectedTextClipId],
+  );
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -735,15 +797,38 @@ export function EditorWorkbench() {
         aspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
         materialsPanel={
-          <MediaLibrary
-            onLoadDemo={loadDemo}
-            onLibraryItemsChange={syncAssetsFromLibrary}
-            onAddToTimeline={handleAddToTimeline}
-            onAssetDeleted={handleLibraryAssetDeleted}
-            selectedAssetIds={selectedAssetIds}
-            onToggleAsset={toggleSelectAsset}
-            onClearSelection={clearSelection}
-          />
+          showTextPanel ? (
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
+                <span className="text-xs font-semibold text-[var(--color-text)]">文字编辑</span>
+                <button
+                  type="button"
+                  onClick={() => setShowTextPanel(false)}
+                  className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs"
+                >
+                  ← 素材
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <TextClipEditor
+                  clip={selectedTextClip}
+                  onUpdate={handleUpsertTextClip}
+                  onDelete={handleRemoveTextClip}
+                  onClose={() => setShowTextPanel(false)}
+                />
+              </div>
+            </div>
+          ) : (
+            <MediaLibrary
+              onLoadDemo={loadDemo}
+              onLibraryItemsChange={syncAssetsFromLibrary}
+              onAddToTimeline={handleAddToTimeline}
+              onAssetDeleted={handleLibraryAssetDeleted}
+              selectedAssetIds={selectedAssetIds}
+              onToggleAsset={toggleSelectAsset}
+              onClearSelection={clearSelection}
+            />
+          )
         }
         musicPanel={
           <BgmMixPanel
@@ -823,6 +908,7 @@ export function EditorWorkbench() {
                     {activeSubtitleText}
                   </div>
                 ) : null}
+                <TextOverlayRenderer activeClips={activeTextClips} timeSec={currentTime} />
                 {bgmUrl && bgmClip ? (
                   <audio
                     key={bgmClip.id}
@@ -863,6 +949,9 @@ export function EditorWorkbench() {
             selectedVideoClipId={selectedVideoClipId}
             onSelectVideoClip={setSelectedVideoClipId}
             onVideoClipDragEnd={handleVideoClipDragEnd}
+            selectedTextClipId={selectedTextClipId}
+            onSelectTextClip={setSelectedTextClipId}
+            onOpenTextEditor={() => setShowTextPanel(true)}
             onMixChange={(partial) => {
               setProject((p) => {
                 const n = normalizeTimelineProject(p);
@@ -917,6 +1006,32 @@ export function EditorWorkbench() {
         }
         topBarExtra={
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 border-r border-[var(--color-border)] pr-2 mr-1">
+              <button
+                type="button"
+                onClick={handleAddIntro}
+                className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                title="在开头添加片头"
+              >
+                片头
+              </button>
+              <button
+                type="button"
+                onClick={handleAddSubtitleText}
+                className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                title="在当前时间添加字幕"
+              >
+                + 字幕
+              </button>
+              <button
+                type="button"
+                onClick={handleAddOutro}
+                className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                title="在末尾添加片尾"
+              >
+                片尾
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleCaptureCover}

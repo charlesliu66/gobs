@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { TimelineProject, VideoClip, AudioClip } from '../types/timeline';
-import { computeDurationSec } from '../types/timeline';
+import type { TimelineProject, VideoClip, AudioClip, TextClip } from '../types/timeline';
+import { computeDurationSec, getAllTextClips } from '../types/timeline';
+import { getTextPreset } from '../textPresets';
 import { formatTimelineTime } from '../utils/formatTimelineTime';
 
 /** 像素/秒：越大=同屏时间越短（放大细节）；越小=同屏时间越长（压缩概览）。长视频适配需能低于 12。 */
@@ -52,6 +53,11 @@ interface TimelinePanelProps {
   previewFullscreen?: boolean;
   /** 时间轴标尺上方：片段工具条（图标栏） */
   clipToolbar?: ReactNode;
+  /** 文字轨选中 */
+  onSelectTextClip?: (clipId: string | null) => void;
+  selectedTextClipId?: string | null;
+  /** 双击文字片段时打开编辑面板 */
+  onOpenTextEditor?: () => void;
 }
 
 const CLIP_DRAG_SELECT_PX = 4;
@@ -73,6 +79,9 @@ export function TimelinePanel({
   onEnterPreviewFullscreen,
   previewFullscreen,
   clipToolbar,
+  onSelectTextClip,
+  selectedTextClipId = null,
+  onOpenTextEditor,
 }: TimelinePanelProps) {
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC_DEFAULT);
   /** 点击「原声」「BGM」轨标签展开音量条 */
@@ -262,6 +271,15 @@ export function TimelinePanel({
 
   const mix = project.mix ?? { sourceAudio: 1, bgm: 0.85 };
 
+  const CATEGORY_COLORS: Record<string, string> = {
+    intro: 'bg-purple-500/70 border-purple-400',
+    outro: 'bg-orange-500/70 border-orange-400',
+    subtitle: 'bg-blue-500/70 border-blue-400',
+    title: 'bg-cyan-500/70 border-cyan-400',
+  };
+
+  const textClips = useMemo(() => getAllTextClips(project), [project]);
+
   const toggleMixTrack = useCallback((trackId: 'a1' | 'a2') => {
     setExpandedMixTrack((prev) => (prev === trackId ? null : trackId));
   }, []);
@@ -402,8 +420,7 @@ export function TimelinePanel({
           <div className="relative">
             {project.tracks.map((track) => {
               const isMixTrack = onMixChange && (track.id === 'a1' || track.id === 'a2');
-              const mixOpen = isMixTrack && expandedMixTrack === track.id;
-              return (
+              const mixOpen = isMixTrack && expandedMixTrack === track.id;              return (
                 <div key={track.id} className="mb-2">
                   <div className="flex items-stretch">
                     {isMixTrack ? (
@@ -531,6 +548,58 @@ export function TimelinePanel({
                 </div>
               );
             })}
+
+            {/* 文字轨 */}
+            <div className="mb-2">
+              <div className="flex items-stretch">
+                <span
+                  className="flex flex-shrink-0 items-center text-[9px] text-[var(--color-text-muted)] px-1"
+                  style={{ width: LABEL_PX, minWidth: LABEL_PX }}
+                >
+                  文字
+                </span>
+                <div
+                  className="relative h-10 flex-shrink-0 rounded bg-[var(--color-surface)] ring-1 ring-[var(--color-border)]"
+                  style={{ width: contentWidthPx }}
+                >
+                  {textClips.length === 0 && (
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-[var(--color-text-muted)]">
+                      空
+                    </span>
+                  )}
+                  {textClips.map((clip: TextClip) => {
+                    const preset = getTextPreset(clip.presetId);
+                    const category = preset?.category ?? 'subtitle';
+                    const colorClass = CATEGORY_COLORS[category] ?? CATEGORY_COLORS['subtitle']!;
+                    const left = clip.timelineStart * pxPerSec;
+                    const w = Math.max((clip.timelineEnd - clip.timelineStart) * pxPerSec, 8);
+                    const isSelected = selectedTextClipId === clip.id;
+                    return (
+                      <div
+                        key={clip.id}
+                        role="button"
+                        tabIndex={0}
+                        title={`文字片段: ${clip.text}`}
+                        onClick={() => onSelectTextClip?.(clip.id)}
+                        onDoubleClick={() => {
+                          onSelectTextClip?.(clip.id);
+                          onOpenTextEditor?.();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') onSelectTextClip?.(clip.id);
+                        }}
+                        className={`absolute top-1 bottom-1 cursor-pointer rounded border px-1 text-[10px] text-white truncate ${colorClass} ${
+                          isSelected ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--color-surface)]' : ''
+                        }`}
+                        style={{ left, width: w, zIndex: 5 }}
+                      >
+                        <span className="pointer-events-none text-[9px] leading-none">{clip.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
             {/* 贯穿播放头 */}
             <div
