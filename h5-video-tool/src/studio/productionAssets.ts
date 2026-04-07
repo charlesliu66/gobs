@@ -672,3 +672,36 @@ export function computeShotRefTags(
   }
   return tags.length ? tags : [`@场景:${shot.sceneRef}`];
 }
+
+/**
+ * 根据分镜内容自动匹配角色状态
+ * 返回匹配的 CharacterState id，没有匹配则返回 undefined（使用基础形象）
+ */
+export function autoMatchCharacterState(
+  shot: { action?: string; subject?: string; emotion?: string; notes?: string },
+  states: Array<{ id: string; label: string }>,
+): string | undefined {
+  if (!states.length) return undefined;
+  const text = [shot.action, shot.subject, shot.emotion, shot.notes].filter(Boolean).join(' ').toLowerCase();
+
+  const rules: [RegExp, string[]][] = [
+    [/战[斗打]|格斗|搏斗|厮[杀打]|持[刀剑]|拔[刀剑]|攻击|战场/, ['战斗', '战斗装束', '战']],
+    [/哭[泣泣]|流泪|悲[伤痛]|泪水|痛哭/, ['哭戏', '哭泣', '悲伤']],
+    [/受伤|[血伤]口|包扎|虚弱|倒地|伤/, ['受伤', '受伤状态']],
+    [/正式|宴会|庆典|盛装|礼服|典礼/, ['正式', '正式场合']],
+    [/日常|普通|休闲|平时|家中|家里/, ['日常', '日常装束']],
+    [/职场|工作|办公|上班|会议/, ['职场', '职场着装']],
+    [/运动|跑步|锻炼|训练|比赛/, ['运动', '运动装束']],
+    [/胜利|庆祝|成功|获胜/, ['胜利', '胜利姿态']],
+  ];
+
+  for (const [pattern, keywords] of rules) {
+    if (pattern.test(text)) {
+      const matched = states.find((s) =>
+        keywords.some((kw) => s.label.includes(kw))
+      );
+      if (matched) return matched.id;
+    }
+  }
+  return undefined;
+}

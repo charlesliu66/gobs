@@ -5,6 +5,8 @@ import { useGoogleDrive } from '../hooks/useGoogleDrive';
 import { useMaterials } from '../context/MaterialsContext';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { DriveExplorer } from '../components/DriveExplorer';
+import { LocalUploadPanel } from '../components/LocalUploadPanel';
+import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
 
 export function TabMaterials() {
   const materialsCtx = useMaterials();
@@ -97,9 +99,40 @@ export function TabMaterials() {
     await handleVerify();
   }, [folderId, localFolderUrl, accessToken, login, handleVerify]);
 
+  const [activeTab, setActiveTab] = useState<'local' | 'drive' | 'library'>('local');
+
   return (
     <div className="max-w-6xl w-full space-y-6">
         <h1 className="page-title">素材管理</h1>
+
+        {/* 三 Tab */}
+        <div className="flex gap-1 mb-6">
+          {([
+            { id: 'local', label: '📁 本地上传' },
+            { id: 'drive', label: '☁️ Google Drive' },
+            { id: 'library', label: '🎭 形象库' },
+          ] as const).map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === id
+                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'local' && <LocalUploadPanel />}
+
+        {activeTab === 'library' && <CharacterLibraryPanel />}
+
+        {activeTab === 'drive' && (
+        <div className="space-y-6">
 
         <section className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
           <h2 className="section-title mb-4">
@@ -197,6 +230,9 @@ export function TabMaterials() {
               已在「视频生成」中选择 {selectedOrder.length} 个素材，顺序映射为 @图片1、@图片2…
             </p>
           </section>
+        )}
+
+        </div>
         )}
     </div>
   );
