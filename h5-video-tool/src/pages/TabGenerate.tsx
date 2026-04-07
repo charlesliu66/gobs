@@ -10,7 +10,7 @@ import {
   type ShortDramaPreset,
   type ShortDramaExpandResult,
 } from '../api/promptPolish';
-import { getVeoModels } from '../api/video';
+import { listCharacterLibrary } from '../api/characterLibrary';
 import { useGoogleDrive, type DriveFile } from '../hooks/useGoogleDrive';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { useMaterials } from '../context/MaterialsContext';
@@ -38,10 +38,16 @@ function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
   ].join('\n');
 }
 
+const SEEDANCE_MODELS = [
+  { value: 'dreamina-multimodal', label: '🌙 全能参考（Seedance 2.0）— 推荐' },
+  { value: 'dreamina-text2video', label: '文生视频（Seedance 2.0）' },
+  { value: 'dreamina-image2video', label: '图生视频（Seedance 2.0）' },
+] as const;
+
+/** 专家模式额外可选的 Veo 模型（仍依赖后端） */
 const VIDEO_MODEL_LABELS: Record<string, string> = {
-  'dreamina-multimodal': '即梦 · 全能参考 (Seedance 2.0 Fast)',
-  'dreamina-text2video': '即梦 · 文生视频',
-  'dreamina-image2video': '即梦 · 图生视频',
+  'veo-2.0-generate-001': 'Veo 2.0 Generate',
+  'veo-3.0-generate-preview': 'Veo 3.0 Preview',
 };
 
 function ChevronIcon({ className }: { className?: string }) {
@@ -118,7 +124,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [polishError, setPolishError] = useState<string | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
   const [showGenerationFlow, setShowGenerationFlow] = useState(false);
-  const [veoModels, setVeoModels] = useState<string[]>(['veo-2.0-generate-001']);
+  const [veoModels, setVeoModels] = useState<string[]>([]);
 
   const login = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/drive.readonly',
@@ -151,10 +157,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   }, []);
 
   useEffect(() => {
-    getVeoModels()
-      .then((r) => setVeoModels(r.models))
-      .catch(() => {});
-  }, []);
+    if (expertMode) {
+      import('../api/video').then(({ getVeoModels }) => {
+        getVeoModels()
+          .then((r) => setVeoModels(r.models))
+          .catch(() => {});
+      });
+    }
+  }, [expertMode]);
 
   /** 切换离「全能参考」时清空已选素材，避免误带大 payload */
   useEffect(() => {
@@ -191,6 +201,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       setViralDanceReferenceVideoUrl('');
     }
   }, [templateId, setViralDanceReferenceVideoUrl]);
+
+  /** Viral Dance + TikTok URL 自动预填 prompt（越懒越好） */
+  useEffect(() => {
+    if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim() && !prompt.trim()) {
+      setPrompt('角色（@图片1）在参考场景（@图片2）中，跟随参考视频（@视频1）中舞者的动作起舞，节奏流畅，角色造型保持一致，竖屏 9:16，8 秒，活力充沛');
+    }
+  }, [templateId, viralDanceReferenceVideoUrl]);
 
   const handleOneClickPrompt = useCallback(
     async (styleId?: string) => {
@@ -375,7 +392,9 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       selectedOrder.slice(0, characters.length).every((f) => f && !f.id.startsWith('empty-')));
   const materialOk = isShortDramaFlow
     ? shortDramaCharsFilled
-    : !hasMatchedMaterials || selectedOrder.length >= 1;
+    : isViralDanceTemplate
+      ? selectedOrder.length >= 1  // @图片1 必填
+      : !hasMatchedMaterials || selectedOrder.length >= 1;
   const canStartGenerate = hasValidPrompt && materialOk;
 
   return (
@@ -541,28 +560,33 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               }
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
             />
-            {expertMode && isViralDanceTemplate && (
-              <div className="mt-3 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <label className="block text-xs font-medium text-[var(--color-text)]">
-                  TikTok / 参考视频直链（可灵 Omni · <span className="font-mono text-[10px]">video_list</span>）
-                </label>
-                <input
-                  type="url"
-                  value={viralDanceReferenceVideoUrl}
-                  onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
-                  placeholder="粘贴 TikTok 分享链接，或公网 MP4 直链"
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
-                />
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed rounded-md bg-[var(--color-primary)]/8 px-2 py-1.5 border border-[var(--color-primary)]/25">
-                  <strong className="text-[var(--color-text)]">说明：</strong>
-                  可直接粘贴浏览器里的 <strong className="text-[var(--color-text)]">TikTok 视频链接</strong>
-                  ，服务端会用 <code className="text-[10px]">yt-dlp</code> 解析为可下载地址后再提交可灵（首次解析可能需数十秒）。
-                  若已自有 MP4 直链也可直接粘贴；无法解析时请检查服务器是否安装 yt-dlp 或配置 YT_DLP_PROXY。
-                </p>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-                  素材顺序：<span className="text-[var(--color-text)] font-medium">第 1 张</span> = 角色，
-                  <span className="text-[var(--color-text)] font-medium">第 2 张</span> = 场景；只选 1 张图时请在创意里用文字写清另一项。
-                  模型选可灵 Omni 且后端为 ingarena 时，提交生成会附带该链接。
+            {isViralDanceTemplate && (
+              <div className="rounded-xl border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 p-4 space-y-3 mt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎵</span>
+                  <span className="text-sm font-semibold text-[var(--color-text)]">TikTok 参考视频</span>
+                  <span className="ml-auto text-[10px] text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">@视频1</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={viralDanceReferenceVideoUrl}
+                    onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
+                    placeholder="粘贴 TikTok 分享链接（如 https://www.tiktok.com/t/...）"
+                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
+                  />
+                  {viralDanceReferenceVideoUrl.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setViralDanceReferenceVideoUrl('')}
+                      className="px-2 py-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  粘贴后系统自动解析视频动作，作为 Seedance 的动作参考（@视频1）。支持 TikTok 分享链接或 MP4 直链。
                 </p>
               </div>
             )}
@@ -581,7 +605,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 ? '猫猫后宫写稿要点'
                 : '短剧写稿要点（drama-creator）'
               : isViralDanceTemplate
-                ? 'Viral 舞蹈（可灵 Omni）要点'
+                ? 'Viral 舞蹈（Seedance 2.0）要点'
                 : 'Veo 写稿要点'}
           </button>
           {tipsExpanded && (
@@ -602,10 +626,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 </>
               ) : isViralDanceTemplate ? (
                 <>
-                  <p><strong className="text-[var(--color-text)]">占位符：</strong>成品 prompt 应体现「【TikTok视频】」中的动作来源，以及「【图片1】」角色与「【图片2】」场景的对应关系（与 Omni 多模态引用一致）。</p>
-                  <p><strong className="text-[var(--color-text)]">参考视频：</strong>可粘贴 TikTok 分享链接，由服务端解析；亦可直接填公网 MP4 直链。</p>
-                  <p><strong className="text-[var(--color-text)]">素材顺序：</strong>Drive 勾选顺序 = @图片1、@图片2；单图时在正文里写明缺失的角色或场景。</p>
-                  <p><strong className="text-[var(--color-text)]">合规：</strong>不写具体艺人名或曲名；前 3 秒抓眼、竖屏 9:16 友好。</p>
+                  <p><strong className="text-[var(--color-text)]">动作迁移：</strong>在 prompt 里写「参考 @视频1 中舞者的动作节奏与肢体细节」，Seedance 会提取参考视频的动作并迁移到角色图（@图片1）上。</p>
+                  <p><strong className="text-[var(--color-text)]">素材顺序：</strong>@图片1 = 角色参考（必填），@图片2 = 场景参考（可选），@视频1 = TikTok 动作参考视频（系统自动处理）。</p>
+                  <p><strong className="text-[var(--color-text)]">Prompt 结构：</strong>「[角色描述]，在[场景]中，跟随参考视频中舞者的动作起舞，节奏流畅，@图片1 角色造型一致，竖屏 9:16，8秒」。</p>
+                  <p><strong className="text-[var(--color-text)]">TikTok 链接：</strong>直接粘贴分享链接，后端 yt-dlp 解析为可下载地址，作为 @视频1 传给 Seedance。</p>
+                  <p><strong className="text-[var(--color-text)]">合规提示：</strong>不写具体艺人名或歌曲名；前 3 秒要有强吸引点；竖屏 9:16，8秒。</p>
                 </>
               ) : (
                 <>
@@ -707,7 +732,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onChange={(e) => setVideoModel(e.target.value)}
             className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
           >
-            {veoModels.map((m) => (
+            {SEEDANCE_MODELS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+            {expertMode && veoModels.map((m) => (
               <option key={m} value={m}>
                 {VIDEO_MODEL_LABELS[m] ?? m}
               </option>
@@ -902,10 +932,52 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 selectedOrder={selectedOrder}
                 setSelectedOrder={setSelectedOrder}
                 onLogin={() => login()}
+                onLoadCharacterLibrary={async () => {
+                  const { characters } = await listCharacterLibrary();
+                  return characters
+                    .filter((c) => c.baseImageDataUrl)
+                    .map((c) => ({
+                      id: c.id,
+                      name: c.name,
+                      imageUrl: c.baseImageDataUrl || '',
+                    }));
+                }}
+                onCharacterSelected={async (imageUrl: string) => {
+                  try {
+                    // fetch → base64 → 设为 dreaminaMultimodalItems[0]（@图片1）
+                    const resp = await fetch(imageUrl);
+                    const blob = await resp.blob();
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const dataUrl = reader.result as string;
+                      // data:image/jpeg;base64,XXXX → 去掉前缀
+                      const base64 = dataUrl.split(',')[1] ?? dataUrl;
+                      const mimeType = blob.type || 'image/jpeg';
+                      setDreaminaMultimodalItems((prev) => {
+                        const next = [...prev];
+                        next[0] = {
+                          id: `lib-char-${Date.now()}`,
+                          kind: 'image',
+                          base64,
+                          mimeType,
+                          fileName: 'character.jpg',
+                        };
+                        return next;
+                      });
+                    };
+                    reader.readAsDataURL(blob);
+                  } catch {
+                    // 静默失败，用户可手动选图
+                  }
+                }}
               />
-              {selectedOrder.length > 0 && (
+              {selectedOrder.length > 0 ? (
                 <p className="mt-3 text-sm text-[var(--color-success)]">
                   已绑定：{selectedOrder.length === 1 ? '@图片1 已选' : '@图片1 + @图片2 已选'}，与上方 prompt 中【图片1】【图片2】一致。
+                </p>
+              ) : (
+                <p className="mt-3 text-sm text-[var(--color-error)]">
+                  ⚠️ @图片1（角色参考图）必填，请从形象库或 Drive 中选择一张角色图。
                 </p>
               )}
             </>

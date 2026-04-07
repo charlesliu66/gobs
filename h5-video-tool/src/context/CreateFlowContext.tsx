@@ -51,6 +51,8 @@ interface CreateFlowState {
   dreaminaMultimodalItems: DreaminaMultimodalItem[];
   /** 选中的 Veo 模型 */
   videoModel: string;
+  /** Seedance 版本（如 'seedance2.0'） */
+  dreaminaModelVersion: string;
   /** 比例 16:9 | 9:16 */
   videoAspectRatio: string;
   /** 时长（秒）4–8 或 10、60（模板指定时） */
@@ -68,6 +70,7 @@ interface CreateFlowContextValue extends CreateFlowState {
   setVideoResult: (url: string | null, taskId: string | null, videoPath?: string | null) => void;
   setTemplateId: (v: string) => void;
   setVideoModel: (v: string) => void;
+  setDreaminaModelVersion: (v: string) => void;
   setVideoAspectRatio: (v: string) => void;
   setVideoDuration: (v: number) => void;
   setVideoResolution: (v: string) => void;
@@ -98,7 +101,8 @@ const initialState: CreateFlowState = {
   templateId: '',
   multiShotEnabled: false,
   shots: [],
-  videoModel: 'veo-2.0-generate-001',
+  videoModel: 'dreamina-multimodal',
+  dreaminaModelVersion: 'seedance2.0',
   videoAspectRatio: '16:9',
   videoDuration: 5,
   videoResolution: '720p',
@@ -139,6 +143,7 @@ export function CreateFlowProvider({ children }: { children: ReactNode }) {
     setVideoResult,
     setTemplateId: (v) => setState((s) => ({ ...s, templateId: v })),
     setVideoModel: (v) => setState((s) => ({ ...s, videoModel: v })),
+    setDreaminaModelVersion: (v) => setState((s) => ({ ...s, dreaminaModelVersion: v })),
     setVideoAspectRatio: (v) => setState((s) => ({ ...s, videoAspectRatio: v })),
     setVideoDuration: (v) => setState((s) => ({ ...s, videoDuration: v })),
     setVideoResolution: (v) => setState((s) => ({ ...s, videoResolution: v })),

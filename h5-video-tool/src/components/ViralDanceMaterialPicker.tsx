@@ -4,6 +4,12 @@ import { AuthThumbnail } from './AuthThumbnail';
 
 type FolderCrumb = { id: string; name: string };
 
+export interface CharacterLibraryItem {
+  id: string;
+  name: string;
+  imageUrl: string;
+}
+
 interface ViralDanceMaterialPickerProps {
   accessToken: string | null;
   verifiedFolderId: string;
@@ -13,10 +19,15 @@ interface ViralDanceMaterialPickerProps {
   selectedOrder: DriveFile[];
   setSelectedOrder: (v: DriveFile[] | ((prev: DriveFile[]) => DriveFile[])) => void;
   onLogin: () => void;
+  /** 加载服化道形象库（可选）；返回有图的角色列表 */
+  onLoadCharacterLibrary?: () => Promise<CharacterLibraryItem[]>;
+  /** 选中形象库角色后的回调（imageUrl, name） */
+  onCharacterSelected?: (imageUrl: string, name: string) => void;
 }
 
 /**
- * Viral 舞蹈：固定 @图片1（角色）与 @图片2（场景），支持在已验证 Drive 根下进入子文件夹手动勾选。
+ * Viral 舞蹈：固定 @图片1（角色）与 @图片2（场景），支持在已验证 Drive 根下进入子文件夹手动勾选，
+ * 以及从服化道形象库直接选角色。
  */
 export function ViralDanceMaterialPicker({
   accessToken,
@@ -26,6 +37,8 @@ export function ViralDanceMaterialPicker({
   selectedOrder,
   setSelectedOrder,
   onLogin,
+  onLoadCharacterLibrary,
+  onCharacterSelected,
 }: ViralDanceMaterialPickerProps) {
   const [slot1, setSlot1] = useState<DriveFile | null>(() => selectedOrder[0] ?? null);
   const [slot2, setSlot2] = useState<DriveFile | null>(() => selectedOrder[1] ?? null);
@@ -48,6 +61,11 @@ export function ViralDanceMaterialPicker({
   const [browseLoading, setBrowseLoading] = useState(false);
 
   const [activeSlot, setActiveSlot] = useState<1 | 2 | null>(null);
+
+  // 形象库
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [libraryChars, setLibraryChars] = useState<CharacterLibraryItem[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
 
   const loadCurrent = useCallback(async () => {
     if (!accessToken) return;
@@ -109,6 +127,25 @@ export function ViralDanceMaterialPicker({
     [slot1, pushSlotsToParent],
   );
 
+  /** 从形象库选角色作为 @图片1 */
+  const handleLibrarySelect = useCallback(
+    (char: CharacterLibraryItem) => {
+      // 用一个虚拟 DriveFile（id 用形象库 id，name 用角色名，mimeType 标记为 image/jpeg）
+      const virtualFile: DriveFile = {
+        id: `lib:${char.id}`,
+        name: char.name,
+        mimeType: 'image/jpeg',
+      };
+      setSlot1(virtualFile);
+      pushSlotsToParent(virtualFile, slot2);
+      setShowLibraryPicker(false);
+      setActiveSlot(null);
+      // 通知父组件执行 fetch → base64 → multimodalItems[0]
+      onCharacterSelected?.(char.imageUrl, char.name);
+    },
+    [slot2, pushSlotsToParent, onCharacterSelected],
+  );
+
   if (!accessToken) {
     return (
       <div className="flex flex-col gap-3">
@@ -145,23 +182,94 @@ export function ViralDanceMaterialPicker({
               <p className="text-sm font-semibold text-[var(--color-primary)]">@图片1</p>
               <p className="text-xs text-[var(--color-text-muted)]">角色参考（必填）</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveSlot(activeSlot === 1 ? null : 1)}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                activeSlot === 1
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-              }`}
-            >
-              {activeSlot === 1 ? '取消选择' : '从下方选择'}
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onLoadCharacterLibrary && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowLibraryPicker((v) => !v);
+                    if (!showLibraryPicker && libraryChars.length === 0) {
+                      setLibraryLoading(true);
+                      try {
+                        const lib = await onLoadCharacterLibrary();
+                        setLibraryChars(lib);
+                      } finally {
+                        setLibraryLoading(false);
+                      }
+                    }
+                  }}
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    showLibraryPicker
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  📚 形象库
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLibraryPicker(false);
+                  setActiveSlot(activeSlot === 1 ? null : 1);
+                }}
+                className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  activeSlot === 1
+                    ? 'bg-[var(--color-primary)] text-white'
+                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+                }`}
+              >
+                {activeSlot === 1 ? '取消选择' : '从下方选择'}
+              </button>
+            </div>
           </div>
+
+          {/* 形象库内联选择面板 */}
+          {showLibraryPicker && (
+            <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-2 space-y-2">
+              <p className="text-xs font-medium text-[var(--color-text-muted)]">
+                点击角色图，设为 @图片1
+              </p>
+              {libraryLoading ? (
+                <p className="text-xs text-[var(--color-text-muted)]">加载中…</p>
+              ) : libraryChars.length === 0 ? (
+                <p className="text-xs text-[var(--color-text-muted)]">形象库暂无有图的角色</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                  {libraryChars.map((char) => (
+                    <button
+                      key={char.id}
+                      type="button"
+                      onClick={() => handleLibrarySelect(char)}
+                      className="flex flex-col items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)] p-1 transition-colors"
+                    >
+                      <img
+                        src={char.imageUrl}
+                        alt={char.name}
+                        className="w-full aspect-square object-cover rounded"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      <span className="text-[10px] text-[var(--color-text-muted)] truncate w-full text-center">
+                        {char.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <SlotPreview
             file={slot1}
-            accessToken={accessToken}
-            onClear={() => clearSlot(1)}
-            emptyHint="点击「从下方选择」后在浏览区点选图片"
+            accessToken={slot1?.id.startsWith('lib:') ? null : accessToken}
+            libraryImageUrl={slot1?.id.startsWith('lib:') ? libraryChars.find((c) => `lib:${c.id}` === slot1.id)?.imageUrl : undefined}
+            onClear={() => {
+              clearSlot(1);
+              setShowLibraryPicker(false);
+            }}
+            emptyHint="点击「📚 形象库」或「从下方选择」选角色图"
           />
         </div>
 
@@ -304,11 +412,14 @@ export function ViralDanceMaterialPicker({
 function SlotPreview({
   file,
   accessToken,
+  libraryImageUrl,
   onClear,
   emptyHint,
 }: {
   file: DriveFile | null;
   accessToken: string | null;
+  /** 若选自形象库，直接用 URL 渲染而不走 AuthThumbnail */
+  libraryImageUrl?: string;
   onClear: () => void;
   emptyHint: string;
 }) {
@@ -316,13 +427,21 @@ function SlotPreview({
     <div className="relative aspect-video max-h-56 rounded-lg border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface-elevated)]">
       {file ? (
         <>
-          <AuthThumbnail
-            fileId={file.id}
-            accessToken={accessToken}
-            name={file.name}
-            mimeType={file.mimeType}
-            className="w-full h-full object-contain"
-          />
+          {libraryImageUrl ? (
+            <img
+              src={libraryImageUrl}
+              alt={file.name}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <AuthThumbnail
+              fileId={file.id}
+              accessToken={accessToken}
+              name={file.name}
+              mimeType={file.mimeType}
+              className="w-full h-full object-contain"
+            />
+          )}
           <button
             type="button"
             onClick={(e) => {
