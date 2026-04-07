@@ -143,27 +143,20 @@ export function mergePropSheetsPreservingImages(next: PropSheet[], prev: PropShe
 export function buildPropImagePrompt(
   sheet: PropSheet,
   variant: AssetVariant,
-  styleRef: string,
+  _styleRef: string,
   productionDesign: ProductionDesignLayer | null,
-  opts?: { enforceGlobalStyleLock?: boolean },
+  _opts?: { enforceGlobalStyleLock?: boolean },
 ): string {
   const propRow = productionDesign?.props.find(
     (p) => p.name === sheet.name || sheet.name.includes(p.name) || p.name.includes(sheet.name),
   );
-  const setHint = sheet.sceneRef
-    ? productionDesign?.sets.find((s) => s.sceneId === sheet.sceneRef)
-    : undefined;
+  // 道具图只需形态清晰，不追求画风精度，prompt 精简
   const parts = [
-    styleRef.trim(),
-    opts?.enforceGlobalStyleLock
-      ? '【全片画风】道具须与立项画风参考及上文风格摘要一致，与角色定妆、场景在同一视觉体系内。'
-      : '',
-    `关键道具静物/产品图：${sheet.name}`,
+    `产品静物图：${sheet.name}`,
     variant.label !== '主道具' ? `变体：${variant.label}` : '',
-    propRow?.notes?.trim() ? `剧情与外观：${propRow.notes.trim()}` : '',
-    sheet.notes ? `备忘：${sheet.notes}` : '',
-    setHint ? `关联空间：${setHint.description}` : '',
-    '中性背景，单主体居中，高清，无文字水印。',
+    propRow?.notes?.trim() ? `外观说明：${propRow.notes.trim()}` : '',
+    sheet.notes ? `备注：${sheet.notes}` : '',
+    '纯白背景，单主体居中，清晰，无文字水印。',
   ];
   return parts.filter(Boolean).join('\n');
 }
