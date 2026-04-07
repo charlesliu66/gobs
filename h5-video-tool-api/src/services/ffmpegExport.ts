@@ -180,7 +180,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
       log(Math.round(10 + (i / videoClips.length) * 40), `处理片段 ${i + 1}/${videoClips.length}`);
     }
 
-    // ── Step 2: 拼接片段 ────────────────────────────────────────────────────
+    // ── Step 2: 拼接片段（crossfade 转场暂简化为硬切，后续用 xfade filter 实现）
     log(55, '拼接片段…');
     const concatListPath = path.join(tmpDir, 'concat.txt');
     const concatLines = segmentPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');

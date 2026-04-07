@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import type { EditorExportRequestBody } from '../editor/timelineSchema.js';
 import { runFfmpegExport } from '../services/ffmpegExport.js';
-import { getApiDataDir } from '../config/apiDataDir.js';
+import { getApiDataDir, getUploadsPath } from '../config/apiDataDir.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
 type ExportJobStatus = 'queued' | 'processing' | 'done' | 'error';
@@ -31,29 +29,50 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
   return typeof p.id === 'string' && Array.isArray(p.tracks);
 }
 
-/** 把 assetId 映射到本地文件路径 */
+/** 把 assetId 映射到本地文件路径（多路查找） */
 function resolveAssetPaths(
   tracks: EditorExportRequestBody['project']['tracks'],
 ): Record<string, string> {
-  const assetDir = path.join(getApiDataDir(), 'editor-assets');
+  // 素材可能在多个目录
+  const searchDirs = [
+    getUploadsPath('editor'),           // 剪辑上传目录
+    path.join(getApiDataDir(), 'output', 'production', 'images'), // 高级制片图片
+    path.join(getApiDataDir(), 'output'), // 通用输出目录
+  ];
+
   const map: Record<string, string> = {};
   for (const track of tracks) {
     for (const clip of track.clips) {
       const c = clip as { assetId?: string };
-      if (!c.assetId) continue;
-      // 优先尝试 assetDir/<id>（无扩展）, 再扫目录找匹配
-      const base = path.join(assetDir, c.assetId);
-      if (fs.existsSync(base)) {
-        map[c.assetId] = base;
+      if (!c.assetId || map[c.assetId]) continue;
+      // 跳过 http(s):// URL — 需要下载，暂不支持（日志提示）
+      if (c.assetId.startsWith('http')) {
+        console.warn('[export] assetId is a URL, skipping:', c.assetId);
         continue;
       }
-      // 扫目录找前缀匹配（assetId 可能带 ext）
-      if (fs.existsSync(assetDir)) {
-        const files = fs.readdirSync(assetDir);
-        const match = files.find(
-          (f) => f === c.assetId || f.startsWith(c.assetId + '.'),
-        );
-        if (match) map[c.assetId] = path.join(assetDir, match);
+      const assetId = c.assetId;
+      let found = false;
+      for (const dir of searchDirs) {
+        if (!fs.existsSync(dir)) continue;
+        // 精确匹配
+        if (fs.existsSync(path.join(dir, assetId))) {
+          map[assetId] = path.join(dir, assetId);
+          found = true;
+          break;
+        }
+        // 扫目录找前缀匹配（id 可能不含扩展名）
+        try {
+          const files = fs.readdirSync(dir);
+          const match = files.find((f) => f === assetId || f.startsWith(assetId + '.'));
+          if (match) {
+            map[assetId] = path.join(dir, match);
+            found = true;
+            break;
+          }
+        } catch { /* ignore */ }
+      }
+      if (!found) {
+        console.warn('[export] asset not found locally:', assetId);
       }
     }
   }

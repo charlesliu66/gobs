@@ -140,6 +140,11 @@ export interface ProductionShot {
    * 未设置时使用自动拼接（结构化叙事 + @图片 说明行）。
    */
   videoStoryboardOverride?: string;
+  /**
+   * 每个角色的手动状态覆盖：charId → stateId
+   * 未设置时由 autoMatchCharacterStateBySheet 自动推断
+   */
+  characterStateOverrides?: Record<string, string>;
 }
 
 export interface CharacterVisualProfile {

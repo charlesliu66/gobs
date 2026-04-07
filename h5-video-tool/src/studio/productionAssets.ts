@@ -705,3 +705,58 @@ export function autoMatchCharacterState(
   }
   return undefined;
 }
+
+/**
+ * 根据分镜描述关键词，自动匹配角色最合适的状态（新版：接受 CharacterSheet + 描述文本）
+ * 返回匹配到的 CharacterState id，或 null（无匹配）
+ */
+export function autoMatchCharacterStateBySheet(
+  sheet: CharacterSheet,
+  shotDescription: string,
+): string | null {
+  const states = sheet.states ?? [];
+  if (states.length === 0) return null;
+
+  const desc = shotDescription.toLowerCase();
+
+  // 关键词权重匹配
+  const KEYWORD_GROUPS: Array<{ keywords: string[]; weight: number }> = [
+    { keywords: ['战斗', '打斗', '搏击', '格斗', '战场', 'battle', 'fight'], weight: 10 },
+    { keywords: ['正装', '西装', '礼服', '婚礼', '庆典', 'formal', 'suit'], weight: 10 },
+    { keywords: ['正式', '宴会', '盛装', '典礼'], weight: 9 },
+    { keywords: ['休闲', '日常', '家居', '放松', 'casual', 'daily'], weight: 8 },
+    { keywords: ['睡衣', '睡觉', '卧室', 'pajama', 'sleep', 'bedroom'], weight: 10 },
+    { keywords: ['运动', '健身', '跑步', '训练', 'sport', 'workout', 'gym'], weight: 9 },
+    { keywords: ['雨', '雨天', '淋雨', 'rain', 'wet'], weight: 8 },
+    { keywords: ['冬', '雪', '寒冷', '大衣', 'winter', 'snow', 'coat'], weight: 9 },
+    { keywords: ['夏', '泳装', '海滩', '比基尼', 'summer', 'beach', 'swim'], weight: 9 },
+    { keywords: ['悲伤', '哭泣', '流泪', '伤心', 'sad', 'cry', 'tears'], weight: 7 },
+    { keywords: ['狂喜', '庆祝', '胜利', '开心', 'happy', 'celebrate', 'victory'], weight: 7 },
+    { keywords: ['受伤', '伤口', '包扎', '虚弱', '倒地'], weight: 9 },
+    { keywords: ['职场', '工作', '办公', '上班', '会议'], weight: 8 },
+    { keywords: ['约会', '浪漫', '爱情', 'date', 'romantic'], weight: 8 },
+  ];
+
+  const scores = states.map((state) => {
+    const label = (state.label ?? '').toLowerCase();
+    const notes = (state.notes ?? '').toLowerCase();
+    const stateText = label + ' ' + notes;
+
+    let score = 0;
+
+    for (const group of KEYWORD_GROUPS) {
+      const descMatch = group.keywords.some((k) => desc.includes(k));
+      const stateMatch = group.keywords.some((k) => stateText.includes(k));
+      if (descMatch && stateMatch) score += group.weight;
+    }
+
+    // 直接字面量匹配（状态名出现在描述里，加高权重）
+    if (label.length > 1 && desc.includes(label)) score += 15;
+
+    return { id: state.id, score };
+  });
+
+  scores.sort((a, b) => b.score - a.score);
+  const best = scores[0];
+  return best && best.score > 0 ? best.id : null;
+}
