@@ -40,6 +40,8 @@ interface AgentPanelProps {
   timelineAssetCount: number;
   /** 最近一次 Agent 成功后的成片结构（Markdown 表），对齐竞品「交付说明」 */
   deliverableMarkdown?: string | null;
+  /** 本次会话的对话历史（仅 chat 轮次） */
+  chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export function AgentPanel({
@@ -51,8 +53,10 @@ export function AgentPanel({
   selectedCount,
   timelineAssetCount,
   deliverableMarkdown,
+  chatHistory,
 }: AgentPanelProps) {
   const [input, setInput] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   const send = async (text?: string) => {
     const t = (text ?? input).trim();
@@ -73,12 +77,48 @@ export function AgentPanel({
         ? `未勾选时将按时间轴上 ${timelineAssetCount} 段素材继续调整`
         : '请先勾选素材，或先加入时间轴';
 
+  const recentHistory = chatHistory && chatHistory.length > 0
+    ? chatHistory.slice(-10)
+    : [];
+
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
       <div className="border-b border-[var(--color-border)] px-3 py-2">
         <h2 className="text-sm font-semibold text-[var(--color-text)]">剪辑 Agent</h2>
         <p className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">{hint}</p>
       </div>
+      {recentHistory.length > 0 && (
+        <div className="border-b border-[var(--color-border)]">
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-border)]/20"
+          >
+            <span>📜 历史对话（{Math.floor(recentHistory.length / 2)} 轮）</span>
+            <span>{showHistory ? '▲' : '▼'}</span>
+          </button>
+          {showHistory && (
+            <div className="max-h-40 space-y-1.5 overflow-y-auto bg-black/10 p-2">
+              {recentHistory.map((msg, i) => (
+                <div
+                  key={`hist-${i}`}
+                  className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[92%] rounded-xl px-2.5 py-1.5 text-[10px] leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/15 text-[var(--color-text)]'
+                        : 'border border-sky-500/35 bg-sky-500/10 text-[var(--color-text)]'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {deliverableMarkdown ? (
         <div className="border-b border-[var(--color-border)] px-3 py-2">
           <div className="text-[10px] font-semibold text-[var(--color-text)]">成片说明</div>

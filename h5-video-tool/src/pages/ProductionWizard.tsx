@@ -57,6 +57,9 @@ import {
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
 import { saveProductionProject, loadProductionProject, listProductionProjects, type ProjectListItem } from '../api/production';
+import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
+import { type LibraryCharacter } from '../api/characterLibrary';
+import { toast } from '../components/Toast';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -575,6 +578,7 @@ export function ProductionWizard() {
   });
   const [showProjectList, setShowProjectList] = useState(false);
   const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
+  const [showLibraryImport, setShowLibraryImport] = useState(false);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
@@ -1069,6 +1073,34 @@ export function ProductionWizard() {
       });
       return { ...p, characterAssets: sheets };
     });
+  }, []);
+
+  const handleImportFromLibrary = useCallback((libChar: LibraryCharacter) => {
+    const id = `ch-lib-${Date.now()}`;
+    const rootId = `${id}-v0`;
+    const newChar: CharacterSheet = {
+      id,
+      name: libChar.name,
+      isProtagonist: libChar.isProtagonist ?? false,
+      variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+      lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+      activeLookId: rootId,
+      baseImageDataUrl: libChar.baseImageDataUrl,
+      baseConfirmed: libChar.baseConfirmed ?? false,
+      states: libChar.states?.map((s) => ({
+        id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        label: s.label,
+        imageDataUrl: s.imageDataUrl,
+        statePrompt: s.statePrompt ?? '',
+        notes: s.notes ?? '',
+      })) ?? [],
+    };
+    setProject((p) => ({
+      ...p,
+      characterAssets: [...(p.characterAssets ?? []), newChar],
+    }));
+    setShowLibraryImport(false);
+    toast.success(`已导入角色「${libChar.name}」`);
   }, []);
 
   const handleFile = useCallback((file: File | null) => {
@@ -1864,10 +1896,24 @@ export function ProductionWizard() {
                       + 添加角色
                     </button>
                   ) : null}
+                  {l2Tab === 'characters' ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowLibraryImport((v) => !v)}
+                      className="text-xs font-medium text-[var(--color-primary)] hover:underline ml-3"
+                    >
+                      📚 从形象库导入
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
               <div className="p-4 sm:p-6">
+            {l2Tab === 'characters' && showLibraryImport && (
+              <div className="border border-[var(--color-border)] rounded-xl p-3 mb-4">
+                <CharacterLibraryPanel onImportToProject={handleImportFromLibrary} />
+              </div>
+            )}
             {l2Tab === 'characters' && (
               <>
                 {chSheets.length > 0 && treeFocusCharacterId ? (

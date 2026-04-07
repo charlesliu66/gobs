@@ -138,6 +138,7 @@ export function EditorWorkbench() {
   activeVideoClipRef.current = activeVideoClip;
   const [agentLogs, setAgentLogs] = useState<string[]>([]);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [agentChatHistory, setAgentChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [libraryItems, setLibraryItems] = useState<EditorAssetDto[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
@@ -260,6 +261,11 @@ export function EditorWorkbench() {
           try {
             const { reply } = await chatEditorAgent(userMessage);
             pushLog(`助手：${reply}`);
+            setAgentChatHistory((prev) => [
+              ...prev,
+              { role: 'user', content: userMessage },
+              { role: 'assistant', content: reply },
+            ]);
           } catch (e) {
             pushLog(`错误：对话失败：${e instanceof Error ? e.message : String(e)}`);
           }
@@ -933,6 +939,7 @@ export function EditorWorkbench() {
             selectedCount={selectedAssetIds.length}
             timelineAssetCount={uniqueVideoAssetIds(project).length}
             deliverableMarkdown={agentDeliverable}
+            chatHistory={agentChatHistory}
           />
         }
         timelinePanel={
