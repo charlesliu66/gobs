@@ -4,6 +4,7 @@ import { MaterialsProvider } from './context/MaterialsContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Layout } from './components/Layout';
 import { GeelarkLayout } from './components/GeelarkLayout';
+import { ToastContainer } from './components/Toast';
 import { Home } from './pages/Home';
 import { Studio } from './pages/Studio';
 import { ProductionWizard } from './pages/ProductionWizard';
@@ -44,6 +45,7 @@ function App() {
             <Route path="/geelark" element={<Navigate to="/geelark-batch" replace />} />
           </Routes>
           </BrowserRouter>
+          <ToastContainer />
         </MaterialsProvider>
       </CreateFlowProvider>
     </ThemeProvider>

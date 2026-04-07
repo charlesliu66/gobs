@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -111,66 +112,101 @@ export function Layout() {
   const { pathname } = useLocation();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // 路由切换时关闭移动端侧边栏
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
+
+  const sidebar = (
+    <div className={`sticky top-0 flex flex-col ${isEditor ? 'h-[100dvh]' : 'h-screen'}`}>
+      {/* Logo */}
+      <div className="flex items-center justify-between px-4 py-5 border-b border-[var(--color-border)]">
+        <img src="/logo.png" alt="GOBS" className="h-12 w-auto max-w-full object-contain" />
+        {/* 移动端关闭按钮 */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          className="sm:hidden p-1 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      {/* 导航 */}
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
+          <>
+            {(idx === 4 || idx === 6) && (
+              <div key={`sep-${idx}`} className="my-1.5 border-t border-[var(--color-border)]/40" />
+            )}
+            <NavLink
+              key={to}
+              to={to}
+              end={endProp ?? to === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+                }`
+              }
+            >
+              <Icon />
+              {label}
+            </NavLink>
+          </>
+        ))}
+      </nav>
+      <div className="p-3 border-t border-[var(--color-border)]">
+        <ThemeToggle />
+        <p className="text-[10px] text-center text-[var(--color-text-subtle)] pb-1">GOBS v0.1</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div
-      className={`flex bg-[var(--color-surface)] ${
-        isEditor ? 'h-[100dvh] min-h-0 overflow-hidden' : isProductionWizard ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
-      }`}
-    >
-      {/* 左侧边栏 */}
-      <aside className="w-56 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-        <div className={`sticky top-0 flex flex-col ${isEditor ? 'h-[100dvh]' : 'h-screen'}`}>
-          {/* Logo / 品牌 */}
-          <div className="flex items-center justify-center px-4 py-5 border-b border-[var(--color-border)]">
-            <img
-              src="/logo.png"
-              alt="GOBS - GLIMPSE. OBTAIN. BOOST."
-              className="h-12 w-auto max-w-full object-contain"
-            />
-          </div>
-          {/* 导航 */}
-          <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-            {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
-              <>
-                {(idx === 4 || idx === 6) && (
-                  <div key={`sep-${idx}`} className="my-1.5 border-t border-[var(--color-border)]/40" />
-                )}
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={endProp ?? to === '/'}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                        : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-                    }`
-                  }
-                >
-                  <Icon />
-                  {label}
-                </NavLink>
-              </>
-            ))}
-          </nav>
-          {/* 设置：主题切换 */}
-          <div className="p-3 border-t border-[var(--color-border)]">
-            <ThemeToggle />
-            <p className="text-[10px] text-center text-[var(--color-text-subtle)] pb-1">GOBS v0.1</p>
-          </div>
-        </div>
-      </aside>
-      {/* 主内容区 - 统一 p-6 与 TikTok 矩阵一致，内容左对齐避免居中造成左右间距不均 */}
-      <main
-        className={
-          isEditor
-            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--color-surface)] p-0'
-            : isProductionWizard
-              ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--color-surface)] p-0'
-              : 'flex min-h-0 flex-1 flex-col overflow-auto p-6 bg-[var(--color-surface)]'
-        }
+    <div className={`flex bg-[var(--color-surface)] ${
+      isEditor || isProductionWizard ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
+    }`}>
+      {/* 移动端遮罩 */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 sm:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* 侧边栏 — 桌面端固定，移动端抽屉 */}
+      <aside
+        className={`
+          fixed sm:relative inset-y-0 left-0 z-40
+          w-56 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-elevated)]
+          transition-transform duration-300 ease-in-out
+          sm:translate-x-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
+        `}
       >
+        {sidebar}
+      </aside>
+
+      {/* 主内容区 */}
+      <main className={`flex-1 min-w-0 flex flex-col ${
+        isEditor || isProductionWizard
+          ? 'min-h-0 overflow-hidden bg-[var(--color-surface)] p-0'
+          : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
+      }`}>
+        {/* 移动端顶部栏 */}
+        <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+          <span className="text-sm font-semibold text-[var(--color-text)]">GOBS</span>
+        </div>
         <Outlet />
       </main>
     </div>

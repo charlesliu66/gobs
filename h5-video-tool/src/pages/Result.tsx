@@ -1,4 +1,4 @@
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { loadVideoHistory, getVideoFileUrl, getLocalPlaybackSrc } from '../utils/videoHistory';
