@@ -194,19 +194,21 @@ export function Layout() {
           ? 'min-h-0 overflow-hidden bg-[var(--color-surface)] p-0'
           : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
       }`}>
-        {/* 移动端顶部栏 */}
-        <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-          </button>
-          <span className="text-sm font-semibold text-[var(--color-text)]">GOBS</span>
-        </div>
+        {/* 移动端顶部栏：全屏页（editor/production）隐藏 */}
+        {!isEditor && !isProductionWizard && (
+          <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <span className="text-sm font-semibold text-[var(--color-text)]">GOBS</span>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

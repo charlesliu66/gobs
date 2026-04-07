@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
 
@@ -98,6 +98,20 @@ export function Home() {
   const { setPrompt, setTemplateId, setVideoAspectRatio, setVideoDuration } = useCreateFlow();
   const [draft, setDraft] = useState('');
 
+  // 步骤完成状态感知（轻量版：读 localStorage）
+  const [stepsDone, setStepsDone] = useState({ materials: false, video: false });
+  useEffect(() => {
+    try {
+      const hasMaterials = !!localStorage.getItem('h5-materials-tab'); // 去过素材页就算
+      const hasVideo = (() => {
+        const raw = localStorage.getItem('videoHistory');
+        if (!raw) return false;
+        try { return (JSON.parse(raw) as unknown[]).length > 0; } catch { return false; }
+      })();
+      setStepsDone({ materials: hasMaterials, video: hasVideo });
+    } catch { /* ignore */ }
+  }, []);
+
   const goCreate = useCallback(
     (seed?: string) => {
       const text = (seed ?? draft).trim();
@@ -171,24 +185,39 @@ export function Home() {
         <div className="flex flex-col sm:flex-row gap-4 items-stretch">
           {STEPS.map((step, idx) => {
             const Icon = step.icon;
+            const isDone = (step.num === 1 && stepsDone.materials) || (step.num === 2 && stepsDone.video);
             return (
               <div key={step.num} className="flex flex-col sm:flex-row items-stretch flex-1 gap-4">
                 {/* 卡片 */}
                 <button
                   type="button"
                   onClick={() => navigate(step.to)}
-                  className="group relative flex-1 flex flex-col gap-3 p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-left hover:border-[var(--color-primary)]/40 hover:shadow-lg transition-all overflow-hidden"
+                  className={`group relative flex-1 flex flex-col gap-3 p-5 rounded-2xl border text-left hover:shadow-lg transition-all overflow-hidden ${
+                    isDone
+                      ? 'border-[var(--color-success)]/40 bg-[var(--color-surface-elevated)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40'
+                  }`}
                 >
                   {/* 渐变背景 */}
                   <div className={`absolute inset-0 bg-gradient-to-br ${step.color} opacity-30 group-hover:opacity-45 transition-opacity`} aria-hidden />
 
-                  {/* 步骤数 */}
-                  <span className="relative z-10 text-[10px] font-bold text-[var(--color-text-muted)] tracking-widest uppercase">
-                    Step {step.num}
-                  </span>
+                  {/* 步骤数 + 完成标记 */}
+                  <div className="relative z-10 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] tracking-widest uppercase">
+                      Step {step.num}
+                    </span>
+                    {isDone && (
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-success)]">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                        已完成
+                      </span>
+                    )}
+                  </div>
 
                   {/* 图标 */}
-                  <div className="relative z-10 w-10 h-10 rounded-xl bg-[var(--color-primary)]/15 flex items-center justify-center text-[var(--color-primary)]">
+                  <div className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center ${
+                    isDone ? 'bg-[var(--color-success)]/15 text-[var(--color-success)]' : 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                  }`}>
                     <Icon />
                   </div>
 
@@ -203,8 +232,8 @@ export function Home() {
                   </div>
 
                   {/* 按钮 */}
-                  <div className="relative z-10 flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)]">
-                    {step.action}
+                  <div className={`relative z-10 flex items-center gap-1.5 text-xs font-medium ${isDone ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-primary)]'}`}>
+                    {isDone ? '再次进入' : step.action}
                     <ArrowRightIcon />
                   </div>
                 </button>

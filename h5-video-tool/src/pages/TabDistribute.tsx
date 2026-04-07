@@ -207,7 +207,22 @@ export function TabDistribute() {
         ) : error ? (
           <p className="text-sm text-[var(--color-error)]">{error}</p>
         ) : accounts.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">暂无账号，请配置 config/geelark-accounts.json（参考 geelark-accounts.json.example）</p>
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 text-center space-y-3">
+            <p className="text-2xl">📱</p>
+            <p className="text-sm font-medium text-[var(--color-text)]">还没有配置账号</p>
+            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+              在服务器的 <code className="bg-[var(--color-surface-hover)] px-1 py-0.5 rounded text-[10px]">config/geelark-accounts.json</code> 文件里添加账号信息，<br/>
+              参考同目录下的 <code className="bg-[var(--color-surface-hover)] px-1 py-0.5 rounded text-[10px]">geelark-accounts.json.example</code> 文件格式
+            </p>
+            <a
+              href="https://geelark.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"
+            >
+              了解 Geelark 矩阵方案 →
+            </a>
+          </div>
         ) : (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
             {(regions.length > 0 || platforms.length > 0) && (

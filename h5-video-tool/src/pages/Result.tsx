@@ -105,21 +105,21 @@ export function Result() {
                   onClick={() => navigate('/distribute')}
                   className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
                 >
-                  <span className="text-2xl">📱</span>
+                  <span className="text-2xl">🚀</span>
                   <div>
-                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">去发布</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">选平台账号一键分发</p>
+                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">手动发布</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">选平台、填文案、单次发</p>
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate('/geelark-batch')}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
+                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-primary)]/10 transition-all text-left group"
                 >
-                  <span className="text-2xl">📱</span>
+                  <span className="text-2xl">📲</span>
                   <div>
-                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">矩阵发布</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">TikTok 多账号批量发</p>
+                    <p className="text-sm font-medium text-[var(--color-primary)] transition-colors">矩阵批发 ★</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">多账号自动化，TikTok 专属</p>
                   </div>
                 </button>
               </div>

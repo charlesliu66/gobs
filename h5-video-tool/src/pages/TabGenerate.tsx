@@ -388,6 +388,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           <button
             type="button"
             onClick={() => setExpertMode((v) => !v)}
+            title={expertMode ? '切换为简洁模式（隐藏高级选项）' : '切换为专家模式（显示全部选项）'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               expertMode
                 ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
@@ -395,7 +396,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             }`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M12 2v2M12 20v2M4.93 4.93l1.41 1.41M18.66 18.66l1.41 1.41M2 12h2M20 12h2"/></svg>
-            {expertMode ? '专家模式' : '简洁模式'}
+            {expertMode ? '⚡ 专家模式' : '简洁模式'}
           </button>
           {templateId && onBackToPicker && (
             <button

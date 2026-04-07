@@ -7,6 +7,7 @@ import {
   type LibraryCharacterSummary,
   type LibraryCharacter,
 } from '../api/characterLibrary';
+import { toast } from './Toast';
 
 interface Props {
   /** 点击「使用到项目」时的回调 */
@@ -15,6 +16,7 @@ interface Props {
 
 export function CharacterLibraryPanel({ onImportToProject }: Props) {
   const [chars, setChars] = useState<LibraryCharacterSummary[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<LibraryCharacter | null>(null);
   const [shareInfo, setShareInfo] = useState<{ url: string; expiresAt: string } | null>(null);
@@ -45,11 +47,16 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!window.confirm('确认删除此角色？')) return;
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id);
+      return;
+    }
+    setDeleteConfirmId(null);
     await deleteCharacterFromLibrary(id);
     setChars((prev) => prev.filter((c) => c.id !== id));
     if (selected?.id === id) setSelected(null);
-  }, [selected]);
+    toast.success('角色已删除');
+  }, [selected, deleteConfirmId]);
 
   const handleShare = useCallback(async (id: string) => {
     try {
@@ -141,9 +148,13 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
                 <button
                   type="button"
                   onClick={() => void handleDelete(selected.id)}
-                  className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    deleteConfirmId === selected.id
+                      ? 'border-red-500/60 bg-red-500/15 text-red-400'
+                      : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                  }`}
                 >
-                  删除
+                  {deleteConfirmId === selected.id ? '再次点击确认删除' : '删除'}
                 </button>
               </div>
             </div>
