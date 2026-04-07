@@ -3,13 +3,11 @@ import { ThemeToggle } from './ThemeToggle';
 
 const navItems = [
   { to: '/', label: '首页', icon: HomeIcon },
-  { to: '/studio', label: 'Studio', icon: StudioIcon, end: true },
-  { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
-  { to: '/editor', label: '剪辑', icon: EditorIcon },
+  { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
   { to: '/materials', label: '素材管理', icon: MaterialsIcon },
-  { to: '/history', label: '历史', icon: HistoryIcon },
   { to: '/distribute', label: '视频分发', icon: DistributeIcon },
   { to: '/geelark-batch', label: 'TikTok 矩阵', icon: GeelarkIcon },
+  { to: '/history', label: '历史记录', icon: HistoryIcon },
 ];
 
 function HomeIcon() {

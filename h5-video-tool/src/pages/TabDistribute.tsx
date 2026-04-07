@@ -192,7 +192,10 @@ export function TabDistribute() {
 
   return (
     <div className="max-w-6xl w-full space-y-6">
-      <h1 className="page-title">视频分发</h1>
+      <div>
+        <h1 className="page-title">第三步：分发到社媒</h1>
+        <p className="text-sm text-[var(--color-text-muted)] mt-1">选择目标账号，添加文案，一键发布到各平台</p>
+      </div>
 
       {/* TT 账号列表 */}
       <section className="mb-6">

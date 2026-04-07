@@ -8,16 +8,6 @@ import { GalleryView } from '../components/GalleryView';
 import { StudioErrorBoundary } from '../components/ErrorFallback';
 import { useCreateFlow } from '../context/CreateFlowContext';
 
-const STUDIO_TABS = [
-  { id: 'studio', label: 'Studio', sublabel: '创作' },
-  { id: 'gallery', label: 'Gallery', sublabel: '内容管理' },
-] as const;
-
-const CREATE_MODE_TABS = [
-  { id: 'create', label: '创作' },
-  { id: 'templates', label: '模板市场' },
-] as const;
-
 type HomeStudioState = { autoSelectCustom?: boolean; seedPrompt?: string };
 
 export function Studio() {
@@ -32,23 +22,25 @@ export function Studio() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as string | null;
-  const mainTab = tabFromUrl === 'gallery' ? 'gallery' : 'studio';
-  const initialCreateMode = tabFromUrl === 'templates' ? 'templates' : 'create';
-  const [activeMainTab, setActiveMainTab] = useState<'studio' | 'gallery'>(mainTab);
-  const [createMode, setCreateMode] = useState<'templates' | 'create'>(initialCreateMode);
 
-  const handleMainTabChange = (tab: 'studio' | 'gallery') => {
-    setActiveMainTab(tab);
-    setSearchParams({ tab });
-  };
+  // 主 tab：create | templates | gallery
+  const [activeTab, setActiveTab] = useState<'create' | 'templates' | 'gallery'>(
+    tabFromUrl === 'templates' ? 'templates' : tabFromUrl === 'gallery' ? 'gallery' : 'create',
+  );
 
-  // URL tab 变化时同步 createMode（如刷新、直接访问 /studio?tab=templates）
+  // URL 变化时同步
   useEffect(() => {
-    const mode = tabFromUrl === 'templates' ? 'templates' : 'create';
-    setCreateMode(mode);
+    const t = tabFromUrl === 'templates' ? 'templates' : tabFromUrl === 'gallery' ? 'gallery' : 'create';
+    setActiveTab(t);
   }, [tabFromUrl]);
 
-  /** 首页大输入框「进入创作」：直达自定义模板并可选带入 seed Prompt */
+  const switchTab = (tab: 'create' | 'templates' | 'gallery') => {
+    setActiveTab(tab);
+    if (tab === 'create') setSearchParams({});
+    else setSearchParams({ tab });
+  };
+
+  /** 首页带 seed prompt 进来 */
   useEffect(() => {
     const st = location.state as HomeStudioState | null;
     if (!st?.autoSelectCustom) return;
@@ -56,8 +48,7 @@ export function Studio() {
     setVideoDuration(8);
     setVideoAspectRatio('9:16');
     if (st.seedPrompt?.trim()) setPrompt(st.seedPrompt.trim());
-    setActiveMainTab('studio');
-    setCreateMode('create');
+    setActiveTab('create');
     navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
   }, [
     location.state,
@@ -74,96 +65,89 @@ export function Studio() {
     (template: { prompt: string; aspectRatio?: string }) => {
       setPrompt(template.prompt);
       if (template.aspectRatio) setVideoAspectRatio(template.aspectRatio);
-      setCreateMode('create');
+      switchTab('create');
     },
     [setPrompt, setVideoAspectRatio],
   );
 
+  const TABS = [
+    { id: 'create' as const, label: '创作' },
+    { id: 'templates' as const, label: '模板市场' },
+    { id: 'gallery' as const, label: '历史内容' },
+  ];
+
   return (
     <div className="min-h-screen">
-      {/* 标题区 - 与主区域列宽一致 */}
+      {/* 顶部标题 + Tab */}
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-        <div className="max-w-6xl px-6 py-5">
-          <h1 className="page-title">Studio</h1>
-        <p className="page-subtitle">
-          创建和管理你的 AI 生成视频。Studio 创作内容，Gallery 展示与管理。
-        </p>
-        <p className="mt-2 text-sm">
-          <Link
-            to="/studio/production"
-            className="font-medium text-[var(--color-primary)] hover:underline"
-          >
-            高级制片
-          </Link>
-          <span className="text-[var(--color-text-muted)]"> — 故事结构 → 分镜表 → Prompt 组装（分步生成）</span>
-        </p>
-        {/* 子 Tab：Studio | Gallery */}
-        <div className="mt-4 flex gap-1">
-          {STUDIO_TABS.map(({ id, label, sublabel }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => handleMainTabChange(id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeMainTab === id
-                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-              }`}
+        <div className="max-w-6xl px-6 pt-5 pb-0">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-[var(--color-text)]">生成视频</h1>
+              <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                输入创意 → 选素材 → 即梦 AI 生成
+              </p>
+            </div>
+            {/* 高级制片入口 */}
+            <Link
+              to="/studio/production"
+              className="mb-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
             >
-              {label}
-              <span className="ml-1.5 text-xs opacity-80">{sublabel}</span>
-            </button>
-          ))}
-        </div>
+              高级制片 →
+            </Link>
+          </div>
+          {/* Tab 栏 */}
+          <div className="mt-4 flex gap-1">
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => switchTab(id)}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === id
+                    ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                    : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* 内容区 - Layout 主区域已有 padding，仅需顶部间距与列宽 */}
+      {/* 内容区 */}
       <div className="pt-6">
         <StudioErrorBoundary>
-          {activeMainTab === 'gallery' ? (
-            <div className="max-w-6xl">
+          {activeTab === 'gallery' ? (
+            <div className="max-w-6xl px-6">
               <GalleryView />
             </div>
-          ) : (
-            <div className="max-w-6xl">
-            {/* Studio 创作区：内层 Tab 创作 | 模板市场 */}
-            <div className="mb-6 flex gap-1">
-              {CREATE_MODE_TABS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    setCreateMode(id);
-                    setSearchParams(id === 'create' ? {} : { tab: id });
-                  }}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    createMode === id
-                      ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {createMode === 'templates' ? (
+          ) : activeTab === 'templates' ? (
+            <div className="max-w-6xl px-6">
               <TemplateMarket onUseTemplate={handleUseTemplate} />
-            ) : templateId === 'boss-showcase' ? (
-              <BossShowcase onBackToPicker={() => setTemplateId('')} />
-            ) : templateId ? (
-              <TabGenerate onBrowseTemplates={() => setCreateMode('templates')} onBackToPicker={() => setTemplateId('')} />
-            ) : (
-              <TemplatePicker
-                onSelect={(t) => {
-                  setTemplateId(t.id);
-                  setVideoDuration(t.duration);
-                  setVideoAspectRatio(t.aspectRatio);
-                }}
-              />
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            // 创作区：选模板 or 直接创作
+            <div className="max-w-6xl">
+              {templateId === 'boss-showcase' ? (
+                <BossShowcase onBackToPicker={() => setTemplateId('')} />
+              ) : templateId ? (
+                <TabGenerate
+                  onBrowseTemplates={() => switchTab('templates')}
+                  onBackToPicker={() => setTemplateId('')}
+                />
+              ) : (
+                <TemplatePicker
+                  onSelect={(t) => {
+                    setTemplateId(t.id);
+                    setVideoDuration(t.duration);
+                    setVideoAspectRatio(t.aspectRatio);
+                  }}
+                />
+              )}
+            </div>
+          )}
         </StudioErrorBoundary>
       </div>
     </div>
