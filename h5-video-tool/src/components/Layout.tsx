@@ -4,7 +4,10 @@ import { ThemeToggle } from './ThemeToggle';
 const navItems = [
   { to: '/', label: '首页', icon: HomeIcon },
   { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
+  { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
+  { to: '/editor', label: '视频剪辑', icon: EditorIcon },
   { to: '/materials', label: '素材管理', icon: MaterialsIcon },
+  { to: '/studio?tab=templates', label: '模板市场', icon: TemplateIcon },
   { to: '/distribute', label: '视频分发', icon: DistributeIcon },
   { to: '/geelark-batch', label: 'TikTok 矩阵', icon: GeelarkIcon },
   { to: '/history', label: '历史记录', icon: HistoryIcon },
@@ -67,6 +70,17 @@ function MaterialsIcon() {
   );
 }
 
+function TemplateIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
 function HistoryIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -116,28 +130,34 @@ export function Layout() {
             />
           </div>
           {/* 导航 */}
-          <nav className="flex-1 p-3 space-y-0.5">
-            {navItems.map(({ to, label, icon: Icon, end: endProp }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={endProp ?? to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-                  }`
-                }
-              >
-                <Icon />
-                {label}
-              </NavLink>
+          <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+            {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
+              <>
+                {(idx === 4 || idx === 6) && (
+                  <div key={`sep-${idx}`} className="my-1.5 border-t border-[var(--color-border)]/40" />
+                )}
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={endProp ?? to === '/'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                        : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+                    }`
+                  }
+                >
+                  <Icon />
+                  {label}
+                </NavLink>
+              </>
             ))}
           </nav>
           {/* 设置：主题切换 */}
           <div className="p-3 border-t border-[var(--color-border)]">
             <ThemeToggle />
+            <p className="text-[10px] text-center text-[var(--color-text-subtle)] pb-1">GOBS v0.1</p>
           </div>
         </div>
       </aside>

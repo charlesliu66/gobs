@@ -235,10 +235,19 @@ export function Home() {
               key={s.label}
               type="button"
               onClick={() => navigate(s.to)}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface-hover)] transition-all text-sm hover:text-[var(--color-text)] ${
+                s.hot
+                  ? 'border-[var(--color-primary)]/50 hover:border-[var(--color-primary)]'
+                  : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'
+              }`}
             >
+              {s.hot && (
+                <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-primary)] text-white">
+                  HOT
+                </span>
+              )}
               <span className="text-2xl">{s.emoji}</span>
-              <span className="font-medium text-xs">{s.label}</span>
+              <span className={`font-medium text-xs ${s.hot ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}>{s.label}</span>
             </button>
           ))}
         </div>
@@ -251,8 +260,8 @@ export function Home() {
 // ─── 快捷入口数据 ──────────────────────────────────────────────────────────────
 
 const SHORTCUTS = [
-  { emoji: '🎬', label: '模板创作', to: '/studio?tab=templates' },
-  { emoji: '📂', label: '历史视频', to: '/history' },
-  { emoji: '✂️', label: '视频剪辑', to: '/editor' },
-  { emoji: '📱', label: 'TikTok 矩阵', to: '/geelark-batch' },
+  { emoji: '🎬', label: '模板市场', to: '/studio?tab=templates', hot: true },
+  { emoji: '📂', label: '历史视频', to: '/history', hot: false },
+  { emoji: '✂️', label: '视频剪辑', to: '/editor', hot: false },
+  { emoji: '📱', label: 'TikTok 矩阵', to: '/geelark-batch', hot: false },
 ] as const;

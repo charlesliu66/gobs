@@ -1226,7 +1226,10 @@ export function ProductionWizard() {
                 placeholder="项目名称"
                 className="w-full max-w-xl border-0 bg-transparent text-lg font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
               />
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">高级制片 · 剧本 → 资产 → 分镜 → 导出</p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs text-[var(--color-text-muted)]">高级制片 · 故事弧 → 角色资产 → 分镜表 → 生成导出</p>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-primary)]/20 text-[var(--color-primary)]">BETA</span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link to="/studio" className="text-sm text-[var(--color-primary)] hover:underline">
@@ -1241,23 +1244,54 @@ export function ProductionWizard() {
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* 步骤进度条 */}
+          <div className="flex items-center gap-0">
             {STEPS.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setStep(i)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  step === i
-                    ? 'bg-[var(--color-primary)] text-white'
-                    : step > i
-                      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
-                      : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]'
-                }`}
-              >
-                <span className="tabular-nums">{i + 1}</span>
-                {s.label}
-              </button>
+              <div key={s.id} className="flex items-center">
+                {/* 连接线（步骤间） */}
+                {i > 0 && (
+                  <div
+                    className={`h-0.5 w-8 sm:w-12 transition-colors ${
+                      step >= i ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-border)]'
+                    }`}
+                  />
+                )}
+                {/* 步骤圆圈 + 标签 */}
+                <button
+                  type="button"
+                  onClick={() => setStep(i)}
+                  className="flex flex-col items-center gap-1 group"
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      step === i
+                        ? 'bg-[var(--color-primary)] text-white ring-2 ring-[var(--color-primary)]/30 ring-offset-1 ring-offset-[var(--color-surface-elevated)]'
+                        : step > i
+                          ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                          : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] group-hover:bg-[var(--color-border)]'
+                    }`}
+                  >
+                    {step > i ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <span
+                    className={`text-[10px] font-medium whitespace-nowrap transition-colors ${
+                      step === i
+                        ? 'text-[var(--color-primary)]'
+                        : step > i
+                          ? 'text-[var(--color-text-muted)]'
+                          : 'text-[var(--color-text-subtle)]'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </button>
+              </div>
             ))}
           </div>
         </div>
