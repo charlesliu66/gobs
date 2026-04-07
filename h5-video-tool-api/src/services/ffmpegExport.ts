@@ -202,7 +202,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
 
     // ── Step 3: 混入 BGM ─────────────────────────────────────────────────────
     log(65, '混入 BGM…');
-    const bgmTrack = project.tracks.find((t) => t.type === 'audio' && t.id !== 'a1');
+    const bgmTrack = project.tracks.find((t) => t.type === 'audio' && (t.id === 'a2' || t.id === 'bgm'));
     const bgmClip = bgmTrack
       ? ((bgmTrack.clips ?? []) as AudioClip[])[0]
       : null;
