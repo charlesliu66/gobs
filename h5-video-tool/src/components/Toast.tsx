@@ -44,28 +44,28 @@ export const toast = {
 
 const KIND_STYLES: Record<ToastKind, { bg: string; border: string; icon: string; text: string }> = {
   success: {
-    bg: 'bg-[#052e16]/90',
-    border: 'border-[#16a34a]/50',
+    bg: 'bg-[var(--color-surface-elevated)]/95',
+    border: 'border-[var(--color-success)]/50',
     icon: '✓',
-    text: 'text-[#4ade80]',
+    text: 'text-[var(--color-success)]',
   },
   error: {
-    bg: 'bg-[#2d0a0a]/90',
-    border: 'border-[#dc2626]/50',
+    bg: 'bg-[var(--color-surface-elevated)]/95',
+    border: 'border-[var(--color-error)]/50',
     icon: '✕',
-    text: 'text-[#f87171]',
+    text: 'text-[var(--color-error)]',
   },
   info: {
-    bg: 'bg-[#0d1b2a]/90',
-    border: 'border-[#3b82f6]/50',
+    bg: 'bg-[var(--color-surface-elevated)]/95',
+    border: 'border-[var(--color-primary)]/50',
     icon: 'ℹ',
-    text: 'text-[#60a5fa]',
+    text: 'text-[var(--color-primary)]',
   },
   warning: {
-    bg: 'bg-[#2d1a00]/90',
-    border: 'border-[#d97706]/50',
+    bg: 'bg-[var(--color-surface-elevated)]/95',
+    border: 'border-[var(--color-warning)]/50',
     icon: '⚠',
-    text: 'text-[#fbbf24]',
+    text: 'text-[var(--color-warning)]',
   },
 };
 
@@ -89,7 +89,7 @@ function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: (id: string)
 
   return (
     <div
-      className={`flex items-start gap-3 px-4 py-3 rounded-xl border backdrop-blur-sm shadow-lg max-w-sm w-full transition-all duration-300 ${s.bg} ${s.border} ${
+      className={`flex items-start gap-3 px-4 py-3 rounded-xl border backdrop-blur-md shadow-xl max-w-sm w-full transition-all duration-300 ${s.bg} ${s.border} ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       }`}
     >

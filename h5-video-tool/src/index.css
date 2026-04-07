@@ -110,6 +110,13 @@ button, a, input, textarea {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* 全局 input/textarea/select focus 样式 */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
 /* 排版规范 - 以 TikTok 矩阵为参考，各 tab 统一 */
 .page-title { font-size: 1.5rem; font-weight: 600; color: var(--color-text); }
 .page-subtitle { font-size: 0.875rem; color: var(--color-text-muted); margin-top: 0.25rem; }

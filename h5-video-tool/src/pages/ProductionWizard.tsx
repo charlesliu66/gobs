@@ -1521,7 +1521,7 @@ export function ProductionWizard() {
                     )}
                   </div>
                   <span
-                    className={`text-[10px] font-medium whitespace-nowrap transition-colors ${
+                    className={`text-[11px] font-medium whitespace-nowrap transition-colors ${
                       step === i
                         ? 'text-[var(--color-primary)]'
                         : step > i
@@ -2934,7 +2934,7 @@ export function ProductionWizard() {
                     />
                   </div>
                 ) : (
-                  <p className="mt-3 text-[10px] text-[var(--color-text-muted)]">暂无分镜图，点击「生成分镜图」。</p>
+                  <p className="mt-3 text-[11px] text-[var(--color-text-muted)]">暂无分镜图，点击「生成分镜图」。</p>
                 )}
                 {shot.previewVideoUrl ? (
                   <div className="mt-3">
