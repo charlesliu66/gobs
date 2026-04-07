@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { toast } from '../components/Toast';
+import { ExportPanel } from '../editor/components/ExportPanel';
 import { EditorShell } from '../editor/layout/EditorShell';
 import { useTimelineState } from '../editor/hooks/useTimelineState';
 import { TimelinePanel } from '../editor/components/TimelinePanel';
@@ -742,6 +744,27 @@ export function EditorWorkbench() {
     }
   }, [project, aspectRatio, pushLog]);
 
+  const handleCaptureCover = useCallback(() => {
+    const video = document.querySelector<HTMLVideoElement>('video');
+    if (!video) { toast.info('暂无视频可截取'); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1080;
+    canvas.height = video.videoHeight || 1920;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cover_${Date.now()}.jpg`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('封面已截取，请检查下载文件');
+    }, 'image/jpeg', 0.92);
+  }, []);
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <EditorShell
@@ -930,19 +953,19 @@ export function EditorWorkbench() {
         }
         topBarExtra={
           <div className="flex items-center gap-2">
-            {exportHint && (
-              <span className="max-w-[200px] truncate text-[10px] text-[var(--color-text-muted)]" title={exportHint}>
-                {exportHint}
-              </span>
-            )}
             <button
               type="button"
-              disabled={exportBusy}
-              onClick={handleExport}
-              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              onClick={handleCaptureCover}
+              title="截取当前帧为封面"
+              className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
-              {exportBusy ? '导出中…' : '一键导出 MP4'}
+              📷 截帧
             </button>
+            <ExportPanel
+              project={project}
+              aspectRatio={aspectRatio}
+              onPushLog={pushLog}
+            />
           </div>
         }
       />

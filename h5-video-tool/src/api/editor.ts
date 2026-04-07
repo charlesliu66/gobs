@@ -68,6 +68,9 @@ export interface EditorExportStatusResponse {
 export async function startEditorExport(body: {
   project: TimelineProject;
   aspectRatio?: AspectRatioPreset;
+  resolution?: string;
+  format?: string;
+  quality?: string;
 }): Promise<EditorExportStartResponse> {
   return apiPost<EditorExportStartResponse>('/api/editor/export', body);
 }
