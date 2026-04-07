@@ -15,11 +15,12 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { getPublicApiBaseUrlForKlingRef } from '../config/publicApiBase.js';
+import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 
 const TIMEOUT_MS = Math.max(30000, parseInt(process.env.YT_DLP_TIMEOUT_MS || '120000', 10) || 120000);
 const DOWNLOAD_TIMEOUT_MS = Math.max(TIMEOUT_MS, parseInt(process.env.YT_DLP_DOWNLOAD_TIMEOUT_MS || '300000', 10) || 300000);
 
-const OUTPUT_DIR = process.env.VIDEO_OUTPUT_DIR || path.resolve(process.cwd(), 'output');
+const OUTPUT_DIR = getDefaultVideoOutputDir();
 
 /** 可灵参考视频缓存目录（供 GET /api/video/kling/ref-cache/:id） */
 export const KLING_REF_CACHE_DIR = path.join(OUTPUT_DIR, 'kling-ref-cache');

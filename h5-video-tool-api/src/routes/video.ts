@@ -38,10 +38,11 @@ import {
   submitDreaminaMultimodalVideo,
   submitDreaminaVideo,
 } from '../services/dreaminaVideo.js';
+import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 
 export const videoRouter = Router();
 
-const OUTPUT_DIR = process.env.VIDEO_OUTPUT_DIR || path.resolve(process.cwd(), 'output');
+const OUTPUT_DIR = getDefaultVideoOutputDir();
 
 /**
  * Omni `video_url` 须为服务端可直接拉取的视频资源。社交「分享页」会导致拉取失败，ingarena 常报 DatabaseError。
@@ -269,8 +270,8 @@ videoRouter.get('/file', async (req: Request, res: Response) => {
     res.status(400).json({ error: '请提供 path 参数' });
     return;
   }
-  const outputDir = path.resolve(process.cwd(), 'output');
-  const fullPath = path.resolve(process.cwd(), path.normalize(rawPath));
+  const outputDir = getDefaultVideoOutputDir();
+  const fullPath = path.resolve(getApiDataDir(), path.normalize(rawPath));
   if (!fullPath.startsWith(outputDir + path.sep) && fullPath !== outputDir) {
     res.status(400).json({ error: 'path 必须在 output 目录下' });
     return;

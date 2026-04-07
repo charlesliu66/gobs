@@ -8,6 +8,7 @@ import path from 'path';
 import os from 'os';
 import fsSync from 'fs';
 import { randomBytes } from 'crypto';
+import { getUploadsPath } from '../config/apiDataDir.js';
 
 const DREAMINA_TEXT2VIDEO = 'dreamina-text2video';
 const DREAMINA_IMAGE2VIDEO = 'dreamina-image2video';
@@ -196,7 +197,7 @@ function toDreaminaCliPath(absPath: string): string {
 function getDreaminaStagingDir(): string {
   const env = process.env.DREAMINA_MEDIA_STAGING_DIR?.trim();
   if (env) return path.resolve(env);
-  return path.resolve(process.cwd(), 'uploads', 'dreamina-mm');
+  return getUploadsPath('dreamina-mm');
 }
 
 interface WrapperJson {

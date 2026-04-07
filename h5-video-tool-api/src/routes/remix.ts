@@ -5,10 +5,11 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { runRemix, runMergeRemix, type SubtitleCue } from '../services/remixService.js';
+import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 
 export const remixRouter = Router();
 
-const OUTPUT_DIR = process.env.VIDEO_OUTPUT_DIR || path.resolve(process.cwd(), 'output');
+const OUTPUT_DIR = getDefaultVideoOutputDir();
 
 interface RemixTask {
   id: string;

@@ -5,10 +5,11 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { decodeMultipartFilename } from '../utils/multipartFilename.js';
+import { getUploadsPath } from '../config/apiDataDir.js';
 
 const router = Router();
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'editor');
+const UPLOAD_DIR = getUploadsPath('editor');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const UPLOAD_MAX_MB = Math.min(

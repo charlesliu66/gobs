@@ -7,8 +7,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import axios from 'axios';
+import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 
-const OUTPUT_DIR = process.env.VIDEO_OUTPUT_DIR || path.resolve(process.cwd(), 'output');
+const OUTPUT_DIR = getDefaultVideoOutputDir();
 const REMIX_OUTPUT_DIR = path.join(OUTPUT_DIR, 'remix');
 
 export interface SubtitleCue {

@@ -147,7 +147,26 @@ pm2 startup
 - **视频生成**：Compass/Remix 等接口
 - **GeeLark 分发**：云手机、任务管理、批量发布
 
-## 六、常见问题
+## 六、云服务器与素材存储（Ubuntu 示例）
+
+1. **不要用密码登录**：在云平台修改默认密码，改用 **SSH 公钥** 登录；勿将口令写入仓库或文档。
+2. **挂载数据盘（可选）**：控制台挂载云硬盘后，例如挂载到 `/data`，并设置属主：
+   ```bash
+   sudo mkdir -p /data/qas
+   sudo chown -R ubuntu:ubuntu /data/qas
+   ```
+3. **后端 `.env` 增加**（与 `PORT`、`COMPASS_API_KEY` 等一并配置）：
+   ```env
+   API_DATA_DIR=/data/qas
+   ```
+   则上传与生成文件会落在：
+   - `/data/qas/uploads/`（剪辑上传、即梦缓存等）
+   - `/data/qas/output/`（生成视频、可灵缓存等，除非另设 `VIDEO_OUTPUT_DIR`）
+4. **进程管理**：与上文一致，使用 `pm2 start dist/index.js --name h5-api`，工作目录为 `h5-video-tool-api`。
+5. **防火墙 / 安全组**：放行 **80/443**（Nginx）及 **3001**（若未走反向代理则按需开放；推荐仅本机访问 3001，由 Nginx 对外暴露 80/443）。
+6. **前端 `VITE_API_BASE_URL`**：若前后端同机且 Nginx 反代 `/api`，可留空；若 API 单独域名，填 `https://api.你的域名`。
+
+## 七、常见问题
 
 1. **CORS 报错**：确保后端 `cors()` 已启用，或 Nginx 正确代理 `/api`
 2. **Google OAuth 失败**：在 Google Cloud Console 添加生产域名到「已授权的 JavaScript 来源」

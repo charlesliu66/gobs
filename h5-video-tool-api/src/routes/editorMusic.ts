@@ -7,6 +7,7 @@ import {
   LYRIA_CLIP_DURATION_SEC,
 } from '../services/compassLyriaMusic.js';
 import { polishLyriaMusicPrompt } from '../services/editorMusicPromptPolish.js';
+import { getUploadsPath } from '../config/apiDataDir.js';
 
 const router = Router();
 
@@ -23,7 +24,7 @@ router.post('/music/polish-prompt', async (req, res) => {
   }
 });
 
-const MUSIC_DIR = path.join(process.cwd(), 'uploads', 'editor', 'music');
+const MUSIC_DIR = getUploadsPath('editor', 'music');
 fs.mkdirSync(MUSIC_DIR, { recursive: true });
 
 type MusicMeta = { filename: string; createdAt: string; prompt: string };
