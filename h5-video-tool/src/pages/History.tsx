@@ -22,6 +22,8 @@ import {
   type KlingVideoListRow,
 } from '../api/video';
 import { pollRemixUntilDone, submitRemixMerge } from '../api/remix';
+import { uploadEditorAsset } from '../api/editor';
+import type { BatchJobDto } from '../api/batchJobs';
 import { absoluteApiUrl } from '../utils/absoluteApiUrl';
 import { BatchJobsBoard } from '../components/BatchJobsBoard';
 
@@ -91,6 +93,29 @@ export function History() {
   const [mergeIntroUrl, setMergeIntroUrl] = useState('');
   const [mergeOutroUrl, setMergeOutroUrl] = useState('');
   const [mergeSubtitleMode, setMergeSubtitleMode] = useState<'off' | 'simple' | 'srt'>('off');
+  const [batchImportBusy, setBatchImportBusy] = useState(false);
+
+  /** 把批量任务成品导入到剪辑时间轴 */
+  const handleImportBatchVideo = useCallback(async (job: BatchJobDto) => {
+    if (!job.videoUrl) return;
+    setBatchImportBusy(true);
+    try {
+      // 下载视频 → Blob → 上传到剪辑素材库 → navigate 到剪辑页
+      const resp = await fetch(job.videoUrl);
+      if (!resp.ok) throw new Error(`下载失败 ${resp.status}`);
+      const blob = await resp.blob();
+      const filename = `batch_shot${job.shotIndex + 1}_${job.id}.mp4`;
+      const file = new File([blob], filename, { type: 'video/mp4' });
+      const { asset } = await uploadEditorAsset(file);
+      // 把 assetId 存到 sessionStorage，EditorWorkbench 启动时读取并追加
+      sessionStorage.setItem('editor_pending_import', JSON.stringify({ assetId: asset.id, originalName: filename }));
+      navigate('/editor');
+    } catch (e) {
+      alert(`导入失败：${e instanceof Error ? e.message : '未知错误'}`);
+    } finally {
+      setBatchImportBusy(false);
+    }
+  }, [navigate]);
   const [mergeSimpleText, setMergeSimpleText] = useState('');
   const [mergeSrtText, setMergeSrtText] = useState('');
   const [mergeBusy, setMergeBusy] = useState(false);
@@ -583,7 +608,12 @@ export function History() {
       {/* 批量任务看板 */}
       {tab === 'batch' && (
         <section className="space-y-4">
-          <BatchJobsBoard />
+          {batchImportBusy && (
+            <div className="text-sm text-[var(--color-text-muted)] text-center py-2">
+              正在上传视频到素材库，请稍候…
+            </div>
+          )}
+          <BatchJobsBoard onImportVideo={handleImportBatchVideo} />
         </section>
       )}
 

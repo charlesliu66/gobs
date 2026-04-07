@@ -399,8 +399,29 @@ export function EditorWorkbench() {
     [setAssets, setProject, pushLog],
   );
 
-  const handleDeleteClip = useCallback(
-    (trackId: string, clipId: string) => {
+  // 读取 History 页面「导入到时间轴」存入的 pending import
+  useEffect(() => {
+    const raw = sessionStorage.getItem('editor_pending_import');
+    if (!raw) return;
+    sessionStorage.removeItem('editor_pending_import');
+    try {
+      const { assetId, originalName } = JSON.parse(raw) as { assetId: string; originalName: string };
+      if (!assetId) return;
+      const url = `${API_BASE}/api/editor/assets/files/${assetId}`;
+      // 延迟一拍等 libraryItems 加载完
+      const timer = setTimeout(async () => {
+        const asset: EditorAssetDto = { id: assetId, url, kind: 'video', originalName, durationSec: 10 };
+        await handleAddToTimeline(asset);
+        toast.success(`已导入「${originalName}」到时间轴`);
+      }, 800);
+      return () => clearTimeout(timer);
+    } catch {
+      // ignore parse error
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDeleteClip = useCallback(    (trackId: string, clipId: string) => {
       /** 原声轨片段由视频轨镜像生成，删除请改视频轨 */
       if (trackId === 'a1') return;
       setIsPlaying(false);
