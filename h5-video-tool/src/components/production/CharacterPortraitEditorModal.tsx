@@ -13,6 +13,8 @@ export interface CharacterPortraitEditorModalProps {
   characterSheet: CharacterSheet;
   editIntent: PortraitEditIntent;
   storyBio?: string;
+  /** 优先作为「补充描述」默认内容（制作清单 wardrobe 服化道） */
+  wardrobeSupplementDefault?: string;
   styleRef: string;
   productionDesign: ProductionDesignLayer | null;
   /** 立项画风参考图，生成预览时多模态锁定全片影调 */
@@ -30,6 +32,7 @@ export function CharacterPortraitEditorModal({
   characterSheet,
   editIntent,
   storyBio,
+  wardrobeSupplementDefault,
   styleRef,
   productionDesign,
   globalStyleReferenceFrame,
@@ -57,7 +60,9 @@ export function CharacterPortraitEditorModal({
       /* ignore */
     }
     setGenMode('text');
-    setExtraPrompt(storyBio?.trim() ?? '');
+    setExtraPrompt(
+      wardrobeSupplementDefault?.trim() || storyBio?.trim() || '',
+    );
 
     if (editIntent.mode === 'branch') {
       const parent = lookTree.find((n) => n.id === editIntent.parentNodeId);
@@ -70,7 +75,7 @@ export function CharacterPortraitEditorModal({
     } else {
       setRefDataUrl(null);
     }
-  }, [characterSheet.id, editIntent, lookTree, storyBio]);
+  }, [characterSheet.id, editIntent, lookTree, storyBio, wardrobeSupplementDefault]);
 
   const persistKey = useCallback((k: string) => {
     setCompassKey(k);

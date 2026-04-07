@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   loadVideoHistory,
   removeVideoFromHistory,
-  getVideoFileUrl,
   getLocalPlaybackSrc,
   saveVideoToHistory,
   toggleVideoHistoryStarred,

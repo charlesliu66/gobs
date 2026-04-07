@@ -17,6 +17,7 @@ import {
   type StoryBeat,
   type ProductionShot,
   type ProductionDesignLayer,
+  type PropSheet,
 } from '../studio/productionTypes';
 import {
   addCharacterLookBranch,
@@ -25,6 +26,10 @@ import {
   mergeSceneSheetsFromL2,
   buildCharacterImagePrompt,
   buildSceneImagePrompt,
+  buildPropImagePrompt,
+  buildPropSheetsFromProductionDesign,
+  mergePropSheetsPreservingImages,
+  formatWardrobeSupplementForCharacter,
   computeShotRefTags,
   buildShotMultimodalRefPack,
   buildProductionShotVideoStoryboardText,
@@ -49,14 +54,7 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
-import {
-  uploadProductionImage,
-  saveProductionProject,
-  loadProductionProject,
-  listProductionProjects,
-  resolveProductionImageUrl,
-  type ProjectListItem,
-} from '../api/production';
+import { saveProductionProject, loadProductionProject, listProductionProjects, type ProjectListItem } from '../api/production';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -69,12 +67,12 @@ const ASPECT_OPTIONS = ['16:9', '9:16', '1:1', '4:3'] as const;
 const STEPS = [
   { id: 0, label: '输入' },
   { id: 1, label: '剧本大纲' },
-  { id: 2, label: '角色与场景' },
+  { id: 2, label: '角色·场景·道具' },
   { id: 3, label: '分镜' },
   { id: 4, label: '导出' },
 ];
 
-type L2Tab = 'characters' | 'scenes' | 'checklist';
+type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
 
 interface StoredWizard {
   project: ProductionProject;
@@ -98,6 +96,10 @@ function migrateProject(p: ProductionProject): ProductionProject {
     if (next.productionDesign && next.sceneAssets?.length) {
       next.sceneAssets = mergeSceneSheetsFromL2(next.sceneAssets, next.productionDesign);
     }
+  }
+  if (next.productionDesign?.props?.length) {
+    const built = buildPropSheetsFromProductionDesign(next.productionDesign);
+    next.propAssets = mergePropSheetsPreservingImages(built, next.propAssets ?? []);
   }
   if (!next.meta.aspectRatio) {
     next.meta = { ...next.meta, aspectRatio: '16:9' };
@@ -494,23 +496,38 @@ function StoryAssetFieldsFromOutline({
   );
 }
 
-function updateVariantImage(
-  sheets: CharacterSheet[] | SceneSheet[],
+function updateFlatAssetVariantImage<T extends { id: string; variants: AssetVariant[] }>(
+  sheets: T[],
   sheetId: string,
   variantId: string,
   imageDataUrl: string,
-): CharacterSheet[] | SceneSheet[] {
+): T[] {
   return sheets.map((sh) => {
     if (sh.id !== sheetId) return sh;
-    if ('sceneRef' in sh && (sh as SceneSheet).sceneRef !== undefined) {
-      const sc = sh as SceneSheet;
-      return {
-        ...sc,
-        variants: sc.variants.map((v) => (v.id === variantId ? { ...v, imageDataUrl } : v)),
-      };
-    }
-    return setCharacterLookNodeImage(ensureCharacterLookTree(sh as CharacterSheet), variantId, imageDataUrl);
-  }) as CharacterSheet[] | SceneSheet[];
+    return {
+      ...sh,
+      variants: sh.variants.map((v) => (v.id === variantId ? { ...v, imageDataUrl } : v)),
+    };
+  });
+}
+
+function updateVariantImage(
+  sheets: CharacterSheet[] | SceneSheet[] | PropSheet[],
+  sheetId: string,
+  variantId: string,
+  imageDataUrl: string,
+  kind: 'char' | 'scene' | 'prop',
+): CharacterSheet[] | SceneSheet[] | PropSheet[] {
+  if (kind === 'char') {
+    return sheets.map((sh) => {
+      if (sh.id !== sheetId) return sh as CharacterSheet;
+      return setCharacterLookNodeImage(ensureCharacterLookTree(sh as CharacterSheet), variantId, imageDataUrl);
+    }) as CharacterSheet[];
+  }
+  if (kind === 'scene') {
+    return updateFlatAssetVariantImage(sheets as SceneSheet[], sheetId, variantId, imageDataUrl);
+  }
+  return updateFlatAssetVariantImage(sheets as PropSheet[], sheetId, variantId, imageDataUrl);
 }
 
 export function ProductionWizard() {
@@ -527,6 +544,8 @@ export function ProductionWizard() {
   const [maxTotalDurationSec, setMaxTotalDurationSec] = useState(initial?.maxTotalDurationSec ?? 60);
   const [step, setStep] = useState(initial?.step ?? 0);
   const [l2Tab, setL2Tab] = useState<L2Tab>('characters');
+  /** 制作清单子视图：默认服化道 wardrobe */
+  const [checklistSubTab, setChecklistSubTab] = useState<'wardrobe' | 'props' | 'raw'>('wardrobe');
   const [selectedShotIdx, setSelectedShotIdx] = useState(0);
 
   const [busyL1, setBusyL1] = useState(false);
@@ -583,7 +602,7 @@ export function ProductionWizard() {
     try {
       const raw = await loadProductionProject(id);
       if (raw && typeof raw === 'object' && 'project' in raw) {
-        const s = raw as StoredWizard;
+        const s = raw as unknown as StoredWizard;
         setProject(migrateProject(s.project));
         if (s.characterBible) setCharacterBible(s.characterBible);
         if (s.synopsis) setSynopsis(s.synopsis);
@@ -626,7 +645,7 @@ export function ProductionWizard() {
     const pd = project.productionDesign;
     const styleLock = !!project.meta.styleRefImageDataUrl?.trim();
     const styleRef = project.meta.styleRefSummary;
-    type Task = { kind: 'char' | 'scene'; sheetId: string; variantId: string; prompt: string };
+    type Task = { kind: 'char' | 'scene' | 'prop'; sheetId: string; variantId: string; prompt: string };
     const tasks: Task[] = [];
 
     for (const ch of project.characterAssets ?? []) {
@@ -659,8 +678,21 @@ export function ProductionWizard() {
       tasks.push({ kind: 'scene', sheetId: sc.id, variantId: v0.id, prompt });
     }
 
+    for (const pr of project.propAssets ?? []) {
+      const v0 = pr.variants[0];
+      if (!v0?.id || v0.imageDataUrl) continue;
+      const prompt = buildPropImagePrompt(
+        pr,
+        v0,
+        styleRef,
+        pd,
+        { enforceGlobalStyleLock: styleLock },
+      );
+      tasks.push({ kind: 'prop', sheetId: pr.id, variantId: v0.id, prompt });
+    }
+
     if (tasks.length === 0) {
-      setErr('没有可补全项：角色定稿/场景主变体已有图，或肖像弹窗中有待确认预览。');
+      setErr('没有可补全项：角色定稿/场景/道具主变体已有图，或肖像弹窗中有待确认预览。');
       return;
     }
 
@@ -684,13 +716,20 @@ export function ProductionWizard() {
             const sheets = p.characterAssets ?? [];
             return {
               ...p,
-              characterAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img) as CharacterSheet[],
+              characterAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'char') as CharacterSheet[],
             };
           }
-          const sheets = p.sceneAssets ?? [];
+          if (t.kind === 'scene') {
+            const sheets = p.sceneAssets ?? [];
+            return {
+              ...p,
+              sceneAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'scene') as SceneSheet[],
+            };
+          }
+          const sheets = p.propAssets ?? [];
           return {
             ...p,
-            sceneAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img) as SceneSheet[],
+            propAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'prop') as PropSheet[],
           };
         });
       }
@@ -703,6 +742,7 @@ export function ProductionWizard() {
   }, [
     project.characterAssets,
     project.sceneAssets,
+    project.propAssets,
     project.productionDesign,
     project.meta.styleRefSummary,
     project.meta.styleRefImageDataUrl,
@@ -794,6 +834,7 @@ export function ProductionWizard() {
         assembled: null,
         characterAssets,
         sceneAssets,
+        propAssets: [],
       }));
       setStep(1);
     } catch (e) {
@@ -814,12 +855,14 @@ export function ProductionWizard() {
       const { productionDesign } = await postProductionDesign({ story: project.story });
       setProject((p) => {
         const baseScenes = p.sceneAssets?.length ? p.sceneAssets : buildSceneSheetsFromStory(p.story!);
+        const nextProps = buildPropSheetsFromProductionDesign(productionDesign);
         return {
           ...p,
           productionDesign,
           shots: [],
           assembled: null,
           sceneAssets: mergeSceneSheetsFromL2(baseScenes, productionDesign),
+          propAssets: mergePropSheetsPreservingImages(nextProps, p.propAssets ?? []),
         };
       });
       setStep(2);
@@ -852,7 +895,7 @@ export function ProductionWizard() {
   }, [project.story, project.productionDesign, maxTotalDurationSec]);
 
   const runGenerateFrame = useCallback(
-    async (prompt: string, sheetId: string, variantId: string, kind: 'char' | 'scene') => {
+    async (prompt: string, sheetId: string, variantId: string, kind: 'char' | 'scene' | 'prop') => {
       setGenKey(`${kind}:${sheetId}:${variantId}`);
       setErr(null);
       try {
@@ -869,13 +912,20 @@ export function ProductionWizard() {
             const sheets = p.characterAssets ?? [];
             return {
               ...p,
-              characterAssets: updateVariantImage(sheets, sheetId, variantId, img) as CharacterSheet[],
+              characterAssets: updateVariantImage(sheets, sheetId, variantId, img, 'char') as CharacterSheet[],
             };
           }
-          const sheets = p.sceneAssets ?? [];
+          if (kind === 'scene') {
+            const sheets = p.sceneAssets ?? [];
+            return {
+              ...p,
+              sceneAssets: updateVariantImage(sheets, sheetId, variantId, img, 'scene') as SceneSheet[],
+            };
+          }
+          const sheets = p.propAssets ?? [];
           return {
             ...p,
-            sceneAssets: updateVariantImage(sheets, sheetId, variantId, img) as SceneSheet[],
+            propAssets: updateVariantImage(sheets, sheetId, variantId, img, 'prop') as PropSheet[],
           };
         });
       } catch (e) {
@@ -888,7 +938,7 @@ export function ProductionWizard() {
   );
 
   const handleUploadVariant = useCallback(
-    (file: File | null, sheetId: string, variantId: string, kind: 'char' | 'scene') => {
+    (file: File | null, sheetId: string, variantId: string, kind: 'char' | 'scene' | 'prop') => {
       if (!file || !file.type.startsWith('image/')) return;
       const reader = new FileReader();
       reader.onload = () => {
@@ -898,13 +948,20 @@ export function ProductionWizard() {
             const sheets = p.characterAssets ?? [];
             return {
               ...p,
-              characterAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl) as CharacterSheet[],
+              characterAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'char') as CharacterSheet[],
             };
           }
-          const sheets = p.sceneAssets ?? [];
+          if (kind === 'scene') {
+            const sheets = p.sceneAssets ?? [];
+            return {
+              ...p,
+              sceneAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'scene') as SceneSheet[],
+            };
+          }
+          const sheets = p.propAssets ?? [];
           return {
             ...p,
-            sceneAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl) as SceneSheet[],
+            propAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'prop') as PropSheet[],
           };
         });
       };
@@ -949,6 +1006,19 @@ export function ProductionWizard() {
       const v: AssetVariant = { id: `sv-${sheetId}-${Date.now()}`, label: `变体 ${n}` };
       sheets[i] = { ...sh, variants: [...sh.variants, v] };
       return { ...p, sceneAssets: sheets };
+    });
+  }, []);
+
+  const addPropVariant = useCallback((sheetId: string) => {
+    setProject((p) => {
+      const sheets = [...(p.propAssets ?? [])];
+      const i = sheets.findIndex((s) => s.id === sheetId);
+      if (i < 0) return p;
+      const sh = sheets[i]!;
+      const n = sh.variants.length + 1;
+      const v: AssetVariant = { id: `pv-${sheetId}-${Date.now()}`, label: `变体 ${n}` };
+      sheets[i] = { ...sh, variants: [...sh.variants, v] };
+      return { ...p, propAssets: sheets };
     });
   }, []);
 
@@ -1108,7 +1178,12 @@ export function ProductionWizard() {
       if (p.productionDesign) sceneAssets = mergeSceneSheetsFromL2(sceneAssets, p.productionDesign);
       const prevSc = p.sceneAssets ?? [];
       sceneAssets = mergeSceneSheetsPreservingImages(sceneAssets, prevSc);
-      return { ...p, characterAssets, sceneAssets };
+      let propAssets = p.propAssets ?? [];
+      if (p.productionDesign?.props?.length) {
+        const built = buildPropSheetsFromProductionDesign(p.productionDesign);
+        propAssets = mergePropSheetsPreservingImages(built, propAssets);
+      }
+      return { ...p, characterAssets, sceneAssets, propAssets };
     });
   }, []);
 
@@ -1158,10 +1233,15 @@ export function ProductionWizard() {
       const mv = project.meta.dreaminaModelVersion?.trim();
 
       if (pref === 'dreamina-multimodal') {
-        const pack = buildShotMultimodalRefPack(s, project.characterAssets ?? [], project.sceneAssets ?? []);
+        const pack = buildShotMultimodalRefPack(
+          s,
+          project.characterAssets ?? [],
+          project.sceneAssets ?? [],
+          project.propAssets ?? [],
+        );
         if (!pack.multimodalImages.length) {
           setErr(
-            '全能参考需要至少一张角色或场景参考图：请在角色/场景卡生成定妆图，并确保本镜主体、动作或对白中出现对应角色姓名。',
+            '全能参考需要至少一张角色、场景或道具参考图：请在对应资产卡生成图，并确保本镜文案中出现角色姓名或道具名称。',
           );
           return;
         }
@@ -1227,6 +1307,7 @@ export function ProductionWizard() {
     project.shots,
     project.characterAssets,
     project.sceneAssets,
+    project.propAssets,
     project.meta.shotVideoDreaminaModel,
     project.meta.dreaminaModelVersion,
     ar,
@@ -1243,12 +1324,13 @@ export function ProductionWizard() {
     return [c.goal, c.conflict, c.arc].filter(Boolean).join(' ');
   }, [project.story?.characters]);
   const scSheets = project.sceneAssets ?? [];
+  const propSheets = project.propAssets ?? [];
   const shot = project.shots[selectedShotIdx];
 
   const multimodalRefPack = useMemo(() => {
     if (!shot) return null;
-    return buildShotMultimodalRefPack(shot, chSheets, scSheets);
-  }, [shot, chSheets, scSheets]);
+    return buildShotMultimodalRefPack(shot, chSheets, scSheets, propSheets);
+  }, [shot, chSheets, scSheets, propSheets]);
 
   const multimodalAutoPrompt = useMemo(() => {
     if (!shot || !multimodalRefPack) return '';
@@ -1692,6 +1774,7 @@ export function ProductionWizard() {
                     [
                       { id: 'characters' as const, label: `全部角色 ${chSheets.length}` },
                       { id: 'scenes' as const, label: `全部场景 ${scSheets.length}` },
+                      { id: 'props' as const, label: `全部道具 ${(project.propAssets ?? []).length}` },
                       { id: 'checklist' as const, label: '制作清单' },
                     ] as const
                   ).map(({ id, label }) => (
@@ -1715,7 +1798,7 @@ export function ProductionWizard() {
                       type="button"
                       disabled={batchAssetGen !== null}
                       onClick={() => void handleBatchGenerateMissingAssets()}
-                      title="按默认 prompt（与列表「AI」相同）为缺图角色定稿节点与场景主变体生图；跳过弹窗待确认项"
+                      title="按默认 prompt（与列表「AI」相同）为缺图角色定稿节点、场景与道具主变体生图；跳过弹窗待确认项"
                       className="rounded-lg border border-[var(--color-primary)]/45 bg-[var(--color-primary)]/12 px-3 py-1.5 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {batchAssetGen
@@ -1988,10 +2071,145 @@ export function ProductionWizard() {
               </div>
             )}
 
+            {l2Tab === 'props' && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {propSheets.length === 0 ? (
+                  <p className="col-span-full text-sm text-[var(--color-text-muted)]">
+                    暂无道具卡。请先生成服化道（L2），制作清单中的 props 会同步为道具卡。
+                  </p>
+                ) : null}
+                {propSheets.map((pr) => {
+                  const vCount = pr.variants.length;
+                  const cover = pr.variants[0]?.imageDataUrl;
+                  return (
+                    <div
+                      key={pr.id}
+                      className="flex flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition-[box-shadow,transform] hover:-translate-y-0.5 hover:border-[var(--color-primary)]/35 hover:shadow-md"
+                    >
+                      <div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface-hover)]">
+                        {cover ? (
+                          <img src={cover} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-[var(--color-text-muted)]">
+                            暂无道具图
+                          </div>
+                        )}
+                      </div>
+                      <div className="border-t border-[var(--color-border)]/60 px-2 py-3 text-center">
+                        <div className="truncate text-sm font-semibold text-[var(--color-text)]">{pr.name}</div>
+                        {pr.sceneRef ? (
+                          <div className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
+                            场景：{pr.sceneRef}
+                          </div>
+                        ) : null}
+                        <div className="mt-1 text-xs text-[var(--color-text-muted)]">共{vCount}个变体</div>
+                      </div>
+                      <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
+                        <summary className="cursor-pointer list-none text-center text-[10px] text-[var(--color-text-muted)] [&::-webkit-details-marker]:hidden">
+                          变体与 AI 生图
+                        </summary>
+                        <div className="mt-2 space-y-2 pb-2">
+                          {pr.variants.map((v) => (
+                            <div
+                              key={v.id}
+                              className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border)]/50 p-1.5"
+                            >
+                              <span className="max-w-[5rem] truncate text-[10px] text-[var(--color-text-muted)]">
+                                {v.label}
+                              </span>
+                              {v.imageDataUrl ? (
+                                <img src={v.imageDataUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                              ) : null}
+                              <label className="cursor-pointer text-[10px] text-[var(--color-primary)]">
+                                上传
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) =>
+                                    handleUploadVariant(e.target.files?.[0] ?? null, pr.id, v.id, 'prop')
+                                  }
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                disabled={genKey === `prop:${pr.id}:${v.id}`}
+                                onClick={() => {
+                                  const prompt = buildPropImagePrompt(
+                                    pr,
+                                    v,
+                                    project.meta.styleRefSummary,
+                                    project.productionDesign,
+                                    {
+                                      enforceGlobalStyleLock: !!project.meta.styleRefImageDataUrl?.trim(),
+                                    },
+                                  );
+                                  void runGenerateFrame(prompt, pr.id, v.id, 'prop');
+                                }}
+                                className="text-[10px] text-[var(--color-primary)] disabled:opacity-50"
+                              >
+                                {genKey === `prop:${pr.id}:${v.id}` ? '…' : 'AI'}
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => addPropVariant(pr.id)}
+                            className="w-full text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                          >
+                            + 道具变体
+                          </button>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {l2Tab === 'checklist' && (
-              <pre className="max-h-[420px] overflow-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-xs">
-                {JSON.stringify(project.productionDesign, null, 2)}
-              </pre>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: 'wardrobe' as const, label: '服化道·服装 (wardrobe)' },
+                      { id: 'props' as const, label: '道具 (props)' },
+                      { id: 'raw' as const, label: '完整 JSON' },
+                    ] as const
+                  ).map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setChecklistSubTab(id)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        checklistSubTab === id
+                          ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                          : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {checklistSubTab === 'raw' ? (
+                  <pre className="max-h-[420px] overflow-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-xs">
+                    {JSON.stringify(project.productionDesign, null, 2)}
+                  </pre>
+                ) : (
+                  <pre className="max-h-[420px] overflow-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-xs">
+                    {JSON.stringify(
+                      checklistSubTab === 'wardrobe'
+                        ? project.productionDesign?.wardrobe ?? []
+                        : project.productionDesign?.props ?? [],
+                      null,
+                      2,
+                    )}
+                  </pre>
+                )}
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  默认展示服化道服装清单；道具清单与「全部道具」卡一致，可在道具页上传/生图以保证成片一致。
+                </p>
+              </div>
             )}
               </div>
             </div>
@@ -2002,6 +2220,10 @@ export function ProductionWizard() {
                 characterSheet={portraitEdit.sheet}
                 editIntent={portraitEdit.intent}
                 storyBio={characterStoryBio(portraitEdit.sheet.name)}
+                wardrobeSupplementDefault={formatWardrobeSupplementForCharacter(
+                  portraitEdit.sheet.name,
+                  project.productionDesign?.wardrobe,
+                )}
                 styleRef={project.meta.styleRefSummary}
                 productionDesign={project.productionDesign}
                 globalStyleReferenceFrame={project.meta.styleRefImageDataUrl}
@@ -2048,7 +2270,7 @@ export function ProductionWizard() {
                 <span className="mr-1.5 inline-block text-[var(--color-primary)]" aria-hidden>
                   ◆
                 </span>
-                角色和场景设定会应用到后续分镜与成片，建议定妆、场景图确认后再继续。
+                角色、场景与关键道具会应用到后续分镜与成片，建议定妆、场景图与道具图确认后再继续。
               </p>
             </div>
 

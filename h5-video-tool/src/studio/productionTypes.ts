@@ -237,6 +237,16 @@ export interface SceneSheet {
   variants: AssetVariant[];
 }
 
+/** L2：关键道具卡与变体图（与制作清单 props 对齐） */
+export interface PropSheet {
+  id: string;
+  /** 与制作清单 PropItem.name 一致 */
+  name: string;
+  sceneRef?: string;
+  notes?: string;
+  variants: AssetVariant[];
+}
+
 export interface ProductionProject {
   schemaVersion: '1.0.0';
   meta: ProductionProjectMeta;
@@ -249,6 +259,8 @@ export interface ProductionProject {
   characterAssets?: CharacterSheet[];
   /** L2：场景卡与变体图 */
   sceneAssets?: SceneSheet[];
+  /** L2：关键道具卡与变体图 */
+  propAssets?: PropSheet[];
 }
 
 export const PRODUCTION_STORAGE_KEY = 'h5-production-project-v1';
@@ -264,5 +276,6 @@ export function emptyProductionProject(): ProductionProject {
     assembled: null,
     characterAssets: [],
     sceneAssets: [],
+    propAssets: [],
   };
 }

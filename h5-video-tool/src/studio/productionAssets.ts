@@ -5,8 +5,10 @@ import type {
   ProductionDesignLayer,
   ProductionShot,
   PropItem,
+  PropSheet,
   SceneSheet,
   StoryArcLayer,
+  WardrobeItem,
 } from './productionTypes';
 
 /** 制作清单道具：供角色定妆时统一世界观（全表） */
@@ -87,6 +89,83 @@ export function mergeSceneSheetsFromL2(
     }
   }
   return [...byId.values()];
+}
+
+/** 角色定妆「补充描述」默认：与当前角色匹配的 wardrobe 行（服化道·服装） */
+export function formatWardrobeSupplementForCharacter(
+  characterName: string,
+  wardrobe: WardrobeItem[] | undefined | null,
+): string {
+  const nm = characterName?.trim();
+  if (!nm || !wardrobe?.length) return '';
+  const w = wardrobe.find(
+    (x) =>
+      x.character === nm ||
+      nm.includes(x.character) ||
+      x.character.includes(nm),
+  );
+  if (!w) return '';
+  const lines = [
+    `角色：${w.character}`,
+    w.item?.trim() ? `服装/造型：${w.item.trim()}` : '',
+    w.notes?.trim() ? `说明：${w.notes.trim()}` : '',
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+export function buildPropSheetsFromProductionDesign(pd: ProductionDesignLayer): PropSheet[] {
+  return pd.props.map((p, i) => {
+    const name = p.name?.trim() || `道具${i + 1}`;
+    return {
+      id: `prop-${i}-${slug(name)}`,
+      name,
+      sceneRef: p.sceneRef?.trim(),
+      notes: p.notes?.trim(),
+      variants: [{ id: `propv-${i}-0`, label: '主道具' }],
+    };
+  });
+}
+
+/** L2 重新生成制作清单后合并道具卡，保留用户已上传的变体图 */
+export function mergePropSheetsPreservingImages(next: PropSheet[], prev: PropSheet[]): PropSheet[] {
+  return next.map((sheet) => {
+    const old = prev.find((o) => o.name === sheet.name);
+    if (!old) return sheet;
+    const mergedVariants = sheet.variants.map((v, vi) => {
+      const ov = old.variants[vi] ?? old.variants.find((x) => x.label === v.label);
+      if (ov?.imageDataUrl) return { ...v, imageDataUrl: ov.imageDataUrl };
+      return v;
+    });
+    return { ...sheet, id: old.id, variants: mergedVariants };
+  });
+}
+
+export function buildPropImagePrompt(
+  sheet: PropSheet,
+  variant: AssetVariant,
+  styleRef: string,
+  productionDesign: ProductionDesignLayer | null,
+  opts?: { enforceGlobalStyleLock?: boolean },
+): string {
+  const propRow = productionDesign?.props.find(
+    (p) => p.name === sheet.name || sheet.name.includes(p.name) || p.name.includes(sheet.name),
+  );
+  const setHint = sheet.sceneRef
+    ? productionDesign?.sets.find((s) => s.sceneId === sheet.sceneRef)
+    : undefined;
+  const parts = [
+    styleRef.trim(),
+    opts?.enforceGlobalStyleLock
+      ? '【全片画风】道具须与立项画风参考及上文风格摘要一致，与角色定妆、场景在同一视觉体系内。'
+      : '',
+    `关键道具静物/产品图：${sheet.name}`,
+    variant.label !== '主道具' ? `变体：${variant.label}` : '',
+    propRow?.notes?.trim() ? `剧情与外观：${propRow.notes.trim()}` : '',
+    sheet.notes ? `备忘：${sheet.notes}` : '',
+    setHint ? `关联空间：${setHint.description}` : '',
+    '中性背景，单主体居中，高清，无文字水印。',
+  ];
+  return parts.filter(Boolean).join('\n');
 }
 
 export function buildCharacterImagePrompt(
@@ -329,6 +408,11 @@ function firstSceneVariantImageUrl(sheet: SceneSheet): string | undefined {
   return v?.imageDataUrl ?? sheet.variants[0]?.imageDataUrl;
 }
 
+function firstPropVariantImageUrl(sheet: PropSheet): string | undefined {
+  const v = sheet.variants.find((x) => x.imageDataUrl);
+  return v?.imageDataUrl ?? sheet.variants[0]?.imageDataUrl;
+}
+
 /** 分镜视频默认叙事层（与 ProductionWizard 原逻辑一致） */
 export function buildProductionShotVideoStoryboardText(shot: ProductionShot): string {
   return [
@@ -429,20 +513,24 @@ function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
 }
 
 /**
- * Seedance 2.0 全能参考：按镜内文案匹配出镜角色与当前场景，收集参考图；顺序与 @图片1…@图片n 一致。
+ * Seedance 2.0 全能参考：按镜内文案匹配出镜角色、当前场景与道具名，收集参考图；顺序与 @图片1…@图片n 一致。
  * - 角色：姓名出现在本镜检索文本中（含「父亲」↔ 龙父 等称谓扩展），且定妆树/变体有图；长名优先避免「龙」误匹配「龙一」。
  * - 场景：本镜 sceneRef 对应场景卡的首张有图变体，置于角色图之后。
+ * - 道具：道具名出现在本镜检索文本中且道具有图时加入（关键道具前后一致）。
  */
 export function buildShotMultimodalRefPack(
   shot: ProductionShot,
   characterSheets: CharacterSheet[],
   sceneSheets: SceneSheet[],
+  propSheets?: PropSheet[],
 ): {
   multimodalImages: { base64: string; mimeType: string }[];
   /** 与 multimodalImages 下标对齐，供 UI 展示 */
   labels: string[];
   /** 追加到叙事 prompt 后，说明 @图片n 与素材对应关系 */
   refPromptSuffix: string;
+  narrativeWithInlineTags: string;
+  defaultVideoPrompt: string;
 } {
   const blob = [
     shot.subject,
@@ -511,6 +599,28 @@ export function buildShotMultimodalRefPack(
           injectNames: [...injectNames],
         });
       }
+    }
+  }
+
+  if (propSheets?.length) {
+    const propCandidates = propSheets.filter((ps) => {
+      const nm = ps.name?.trim();
+      if (!nm || nm.length < 2) return false;
+      return blob.includes(nm);
+    });
+    propCandidates.sort((a, b) => b.name.length - a.name.length);
+    for (const ps of propCandidates) {
+      const url = firstPropVariantImageUrl(ps);
+      if (!url) continue;
+      const parsed = dataUrlToBase64Mime(url);
+      if (!parsed) continue;
+      const nm = ps.name.trim();
+      entries.push({
+        base64: parsed.base64,
+        mimeType: parsed.mimeType || 'image/png',
+        label: `道具「${nm}」`,
+        injectNames: [nm],
+      });
     }
   }
 
