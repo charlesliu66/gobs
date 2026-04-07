@@ -23,8 +23,9 @@ import {
 } from '../api/video';
 import { pollRemixUntilDone, submitRemixMerge } from '../api/remix';
 import { absoluteApiUrl } from '../utils/absoluteApiUrl';
+import { BatchJobsBoard } from '../components/BatchJobsBoard';
 
-type HistoryTab = 'cloud' | 'local';
+type HistoryTab = 'cloud' | 'local' | 'batch';
 
 /** 单行通栏字幕（整段约 1 小时），精细时间轴请用 SRT 模式 */
 function buildSimpleSrt(text: string): string {
@@ -314,6 +315,17 @@ export function History() {
           >
             本机历史
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('batch')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'batch'
+                ? 'bg-[var(--color-primary)] text-white'
+                : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+            }`}
+          >
+            🌙 批量任务看板
+          </button>
         </div>
         <p className="text-xs text-[var(--color-text-subtle)] mt-3 max-w-3xl leading-relaxed">
           云端与官网共用 API Key；可<strong>星标</strong>置顶、<strong>删除</strong>仅从当前列表隐藏（不调用远端删任务）。
@@ -565,6 +577,13 @@ export function History() {
               })}
             </div>
           )}
+        </section>
+      )}
+
+      {/* 批量任务看板 */}
+      {tab === 'batch' && (
+        <section className="space-y-4">
+          <BatchJobsBoard />
         </section>
       )}
 

@@ -20,6 +20,7 @@ import {
   type KlingVideoListRow,
   type DreaminaTaskPollResponse,
 } from '../api/video';
+import { submitBatchJobs } from '../api/batchJobs';
 import { KlingJobCard } from './KlingJobCard';
 import { DreaminaJobCard } from './DreaminaJobCard';
 import { DreaminaMultimodalRefs } from './DreaminaMultimodalRefs';
@@ -79,6 +80,11 @@ export function StepVideo() {
   const [dreaminaJobs, setDreaminaJobs] = useState<DreaminaJob[]>([]);
   const [klingSubmitting, setKlingSubmitting] = useState(false);
   const [dreaminaSubmitting, setDreaminaSubmitting] = useState(false);
+
+  // 夜间批量提交状态
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ submitted: number; total: number } | null>(null);
+  const [batchDone, setBatchDone] = useState(false);
 
   const klingJobsRef = useRef(klingJobs);
   klingJobsRef.current = klingJobs;
@@ -216,6 +222,53 @@ export function StepVideo() {
     multiShotEnabled &&
     shots.length > 0 &&
     shots.some((_, i) => !shotFrames[i]?.first);
+
+  /** 🌙 夜间批量提交：遍历所有分镜，逐个调用 submitDreaminaAsync，收集 submitId 后存入后端队列 */
+  const handleBatchNight = async () => {
+    if (shots.length === 0) return;
+    setBatchSubmitting(true);
+    setBatchDone(false);
+    setBatchProgress({ submitted: 0, total: shots.length });
+
+    const batchShots: Array<{ submitId: string; taskId: string; shotIndex: number; shotDescription: string; model: string }> = [];
+
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i];
+      if (!shot.prompt.trim()) continue;
+      try {
+        const { submitId, taskId } = await submitDreaminaAsync({
+          storyboardText: shot.prompt.trim(),
+          materials: selectedOrder.map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType })),
+          driveToken: accessToken ?? undefined,
+          duration: videoDuration,
+          aspectRatio: videoAspectRatio,
+          resolution: videoResolution,
+          model: videoModel || undefined,
+        });
+        batchShots.push({
+          submitId,
+          taskId,
+          shotIndex: i,
+          shotDescription: shot.prompt.trim().slice(0, 120),
+          model: videoModel || 'dreamina',
+        });
+      } catch (e) {
+        console.warn(`[BatchNight] 分镜 ${i + 1} 提交失败`, e);
+      }
+      setBatchProgress({ submitted: i + 1, total: shots.length });
+    }
+
+    // 存入后端队列
+    try {
+      await submitBatchJobs(templateId || 'default', batchShots);
+    } catch (e) {
+      console.log('batch submitted (fallback log):', batchShots.map((s) => s.submitId));
+      console.warn('[BatchNight] submitBatchJobs failed', e);
+    }
+
+    setBatchSubmitting(false);
+    setBatchDone(true);
+  };
 
   const handleGenerate = () => {
     if (hasMissingFrames) {
@@ -411,6 +464,50 @@ export function StepVideo() {
               ? '可灵异步：可同时保留多个进行中的任务。'
               : null}
         </p>
+
+        {/* 🌙 夜间批量提交区域：仅在即梦异步 + 多分镜时显示 */}
+        {dreaminaAsync && isDreaminaModelId(videoModel) && !useMock && multiShotEnabled && shots.length > 0 && (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🌙</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">夜间批量提交</span>
+              <span className="text-xs text-[var(--color-text-muted)] ml-auto">{shots.length} 个分镜</span>
+            </div>
+            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+              一次性提交所有分镜到即梦队列，关掉浏览器后台继续生成，明天来「历史 → 批量任务看板」审片。
+            </p>
+            {batchProgress && (
+              <div className="space-y-1.5">
+                <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-300"
+                    style={{ width: `${(batchProgress.submitted / batchProgress.total) * 100}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  已提交 {batchProgress.submitted}/{batchProgress.total} 个分镜
+                </p>
+              </div>
+            )}
+            {batchDone && (
+              <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2">
+                <p className="text-xs text-green-400">
+                  ✅ 已提交 {batchProgress?.total ?? shots.length} 个分镜，关掉浏览器后台继续生成，明天来审片
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleBatchNight()}
+              disabled={batchSubmitting || shots.some((s) => !s.prompt.trim())}
+              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-elevated)] border border-[var(--color-border)] text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {batchSubmitting
+                ? `提交中… (${batchProgress?.submitted ?? 0}/${batchProgress?.total ?? shots.length})`
+                : '🌙 夜间批量提交全部分镜'}
+            </button>
+          </div>
+        )}
 
         {(klingJobs.length > 0 || dreaminaJobs.length > 0) && (
           <div className="flex flex-col gap-3">
