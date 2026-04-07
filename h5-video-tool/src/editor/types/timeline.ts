@@ -50,6 +50,10 @@ export interface VideoClip {
   note?: string;
   /** 与下一段之间转场，默认硬切 */
   transitionAfter?: ClipTransition;
+  /** 播放速度倍率，默认 1.0；0.25–4.0 */
+  speed?: number;
+  /** 原声音量，0–200（百分比），默认 100 */
+  volume?: number;
 }
 
 export interface AudioClip {
@@ -403,6 +407,42 @@ export function setVideoClipTransitionAfter(
     if (t.id !== 'v1' || t.type !== 'video') return t;
     const clips = (t.clips as VideoClip[]).map((vc) =>
       vc.id === clipId ? { ...vc, transitionAfter } : vc,
+    );
+    return { ...t, clips };
+  });
+  return { ...p, tracks };
+}
+
+/** 设置片段播放速度（0.25–4），同步修改时间轴时长 */
+export function setVideoClipSpeed(
+  project: TimelineProject,
+  clipId: string,
+  speed: number,
+): TimelineProject {
+  const p = normalizeTimelineProject(project);
+  const clamped = Math.min(4, Math.max(0.25, speed));
+  const tracks = p.tracks.map((t) => {
+    if (t.id !== 'v1' || t.type !== 'video') return t;
+    const clips = (t.clips as VideoClip[]).map((vc) =>
+      vc.id === clipId ? { ...vc, speed: clamped } : vc,
+    );
+    return { ...t, clips };
+  });
+  return withSyncedDuration(snapVideoClipsSequential({ ...p, tracks }));
+}
+
+/** 设置片段原声音量（0–200） */
+export function setVideoClipVolume(
+  project: TimelineProject,
+  clipId: string,
+  volume: number,
+): TimelineProject {
+  const p = normalizeTimelineProject(project);
+  const clamped = Math.min(200, Math.max(0, volume));
+  const tracks = p.tracks.map((t) => {
+    if (t.id !== 'v1' || t.type !== 'video') return t;
+    const clips = (t.clips as VideoClip[]).map((vc) =>
+      vc.id === clipId ? { ...vc, volume: clamped } : vc,
     );
     return { ...t, clips };
   });

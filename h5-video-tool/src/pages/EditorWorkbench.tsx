@@ -19,10 +19,13 @@ import {
   reorderVideoClip,
   setBgmClipOnProject,
   setVideoClipTransitionAfter,
+  setVideoClipSpeed,
+  setVideoClipVolume,
   snapVideoClipsSequential,
   splitVideoClipAtPlayhead,
   trimVideoClipHeadToPlayhead,
   trimVideoClipTailToPlayhead,
+  updateVideoClipSourceRange,
   upsertSubtitleCue,
   withSyncedDuration,
 } from '../editor/types/timeline';
@@ -593,6 +596,33 @@ export function EditorWorkbench() {
     pushLog('已删除片段。');
   }, [selectedVideoClipId, handleDeleteClip, pushLog]);
 
+  const handleSetSourceRange = useCallback(
+    (start: number, end: number) => {
+      if (!selectedVideoClipId) return;
+      const next = updateVideoClipSourceRange(project, selectedVideoClipId, { sourceStart: start, sourceEnd: end });
+      applyTimelineProject(next);
+      pushLog(`已设置入出点 ${start.toFixed(2)}s → ${end.toFixed(2)}s`);
+    },
+    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+  );
+
+  const handleSetSpeed = useCallback(
+    (speed: number) => {
+      if (!selectedVideoClipId) return;
+      applyTimelineProject(setVideoClipSpeed(project, selectedVideoClipId, speed));
+      pushLog(`播放速度已设为 ${speed}x`);
+    },
+    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+  );
+
+  const handleSetVolume = useCallback(
+    (volume: number) => {
+      if (!selectedVideoClipId) return;
+      applyTimelineProject(setVideoClipVolume(project, selectedVideoClipId, volume));
+    },
+    [project, selectedVideoClipId, applyTimelineProject],
+  );
+
   const handleClipMoveEarlier = useCallback(() => {
     if (!selectedVideoClipId) return;
     applyTimelineProject(reorderVideoClip(project, selectedVideoClipId, 'up'));
@@ -876,6 +906,10 @@ export function EditorWorkbench() {
                 summaryLine={clipSummaryLine}
                 currentTime={currentTime}
                 timelineDuration={durationSec}
+                clipSourceStart={selectedVideoClip?.sourceStart}
+                clipSourceEnd={selectedVideoClip?.sourceEnd}
+                clipSpeed={selectedVideoClip?.speed ?? 1}
+                clipVolume={selectedVideoClip?.volume ?? 100}
                 onSplit={handleClipSplit}
                 onTrimHead={handleClipTrimHead}
                 onTrimTail={handleClipTrimTail}
@@ -887,6 +921,9 @@ export function EditorWorkbench() {
                 subtitleCueCount={project.subtitles?.length ?? 0}
                 subtitleCues={project.subtitles ?? []}
                 onRemoveSubtitle={handleRemoveSubtitle}
+                onSetSourceRange={handleSetSourceRange}
+                onSetSpeed={handleSetSpeed}
+                onSetVolume={handleSetVolume}
               />
             }
           />

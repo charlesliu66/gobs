@@ -16,6 +16,13 @@ export interface TimelineClipToolbarProps {
   summaryLine: string;
   currentTime: number;
   timelineDuration: number;
+  /** 当前选中片段的 sourceStart/sourceEnd（秒），用于精确 Trim */
+  clipSourceStart?: number;
+  clipSourceEnd?: number;
+  /** 当前片段速度 (1.0 = 正常) */
+  clipSpeed?: number;
+  /** 当前片段音量 (100 = 原声) */
+  clipVolume?: number;
   onSplit: () => void;
   onTrimHead: () => void;
   onTrimTail: () => void;
@@ -27,6 +34,12 @@ export interface TimelineClipToolbarProps {
   subtitleCueCount: number;
   subtitleCues: SubtitleCue[];
   onRemoveSubtitle: (id: string) => void;
+  /** 精确 Trim：设置片段入出点（秒） */
+  onSetSourceRange?: (start: number, end: number) => void;
+  /** 设置播放速度 */
+  onSetSpeed?: (speed: number) => void;
+  /** 设置原声音量 (0-200) */
+  onSetVolume?: (volume: number) => void;
 }
 
 function IconBtn({
@@ -64,6 +77,10 @@ export function TimelineClipToolbar({
   summaryLine,
   currentTime,
   timelineDuration,
+  clipSourceStart,
+  clipSourceEnd,
+  clipSpeed = 1,
+  clipVolume = 100,
   onSplit,
   onTrimHead,
   onTrimTail,
@@ -75,10 +92,36 @@ export function TimelineClipToolbar({
   subtitleCueCount,
   subtitleCues,
   onRemoveSubtitle,
+  onSetSourceRange,
+  onSetSpeed,
+  onSetVolume,
 }: TimelineClipToolbarProps) {
   const [infoOpen, setInfoOpen] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
+  const [speedOpen, setSpeedOpen] = useState(false);
   const [subText, setSubText] = useState('');
+  // 精确 Trim 本地编辑状态
+  const [trimStart, setTrimStart] = useState('');
+  const [trimEnd, setTrimEnd] = useState('');
+
+  // 打开精确 Trim 面板时同步当前值
+  const handleOpenTrim = useCallback(() => {
+    setTrimStart(clipSourceStart !== undefined ? String(clipSourceStart.toFixed(2)) : '0');
+    setTrimEnd(clipSourceEnd !== undefined ? String(clipSourceEnd.toFixed(2)) : '');
+    setTrimOpen((o) => !o);
+    setSpeedOpen(false);
+  }, [clipSourceStart, clipSourceEnd]);
+
+  const handleApplyTrim = useCallback(() => {
+    const s = parseFloat(trimStart);
+    const e = parseFloat(trimEnd);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return;
+    onSetSourceRange?.(s, e);
+    setTrimOpen(false);
+  }, [trimStart, trimEnd, onSetSourceRange]);
+
+  const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4] as const;
   const [subEndRel, setSubEndRel] = useState('2');
   const infoId = useId();
 
@@ -149,6 +192,129 @@ export function TimelineClipToolbar({
             <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
           </svg>
         </IconBtn>
+
+        <div className="mx-1 h-5 w-px flex-shrink-0 bg-[var(--color-border)]" aria-hidden />
+
+        {/* 精确 Trim 入出点 */}
+        <div className="relative flex flex-shrink-0">
+          <button
+            type="button"
+            disabled={dis || !onSetSourceRange}
+            title="精确设置入出点（秒）"
+            onClick={handleOpenTrim}
+            className={`flex h-8 items-center gap-1 rounded-md border px-2 text-[10px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+              trimOpen
+                ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 3L3 21M10.5 3H3v7.5M13.5 21H21v-7.5"/></svg>
+            Trim
+          </button>
+          {trimOpen && hasSelection && (
+            <div className="absolute bottom-full left-0 z-50 mb-1 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3 shadow-xl">
+              <p className="mb-2 text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">精确入出点（秒）</p>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex-1">
+                  <label className="block text-[9px] text-[var(--color-text-muted)] mb-0.5">入点</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={trimStart}
+                    onChange={(e) => setTrimStart(e.target.value)}
+                    className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 font-mono text-[11px] text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+                  />
+                </div>
+                <span className="text-[var(--color-text-muted)] mt-4">→</span>
+                <div className="flex-1">
+                  <label className="block text-[9px] text-[var(--color-text-muted)] mb-0.5">出点</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={trimEnd}
+                    onChange={(e) => setTrimEnd(e.target.value)}
+                    className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 font-mono text-[11px] text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleApplyTrim}
+                className="w-full rounded bg-[var(--color-primary)] py-1.5 text-[11px] font-medium text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                应用
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 播放速度 */}
+        <div className="relative flex flex-shrink-0">
+          <button
+            type="button"
+            disabled={dis || !onSetSpeed}
+            title="播放速度"
+            onClick={() => { setSpeedOpen((o) => !o); setTrimOpen(false); }}
+            className={`flex h-8 items-center gap-1 rounded-md border px-2 text-[10px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+              speedOpen || clipSpeed !== 1
+                ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            {clipSpeed !== 1 ? `${clipSpeed}x` : '速度'}
+          </button>
+          {speedOpen && hasSelection && (
+            <div className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-2 shadow-xl">
+              <p className="mb-1.5 text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">播放速度</p>
+              <div className="flex flex-wrap gap-1">
+                {SPEED_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => { onSetSpeed?.(s); setSpeedOpen(false); }}
+                    className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                      clipSpeed === s
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 原声音量 */}
+        <div className="flex flex-shrink-0 items-center gap-1 rounded-md border border-transparent px-1">
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={clipVolume === 0 ? 'var(--color-error)' : 'var(--color-text-muted)'}
+            strokeWidth="2" className={dis ? 'opacity-35' : ''}
+          >
+            {clipVolume === 0
+              ? <><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></>
+              : <><path d="M11 5L6 9H2v6h4l5 4V5z"/>{clipVolume > 50 && <path d="M19.07 4.93a10 10 0 010 14.14"/>}<path d="M15.54 8.46a5 5 0 010 7.07"/></>
+            }
+          </svg>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            step={5}
+            value={clipVolume}
+            disabled={dis || !onSetVolume}
+            onChange={(e) => onSetVolume?.(Number(e.target.value))}
+            className="h-1.5 w-16 cursor-pointer accent-[var(--color-primary)] disabled:opacity-35"
+            title={`原声音量 ${clipVolume}%`}
+          />
+          <span className={`w-7 text-right font-mono text-[9px] ${dis ? 'opacity-35' : ''} text-[var(--color-text-muted)]`}>
+            {clipVolume}%
+          </span>
+        </div>
 
         <div className="mx-1 h-5 w-px flex-shrink-0 bg-[var(--color-border)]" aria-hidden />
 
