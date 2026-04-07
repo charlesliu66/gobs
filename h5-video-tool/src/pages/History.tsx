@@ -454,12 +454,20 @@ export function History() {
               <p className="text-sm text-[var(--color-text-subtle)] mb-4">
                 在 Studio 内生成成功后会写入此处（含即梦 Dreamina 异步/同步成片）；也可在「可灵云端」打开成片并加入本机历史。
               </p>
-              <Link
-                to="/studio"
-                className="inline-flex px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
-              >
-                去 Studio 创作
-              </Link>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link
+                  to="/studio"
+                  className="inline-flex px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
+                >
+                  去 Studio 创作
+                </Link>
+                <a
+                  href="/studio"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm hover:bg-[var(--color-primary)]/10 transition-colors"
+                >
+                  去生成视频 →
+                </a>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
