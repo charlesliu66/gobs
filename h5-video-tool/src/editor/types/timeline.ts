@@ -20,7 +20,7 @@ export function resolutionForPreset(preset: AspectRatioPreset): Resolution {
   return { ...PRESET_TO_SIZE[preset] };
 }
 
-export type TrackType = 'video' | 'audio';
+export type TrackType = 'video' | 'audio' | 'text';
 
 export interface MediaAsset {
   id: string;
@@ -65,11 +65,36 @@ export interface AudioClip {
   gainDb?: number;
 }
 
+/** 文字/字幕/片头片尾 版式样式 ID */
+export type TextPresetId =
+  | 'intro-minimal'       // 片头-极简
+  | 'intro-impact'        // 片头-冲击
+  | 'outro-follow'        // 片尾-关注引导
+  | 'outro-brand'         // 片尾-品牌落版
+  | 'sub-bottom'          // 字幕-底部对话
+  | 'sub-top'             // 字幕-顶部提示
+  | 'sub-highlight'       // 字幕-动态高亮
+  | 'title-card';         // 标题卡-章节分割
+
+export interface TextClip {
+  id: string;
+  /** 时间轴上的起点（秒） */
+  timelineStart: number;
+  /** 时间轴上的终点（秒） */
+  timelineEnd: number;
+  /** 文案内容 */
+  text: string;
+  /** 版式预设 ID */
+  presetId: TextPresetId;
+  /** 可选副标题（片头/片尾用） */
+  subtext?: string;
+}
+
 export interface Track {
   id: string;
   type: TrackType;
   label: string;
-  clips: (VideoClip | AudioClip)[];
+  clips: (VideoClip | AudioClip | TextClip)[];
 }
 
 /** 预览/导出混音：0–1 */
@@ -119,6 +144,7 @@ export function emptyTimelineProject(aspectRatio: AspectRatioPreset): TimelinePr
       { id: 'v1', type: 'video', label: '视频', clips: [] },
       { id: 'a1', type: 'audio', label: '原声', clips: [] },
       { id: 'a2', type: 'audio', label: 'BGM', clips: [] },
+      { id: 't1', type: 'text', label: '文字', clips: [] },
     ],
   };
 }
@@ -131,6 +157,7 @@ export function normalizeTimelineProject(project: TimelineProject): TimelineProj
     { id: 'v1', type: 'video' as const, label: '视频' },
     { id: 'a1', type: 'audio' as const, label: '原声' },
     { id: 'a2', type: 'audio' as const, label: 'BGM' },
+    { id: 't1', type: 'text' as const, label: '文字' },
   ];
   const byId = new Map(project.tracks.map((t) => [t.id, t]));
   const tracks = want.map((w) => {
@@ -567,4 +594,105 @@ export function trimVideoClipTailToPlayhead(
   const clips = (vTrack.clips as VideoClip[]).map((c) => (c.id === clipId ? updated : c));
   const tracks = p.tracks.map((t) => (t.id === 'v1' ? { ...t, clips } : t));
   return withSyncedDuration(snapVideoClipsSequential({ ...p, tracks }));
+}
+
+// ─── 文字轨工具函数 ───────────────────────────────────────────────
+
+function getTextTrack(project: TimelineProject): Track | undefined {
+  return project.tracks.find((t) => t.type === 'text');
+}
+
+function clampTextClip(clip: TextClip, durationSec: number): TextClip {
+  const start = Math.max(0, clip.timelineStart);
+  const end = Math.min(durationSec, Math.max(start + 0.5, clip.timelineEnd));
+  return { ...clip, timelineStart: start, timelineEnd: end };
+}
+
+/** 添加或更新一个文字片段 */
+export function upsertTextClip(
+  project: TimelineProject,
+  clip: TextClip,
+): TimelineProject {
+  const p = normalizeTimelineProject(project);
+  const tracks = p.tracks.map((t) => {
+    if (t.type !== 'text') return t;
+    const existing = (t.clips as TextClip[]).find((c) => c.id === clip.id);
+    const clamped = clampTextClip(clip, p.durationSec);
+    if (existing) {
+      return { ...t, clips: (t.clips as TextClip[]).map((c) => c.id === clip.id ? clamped : c) };
+    }
+    return { ...t, clips: [...t.clips, clamped] };
+  });
+  return { ...p, tracks };
+}
+
+/** 删除一个文字片段 */
+export function removeTextClip(
+  project: TimelineProject,
+  clipId: string,
+): TimelineProject {
+  const p = normalizeTimelineProject(project);
+  const tracks = p.tracks.map((t) => {
+    if (t.type !== 'text') return t;
+    return { ...t, clips: (t.clips as TextClip[]).filter((c) => c.id !== clipId) };
+  });
+  return { ...p, tracks };
+}
+
+/** 获取某时刻（秒）激活的所有文字片段 */
+export function getActiveTextClips(
+  project: TimelineProject,
+  timeSec: number,
+): TextClip[] {
+  const t = getTextTrack(project);
+  if (!t) return [];
+  return (t.clips as TextClip[]).filter(
+    (c) => timeSec >= c.timelineStart && timeSec < c.timelineEnd,
+  );
+}
+
+/** 获取时间轴所有文字片段（排序） */
+export function getAllTextClips(project: TimelineProject): TextClip[] {
+  const t = getTextTrack(project);
+  if (!t) return [];
+  return [...(t.clips as TextClip[])].sort((a, b) => a.timelineStart - b.timelineStart);
+}
+
+/** 快捷：在时间轴开头加片头 */
+export function addIntroTextClip(
+  project: TimelineProject,
+  text: string,
+  subtext: string,
+  presetId: TextPresetId,
+  durationSec = 3,
+): TimelineProject {
+  const clip: TextClip = {
+    id: `text_${Date.now()}_intro`,
+    timelineStart: 0,
+    timelineEnd: durationSec,
+    text,
+    subtext,
+    presetId,
+  };
+  return upsertTextClip(project, clip);
+}
+
+/** 快捷：在时间轴末尾加片尾 */
+export function addOutroTextClip(
+  project: TimelineProject,
+  text: string,
+  subtext: string,
+  presetId: TextPresetId,
+  durationSec = 3,
+): TimelineProject {
+  const start = Math.max(0, project.durationSec - durationSec);
+  const clip: TextClip = {
+    id: `text_${Date.now()}_outro`,
+    timelineStart: start,
+    timelineEnd: project.durationSec,
+    text,
+    subtext,
+    presetId,
+  };
+  return upsertTextClip(project, clip);
 }
