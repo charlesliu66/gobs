@@ -60,6 +60,7 @@ import { saveProductionProject, loadProductionProject, listProductionProjects, u
 import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
 import { type LibraryCharacter } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
+import { ScenePropImageModal } from '../components/production/ScenePropImageModal';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -572,6 +573,17 @@ export function ProductionWizard() {
     sheet: CharacterSheet;
     intent: PortraitEditIntent;
   } | null>(null);
+  const [scenePropModal, setScenePropModal] = useState<{
+    kind: 'scene' | 'prop';
+    sheetId: string;
+    variantId: string;
+    name: string;
+    basePrompt: string;
+    currentImageDataUrl?: string;
+  } | null>(null);
+  const [scenePropGenBusy, setScenePropGenBusy] = useState(false);
+  const [scenePropPreview, setScenePropPreview] = useState<string | null>(null);
+  const [scenePropError, setScenePropError] = useState<string | null>(null);
   // ── 服务端持久化 ────────────────────────────────────────────────────────────
   const [serverProjectId, setServerProjectId] = useState<string | null>(() => {
     try { return localStorage.getItem('h5-production-server-id') ?? null; } catch { return null; }
@@ -1069,6 +1081,64 @@ export function ProductionWizard() {
       return { ...p, propAssets: sheets };
     });
   }, []);
+
+  const handleScenePropGenerate = useCallback(async (extraPrompt: string) => {
+    if (!scenePropModal) return;
+    const { kind, basePrompt } = scenePropModal;
+    const fullPrompt = extraPrompt.trim() ? `${basePrompt}\n\n${extraPrompt.trim()}` : basePrompt;
+    setScenePropGenBusy(true);
+    setScenePropError(null);
+    setScenePropPreview(null);
+    try {
+      const g = project.meta.styleRefImageDataUrl?.trim();
+      const res = await generateFrames({
+        prompt: fullPrompt,
+        aspectRatio: kind === 'scene' ? '16:9' : '1:1',
+        shotIndex: 0,
+        ...(g ? { globalStyleReferenceFrame: g } : {}),
+      });
+      setScenePropPreview(res.firstFrame);
+    } catch (e) {
+      setScenePropError(e instanceof Error ? e.message : '生图失败');
+    } finally {
+      setScenePropGenBusy(false);
+    }
+  }, [scenePropModal, project.meta.styleRefImageDataUrl]);
+
+  const handleScenePropConfirm = useCallback(() => {
+    if (!scenePropModal || !scenePropPreview) return;
+    const { kind, sheetId, variantId } = scenePropModal;
+    const applyImg = (url: string) => {
+      setProject((p) => {
+        if (kind === 'scene') {
+          const sheets = p.sceneAssets ?? [];
+          return { ...p, sceneAssets: updateVariantImage(sheets, sheetId, variantId, url, 'scene') as SceneSheet[] };
+        }
+        const sheets = p.propAssets ?? [];
+        return { ...p, propAssets: updateVariantImage(sheets, sheetId, variantId, url, 'prop') as PropSheet[] };
+      });
+    };
+    applyImg(scenePropPreview);
+    if (scenePropPreview.startsWith('data:')) {
+      const mime = scenePropPreview.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
+      uploadProductionImage(scenePropPreview, mime, `${kind}-${sheetId}`).then(({ url }) => applyImg(url)).catch(() => {});
+    }
+    setScenePropModal(null);
+    setScenePropPreview(null);
+  }, [scenePropModal, scenePropPreview]);
+
+  const handleScenePropReset = useCallback(() => {
+    if (!scenePropModal) return;
+    const { kind, sheetId, variantId } = scenePropModal;
+    setProject((p) => {
+      if (kind === 'scene') {
+        return { ...p, sceneAssets: updateVariantImage(p.sceneAssets ?? [], sheetId, variantId, '', 'scene') as SceneSheet[] };
+      }
+      return { ...p, propAssets: updateVariantImage(p.propAssets ?? [], sheetId, variantId, '', 'prop') as PropSheet[] };
+    });
+    setScenePropPreview(null);
+    setScenePropModal(null);
+  }, [scenePropModal]);
 
   const addManualCharacter = useCallback(() => {
     const name = window.prompt('角色名称');
@@ -2141,7 +2211,27 @@ export function ProductionWizard() {
                       key={sc.id}
                       className="flex flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition-[box-shadow,transform] hover:-translate-y-0.5 hover:border-[var(--color-primary)]/35 hover:shadow-md"
                     >
-                      <div className="relative aspect-video w-full overflow-hidden bg-[var(--color-surface-hover)]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const v0 = sc.variants[0];
+                          if (!v0) return;
+                          const prompt = buildSceneImagePrompt(sc, v0, project.meta.styleRefSummary, project.productionDesign, {
+                            enforceGlobalStyleLock: !!project.meta.styleRefImageDataUrl?.trim(),
+                          });
+                          setScenePropModal({
+                            kind: 'scene',
+                            sheetId: sc.id,
+                            variantId: v0.id,
+                            name: sc.name,
+                            basePrompt: prompt,
+                            currentImageDataUrl: cover,
+                          });
+                          setScenePropPreview(null);
+                          setScenePropError(null);
+                        }}
+                        className="relative aspect-video w-full overflow-hidden bg-[var(--color-surface-hover)] cursor-pointer group"
+                      >
                         {cover ? (
                           <img src={cover} alt="" className="h-full w-full object-cover" />
                         ) : (
@@ -2149,7 +2239,10 @@ export function ProductionWizard() {
                             暂无场景图
                           </div>
                         )}
-                      </div>
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium">点击生图</span>
+                        </div>
+                      </button>
                       <div className="border-t border-[var(--color-border)]/60 px-2 py-3 text-center">
                         <div className="truncate text-sm font-semibold text-[var(--color-text)]">{sc.name}</div>
                         <div className="mt-1 text-xs text-[var(--color-text-muted)]">共{vCount}个变体</div>
@@ -2232,7 +2325,27 @@ export function ProductionWizard() {
                       key={pr.id}
                       className="flex flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition-[box-shadow,transform] hover:-translate-y-0.5 hover:border-[var(--color-primary)]/35 hover:shadow-md"
                     >
-                      <div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface-hover)]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const v0 = pr.variants[0];
+                          if (!v0) return;
+                          const prompt = buildPropImagePrompt(pr, v0, project.meta.styleRefSummary, project.productionDesign, {
+                            enforceGlobalStyleLock: !!project.meta.styleRefImageDataUrl?.trim(),
+                          });
+                          setScenePropModal({
+                            kind: 'prop',
+                            sheetId: pr.id,
+                            variantId: v0.id,
+                            name: pr.name,
+                            basePrompt: prompt,
+                            currentImageDataUrl: cover,
+                          });
+                          setScenePropPreview(null);
+                          setScenePropError(null);
+                        }}
+                        className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface-hover)] cursor-pointer group"
+                      >
                         {cover ? (
                           <img src={cover} alt="" className="h-full w-full object-cover" />
                         ) : (
@@ -2240,7 +2353,10 @@ export function ProductionWizard() {
                             暂无道具图
                           </div>
                         )}
-                      </div>
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium">点击生图</span>
+                        </div>
+                      </button>
                       <div className="border-t border-[var(--color-border)]/60 px-2 py-3 text-center">
                         <div className="truncate text-sm font-semibold text-[var(--color-text)]">{pr.name}</div>
                         {pr.sceneRef ? (
@@ -2360,7 +2476,7 @@ export function ProductionWizard() {
               </div>
             </div>
 
-            {portraitEdit && project.productionDesign ? (
+            {portraitEdit ? (
               <CharacterPortraitEditorModal
                 onClose={() => setPortraitEdit(null)}
                 characterSheet={portraitEdit.sheet}
@@ -2371,7 +2487,7 @@ export function ProductionWizard() {
                   project.productionDesign?.wardrobe,
                 )}
                 styleRef={project.meta.styleRefSummary}
-                productionDesign={project.productionDesign}
+                productionDesign={project.productionDesign ?? null}
                 globalStyleReferenceFrame={project.meta.styleRefImageDataUrl}
                 aspectRatio="9:16"
                 portraitJob={portraitJobs[getPortraitJobKey(portraitEdit.sheet.id, portraitEdit.intent)]}
@@ -2425,6 +2541,23 @@ export function ProductionWizard() {
                 }}
               />
             ) : null}
+
+            {scenePropModal && (
+              <ScenePropImageModal
+                kind={scenePropModal.kind}
+                name={scenePropModal.name}
+                basePrompt={scenePropModal.basePrompt}
+                currentImageDataUrl={scenePropModal.currentImageDataUrl}
+                aspectRatio={scenePropModal.kind === 'scene' ? '16:9' : '1:1'}
+                busy={scenePropGenBusy}
+                previewDataUrl={scenePropPreview}
+                error={scenePropError}
+                onClose={() => { setScenePropModal(null); setScenePropPreview(null); }}
+                onGenerate={handleScenePropGenerate}
+                onConfirm={handleScenePropConfirm}
+                onReset={handleScenePropReset}
+              />
+            )}
 
             <div className="flex flex-col gap-3 rounded-2xl border border-[var(--color-border)]/80 bg-[var(--color-surface-elevated)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
