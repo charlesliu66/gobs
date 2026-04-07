@@ -437,9 +437,12 @@ export function TimelineClipToolbar({
         </div>
       </div>
       {!hasSelection && (
-        <p className="text-[9px] leading-tight text-[var(--color-text-muted)]">
-          轻点视频轨上的片段以选中，再用上方工具在播放头处拆分、掐头去尾或调序。
-        </p>
+        <div className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 px-2.5 py-1.5">
+          <span className="text-[var(--color-primary)] text-sm">👆</span>
+          <p className="text-[10px] leading-snug text-[var(--color-primary)]/80 font-medium">
+            点击时间轴上的视频片段即可选中，然后使用上方的速度 / Trim / 音量工具
+          </p>
+        </div>
       )}
     </div>
   );

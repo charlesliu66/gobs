@@ -83,11 +83,13 @@ const upload = multer({
   storage,
   limits: { fileSize: UPLOAD_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('video/')) {
-      cb(null, true);
-      return;
-    }
-    cb(new Error('仅支持视频文件（video/*）'));
+    const ok =
+      file.mimetype.startsWith('video/') ||
+      // 部分视频文件 mime 识别为 octet-stream（如 .ts .mkv），按扩展名放行
+      (file.mimetype === 'application/octet-stream' &&
+        /\.(mp4|mov|mkv|avi|webm|ts|flv|wmv|m4v|3gp|ogv)$/i.test(file.originalname));
+    if (ok) { cb(null, true); return; }
+    cb(new Error(`不支持的文件类型（${file.mimetype}），请上传 mp4/mov/webm/mkv 等视频文件`));
   },
 });
 

@@ -56,7 +56,7 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
-import { saveProductionProject, loadProductionProject, listProductionProjects, type ProjectListItem } from '../api/production';
+import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
 import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
 import { type LibraryCharacter } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
@@ -720,29 +720,35 @@ export function ProductionWizard() {
         });
         if (batchCancelRef.current) return;
         const img = res.firstFrame;
-        // 每张完成立刻更新画面
-        setProject((p) => {
-          if (t.kind === 'char') {
-          if (t.kind === 'char') {
-            const sheets = p.characterAssets ?? [];
+        // 每张完成立刻更新画面，后台上传替换为持久 URL
+        const applyBatchImg = (url: string) => {
+          setProject((p) => {
+            if (t.kind === 'char') {
+              const sheets = p.characterAssets ?? [];
+              return {
+                ...p,
+                characterAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'char') as CharacterSheet[],
+              };
+            }
+            if (t.kind === 'scene') {
+              const sheets = p.sceneAssets ?? [];
+              return {
+                ...p,
+                sceneAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'scene') as SceneSheet[],
+              };
+            }
+            const sheets = p.propAssets ?? [];
             return {
               ...p,
-              characterAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'char') as CharacterSheet[],
+              propAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'prop') as PropSheet[],
             };
-          }
-          if (t.kind === 'scene') {
-            const sheets = p.sceneAssets ?? [];
-            return {
-              ...p,
-              sceneAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'scene') as SceneSheet[],
-            };
-          }
-          const sheets = p.propAssets ?? [];
-          return {
-            ...p,
-            propAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'prop') as PropSheet[],
-          };
-        });
+          });
+        };
+        applyBatchImg(img);
+        if (img.startsWith('data:')) {
+          const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
+          uploadProductionImage(img, mime, `${t.kind}-${t.sheetId}`).then(({ url }) => applyBatchImg(url)).catch(() => {});
+        }
       } catch (e) {
         if (!batchCancelRef.current) {
           console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, e);
@@ -941,27 +947,35 @@ export function ProductionWizard() {
           ...(g ? { globalStyleReferenceFrame: g } : {}),
         });
         const img = res.firstFrame;
-        setProject((p) => {
-          if (kind === 'char') {
-            const sheets = p.characterAssets ?? [];
+        // 立即显示 base64，后台上传到服务端替换为持久 URL
+        const applyImg = (url: string) => {
+          setProject((p) => {
+            if (kind === 'char') {
+              const sheets = p.characterAssets ?? [];
+              return {
+                ...p,
+                characterAssets: updateVariantImage(sheets, sheetId, variantId, url, 'char') as CharacterSheet[],
+              };
+            }
+            if (kind === 'scene') {
+              const sheets = p.sceneAssets ?? [];
+              return {
+                ...p,
+                sceneAssets: updateVariantImage(sheets, sheetId, variantId, url, 'scene') as SceneSheet[],
+              };
+            }
+            const sheets = p.propAssets ?? [];
             return {
               ...p,
-              characterAssets: updateVariantImage(sheets, sheetId, variantId, img, 'char') as CharacterSheet[],
+              propAssets: updateVariantImage(sheets, sheetId, variantId, url, 'prop') as PropSheet[],
             };
-          }
-          if (kind === 'scene') {
-            const sheets = p.sceneAssets ?? [];
-            return {
-              ...p,
-              sceneAssets: updateVariantImage(sheets, sheetId, variantId, img, 'scene') as SceneSheet[],
-            };
-          }
-          const sheets = p.propAssets ?? [];
-          return {
-            ...p,
-            propAssets: updateVariantImage(sheets, sheetId, variantId, img, 'prop') as PropSheet[],
-          };
-        });
+          });
+        };
+        applyImg(img);
+        if (img.startsWith('data:')) {
+          const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
+          uploadProductionImage(img, mime, `${kind}-${sheetId}`).then(({ url }) => applyImg(url)).catch(() => {});
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : '生图失败');
       } finally {
@@ -2370,29 +2384,44 @@ export function ProductionWizard() {
                     delete next[key];
                     return next;
                   });
-                  setProject((p) => {
-                    const list = p.characterAssets ?? [];
-                    if (intent.mode === 'replace') {
-                      const next = setCharacterLookNodeImage(
-                        ensureCharacterLookTree(sheet),
-                        intent.nodeId,
-                        imageDataUrl,
-                      );
+
+                  // 先以 base64 写入（立即可见），再异步上传到服务端替换为持久 URL
+                  const applyImage = (url: string) => {
+                    setProject((p) => {
+                      const list = p.characterAssets ?? [];
+                      if (intent.mode === 'replace') {
+                        const next = setCharacterLookNodeImage(
+                          ensureCharacterLookTree(sheet),
+                          intent.nodeId,
+                          url,
+                        );
+                        return {
+                          ...p,
+                          characterAssets: list.map((c) => (c.id === next.id ? next : c)),
+                        };
+                      }
+                      const s0 = ensureCharacterLookTree(sheet);
+                      const children = (s0.lookTree ?? []).filter((n) => n.parentId === intent.parentNodeId);
+                      const label = `变体 ${children.length + 1}`;
+                      const next = addCharacterLookBranch(s0, intent.parentNodeId, label, url);
                       return {
                         ...p,
                         characterAssets: list.map((c) => (c.id === next.id ? next : c)),
                       };
-                    }
-                    const s0 = ensureCharacterLookTree(sheet);
-                    const children = (s0.lookTree ?? []).filter((n) => n.parentId === intent.parentNodeId);
-                    const label = `变体 ${children.length + 1}`;
-                    const next = addCharacterLookBranch(s0, intent.parentNodeId, label, imageDataUrl);
-                    return {
-                      ...p,
-                      characterAssets: list.map((c) => (c.id === next.id ? next : c)),
-                    };
-                  });
+                    });
+                  };
+
+                  // 1. 立刻用 base64 显示
+                  applyImage(imageDataUrl);
                   setPortraitEdit(null);
+
+                  // 2. 后台上传到服务端，成功后替换 URL（避免 localStorage 爆炸）
+                  if (imageDataUrl.startsWith('data:')) {
+                    const mime = imageDataUrl.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
+                    uploadProductionImage(imageDataUrl, mime, sheet.name)
+                      .then(({ url }) => applyImage(url))
+                      .catch((e) => console.warn('[portrait upload]', e));
+                  }
                 }}
               />
             ) : null}
