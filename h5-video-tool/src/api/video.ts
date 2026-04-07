@@ -52,6 +52,8 @@ export interface VideoGenerateRequest {
   multimodalImages?: { base64: string; mimeType?: string }[];
   multimodalVideos?: { base64: string; mimeType?: string }[];
   multimodalAudios?: { base64: string; mimeType?: string }[];
+  /** 即梦 CLI `--model-version`（如 seedance2.0、seedance2.0fast）；空则读服务端 DREAMINA_*_MODEL */
+  dreaminaModelVersion?: string;
 }
 
 export interface VeoModelsResponse {

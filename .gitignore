@@ -31,3 +31,6 @@ tiktok_downloads/
 
 # 本地代理/订阅（常含敏感信息；若需共享请从 .gitignore 中删除本行）
 subweb/
+
+# 打包脚本生成的迁移目录（勿提交）
+QAS-package/

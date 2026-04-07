@@ -3,6 +3,7 @@ import type {
   CharacterLookNode,
   CharacterSheet,
   ProductionDesignLayer,
+  ProductionShot,
   PropItem,
   SceneSheet,
   StoryArcLayer,
@@ -314,6 +315,227 @@ export function layoutCharacterLookTree(nodes: CharacterLookNode[]): {
   return {
     positions: pos,
     bounds: { w: Math.max(x + 48, maxCx + LAYOUT_NODE_W + 80), h: maxCy + 100 },
+  };
+}
+
+function dataUrlToBase64Mime(dataUrl: string): { base64: string; mimeType: string } | null {
+  const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl.trim());
+  if (!m) return null;
+  return { mimeType: m[1]!.trim(), base64: m[2]!.trim() };
+}
+
+function firstSceneVariantImageUrl(sheet: SceneSheet): string | undefined {
+  const v = sheet.variants.find((x) => x.imageDataUrl);
+  return v?.imageDataUrl ?? sheet.variants[0]?.imageDataUrl;
+}
+
+/** 分镜视频默认叙事层（与 ProductionWizard 原逻辑一致） */
+export function buildProductionShotVideoStoryboardText(shot: ProductionShot): string {
+  return [
+    shot.structuredStill.sp_subject,
+    shot.structuredStill.sp_environment,
+    shot.structuredMotion.mp_motion,
+    shot.structuredMotion.mp_camera,
+    shot.structuredMotion.mp_tempo,
+    shot.dialogue ? `对白：${shot.dialogue}` : '',
+    shot.audioCue ? `声音：${shot.audioCue}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * 在叙事中首次出现的人名/场景名后插入 @图片k（先匹配更长名称，避免「龙一」命中「龙一的父亲」）。
+ */
+function tryInjectNameWithTag(text: string, name: string, tag: string): string | null {
+  let from = 0;
+  while (from < text.length) {
+    const i = text.indexOf(name, from);
+    if (i < 0) return null;
+    if (text.slice(i + name.length).startsWith(tag)) {
+      from = i + name.length + tag.length;
+      continue;
+    }
+    const after = text.slice(i + name.length, i + name.length + 1);
+    if (after === '的' && name.length <= 4) {
+      from = i + 1;
+      continue;
+    }
+    return text.slice(0, i) + name + tag + text.slice(i + name.length);
+  }
+  return null;
+}
+
+function injectAtImageTagsInNarrative(
+  base: string,
+  slots: { injectNames: string[]; k: number }[],
+): string {
+  const flat: { name: string; k: number }[] = [];
+  for (const s of slots) {
+    const uniq = [...new Set(s.injectNames.map((x) => x.trim()).filter(Boolean))].sort(
+      (a, b) => b.length - a.length,
+    );
+    for (const name of uniq) flat.push({ name, k: s.k });
+  }
+  flat.sort((a, b) => b.name.length - a.name.length);
+
+  let text = base;
+  const done = new Set<number>();
+  for (const { name, k } of flat) {
+    if (done.has(k)) continue;
+    const tag = `@图片${k}`;
+    const next = tryInjectNameWithTag(text, name, tag);
+    if (next !== null) {
+      text = next;
+      done.add(k);
+    }
+  }
+  return text;
+}
+
+/** 文案写「父亲」等称谓，但角色卡名为「龙父」「李父」等时的宽松匹配（排除「师父」等） */
+function fatherLikeCharacterName(nm: string): boolean {
+  if (nm.includes('师')) return false;
+  return nm === '父亲' || nm === '爸爸' || /[父爸爹]/.test(nm);
+}
+
+function motherLikeCharacterName(nm: string): boolean {
+  if (nm.includes('师父')) return false;
+  return nm === '母亲' || nm === '妈妈' || /[母妈娘]/.test(nm);
+}
+
+/** 角色是否被本镜文案「点到」：全名包含，或称谓与卡名对应 */
+function characterMentionedInShotBlob(ch: CharacterSheet, blob: string): boolean {
+  const nm = ch.name?.trim();
+  if (!nm) return false;
+  if (blob.includes(nm)) return true;
+  if (/(父亲|爸爸|爹|老爹)/.test(blob) && fatherLikeCharacterName(nm)) return true;
+  if (/(母亲|妈妈|娘|老妈)/.test(blob) && motherLikeCharacterName(nm)) return true;
+  return false;
+}
+
+function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
+  const nm = ch.name?.trim() ?? '';
+  if (nm && blob.includes(nm)) return blob.indexOf(nm);
+  if (nm && /(父亲|爸爸|爹|老爹)/.test(blob) && fatherLikeCharacterName(nm)) {
+    const m = blob.match(/父亲|爸爸|爹|老爹/);
+    if (m && m.index !== undefined) return m.index;
+  }
+  if (nm && /(母亲|妈妈|娘|老妈)/.test(blob) && motherLikeCharacterName(nm)) {
+    const m = blob.match(/母亲|妈妈|娘|老妈/);
+    if (m && m.index !== undefined) return m.index;
+  }
+  return 1e9;
+}
+
+/**
+ * Seedance 2.0 全能参考：按镜内文案匹配出镜角色与当前场景，收集参考图；顺序与 @图片1…@图片n 一致。
+ * - 角色：姓名出现在本镜检索文本中（含「父亲」↔ 龙父 等称谓扩展），且定妆树/变体有图；长名优先避免「龙」误匹配「龙一」。
+ * - 场景：本镜 sceneRef 对应场景卡的首张有图变体，置于角色图之后。
+ */
+export function buildShotMultimodalRefPack(
+  shot: ProductionShot,
+  characterSheets: CharacterSheet[],
+  sceneSheets: SceneSheet[],
+): {
+  multimodalImages: { base64: string; mimeType: string }[];
+  /** 与 multimodalImages 下标对齐，供 UI 展示 */
+  labels: string[];
+  /** 追加到叙事 prompt 后，说明 @图片n 与素材对应关系 */
+  refPromptSuffix: string;
+} {
+  const blob = [
+    shot.subject,
+    shot.action,
+    shot.dialogue,
+    shot.notes,
+    shot.structuredStill.sp_subject,
+    shot.structuredStill.sp_environment,
+    shot.structuredMotion.mp_motion,
+    shot.structuredMotion.mp_camera,
+    shot.structuredMotion.mp_tempo,
+    shot.structuredMotion.mp_transition,
+    shot.structuredMotion.mp_audio,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const candidates = characterSheets.filter((ch) => characterMentionedInShotBlob(ch, blob));
+  candidates.sort((a, b) => (b.name!.length ?? 0) - (a.name!.length ?? 0));
+  const pickedChars: CharacterSheet[] = [];
+  for (const ch of candidates) {
+    const nm = ch.name!.trim();
+    /** 仅合并「单字龙」与「龙一」这类包含关系，不能把「龙一」与「龙一的父亲」当成同一人 */
+    if (nm.length === 1 && pickedChars.some((p) => p.name !== nm && p.name!.includes(nm))) continue;
+    pickedChars.push(ch);
+  }
+  pickedChars.sort((a, b) => firstCharacterMentionIndex(a, blob) - firstCharacterMentionIndex(b, blob));
+
+  type Entry = {
+    base64: string;
+    mimeType: string;
+    label: string;
+    injectNames: string[];
+  };
+  const entries: Entry[] = [];
+
+  for (const ch of pickedChars) {
+    const url = getCharacterLookImage(ensureCharacterLookTree(ch));
+    if (!url) continue;
+    const parsed = dataUrlToBase64Mime(url);
+    if (!parsed) continue;
+    const nm = ch.name!.trim();
+    entries.push({
+      base64: parsed.base64,
+      mimeType: parsed.mimeType || 'image/png',
+      label: `角色「${nm}」`,
+      injectNames: nm ? [nm] : [],
+    });
+  }
+
+  const scene = sceneSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef);
+  if (scene) {
+    const url = firstSceneVariantImageUrl(scene);
+    if (url) {
+      const parsed = dataUrlToBase64Mime(url);
+      if (parsed) {
+        const sn = scene.name?.trim() || '';
+        const injectNames = new Set<string>();
+        if (sn) injectNames.add(sn);
+        if (scene.sceneRef?.trim()) injectNames.add(scene.sceneRef.trim());
+        if (sn.includes(' - ')) injectNames.add(sn.split(' - ')[0]!.trim());
+        entries.push({
+          base64: parsed.base64,
+          mimeType: parsed.mimeType || 'image/png',
+          label: `场景「${sn || scene.sceneRef}」`,
+          injectNames: [...injectNames],
+        });
+      }
+    }
+  }
+
+  const capped = entries.slice(0, 9);
+  const refPromptSuffix =
+    capped.length > 0
+      ? `参考对应（与上传素材顺序一致）：${capped.map((_, i) => `@图片${i + 1}为${capped[i]!.label}`).join('，')}。`
+      : '';
+
+  const baseNarrative = buildProductionShotVideoStoryboardText(shot);
+  const slots = capped.map((e, i) => ({
+    injectNames: e.injectNames,
+    k: i + 1,
+  }));
+  const narrativeWithInlineTags =
+    capped.length > 0 ? injectAtImageTagsInNarrative(baseNarrative, slots) : baseNarrative;
+  const defaultVideoPrompt =
+    refPromptSuffix.length > 0 ? `${narrativeWithInlineTags}\n\n${refPromptSuffix}` : narrativeWithInlineTags;
+
+  return {
+    multimodalImages: capped.map(({ base64, mimeType }) => ({ base64, mimeType })),
+    labels: capped.map((e) => e.label),
+    refPromptSuffix,
+    narrativeWithInlineTags,
+    defaultVideoPrompt,
   };
 }
 

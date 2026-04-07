@@ -1,2 +1,0 @@
-# 可选：用于从 .env 加载 API Key（脚本内已做 ImportError 兼容，不装也能跑）
-python-dotenv>=1.0.0

@@ -147,6 +147,17 @@ function pollSec(): number {
   return Number.isFinite(n) && n >= 30 ? Math.min(n, 3600) : 600;
 }
 
+/**
+ * dreamina-cli-skill 仅接受 seedance2.0、seedance2.0fast（见 dreamina_wrapper COMMAND_SPECS）。
+ * 旧版 UI / 误填的 seedance2.0_vip 会报 Unsupported value，映射为全模态 seedance2.0。
+ */
+function normalizeDreaminaSeedanceVersion(mv: string | undefined | null): string | undefined {
+  const v = mv?.trim();
+  if (!v) return undefined;
+  if (v === 'seedance2.0_vip') return 'seedance2.0';
+  return v;
+}
+
 /** text2video：ratio 映射为 CLI 支持的枚举 */
 function aspectToDreaminaRatio(aspect?: string): string {
   const a = (aspect || '16:9').trim();
@@ -164,6 +175,28 @@ function aspectToDreaminaRatio(aspect?: string): string {
 function clampDuration(sec: number | undefined): number {
   const d = sec != null && Number.isFinite(sec) ? Math.round(sec) : 5;
   return Math.min(15, Math.max(4, d));
+}
+
+/**
+ * 即梦 CLI（Go）在 Windows 下对反斜杠绝对路径上传素材时易报
+ * upload phase, no file upload；传给子进程时使用正斜杠。
+ */
+function toDreaminaCliPath(absPath: string): string {
+  const resolved = path.resolve(absPath);
+  if (process.platform === 'win32') {
+    return resolved.replace(/\\/g, '/');
+  }
+  return resolved;
+}
+
+/**
+ * 多模态/图生参考图落盘目录（默认项目 uploads/dreamina-mm，避免仅用 Temp 时权限或杀软拦截）。
+ * 可通过环境变量 DREAMINA_MEDIA_STAGING_DIR 覆盖。
+ */
+function getDreaminaStagingDir(): string {
+  const env = process.env.DREAMINA_MEDIA_STAGING_DIR?.trim();
+  if (env) return path.resolve(env);
+  return path.resolve(process.cwd(), 'uploads', 'dreamina-mm');
 }
 
 interface WrapperJson {
@@ -381,6 +414,8 @@ export async function submitDreaminaMultimodalVideo(options: {
   images: MultimodalMediaItem[];
   videos: MultimodalMediaItem[];
   audios: MultimodalMediaItem[];
+  /** 覆盖 DREAMINA_MULTIMODAL_MODEL，传给 CLI --model-version */
+  modelVersion?: string;
 }): Promise<{ submitId: string; taskId: string }> {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error('请提供 prompt（可用 @图片1 @视频1 等引用素材）');
@@ -401,21 +436,26 @@ export async function submitDreaminaMultimodalVideo(options: {
 
   const ratio = aspectToDreaminaRatio(options.aspectRatio);
   const duration = clampDuration(options.duration);
-  const mv = process.env.DREAMINA_MULTIMODAL_MODEL?.trim() || 'seedance2.0fast';
+  const mv =
+    normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+    normalizeDreaminaSeedanceVersion(process.env.DREAMINA_MULTIMODAL_MODEL) ||
+    'seedance2.0fast';
 
   const tmp: string[] = [];
   try {
+    const staging = getDreaminaStagingDir();
+    await fs.mkdir(staging, { recursive: true });
     const write = async (item: MultimodalMediaItem, kind: 'image' | 'video' | 'audio') => {
       const b64 = stripDataUrlBase64(item.base64);
       if (!b64) throw new Error('素材 base64 为空');
       const ext = extForMime(item.mimeType, kind);
       const p = path.join(
-        os.tmpdir(),
+        staging,
         `dreamina_mm_${kind}_${Date.now()}_${randomBytes(4).toString('hex')}.${ext}`,
       );
       await fs.writeFile(p, Buffer.from(b64, 'base64'));
       tmp.push(p);
-      return p;
+      return toDreaminaCliPath(p);
     };
 
     const imagePaths: string[] = [];
@@ -475,10 +515,19 @@ export async function submitDreaminaVideo(options: DreaminaVideoOptions): Promis
     }
     const ext =
       options.imageMimeType?.includes('png') ? 'png' : options.imageMimeType?.includes('webp') ? 'webp' : 'png';
-    const tmp = path.join(os.tmpdir(), `dreamina_i2v_${Date.now()}.${ext}`);
+    const staging = getDreaminaStagingDir();
+    await fs.mkdir(staging, { recursive: true });
+    const tmp = path.join(staging, `dreamina_i2v_${Date.now()}.${ext}`);
     await fs.writeFile(tmp, Buffer.from(raw, 'base64'));
     try {
-      const wrap = await runWrapper('image2video.py', ['--image', tmp, '--prompt', prompt, '--poll', DREAMINA_SUBMIT_POLL]);
+      const mv =
+        normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+        normalizeDreaminaSeedanceVersion(process.env.DREAMINA_IMAGE2VIDEO_MODEL) ||
+        '';
+      const i2vArgs = ['--image', toDreaminaCliPath(tmp), '--prompt', prompt];
+      if (mv) i2vArgs.push('--model-version', mv);
+      i2vArgs.push('--poll', DREAMINA_SUBMIT_POLL);
+      const wrap = await runWrapper('image2video.py', i2vArgs);
       if (!wrap.ok) {
         throw new Error(dreaminaFailureMessage(wrap.error || '即梦 image2video 失败'));
       }
@@ -493,7 +542,10 @@ export async function submitDreaminaVideo(options: DreaminaVideoOptions): Promis
 
   const ratio = aspectToDreaminaRatio(options.aspectRatio);
   const duration = clampDuration(options.duration);
-  const mv = process.env.DREAMINA_TEXT2VIDEO_MODEL?.trim() || 'seedance2.0';
+  const mv =
+    normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+    normalizeDreaminaSeedanceVersion(process.env.DREAMINA_TEXT2VIDEO_MODEL) ||
+    'seedance2.0';
 
   const wrap = await runWrapper('text2video.py', [
     '--prompt',
@@ -527,6 +579,8 @@ export interface DreaminaVideoOptions {
   model: string;
   imageBase64?: string;
   imageMimeType?: string;
+  /** 覆盖各 DREAMINA_*_MODEL 环境变量，传给 CLI --model-version */
+  modelVersion?: string;
 }
 
 /**
@@ -548,17 +602,21 @@ export async function generateDreaminaVideo(options: DreaminaVideoOptions): Prom
     }
     const ext =
       options.imageMimeType?.includes('png') ? 'png' : options.imageMimeType?.includes('webp') ? 'webp' : 'png';
-    const tmp = path.join(os.tmpdir(), `dreamina_i2v_${Date.now()}.${ext}`);
+    const staging = getDreaminaStagingDir();
+    await fs.mkdir(staging, { recursive: true });
+    const tmp = path.join(staging, `dreamina_i2v_${Date.now()}.${ext}`);
     await fs.writeFile(tmp, Buffer.from(raw, 'base64'));
     try {
-      const wrap = await runWrapper('image2video.py', [
-        '--image',
-        tmp,
-        '--prompt',
-        prompt,
-        '--poll',
-        poll,
-      ]);
+      const mv =
+        normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+        normalizeDreaminaSeedanceVersion(process.env.DREAMINA_IMAGE2VIDEO_MODEL) ||
+        '';
+      const i2vArgs = ['--image', toDreaminaCliPath(tmp), '--prompt', prompt];
+      if (mv) {
+        i2vArgs.push('--model-version', mv);
+      }
+      i2vArgs.push('--poll', poll);
+      const wrap = await runWrapper('image2video.py', i2vArgs);
       if (!wrap.ok) {
         throw new Error(dreaminaFailureMessage(wrap.error || '即梦 image2video 失败'));
       }
@@ -578,7 +636,10 @@ export async function generateDreaminaVideo(options: DreaminaVideoOptions): Prom
   // dreamina-text2video
   const ratio = aspectToDreaminaRatio(options.aspectRatio);
   const duration = clampDuration(options.duration);
-  const mv = process.env.DREAMINA_TEXT2VIDEO_MODEL?.trim() || 'seedance2.0';
+  const mv =
+    normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+    normalizeDreaminaSeedanceVersion(process.env.DREAMINA_TEXT2VIDEO_MODEL) ||
+    'seedance2.0';
 
   const wrap = await runWrapper('text2video.py', [
     '--prompt',
@@ -643,6 +704,8 @@ export async function generateDreaminaMultimodalVideo(options: {
   images: MultimodalMediaItem[];
   videos: MultimodalMediaItem[];
   audios: MultimodalMediaItem[];
+  /** 覆盖 DREAMINA_MULTIMODAL_MODEL */
+  modelVersion?: string;
 }): Promise<{ videoUrl: string; taskId: string }> {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error('请提供 prompt（可用 @图片1 @视频1 等引用素材）');
@@ -663,22 +726,27 @@ export async function generateDreaminaMultimodalVideo(options: {
 
   const ratio = aspectToDreaminaRatio(options.aspectRatio);
   const duration = clampDuration(options.duration);
-  const mv = process.env.DREAMINA_MULTIMODAL_MODEL?.trim() || 'seedance2.0fast';
+  const mv =
+    normalizeDreaminaSeedanceVersion(options.modelVersion) ||
+    normalizeDreaminaSeedanceVersion(process.env.DREAMINA_MULTIMODAL_MODEL) ||
+    'seedance2.0fast';
   const poll = String(pollSec());
 
   const tmp: string[] = [];
   try {
+    const staging = getDreaminaStagingDir();
+    await fs.mkdir(staging, { recursive: true });
     const write = async (item: MultimodalMediaItem, kind: 'image' | 'video' | 'audio') => {
       const b64 = stripDataUrlBase64(item.base64);
       if (!b64) throw new Error('素材 base64 为空');
       const ext = extForMime(item.mimeType, kind);
       const p = path.join(
-        os.tmpdir(),
+        staging,
         `dreamina_mm_${kind}_${Date.now()}_${randomBytes(4).toString('hex')}.${ext}`,
       );
       await fs.writeFile(p, Buffer.from(b64, 'base64'));
       tmp.push(p);
-      return p;
+      return toDreaminaCliPath(p);
     };
 
     const imagePaths: string[] = [];

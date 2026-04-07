@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiPost } from '../api/client';
 import { klingVideoProxyUrl, type VideoGenerateResponse } from '../api/video';
@@ -26,6 +26,8 @@ import {
   buildCharacterImagePrompt,
   buildSceneImagePrompt,
   computeShotRefTags,
+  buildShotMultimodalRefPack,
+  buildProductionShotVideoStoryboardText,
   ensureCharacterLookTree,
   flattenLookTreeToVariants,
   getCharacterActiveNode,
@@ -191,20 +193,6 @@ function buildProductionShotFramePrompt(
     '电影感分镜静帧，高清，无文字水印。',
   ];
   return parts.filter(Boolean).join('\n');
-}
-
-function buildProductionShotVideoStoryboardText(shot: ProductionShot): string {
-  return [
-    shot.structuredStill.sp_subject,
-    shot.structuredStill.sp_environment,
-    shot.structuredMotion.mp_motion,
-    shot.structuredMotion.mp_camera,
-    shot.structuredMotion.mp_tempo,
-    shot.dialogue ? `对白：${shot.dialogue}` : '',
-    shot.audioCue ? `声音：${shot.audioCue}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
 }
 
 /** Step2：依据剧本核对角色 / 拍摄空间 / 道具（与 story 同步） */
@@ -1100,28 +1088,85 @@ export function ProductionWizard() {
     setShotMediaBusy('video');
     setErr(null);
     try {
-      const storyboardText = buildProductionShotVideoStoryboardText(s);
-      if (!storyboardText.trim()) {
-        setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频');
-      } else {
-        const base64 = s.previewStillDataUrl?.replace(/^data:image\/\w+;base64,/, '');
+      const pref = project.meta.shotVideoDreaminaModel?.trim();
+      const mv = project.meta.dreaminaModelVersion?.trim();
+
+      if (pref === 'dreamina-multimodal') {
+        const pack = buildShotMultimodalRefPack(s, project.characterAssets ?? [], project.sceneAssets ?? []);
+        if (!pack.multimodalImages.length) {
+          setErr(
+            '全能参考需要至少一张角色或场景参考图：请在角色/场景卡生成定妆图，并确保本镜主体、动作或对白中出现对应角色姓名。',
+          );
+          return;
+        }
+        const base = buildProductionShotVideoStoryboardText(s);
+        if (!base.trim()) {
+          setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频');
+          return;
+        }
+        const autoPrompt = pack.defaultVideoPrompt;
+        const storyboardText = (s.videoStoryboardOverride?.trim() || autoPrompt).trim();
         const res = await apiPost<VideoGenerateResponse>('/api/video/generate', {
           storyboardText,
           materials: [],
           duration: Math.min(60, Math.max(4, Math.round(s.durationSec || 6))),
           aspectRatio: ar,
-          ...(base64 ? { imageBase64: base64, imageMimeType: 'image/png' } : {}),
+          model: 'dreamina-multimodal',
+          multimodalImages: pack.multimodalImages,
+          ...(mv ? { dreaminaModelVersion: mv } : {}),
         });
         const url = res.videoUrl;
         if (url) patchShot(selectedShotIdx, { previewVideoUrl: url });
         else setErr('视频生成未返回地址');
+        return;
       }
+
+      const storyboardText = buildProductionShotVideoStoryboardText(s);
+      if (!storyboardText.trim()) {
+        setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频');
+        return;
+      }
+      const base64Raw = s.previewStillDataUrl?.replace(/^data:image\/\w+;base64,/, '');
+      const hasStill = !!base64Raw?.trim();
+      let model: string;
+      if (pref === 'dreamina-text2video' || pref === 'dreamina-image2video') {
+        model = pref;
+      } else {
+        model = hasStill ? 'dreamina-image2video' : 'dreamina-text2video';
+      }
+      if (model === 'dreamina-image2video' && !hasStill) {
+        setErr('即梦图生视频需要本镜分镜静帧：请先「生成分镜图」，或在下拉里改选「即梦·文生视频」。');
+        return;
+      }
+      const res = await apiPost<VideoGenerateResponse>('/api/video/generate', {
+        storyboardText,
+        materials: [],
+        duration: Math.min(60, Math.max(4, Math.round(s.durationSec || 6))),
+        aspectRatio: ar,
+        model,
+        ...(mv ? { dreaminaModelVersion: mv } : {}),
+        ...(hasStill && model === 'dreamina-image2video'
+          ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
+          : {}),
+      });
+      const url = res.videoUrl;
+      if (url) patchShot(selectedShotIdx, { previewVideoUrl: url });
+      else setErr('视频生成未返回地址');
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频生成失败');
     } finally {
       setShotMediaBusy(null);
     }
-  }, [project.shots, ar, selectedShotIdx, patchShot]);
+  }, [
+    project.shots,
+    project.characterAssets,
+    project.sceneAssets,
+    project.meta.shotVideoDreaminaModel,
+    project.meta.dreaminaModelVersion,
+    ar,
+    selectedShotIdx,
+    patchShot,
+  ]);
 
   const story = project.story;
   const chSheets = project.characterAssets ?? [];
@@ -1133,6 +1178,30 @@ export function ProductionWizard() {
   }, [project.story?.characters]);
   const scSheets = project.sceneAssets ?? [];
   const shot = project.shots[selectedShotIdx];
+
+  const multimodalRefPack = useMemo(() => {
+    if (!shot) return null;
+    return buildShotMultimodalRefPack(shot, chSheets, scSheets);
+  }, [shot, chSheets, scSheets]);
+
+  const multimodalAutoPrompt = useMemo(() => {
+    if (!shot || !multimodalRefPack) return '';
+    return multimodalRefPack.defaultVideoPrompt;
+  }, [shot, multimodalRefPack]);
+
+  /** L1 场景 id 与当前分镜表 sceneRef 是否一一出现过（用于提示「为何 5 张场景图只用了 3 处」） */
+  const storySceneCoverage = useMemo(() => {
+    const plan = project.story?.scenePlan ?? [];
+    if (!plan.length || !project.shots.length) return null;
+    const used = new Set(project.shots.map((s) => String(s.sceneRef || '').trim()).filter(Boolean));
+    const missing = plan.filter((p) => !used.has(String(p.id || '').trim()));
+    return {
+      hit: plan.length - missing.length,
+      total: plan.length,
+      missingLabels: missing.map((p) => (p.name || p.id || '').trim()).filter(Boolean),
+    };
+  }, [project.story?.scenePlan, project.shots]);
+
   const footerHint =
     step === 0
       ? '填写立项信息后可生成剧本大纲'
@@ -1897,6 +1966,10 @@ export function ProductionWizard() {
                 {busyL3 ? '生成中…' : '生成分镜表'}
               </button>
             </div>
+            <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+              分镜表会尽量让 L1 中<strong className="text-[var(--color-text)]">每一个场景 id</strong>
+              至少在某一镜出现（与「全部场景」定帧对应）。若你增删过故事场景，请重新点「生成分镜表」以同步。
+            </p>
           </div>
         )}
 
@@ -1949,6 +2022,27 @@ export function ProductionWizard() {
                   全局风格：{project.meta.styleRefSummary.slice(0, 120)}
                   {project.meta.styleRefSummary.length > 120 ? '…' : ''}
                 </div>
+                {storySceneCoverage && storySceneCoverage.total > 0 ? (
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-[11px] leading-snug ${
+                      storySceneCoverage.hit < storySceneCoverage.total
+                        ? 'border-amber-500/45 bg-amber-500/10 text-amber-950 dark:text-amber-100'
+                        : 'border-[var(--color-border)]/80 bg-[var(--color-surface)] text-[var(--color-text-muted)]'
+                    }`}
+                  >
+                    <span className="font-medium text-[var(--color-text)]">L1 场景覆盖：</span>
+                    {storySceneCoverage.hit}/{storySceneCoverage.total} 个地点已在分镜中出现（sceneRef）。
+                    {storySceneCoverage.hit < storySceneCoverage.total && storySceneCoverage.missingLabels.length > 0 ? (
+                      <span>
+                        {' '}
+                        尚未安排镜头：
+                        {storySceneCoverage.missingLabels.join('、')}。请回到上一步重新点击「生成分镜表」以拉齐（服务端已要求模型全覆盖）。
+                      </span>
+                    ) : (
+                      <span> 与故事里的场景规划一致。</span>
+                    )}
+                  </div>
+                ) : null}
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="text-sm font-semibold text-[var(--color-text)]">
@@ -1961,6 +2055,115 @@ export function ProductionWizard() {
                   <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
                     修改后需重新「组装各镜 Prompt」导出才会更新。
                   </p>
+                  <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                    分镜静帧：服务端 Compass / Gemini 图像（Imagen）；分镜视频：默认即梦 CLI。「全能参考」按本镜文案匹配角色名并附带当前场景卡参考图，prompt 内 @图片1… 与上传顺序一致（最多 9 张）。
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-end gap-3 text-[10px]">
+                    <label className="flex flex-col gap-0.5 text-[var(--color-text-muted)]">
+                      分镜视频（即梦）
+                      <select
+                        value={project.meta.shotVideoDreaminaModel ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProject((p) => ({
+                            ...p,
+                            meta: {
+                              ...p.meta,
+                              shotVideoDreaminaModel: v ? v : undefined,
+                            },
+                          }));
+                        }}
+                        className="mt-0.5 max-w-[240px] rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)]"
+                      >
+                        <option value="">自动（有静帧→图生，无→文生）</option>
+                        <option value="dreamina-multimodal">即梦·全能参考（角色/场景图 + @图片1…）</option>
+                        <option value="dreamina-image2video">即梦·图生视频</option>
+                        <option value="dreamina-text2video">即梦·文生视频</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-[var(--color-text-muted)]">
+                      Seedance 版本（--model-version）
+                      <select
+                        value={project.meta.dreaminaModelVersion ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProject((p) => ({
+                            ...p,
+                            meta: { ...p.meta, dreaminaModelVersion: v ? v : undefined },
+                          }));
+                        }}
+                        className="mt-0.5 max-w-[260px] rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)]"
+                      >
+                        <option value="">默认（读服务端 DREAMINA_*_MODEL）</option>
+                        <option value="seedance2.0">seedance2.0（全模态）</option>
+                        <option value="seedance2.0fast">seedance2.0fast（极速）</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {project.meta.shotVideoDreaminaModel === 'dreamina-multimodal' && shot && multimodalRefPack ? (
+                    <div className="mt-3 space-y-2 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-3 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[var(--color-text)]">
+                          全能参考 · 素材与 @图片 对应
+                        </span>
+                        <span className="text-[10px] text-[var(--color-text-muted)]">
+                          正文会自动在首次出现的人名/场景名后插入 @图片n；龙一与龙一的父亲会分别绑定。可继续微调全文。
+                        </span>
+                      </div>
+                      {multimodalRefPack.multimodalImages.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {multimodalRefPack.multimodalImages.map((img, i) => (
+                            <div
+                              key={`${shot.shotIndex}-mm-${i}`}
+                              className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 pl-1.5 pr-2"
+                            >
+                              <span className="shrink-0 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                @图片{i + 1}
+                              </span>
+                              <img
+                                src={`data:${img.mimeType || 'image/png'};base64,${img.base64}`}
+                                alt=""
+                                className="h-11 w-11 shrink-0 rounded-md object-cover ring-1 ring-[var(--color-border)]"
+                              />
+                              <span className="min-w-0 truncate text-[11px] text-[var(--color-text)]">
+                                {multimodalRefPack.labels[i] ?? `素材 ${i + 1}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+                          当前未匹配到任何带图素材。请在本镜主体/对白中写明角色名或父亲/母亲等称谓，并为角色卡、场景卡生成参考图。
+                        </div>
+                      )}
+                      <label className="block">
+                        <span className="text-[11px] text-[var(--color-text-muted)]">
+                          将发送给即梦的完整 Prompt（与左侧资产顺序一致；勿改 @图片 编号与素材顺序的对应关系）
+                        </span>
+                        <textarea
+                          rows={9}
+                          value={shot.videoStoryboardOverride ?? multimodalAutoPrompt}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            patchShot(selectedShotIdx, {
+                              videoStoryboardOverride: v === '' ? undefined : v,
+                            });
+                          }}
+                          spellCheck={false}
+                          className="mt-1.5 w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => patchShot(selectedShotIdx, { videoStoryboardOverride: undefined })}
+                        className="text-[11px] text-[var(--color-primary)] hover:underline"
+                      >
+                        恢复自动拼接
+                      </button>
+                    </div>
+                  ) : null}
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"

@@ -135,6 +135,11 @@ export interface ProductionShot {
   previewStillDataUrl?: string;
   /** 本镜分镜视频预览（data URL 或同域可播 URL） */
   previewVideoUrl?: string;
+  /**
+   * 仅当分镜视频模式为「全能参考 dreamina-multimodal」时有效：覆盖发给接口的 storyboardText。
+   * 未设置时使用自动拼接（结构化叙事 + @图片 说明行）。
+   */
+  videoStoryboardOverride?: string;
 }
 
 export interface CharacterVisualProfile {
@@ -185,6 +190,17 @@ export interface ProductionProjectMeta {
   styleRefImageDataUrl?: string;
   /** 画面比例：分镜生图与参考 */
   aspectRatio?: string;
+  /**
+   * 分镜预览视频：即梦 CLI 模型（与 /api/video/generate 一致）。
+   * 空则按是否有分镜静帧自动选：有图 → dreamina-image2video，无图 → dreamina-text2video。
+   * dreamina-multimodal：Seedance 全能参考，多图 + prompt 内 @图片1…（与 multimodalImages 顺序一致）。
+   */
+  shotVideoDreaminaModel?: string;
+  /**
+   * 即梦 CLI `--model-version`：dreamina-cli-skill 仅支持 seedance2.0、seedance2.0fast（与 Studio「VIP」名无对应枚举）。
+   * 空则使用服务端环境变量 DREAMINA_TEXT2VIDEO_MODEL / DREAMINA_IMAGE2VIDEO_MODEL。
+   */
+  dreaminaModelVersion?: string;
 }
 
 export interface AssetVariant {

@@ -460,6 +460,7 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
     multimodalImages,
     multimodalVideos,
     multimodalAudios,
+    dreaminaModelVersion,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -472,6 +473,7 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
     multimodalImages?: { base64: string; mimeType?: string }[];
     multimodalVideos?: { base64: string; mimeType?: string }[];
     multimodalAudios?: { base64: string; mimeType?: string }[];
+    dreaminaModelVersion?: string;
   };
 
   if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
@@ -492,6 +494,10 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
       const imgs = Array.isArray(multimodalImages) ? multimodalImages : [];
       const vids = Array.isArray(multimodalVideos) ? multimodalVideos : [];
       const auds = Array.isArray(multimodalAudios) ? multimodalAudios : [];
+      const mvAsync =
+        typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
+          ? dreaminaModelVersion.trim()
+          : undefined;
       const { submitId, taskId } = await submitDreaminaMultimodalVideo({
         prompt: storyboardText.trim(),
         aspectRatio: aspectRatio ?? '16:9',
@@ -499,6 +505,7 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
         images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         videos: vids.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
+        modelVersion: mvAsync,
       });
       res.json({ submitId, taskId, status: 'pending' as const });
       return;
@@ -510,6 +517,10 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
     imageBase64 = r.imageBase64;
     imageMimeType = r.imageMimeType;
 
+    const mvSubmit =
+      typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
+        ? dreaminaModelVersion.trim()
+        : undefined;
     const { submitId, taskId } = await submitDreaminaVideo({
       prompt: storyboardText.trim(),
       aspectRatio: aspectRatio ?? '16:9',
@@ -517,6 +528,7 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
       model: modelTrim!,
       imageBase64,
       imageMimeType,
+      modelVersion: mvSubmit,
     });
     res.json({ submitId, taskId, status: 'pending' as const });
   } catch (err) {
@@ -615,6 +627,7 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
     referenceVideoUrl,
     referenceVideoReferType,
     referenceVideoKeepSound,
+    dreaminaModelVersion,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -631,6 +644,8 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
     referenceVideoUrl?: string;
     referenceVideoReferType?: 'feature' | 'base';
     referenceVideoKeepSound?: 'yes' | 'no';
+    /** 即梦 CLI --model-version，覆盖单次请求的 DREAMINA_*_MODEL */
+    dreaminaModelVersion?: string;
     /** 即梦全能参考 multimodal2video：与下方 storyboardText 一并作为 prompt；顺序即 @图片1 @视频1 编号顺序 */
     multimodalImages?: { base64: string; mimeType?: string }[];
     multimodalVideos?: { base64: string; mimeType?: string }[];
@@ -648,6 +663,10 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
       const imgs = Array.isArray(req.body.multimodalImages) ? req.body.multimodalImages : [];
       const vids = Array.isArray(req.body.multimodalVideos) ? req.body.multimodalVideos : [];
       const auds = Array.isArray(req.body.multimodalAudios) ? req.body.multimodalAudios : [];
+      const mv =
+        typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
+          ? dreaminaModelVersion.trim()
+          : undefined;
       const { videoUrl, taskId } = await generateDreaminaMultimodalVideo({
         prompt: storyboardText.trim(),
         aspectRatio: aspectRatio ?? '16:9',
@@ -655,6 +674,7 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
         images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         videos: vids.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
+        modelVersion: mv,
       });
       let videoPath: string | undefined;
       try {
@@ -745,6 +765,7 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
           model: m!,
           imageBase64,
           imageMimeType,
+          modelVersion: typeof dreaminaModelVersion === 'string' ? dreaminaModelVersion.trim() : undefined,
         })
       : isKlingModel(m)
         ? await generateKlingVideo({

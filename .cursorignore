@@ -1,0 +1,13 @@
+﻿# 减轻索引与搜索负担（不影响 Git；运行仍依赖 node_modules）
+**/node_modules/
+h5-video-tool-api/uploads/
+h5-video-tool-api/output/
+**/dist/
+.tiktok_downloads/
+tiktok_downloads/
+out/
+output/
+viral-analysis-out/
+subweb/
+QAS-package/
+*.zip

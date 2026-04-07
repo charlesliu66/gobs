@@ -84,17 +84,21 @@ class DreaminaWrapperError(Exception):
         self.exit_code = exit_code
 
 
-def compact_lines(text: str) -> list[str]:
+def compact_lines(text: str | None) -> list[str]:
     return [line.strip() for line in strip_ansi(text).splitlines() if line.strip()]
 
 
-def strip_ansi(text: str) -> str:
+def strip_ansi(text: str | None) -> str:
     import re
 
+    if text is None:
+        return ""
     return re.sub(r"\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", text)
 
 
-def extract_json_text(text: str) -> str | None:
+def extract_json_text(text: str | None) -> str | None:
+    if text is None:
+        return None
     trimmed = text.strip()
     object_start = trimmed.find("{")
     array_start = trimmed.find("[")
@@ -118,22 +122,23 @@ def extract_json_text(text: str) -> str | None:
     return candidate[: end + 1]
 
 
-def parse_json_payload(stdout: str, stderr: str = "") -> Any:
+def parse_json_payload(stdout: str | None, stderr: str | None = None) -> Any:
+    stderr = stderr or ""
     stdout_json = extract_json_text(stdout)
     if stdout_json:
         return json.loads(stdout_json)
 
-    combined_json = extract_json_text(f"{stdout}\n{stderr}")
+    combined_json = extract_json_text(f"{stdout or ''}\n{stderr}")
     if combined_json:
         return json.loads(combined_json)
 
     raise DreaminaWrapperError(
         "Dreamina CLI did not return parseable JSON.",
-        details=[*compact_lines(stdout), *compact_lines(stderr)],
+        details=[*compact_lines(stdout), *compact_lines(stderr or None)],
     )
 
 
-def last_meaningful_line(stdout: str, stderr: str, fallback: str) -> str:
+def last_meaningful_line(stdout: str | None, stderr: str | None, fallback: str) -> str:
     stderr_lines = compact_lines(stderr)
     stdout_lines = compact_lines(stdout)
     line = stderr_lines[-1] if stderr_lines else (stdout_lines[-1] if stdout_lines else fallback)
@@ -150,8 +155,8 @@ def last_meaningful_line(stdout: str, stderr: str, fallback: str) -> str:
 def normalize_exec_error(
     command: list[str],
     returncode: int,
-    stdout: str,
-    stderr: str,
+    stdout: str | None,
+    stderr: str | None,
 ) -> DreaminaWrapperError:
     fallback = f"Dreamina CLI failed with exit code {returncode}."
     return DreaminaWrapperError(
@@ -807,10 +812,13 @@ def stringify_value(value: Any) -> str:
 
 def run_dreamina(command: list[str]) -> tuple[str, str]:
     try:
+        # Windows 默认 text 使用本地编码（如 GBK），dreamina 常输出 UTF-8，会导致解码失败、stdout 为 None
         completed = subprocess.run(
             command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
     except FileNotFoundError as error:
