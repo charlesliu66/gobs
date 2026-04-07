@@ -563,8 +563,8 @@ export function TimelinePanel({
                   style={{ width: contentWidthPx }}
                 >
                   {textClips.length === 0 && (
-                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-[var(--color-text-muted)]">
-                      空
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-[var(--color-text-muted)] italic">
+                      点顶栏「片头」「+ 字幕」「片尾」添加
                     </span>
                   )}
                   {textClips.map((clip: TextClip) => {
