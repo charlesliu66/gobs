@@ -694,6 +694,179 @@ export function buildShotMultimodalRefPack(
   };
 }
 
+/** 把任意图片 URL（data: 或 http/https 或相对路径）转换成 base64+mimeType */
+export async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+  // 已经是 data URL，直接解析
+  const m = /^data:([^;]+);base64,(.+)$/s.exec(url.trim());
+  if (m) return { mimeType: m[1]!.trim(), base64: m[2]!.trim() };
+  // HTTP/HTTPS URL 或相对路径：fetch 并转 base64
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        const mm = /^data:([^;]+);base64,(.+)$/s.exec(result);
+        if (mm) resolve({ mimeType: mm[1]!.trim(), base64: mm[2]!.trim() });
+        else resolve(null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 与 buildShotMultimodalRefPack 逻辑一致，但支持 HTTP URL 图片（fetch 转 base64）。
+ * 用于 React 组件中（useEffect）和提交视频时调用。
+ */
+export async function buildShotMultimodalRefPackAsync(
+  shot: ProductionShot,
+  characterSheets: CharacterSheet[],
+  sceneSheets: SceneSheet[],
+  propSheets?: PropSheet[],
+  manualOverrides?: ProductionShot['manualRefOverrides'],
+): Promise<ReturnType<typeof buildShotMultimodalRefPack>> {
+  const blob = [
+    shot.subject,
+    shot.action,
+    shot.dialogue,
+    shot.notes,
+    shot.structuredStill.sp_subject,
+    shot.structuredStill.sp_environment,
+    shot.structuredMotion.mp_motion,
+    shot.structuredMotion.mp_camera,
+    shot.structuredMotion.mp_tempo,
+    shot.structuredMotion.mp_transition,
+    shot.structuredMotion.mp_audio,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  let pickedChars: CharacterSheet[];
+  if (manualOverrides?.characterIds !== undefined) {
+    pickedChars = manualOverrides.characterIds
+      .map((id) => characterSheets.find((c) => c.id === id))
+      .filter(Boolean) as CharacterSheet[];
+  } else {
+    const candidates = characterSheets.filter((ch) => characterMentionedInShotBlob(ch, blob));
+    candidates.sort((a, b) => (b.name!.length ?? 0) - (a.name!.length ?? 0));
+    pickedChars = [];
+    for (const ch of candidates) {
+      const nm = ch.name!.trim();
+      if (nm.length === 1 && pickedChars.some((p) => p.name !== nm && p.name!.includes(nm))) continue;
+      pickedChars.push(ch);
+    }
+    pickedChars.sort((a, b) => firstCharacterMentionIndex(a, blob) - firstCharacterMentionIndex(b, blob));
+  }
+
+  type Entry = {
+    base64: string;
+    mimeType: string;
+    label: string;
+    injectNames: string[];
+  };
+  const entries: Entry[] = [];
+
+  for (const ch of pickedChars) {
+    const url = getCharacterLookImage(ensureCharacterLookTree(ch));
+    if (!url) continue;
+    const parsed = await fetchImageAsBase64(url);
+    if (!parsed) continue;
+    const nm = ch.name!.trim();
+    entries.push({
+      base64: parsed.base64,
+      mimeType: parsed.mimeType || 'image/png',
+      label: `角色「${nm}」`,
+      injectNames: nm ? [nm] : [],
+    });
+  }
+
+  const scene = (() => {
+    if (manualOverrides?.sceneId !== undefined) {
+      if (manualOverrides.sceneId === null) return null;
+      return sceneSheets.find((s) => s.id === manualOverrides!.sceneId) ?? null;
+    }
+    return sceneSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef) ?? null;
+  })();
+  if (scene) {
+    const url = firstSceneVariantImageUrl(scene);
+    if (url) {
+      const parsed = await fetchImageAsBase64(url);
+      if (parsed) {
+        const sn = scene.name?.trim() || '';
+        const injectNames = new Set<string>();
+        if (sn) injectNames.add(sn);
+        if (scene.sceneRef?.trim()) injectNames.add(scene.sceneRef.trim());
+        if (sn.includes(' - ')) injectNames.add(sn.split(' - ')[0]!.trim());
+        entries.push({
+          base64: parsed.base64,
+          mimeType: parsed.mimeType || 'image/png',
+          label: `场景「${sn || scene.sceneRef}」`,
+          injectNames: [...injectNames],
+        });
+      }
+    }
+  }
+
+  if (propSheets?.length) {
+    let propCandidates: typeof propSheets;
+    if (manualOverrides?.propIds !== undefined) {
+      propCandidates = manualOverrides.propIds
+        .map((id) => propSheets.find((ps) => ps.id === id))
+        .filter(Boolean) as typeof propSheets;
+    } else {
+      propCandidates = propSheets.filter((ps) => {
+        const nm = ps.name?.trim();
+        if (!nm || nm.length < 2) return false;
+        return blob.includes(nm);
+      });
+      propCandidates.sort((a, b) => b.name.length - a.name.length);
+    }
+    for (const ps of propCandidates) {
+      const url = firstPropVariantImageUrl(ps);
+      if (!url) continue;
+      const parsed = await fetchImageAsBase64(url);
+      if (!parsed) continue;
+      const nm = ps.name.trim();
+      entries.push({
+        base64: parsed.base64,
+        mimeType: parsed.mimeType || 'image/png',
+        label: `道具「${nm}」`,
+        injectNames: [nm],
+      });
+    }
+  }
+
+  const capped = entries.slice(0, 9);
+  const refPromptSuffix =
+    capped.length > 0
+      ? `参考对应（与上传素材顺序一致）：${capped.map((_, i) => `@图片${i + 1}为${capped[i]!.label}`).join('，')}。`
+      : '';
+
+  const baseNarrative = buildProductionShotVideoStoryboardText(shot);
+  const slots = capped.map((e, i) => ({
+    injectNames: e.injectNames,
+    k: i + 1,
+  }));
+  const narrativeWithInlineTags =
+    capped.length > 0 ? injectAtImageTagsInNarrative(baseNarrative, slots) : baseNarrative;
+  const defaultVideoPrompt =
+    refPromptSuffix.length > 0 ? `${narrativeWithInlineTags}\n\n${refPromptSuffix}` : narrativeWithInlineTags;
+
+  return {
+    multimodalImages: capped.map(({ base64, mimeType }) => ({ base64, mimeType })),
+    labels: capped.map((e) => e.label),
+    refPromptSuffix,
+    narrativeWithInlineTags,
+    defaultVideoPrompt,
+  };
+}
+
 /** 从已注入 @图片n 的文案里提取第 n 张图的插入位置上下文（用于 UI 提示） */
 export function extractAtImageContext(narrative: string, n: number): string {
   const tag = `@图片${n}`;

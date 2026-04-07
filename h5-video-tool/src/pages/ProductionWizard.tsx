@@ -31,7 +31,7 @@ import {
   mergePropSheetsPreservingImages,
   formatWardrobeSupplementForCharacter,
   computeShotRefTags,
-  buildShotMultimodalRefPack,
+  buildShotMultimodalRefPackAsync,
   buildProductionShotVideoStoryboardText,
   buildShotBlobText,
   characterMentionedInShotBlob,
@@ -1381,11 +1381,12 @@ export function ProductionWizard() {
       const mv = project.meta.dreaminaModelVersion?.trim();
 
       if (pref === 'dreamina-multimodal') {
-        const pack = buildShotMultimodalRefPack(
+        const pack = await buildShotMultimodalRefPackAsync(
           s,
           project.characterAssets ?? [],
           project.sceneAssets ?? [],
           project.propAssets ?? [],
+          s.manualRefOverrides,
         );
         if (!pack.multimodalImages.length) {
           setErr(
@@ -1475,17 +1476,20 @@ export function ProductionWizard() {
   const propSheets = project.propAssets ?? [];
   const shot = project.shots[selectedShotIdx];
 
-  const multimodalRefPack = useMemo(() => {
-    if (!shot) return null;
-    return buildShotMultimodalRefPack(shot, chSheets, scSheets, propSheets, shot.manualRefOverrides);
+  const [multimodalRefPack, setMultimodalRefPack] = useState<Awaited<ReturnType<typeof buildShotMultimodalRefPackAsync>> | null>(null);
+
+  useEffect(() => {
+    if (!shot) { setMultimodalRefPack(null); return; }
+    let cancelled = false;
+    buildShotMultimodalRefPackAsync(shot, chSheets, scSheets, propSheets, shot.manualRefOverrides)
+      .then((pack) => { if (!cancelled) setMultimodalRefPack(pack); })
+      .catch(() => { if (!cancelled) setMultimodalRefPack(null); });
+    return () => { cancelled = true; };
   }, [shot, chSheets, scSheets, propSheets]);
 
   const shotBlob = useMemo(() => (shot ? buildShotBlobText(shot) : ''), [shot]);
 
-  const multimodalAutoPrompt = useMemo(() => {
-    if (!shot || !multimodalRefPack) return '';
-    return multimodalRefPack.defaultVideoPrompt;
-  }, [shot, multimodalRefPack]);
+  const multimodalAutoPrompt = multimodalRefPack?.defaultVideoPrompt ?? '';
 
   /** L1 场景 id 与当前分镜表 sceneRef 是否一一出现过（用于提示「为何 5 张场景图只用了 3 处」） */
   const storySceneCoverage = useMemo(() => {
