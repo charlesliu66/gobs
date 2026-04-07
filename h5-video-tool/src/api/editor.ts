@@ -60,6 +60,7 @@ export interface EditorExportStatusResponse {
   id: string;
   status: 'queued' | 'processing' | 'done' | 'error';
   progress: number;
+  progressMsg?: string;
   downloadUrl: string | null;
   error: string | null;
   mock?: boolean;

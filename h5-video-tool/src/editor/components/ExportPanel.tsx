@@ -38,11 +38,15 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
   const [format, setFormat] = useState<ExportFormat>('mp4');
   const [quality, setQuality] = useState<ExportQuality>('balanced');
   const [busy, setBusy] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportMsg, setExportMsg] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const handleExport = useCallback(async () => {
     setBusy(true);
     setDownloadUrl(null);
+    setExportProgress(0);
+    setExportMsg('提交中…');
     setOpen(false);
     toast.info('导出任务已提交，请稍候…');
     try {
@@ -52,6 +56,8 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
       while (tries < 90) {
         await new Promise((r) => setTimeout(r, 2000));
         const st = await getEditorExportStatus(jobId);
+        setExportProgress(st.progress ?? 0);
+        setExportMsg(st.progressMsg ?? (st.status === 'processing' ? '合成中…' : ''));
         if (st.status === 'done') {
           if (st.downloadUrl) {
             setDownloadUrl(st.downloadUrl);
@@ -80,6 +86,20 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
 
   return (
     <div ref={panelRef} className="relative flex items-center gap-2">
+      {busy && (
+        <div className="flex flex-col gap-1 min-w-[120px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] text-[var(--color-text-muted)] truncate max-w-[100px]">{exportMsg || '合成中…'}</span>
+            <span className="text-[9px] text-[var(--color-text-muted)]">{exportProgress}%</span>
+          </div>
+          <div className="h-1 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
+              style={{ width: `${exportProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
       {downloadUrl && (
         <a
           href={downloadUrl}

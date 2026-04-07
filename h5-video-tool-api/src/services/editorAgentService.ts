@@ -188,7 +188,10 @@ export function sanitizeAgentProject(
   let durationSec = 0;
   for (const t of tracks) {
     for (const c of t.clips) {
-      const end = c.timelineStart + (c.sourceEnd - c.sourceStart);
+      // TextClip 用 timelineEnd，VideoClip/AudioClip 用 timelineStart + 源区间
+      const end = 'timelineEnd' in c
+        ? (c as { timelineEnd: number }).timelineEnd
+        : c.timelineStart + ((c as { sourceEnd: number; sourceStart: number }).sourceEnd - (c as { sourceStart: number }).sourceStart);
       if (end > durationSec) durationSec = end;
     }
   }

@@ -1,6 +1,12 @@
 import { Router } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import type { EditorExportRequestBody } from '../editor/timelineSchema.js';
+import { runFfmpegExport } from '../services/ffmpegExport.js';
+import { getApiDataDir } from '../config/apiDataDir.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
 type ExportJobStatus = 'queued' | 'processing' | 'done' | 'error';
@@ -9,10 +15,10 @@ interface ExportJob {
   id: string;
   status: ExportJobStatus;
   progress: number;
+  progressMsg: string;
   downloadUrl: string | null;
   error: string | null;
   createdAt: number;
-  mock: boolean;
 }
 
 const jobs = new Map<string, ExportJob>();
@@ -25,46 +31,104 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
   return typeof p.id === 'string' && Array.isArray(p.tracks);
 }
 
-/** POST 提交导出任务 */
+/** 把 assetId 映射到本地文件路径 */
+function resolveAssetPaths(
+  tracks: EditorExportRequestBody['project']['tracks'],
+): Record<string, string> {
+  const assetDir = path.join(getApiDataDir(), 'editor-assets');
+  const map: Record<string, string> = {};
+  for (const track of tracks) {
+    for (const clip of track.clips) {
+      const c = clip as { assetId?: string };
+      if (!c.assetId) continue;
+      // 优先尝试 assetDir/<id>（无扩展）, 再扫目录找匹配
+      const base = path.join(assetDir, c.assetId);
+      if (fs.existsSync(base)) {
+        map[c.assetId] = base;
+        continue;
+      }
+      // 扫目录找前缀匹配（assetId 可能带 ext）
+      if (fs.existsSync(assetDir)) {
+        const files = fs.readdirSync(assetDir);
+        const match = files.find(
+          (f) => f === c.assetId || f.startsWith(c.assetId + '.'),
+        );
+        if (match) map[c.assetId] = path.join(assetDir, match);
+      }
+    }
+  }
+  return map;
+}
+
+/** POST /api/editor/export — 提交导出任务（异步） */
 router.post('/export', (req, res) => {
   if (!validateTimelineBody(req.body)) {
-    res.status(400).json({ error: 'Invalid body: need { project: { id, tracks, ... } }' });
+    res.status(400).json({ error: 'Invalid body' });
     return;
   }
-  const { project, aspectRatio } = req.body as EditorExportRequestBody;
+
+  const body = req.body as EditorExportRequestBody;
+  const { project, aspectRatio, resolution = '1080p', format = 'mp4', quality = 'balanced' } = body;
+
   const jobId = `exp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const job: ExportJob = {
     id: jobId,
     status: 'queued',
     progress: 0,
+    progressMsg: '已入队',
     downloadUrl: null,
     error: null,
     createdAt: Date.now(),
-    mock: true,
   };
   jobs.set(jobId, job);
 
-  // Mock：短时后标记完成（真实 FFmpeg 合成将使用 project + aspectRatio）
-  setTimeout(() => {
-    const j = jobs.get(jobId);
-    if (!j) return;
-    j.status = 'processing';
-    j.progress = 50;
-  }, 400);
+  // 异步执行，不阻塞 HTTP 响应
+  setImmediate(async () => {
+    job.status = 'processing';
+    job.progress = 5;
+    job.progressMsg = '准备导出…';
 
-  setTimeout(() => {
-    const j = jobs.get(jobId);
-    if (!j) return;
-    j.status = 'done';
-    j.progress = 100;
-    j.downloadUrl = null;
-    console.debug('[editor/export mock done]', project.id, aspectRatio ?? project.aspectRatio);
-  }, 1500);
+    try {
+      // 输出目录
+      const outDir = path.join(getApiDataDir(), 'exports');
+      await fs.promises.mkdir(outDir, { recursive: true });
+      const outputPath = path.join(outDir, `${jobId}.${format}`);
+
+      // 资产路径映射
+      const assets = resolveAssetPaths(project.tracks);
+      const effectiveAspect = aspectRatio ?? project.aspectRatio;
+
+      await runFfmpegExport({
+        project: { ...project, aspectRatio: effectiveAspect },
+        assets,
+        outputPath,
+        resolution,
+        format,
+        quality,
+        onProgress: (pct, msg) => {
+          job.progress = pct;
+          job.progressMsg = msg;
+        },
+      });
+
+      // 生成下载 URL（相对于 API 根）
+      job.status = 'done';
+      job.progress = 100;
+      job.progressMsg = '完成';
+      job.downloadUrl = `/api/editor/export/download/${jobId}.${format}`;
+      console.log('[editor/export] done', jobId, outputPath);
+
+    } catch (e) {
+      job.status = 'error';
+      job.error = e instanceof Error ? e.message : String(e);
+      console.error('[editor/export] error', jobId, job.error);
+    }
+  });
 
   res.json({ jobId, message: 'queued' });
 });
 
-/** GET 查询导出任务 */
+/** GET /api/editor/export/:jobId — 查询任务状态 */
 router.get('/export/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) {
@@ -75,10 +139,21 @@ router.get('/export/:jobId', (req, res) => {
     id: job.id,
     status: job.status,
     progress: job.progress,
+    progressMsg: job.progressMsg,
     downloadUrl: job.downloadUrl,
     error: job.error,
-    mock: job.mock,
   });
+});
+
+/** GET /api/editor/export/download/:filename — 下载导出文件 */
+router.get('/export/download/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename); // 防路径穿越
+  const filePath = path.join(getApiDataDir(), 'exports', filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+  res.download(filePath, filename);
 });
 
 export default router;

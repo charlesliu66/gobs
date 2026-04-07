@@ -20,7 +20,7 @@ export function resolutionForPreset(preset: AspectRatioPreset): Resolution {
   return { ...PRESET_TO_SIZE[preset] };
 }
 
-export type TrackType = 'video' | 'audio';
+export type TrackType = 'video' | 'audio' | 'text';
 
 export interface MediaAsset {
   id: string;
@@ -42,6 +42,10 @@ export interface VideoClip {
   shotIndex?: number;
   note?: string;
   transitionAfter?: ClipTransition;
+  /** 播放速度，1 = 正常，0.25–4 */
+  speed?: number;
+  /** 原声音量 0–200，100 = 原始 */
+  volume?: number;
 }
 
 export interface AudioClip {
@@ -53,11 +57,26 @@ export interface AudioClip {
   gainDb?: number;
 }
 
+export type TextPresetId =
+  | 'intro-minimal' | 'intro-impact'
+  | 'outro-follow' | 'outro-brand'
+  | 'sub-bottom' | 'sub-top' | 'sub-highlight'
+  | 'title-card';
+
+export interface TextClip {
+  id: string;
+  timelineStart: number;
+  timelineEnd: number;
+  text: string;
+  presetId: TextPresetId;
+  subtext?: string;
+}
+
 export interface Track {
   id: string;
   type: TrackType;
   label: string;
-  clips: (VideoClip | AudioClip)[];
+  clips: (VideoClip | AudioClip | TextClip)[];
 }
 
 export interface TimelineMix {
@@ -89,9 +108,11 @@ export interface AgentRevision {
   createdAt: string;
 }
 
-/** 导出任务请求体（与 POST /api/editor/export 对齐） */
+/** 导出任务请求体 */
 export interface EditorExportRequestBody {
   project: TimelineProject;
-  /** 可选：覆盖工程内画幅 */
   aspectRatio?: AspectRatioPreset;
+  resolution?: '720p' | '1080p' | '4K';
+  format?: 'mp4' | 'mov';
+  quality?: 'fast' | 'balanced' | 'high';
 }
