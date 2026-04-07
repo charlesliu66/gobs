@@ -267,8 +267,20 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
                   )}
                   {/* 已选激活标记 */}
                   {sheet.activeStateId === state.id && (
-                    <div className="absolute top-1 right-1 w-3 h-3 rounded-full bg-[var(--color-primary)]" />
+                    <div className="absolute top-1 left-1 w-3 h-3 rounded-full bg-[var(--color-primary)]" />
                   )}
+                  {/* 删除按钮 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = { ...sheet, states: (sheet.states ?? []).filter((s) => s.id !== state.id) };
+                      onUpdate(next);
+                    }}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-error)]/15 hover:text-[var(--color-error)]"
+                    title="删除此状态"
+                  >
+                    ✕
+                  </button>
                 </div>
                 {/* 状态名 */}
                 <span className="text-[10px] text-[var(--color-text-muted)] text-center leading-tight">{state.label}</span>

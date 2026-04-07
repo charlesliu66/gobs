@@ -694,6 +694,15 @@ export function buildShotMultimodalRefPack(
   };
 }
 
+/** 从已注入 @图片n 的文案里提取第 n 张图的插入位置上下文（用于 UI 提示） */
+export function extractAtImageContext(narrative: string, n: number): string {
+  const tag = `@图片${n}`;
+  const idx = narrative.indexOf(tag);
+  if (idx < 0) return '';
+  const before = narrative.slice(Math.max(0, idx - 10), idx).trim();
+  return before ? `「…${before}」后` : '文案开头';
+}
+
 /** 分镜页展示用 @ 引用行 */
 export function computeShotRefTags(
   shot: {

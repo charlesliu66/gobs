@@ -41,6 +41,7 @@ import {
   getCharacterLookImage,
   setCharacterLookNodeImage,
   autoMatchCharacterStateBySheet,
+  extractAtImageContext,
 } from '../studio/productionAssets';
 import {
   postStoryArc,
@@ -51,7 +52,6 @@ import {
   postExtractStyleReference,
 } from '../api/studio';
 import { CharacterLookTreeCanvas } from '../components/production/CharacterLookTreeCanvas';
-import { CharacterWardrobePanel } from '../components/production/CharacterWardrobePanel';
 import {
   CharacterPortraitEditorModal,
   type PortraitEditIntent,
@@ -82,7 +82,6 @@ const STEPS = [
 ];
 
 type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
-type CharacterCardTab = 'looktree' | 'wardrobe';
 
 interface StoredWizard {
   project: ProductionProject;
@@ -571,7 +570,6 @@ export function ProductionWizard() {
   const [titleSaved, setTitleSaved] = useState(false);
   /** Step2：形象树聚焦的角色 id + 肖像弹窗意图 */
   const [treeFocusCharacterId, setTreeFocusCharacterId] = useState<string | null>(null);
-  const [charCardTabs, setCharCardTabs] = useState<Record<string, CharacterCardTab>>({});
   const [portraitEdit, setPortraitEdit] = useState<{
     sheet: CharacterSheet;
     intent: PortraitEditIntent;
@@ -2060,12 +2058,23 @@ export function ProductionWizard() {
                           className="group relative aspect-[3/4] w-full cursor-pointer overflow-hidden bg-[var(--color-surface-hover)] text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                         >
                           {mainImg ? (
-                            <img
-                              src={mainImg}
-                              alt=""
-                              className="h-full w-full object-cover object-top cursor-zoom-in"
-                              onClick={(e) => { e.stopPropagation(); setLightboxSrc(mainImg); }}
-                            />
+                            <>
+                              <img
+                                src={mainImg}
+                                alt=""
+                                className="h-full w-full object-cover object-top"
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-md bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                onClick={(e) => { e.stopPropagation(); setLightboxSrc(mainImg); }}
+                                title="放大"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                              </button>
+                            </>
                           ) : (
                             <div className="flex h-full w-full items-center justify-center px-2 text-center text-[11px] text-[var(--color-text-muted)]">
                               暂无定妆
@@ -2103,51 +2112,15 @@ export function ProductionWizard() {
                         <div className="border-t border-[var(--color-border)]/60 px-2 py-3 text-center">
                           <div className="truncate text-sm font-semibold text-[var(--color-text)]">{ch.name}</div>
                           <div className="mt-1 text-xs text-[var(--color-text-muted)]">共{lookCount}个形象</div>
-                          <div className="mt-2 flex justify-center gap-1">
-                            {(['looktree', 'wardrobe'] as CharacterCardTab[]).map((t) => (
-                              <button
-                                key={t}
-                                type="button"
-                                onClick={() => setCharCardTabs((prev) => ({ ...prev, [ch.id]: t }))}
-                                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                                  (charCardTabs[ch.id] ?? 'looktree') === t
-                                    ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                                }`}
-                              >
-                                {t === 'looktree' ? '形象树' : '状态衣橱'}
-                              </button>
-                            ))}
-                          </div>
-                          {(charCardTabs[ch.id] ?? 'looktree') === 'looktree' ? (
-                            <button
-                              type="button"
-                              onClick={() => setTreeFocusCharacterId(ch.id)}
-                              className="mt-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
-                            >
-                              形象演化
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setTreeFocusCharacterId(ch.id)}
+                            className="mt-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                          >
+                            形象演化
+                          </button>
                         </div>
-                        {(charCardTabs[ch.id] ?? 'looktree') === 'wardrobe' ? (
-                          <div className="border-t border-[var(--color-border)]/50 p-2">
-                            <CharacterWardrobePanel
-                              sheet={ch}
-                              styleRef={project.meta.styleRefSummary}
-                              styleRefImage={project.meta.styleRefImageDataUrl}
-                              aspectRatio={project.meta.aspectRatio ?? '16:9'}
-                              onUpdate={(updated) =>
-                                setProject((p) => ({
-                                  ...p,
-                                  characterAssets: (p.characterAssets ?? []).map((s) =>
-                                    s.id === ch.id ? updated : s,
-                                  ),
-                                }))
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
+                        <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
                           <summary className="cursor-pointer list-none text-center text-[10px] text-[var(--color-text-muted)] [&::-webkit-details-marker]:hidden">
                             变体与 AI 生图
                           </summary>
@@ -2193,6 +2166,30 @@ export function ProductionWizard() {
                                 >
                                   {genKey === `char:${ch.id}:${v.id}` ? '…' : 'AI'}
                                 </button>
+                                {ch.variants.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setProject((p) => {
+                                        const sheets = [...(p.characterAssets ?? [])];
+                                        const idx = sheets.findIndex((s) => s.id === ch.id);
+                                        if (idx < 0) return p;
+                                        const sh = ensureCharacterLookTree(sheets[idx]!);
+                                        const newLookTree = (sh.lookTree ?? []).filter((n) => n.id !== v.id);
+                                        sheets[idx] = {
+                                          ...sh,
+                                          lookTree: newLookTree,
+                                          variants: flattenLookTreeToVariants(newLookTree),
+                                        };
+                                        return { ...p, characterAssets: sheets };
+                                      });
+                                    }}
+                                    className="ml-auto text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
+                                    title="删除此变体"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             ))}
                             <button
@@ -2204,7 +2201,6 @@ export function ProductionWizard() {
                             </button>
                           </div>
                         </details>
-                        )}
                       </div>
                     );
                   })}
@@ -2513,6 +2509,14 @@ export function ProductionWizard() {
                 aspectRatio="9:16"
                 portraitJob={portraitJobs[getPortraitJobKey(portraitEdit.sheet.id, portraitEdit.intent)]}
                 onStartPortraitGenerate={handleStartPortraitGenerate}
+                onSheetUpdate={(updated) => {
+                  setProject((p) => ({
+                    ...p,
+                    characterAssets: (p.characterAssets ?? []).map((c) => c.id === updated.id ? updated : c),
+                  }));
+                }}
+                styleRefImage={project.meta.styleRefImageDataUrl}
+                productionAspectRatio={project.meta.aspectRatio ?? '16:9'}
                 onConfirm={(imageDataUrl) => {
                   const { sheet, intent } = portraitEdit;
                   const key = getPortraitJobKey(sheet.id, intent);
@@ -2799,25 +2803,36 @@ export function ProductionWizard() {
                       </div>
                       {multimodalRefPack.multimodalImages.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {multimodalRefPack.multimodalImages.map((img, i) => (
-                            <div
-                              key={`${shot.shotIndex}-mm-${i}`}
-                              className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 pl-1.5 pr-2"
-                            >
-                              <span className="shrink-0 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                @图片{i + 1}
-                              </span>
-                              <img
-                                src={`data:${img.mimeType || 'image/png'};base64,${img.base64}`}
-                                alt=""
-                                className="h-11 w-11 shrink-0 rounded-md object-cover ring-1 ring-[var(--color-border)] cursor-zoom-in"
-                                onClick={() => setLightboxSrc(`data:${img.mimeType || 'image/png'};base64,${img.base64}`)}
-                              />
-                              <span className="min-w-0 truncate text-[11px] text-[var(--color-text)]">
-                                {multimodalRefPack.labels[i] ?? `素材 ${i + 1}`}
-                              </span>
-                            </div>
-                          ))}
+                          {multimodalRefPack.multimodalImages.map((img, i) => {
+                            const ctx = extractAtImageContext(multimodalRefPack.narrativeWithInlineTags, i + 1);
+                            const notInjected = !ctx;
+                            return (
+                              <div
+                                key={`${shot.shotIndex}-mm-${i}`}
+                                className="flex min-w-0 max-w-full flex-col gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 pl-1.5 pr-2"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="shrink-0 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                    @图片{i + 1}
+                                  </span>
+                                  <img
+                                    src={`data:${img.mimeType || 'image/png'};base64,${img.base64}`}
+                                    alt=""
+                                    className="h-11 w-11 shrink-0 rounded-md object-cover ring-1 ring-[var(--color-border)] cursor-zoom-in"
+                                    onClick={() => setLightboxSrc(`data:${img.mimeType || 'image/png'};base64,${img.base64}`)}
+                                  />
+                                  <span className="min-w-0 truncate text-[11px] text-[var(--color-text)]">
+                                    {multimodalRefPack.labels[i] ?? `素材 ${i + 1}`}
+                                  </span>
+                                </div>
+                                {notInjected ? (
+                                  <span className="text-[10px] text-amber-500">↳ ⚠ 未在文案中找到对应词，@图片 未注入</span>
+                                ) : (
+                                  <span className="text-[10px] text-[var(--color-text-muted)]">↳ 插入在 {ctx}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
