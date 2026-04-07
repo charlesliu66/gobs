@@ -14,7 +14,7 @@
 6. [第五步：配置 Nginx](#六第五步配置-nginx)
 7. [第六步：配置 Google OAuth](#七第六步配置-google-oauth)
 8. [验证与访问](#八验证与访问)
-9. [常见问题排查](#九常见问题排查)
+9. [常见问题排查](#九常见问题排查)（含 [9.6 可灵参考视频](#96-可灵参考视频与公网地址配置)）
 
 ---
 
@@ -35,11 +35,10 @@
 
 | 密钥 | 获取方式 | 用途 |
 |------|----------|------|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | 一键 Prompt 生成分镜 |
+| `COMPASS_API_KEY` | 你们内部的 Compass API（与视频/生图共用） | 一键 Prompt、发布文案、视频生成等 |
+| `COMPASS_API_URL` | 同上 | Compass 代理根地址，默认 `https://compass.llm.shopee.io/compass-api/v1` |
 | `GOOGLE_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/) 创建 OAuth 客户端 | Drive 登录 |
 | `GOOGLE_CLIENT_SECRET` | 同上，创建时一起给出 | Drive 登录 |
-| `COMPASS_API_KEY` | 你们内部的 Compass 视频 API | 视频生成 |
-| `COMPASS_API_URL` | 同上 | 视频生成 API 地址 |
 
 > 如果本地 `.env` 已经配置好，直接复制 `h5-video-tool-api/.env` 到服务器即可。
 
@@ -212,7 +211,7 @@ npm install --production
 cat .env
 ```
 
-确认里面有 `GEMINI_API_KEY`、`GOOGLE_CLIENT_ID`、`COMPASS_API_KEY` 等。没有的话：
+确认里面有 `COMPASS_API_KEY`、`GOOGLE_CLIENT_ID` 等（一键 Prompt 与视频共用 Compass Key）。若使用可灵 Omni **参考视频**，还需配置 `API_PUBLIC_BASE_URL`，见 [9.6](#96-可灵参考视频与公网地址配置)。没有的话：
 
 ```bash
 nano .env
@@ -221,7 +220,6 @@ nano .env
 按下面格式填写（不要有引号、不要有空格 around `=`）：
 
 ```
-GEMINI_API_KEY=你的Gemini密钥
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=你的密钥
 COMPASS_API_URL=https://compass.llm.shopee.io/compass-api/v1
@@ -365,7 +363,7 @@ sudo systemctl reload nginx
 - 视频工坊的页面
 - 能选择模板、输入创意
 - 能点击「连接 Google Drive」（若已配置 OAuth）
-- 能点击「一键 Prompt」生成分镜（需 GEMINI_API_KEY 正确）
+- 能点击「一键 Prompt」生成分镜（需 `COMPASS_API_KEY` 正确）
 
 ### 8.3 若打不开
 
@@ -442,7 +440,7 @@ pm2 logs h5-api
 
 看具体报错。
 
-**处理**：检查 `GEMINI_API_KEY`、`COMPASS_API_KEY`、`COMPASS_API_URL` 是否正确，修改后：
+**处理**：检查 `COMPASS_API_KEY`、`COMPASS_API_URL` 是否正确，修改后：
 
 ```bash
 pm2 restart h5-api
@@ -455,6 +453,44 @@ pm2 restart h5-api
 **现象**：本地能 ping 通服务器，但浏览器打不开网页。
 
 **处理**：在云服务器控制台找到「安全组」或「防火墙」，添加入站规则：放行 **TCP 80** 端口。
+
+---
+
+### 9.6 可灵参考视频与公网地址配置
+
+**适用**：使用 **clipai.ingarena** 可灵 Omni，且任务里带 **参考视频**（`video_list`，如 TikTok 舞蹈、动作迁移脚本 `scripts/test-kling-motion-ref-two-images.ts`）。
+
+**规则（与代码一致）**：
+
+| 项目 | 说明 |
+|------|------|
+| 参考视频传参 | **仅支持 http(s) URL**，不可 base64；可灵服务端会 **GET** 拉取该地址。 |
+| `API_PUBLIC_BASE_URL` | 填 **本 API 对外的根地址**，**无尾斜杠**，与 `GET /api/video/kling/ref-cache/:uuid` 拼成完整链接。需与 **H5 的 `VITE_API_BASE_URL`** 指向同一套部署（生产即你的域名或 `https://服务器IP` 经 Nginx 反代到 3001）。 |
+| 参考视频时长 | ingarena 常见限制：**不超过约 10 秒**，过长会报错（如 `Video duration can not longer than 10s`），需先用剪辑/ffmpeg 裁短。 |
+
+**生产环境**：在 `h5-video-tool-api/.env` 中设置，例如：
+
+```env
+API_PUBLIC_BASE_URL=https://你的域名或反代后的API根
+```
+
+保存后 **重启后端**（如 `pm2 restart h5-api`）。不要用内网 `10.x.x.x` 作为该值——**公网可灵无法访问**。
+
+**本地调试（ngrok）**：
+
+1. 启动后端：`npm run dev`（端口 **3001**）。
+2. 另开终端执行：`ngrok http 3001`（若提示「仅 1 个会话」，请先在 [ngrok Dashboard](https://dashboard.ngrok.com/agents) 关掉旧隧道或改用付费方案）。
+3. 打开 ngrok 本地管理页查看隧道（常见端口 **4040** 或 **4041`，以你本机为准）：浏览器访问 `http://127.0.0.1:4040/api/tunnels`（4040 无内容时试 **4041**），在 JSON 里找到 **`public_url`**，形如 `https://xxxx.ngrok-free.app`。
+4. 把 **`API_PUBLIC_BASE_URL`** 设为该 **https 根地址**（无路径、无尾斜杠），保存 `.env` 并 **重启** 后端进程。
+5. **每次重启 ngrok，子域名常会变化**，需重复 3～4 步更新 `.env`，否则可灵拉取参考视频会失败（如 `Something went wrong when we tried to get the contents of the file`）。
+
+**验证 ref-cache 是否可被外网拉取**（把 `你的ngrok域名` 和 `uuid` 换成实际值）：
+
+```text
+https://你的ngrok域名/api/video/kling/ref-cache/某个uuid
+```
+
+浏览器或 `curl` 应能拿到 **MP4**（非 HTML 警告页）。若 ngrok 免费版对自动化请求返回拦截页，可换 **固定域名的内网穿透** 或 **部署到公网服务器** 后使用真实 `https://你的域名`。
 
 ---
 
@@ -529,11 +565,12 @@ chmod +x start.sh
 ## 十一、检查清单（部署前对照）
 
 - [ ] 本地能正常运行（前后端都启动，浏览器能访问）
-- [ ] 已准备好 GEMINI_API_KEY、GOOGLE_CLIENT_ID、COMPASS_API_KEY 等
+- [ ] 已准备好 COMPASS_API_KEY、GOOGLE_CLIENT_ID 等
 - [ ] 已购买/拥有云服务器，能 SSH 登录
 - [ ] 服务器安全组已放行 80 端口
 - [ ] 已按步骤完成 Nginx 配置
 - [ ] 若用 Drive，已在 Google Console 添加部署域名
+- [ ] 若用可灵参考视频 / ref-cache：已设置 `API_PUBLIC_BASE_URL` 为**公网可访问**的 API 根（与 `VITE_API_BASE_URL` 一致；本地 ngrok 见 [9.6](#96-可灵参考视频与公网地址配置)）
 
 ---
 

@@ -25,3 +25,26 @@ export function resolveCompassApiKeyForVeoModel(model?: string): string {
   if (key1) return key1;
   throw new Error('COMPASS_API_KEY 未配置，请在 .env 中设置');
 }
+
+/**
+ * 分镜图（Imagen）等：优先 COMPASS_API_KEY2（常与 VEO3 同钥），未配置则回退 COMPASS_API_KEY。
+ */
+export function resolveCompassApiKeyPreferKey2(): string {
+  const key1 = process.env.COMPASS_API_KEY?.trim() ?? '';
+  const key2 = process.env.COMPASS_API_KEY2?.trim() ?? '';
+  if (key2) return key2;
+  if (key1) return key1;
+  throw new Error('COMPASS_API_KEY2 或 COMPASS_API_KEY 未配置（LLM/分镜图需至少一把 Compass Key）');
+}
+
+/**
+ * Gemini 文本（一键 Prompt / 文案）：优先 COMPASS_API_KEY（多为全量 Gemini 权限），
+ * KEY2 常为 Veo 专用、无 chat 权限。未配置 KEY1 时再回退 KEY2。
+ */
+export function resolveCompassApiKeyForGeminiChat(): string {
+  const key1 = process.env.COMPASS_API_KEY?.trim() ?? '';
+  const key2 = process.env.COMPASS_API_KEY2?.trim() ?? '';
+  if (key1) return key1;
+  if (key2) return key2;
+  throw new Error('COMPASS_API_KEY 或 COMPASS_API_KEY2 未配置（Gemini 文本需至少一把 Compass Key）');
+}

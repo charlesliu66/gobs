@@ -7,6 +7,17 @@ export function isKlingModelId(model?: string | null): boolean {
   return m.startsWith('kling') || m.includes('kling-v') || m.startsWith('kling/') || m.startsWith('kling-video');
 }
 
+/** 即梦「全能参考」dreamina-multimodal */
+export function isDreaminaMultimodalModelId(model?: string | null): boolean {
+  return model?.trim().toLowerCase() === 'dreamina-multimodal';
+}
+
+/** 即梦任一模型（含全能参考 / 文生 / 图生） */
+export function isDreaminaModelId(model?: string | null): boolean {
+  const m = model?.trim().toLowerCase() ?? '';
+  return m === 'dreamina-multimodal' || m === 'dreamina-text2video' || m === 'dreamina-image2video';
+}
+
 /**
  * 同域代理可灵 CDN MP4，供 <video> 播放与下载。
  * 未配置 VITE_API_BASE_URL 时用相对路径 `/api/...`，走 Vite 代理（局域网访问请勿用 localhost 写死后端地址）。
@@ -37,12 +48,18 @@ export interface VideoGenerateRequest {
   referenceVideoUrl?: string;
   referenceVideoReferType?: 'feature' | 'base';
   referenceVideoKeepSound?: 'yes' | 'no';
+  /** 即梦全能参考：与 storyboardText 同为 prompt；@图片1 对应 multimodalImages[0] 等 */
+  multimodalImages?: { base64: string; mimeType?: string }[];
+  multimodalVideos?: { base64: string; mimeType?: string }[];
+  multimodalAudios?: { base64: string; mimeType?: string }[];
 }
 
 export interface VeoModelsResponse {
   models: string[];
   /** ingarena 网关时，可灵单段可走异步创建 + video-list 轮询 */
   klingAsync?: boolean;
+  /** 即梦：可走 POST /dreamina/submit + 轮询，排队中可继续提交新任务 */
+  dreaminaAsync?: boolean;
 }
 
 export async function getVeoModels(): Promise<VeoModelsResponse> {
@@ -52,7 +69,7 @@ export async function getVeoModels(): Promise<VeoModelsResponse> {
   } catch {
     /* ignore */
   }
-  return { models: ['veo-2.0-generate-001'], klingAsync: false };
+  return { models: ['veo-2.0-generate-001'], klingAsync: false, dreaminaAsync: false };
 }
 
 export interface VideoGenerateResponse {
@@ -145,6 +162,36 @@ export interface KlingRecentListResponse {
 
 export async function getKlingRecentList(page = 1, pageSize = 20): Promise<KlingRecentListResponse> {
   return apiGet<KlingRecentListResponse>(`/api/video/kling/recent-list?page=${page}&pageSize=${pageSize}`);
+}
+
+/** 即梦：仅提交任务，立即返回 submitId（与 POST /generate 同 body） */
+export async function submitDreaminaAsync(
+  req: VideoGenerateRequest,
+): Promise<{ submitId: string; taskId: string; status: 'pending' }> {
+  return apiPost('/api/video/dreamina/submit', req);
+}
+
+export interface DreaminaTaskPollResponse {
+  taskId: string;
+  submitId: string;
+  status: 'pending' | 'completed' | 'failed';
+  phase?: string;
+  genStatus?: string;
+  queueInfo?: {
+    queue_idx?: number;
+    queue_length?: number;
+    queue_status?: string;
+    priority?: number;
+  };
+  failReason?: string;
+  videoUrl?: string;
+  videoPath?: string;
+}
+
+/** 轮询即梦任务：排队中返回 queueInfo；完成返回 videoUrl */
+export async function getDreaminaTaskStatus(submitId: string): Promise<DreaminaTaskPollResponse> {
+  const id = encodeURIComponent(submitId);
+  return apiGet<DreaminaTaskPollResponse>(`/api/video/dreamina/task/${id}`);
 }
 
 export async function generateMultishot(req: MultishotGenerateRequest): Promise<MultishotGenerateResponse> {

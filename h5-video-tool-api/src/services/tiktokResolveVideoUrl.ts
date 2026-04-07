@@ -1,18 +1,14 @@
 /**
- * TikTok / 抖音分享页 → 可灵 Omni `video_list` 可用 URL。
+ * TikTok / 抖音分享页 → 可灵 Omni `video_list` 可用 **http(s) URL**（不可 base64）。
  *
  * 仅用 `yt-dlp -g` 得到的 TikTok CDN 直链，可灵服务端常无法拉取（签名/地域）→ DatabaseError。
- * 正确做法：用 yt-dlp **下载**到本地，再二选一：
- *   - clipai.ingarena：设 KLING_SOCIAL_REF_VIDEO_USE_BASE64=1，将文件读成纯 base64 写入 video_list（无需公网 URL）
- *   - 其它网关：通过 API_PUBLIC_BASE_URL 暴露公网可访问的稳定 URL
+ * 正确做法：用 yt-dlp **下载**到本地，再配置 **API_PUBLIC_BASE_URL**（本服务对外根地址），
+ * 返回 `GET /api/video/kling/ref-cache/:id` 的完整 URL 供可灵拉取。
  *
  * 环境变量：
  *   YT_DLP_PATH / YT_DLP_PROXY / YT_DLP_TIMEOUT_MS
- *   KLING_SOCIAL_REF_VIDEO_USE_BASE64=1  且 KLING_API_BASE_URL 为 ingarena 时，参考视频走 base64（本地试跑）
- *   API_PUBLIC_BASE_URL  本服务对外的根地址（无尾斜杠），如 https://abc.ngrok-free.app
- *   KLING_REF_VIDEO_PUBLIC_BASE  与上一项二选一
+ *   API_PUBLIC_BASE_URL（或 KLING_REF_VIDEO_PUBLIC_BASE / H5_PUBLIC_API_BASE_URL）本服务对外根地址（无尾斜杠）
  *   VIDEO_OUTPUT_DIR  缓存目录父路径，默认项目下 output/
- *   H5_PUBLIC_API_BASE_URL  与 H5 的 VITE_API_BASE_URL 一致时可设，用于拼 ref-cache 完整 URL
  */
 import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
@@ -121,12 +117,6 @@ export async function resolveSocialPageToDirectVideoUrl(pageUrl: string): Promis
   return direct;
 }
 
-/** 当前可灵网关是否为 clipai.ingarena（与 klingVideo 判定一致） */
-function isIngarenaKlingBase(): boolean {
-  const b = (process.env.KLING_API_BASE_URL || '').replace(/\/+$/, '');
-  return /ingarena\.net/i.test(b);
-}
-
 /**
  * 用 yt-dlp 将分享页视频下载到 kling-ref-cache，返回本地路径与 cacheId。
  */
@@ -173,34 +163,15 @@ export function scheduleRefCacheCleanup(absPath: string): void {
 }
 
 /**
- * 将 TikTok/抖音页面视频下载到本地，并返回可灵 Omni `video_list[].video_url` 可用值：
- * - KLING_SOCIAL_REF_VIDEO_USE_BASE64=1 且网关为 ingarena：返回 **纯 base64**（由 ingarena 与参考图同理内嵌）
- * - 否则：返回 **公网 https**（依赖 API_PUBLIC_BASE_URL + GET /api/video/kling/ref-cache/:id）
+ * 将 TikTok/抖音页面视频下载到本地，并返回可灵 Omni `video_list[].video_url`（**仅 http(s) URL**，不可 base64）。
+ * 依赖 API_PUBLIC_BASE_URL（或等价变量）+ GET /api/video/kling/ref-cache/:id。
  */
 export async function prepareSocialVideoUrlForKling(pageUrl: string): Promise<string> {
-  if (process.env.KLING_SOCIAL_REF_VIDEO_USE_BASE64 === '1') {
-    if (!isIngarenaKlingBase()) {
-      throw new Error(
-        'KLING_SOCIAL_REF_VIDEO_USE_BASE64=1 仅适用于 KLING_API_BASE_URL 为 clipai.ingarena.net；' +
-          '其它网关请配置 API_PUBLIC_BASE_URL，或使用快手官方可灵接口文档中的参考视频传参方式。',
-      );
-    }
-    const { absPath } = await downloadSocialPageVideoToKlingCache(pageUrl);
-    try {
-      const buf = await fs.readFile(absPath);
-      return buf.toString('base64');
-    } finally {
-      scheduleRefCacheCleanup(absPath);
-    }
-  }
-
   const base = getPublicApiBaseUrlForKlingRef();
   if (!base) {
     throw new Error(
-      '使用 TikTok/抖音链接时请在 .env 二选一：' +
-        '1) KLING_SOCIAL_REF_VIDEO_USE_BASE64=1（仅 clipai.ingarena，易 DatabaseError，不推荐）；' +
-        '2) 配置 API_PUBLIC_BASE_URL（或 H5_PUBLIC_API_BASE_URL，与 H5 的 VITE_API_BASE_URL 同一部署根地址，无尾斜杠），' +
-        '使 ingarena 能 GET /api/video/kling/ref-cache/…（与 H5 预览用的同源 API）。',
+      '参考视频仅支持 URL。使用 TikTok/抖音链接时请在 .env 配置 API_PUBLIC_BASE_URL（或 H5_PUBLIC_API_BASE_URL / KLING_REF_VIDEO_PUBLIC_BASE），' +
+        '为可灵可访问的本 API 根地址（无尾斜杠），以便拉取 GET /api/video/kling/ref-cache/…。',
     );
   }
 

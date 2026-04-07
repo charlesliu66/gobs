@@ -15,7 +15,7 @@
  *   KLING_POLL_MS / KLING_POLL_MAX / KLING_MODE（standard→std，或 professional→pro）
  *   KLING_CALLBACK_URL  官方创建任务可选 callback_url
  *   KLING_MAX_REF_IMAGES  多图参考时最多张数（默认 7，含素材拉取与 referenceImages）
- *   Omni 参考视频：KlingVideoOptions.videoList → body.video_list（ingarena / 官方 Omni）
+ *   Omni 参考视频：KlingVideoOptions.videoList → body.video_list（**仅 http(s) URL**，不可 base64）
  *   KLING_HTTP_PROXY / KLING_HTTPS_PROXY  仅当显式设置时，可灵请求才走代理（默认直连，不受全局 HTTPS_PROXY 影响；clipai.ingarena 经公司代理常 403）
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
@@ -37,9 +37,11 @@ export interface KlingRefImage {
 
 /**
  * Omni 参考视频（body.video_list）：
- * - 公网 https 直链；或 clipai.ingarena + 本地 TikTok 流程时可为 **纯 base64**（与 image_list 内嵌方式一致）
+ * - **仅**可灵服务端能拉取的 **http(s) URL**（公网 CDN、或本 API 的 `/api/video/kling/ref-cache/:id`）。
+ * - 不支持 base64 / data: 内嵌（与参考图不同）。
  */
 export interface KlingRefVideo {
+  /** 可拉取的成片 URL，必须以 http:// 或 https:// 开头 */
   videoUrl: string;
   /** 特征参考（动作/风格）或待编辑底片 */
   referType?: 'feature' | 'base';
@@ -170,32 +172,35 @@ function resolveRefVideos(options: KlingVideoOptions): KlingRefVideo[] {
   return list ?? [];
 }
 
-/** Omni video_list 项（官方等：video_url 为 https） */
+/** 参考视频仅允许 URL，禁止把整段 MP4 当 base64 传入 */
+function assertRefVideoUrl(raw: string): string {
+  const video_url = raw.trim();
+  if (/^https?:\/\//i.test(video_url)) return video_url;
+  throw new Error(
+    '参考视频 video_list 仅支持 **http(s) URL**（可灵侧需能 GET 拉取），不支持 base64 或 data: 内嵌。请使用 API_PUBLIC_BASE_URL + /api/video/kling/ref-cache/:id、或 OSS/CDN 公网链接。',
+  );
+}
+
+/** Omni video_list 项（官方：video_url 为可拉取 URL） */
 function toOmniVideoListPayload(
   items: KlingRefVideo[],
 ): { video_url: string; refer_type: 'feature' | 'base'; keep_original_sound: 'yes' | 'no' }[] {
   return items.map((v) => ({
-    video_url: v.videoUrl.trim(),
+    video_url: assertRefVideoUrl(v.videoUrl),
     refer_type: (v.referType === 'base' ? 'base' : 'feature') as 'feature' | 'base',
     keep_original_sound: v.keepOriginalSound === 'yes' ? ('yes' as const) : ('no' as const),
   }));
 }
 
-/** clipai.ingarena：video_url 可为 https，或与 image 一致的纯 base64 / data:video/mp4;base64, */
+/** clipai.ingarena：video_url 与官方一致，仅 https 或 http URL */
 function toIngarenaVideoListPayload(
   items: KlingRefVideo[],
 ): { video_url: string; refer_type: 'feature' | 'base'; keep_original_sound: 'yes' | 'no' }[] {
-  return items.map((v) => {
-    let video_url = v.videoUrl.trim();
-    if (/^data:video\/\w+;base64,/i.test(video_url)) {
-      video_url = video_url.replace(/^data:video\/\w+;base64,/i, '');
-    }
-    return {
-      video_url,
-      refer_type: (v.referType === 'base' ? 'base' : 'feature') as 'feature' | 'base',
-      keep_original_sound: v.keepOriginalSound === 'yes' ? ('yes' as const) : ('no' as const),
-    };
-  });
+  return items.map((v) => ({
+    video_url: assertRefVideoUrl(v.videoUrl),
+    refer_type: (v.referType === 'base' ? 'base' : 'feature') as 'feature' | 'base',
+    keep_original_sound: v.keepOriginalSound === 'yes' ? ('yes' as const) : ('no' as const),
+  }));
 }
 
 /** Omni image_list 项：image_url 为 data URL 或 https URL */
@@ -495,7 +500,7 @@ function pollPathForKind(baseURL: string, kind: CreateKind, taskId: string): str
 /** ingarena 对无效 video_url 等偶发返回 DatabaseError，补充可读提示 */
 function enrichIngarenaOmniError(message: string): string {
   if (/DatabaseError/i.test(message)) {
-    return `${message}（参考视频须为「平台侧可拉取」的 https 地址：① 关闭 KLING_SOCIAL_REF_VIDEO_USE_BASE64，配置 API_PUBLIC_BASE_URL + 本服务 /api/video/kling/ref-cache/:id；或把 MP4 传到公司 OSS/CDN 后填公网 URL。② 若曾用 video_list 内嵌整段 MP4 base64，ingarena 多半不支持（与参考图纯 base64 不同），请改用 URL。③ 调试 TikTok CDN 直链可设 KLING_ALLOW_SOCIAL_VIDEO_URL=1，但易仍失败。④ clipai ingarena 侧常见要求：参考视频时长在约 3～10 秒内，过长需 ffmpeg 等裁剪后再传。）`;
+    return `${message}（参考视频须为可灵侧可拉取的 **http(s) URL**：配置 API_PUBLIC_BASE_URL + 本服务 GET /api/video/kling/ref-cache/:id，或将 MP4 传到 OSS/CDN 后填公网链接。不支持 base64。TikTok CDN 直链可设 KLING_ALLOW_SOCIAL_VIDEO_URL=1 尝试。参考视频时长常见要求约 3～10 秒。）`;
   }
   return message;
 }
@@ -562,6 +567,11 @@ async function klingSubmitTask(options: KlingVideoOptions): Promise<{ taskId: st
       throw e;
     }
     taskId = extractTaskId(data);
+    if (!taskId) {
+      throw new Error(
+        `可灵 omni-video 未解析到 task_id，请对照网关文档检查响应字段。原始响应: ${JSON.stringify(data).slice(0, 4000)}`,
+      );
+    }
   } else if (official) {
     const callback_url = process.env.KLING_CALLBACK_URL ?? '';
     const external_task_id = '';

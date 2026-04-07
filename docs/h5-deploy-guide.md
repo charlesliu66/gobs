@@ -130,11 +130,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 | 变量 | 说明 |
 |------|------|
-| `GEMINI_API_KEY` | Gemini API 密钥（一键 Prompt） |
+| `COMPASS_API_KEY` | Compass 密钥（一键 Prompt、文案与视频/生图共用） |
+| `COMPASS_API_URL` | Compass 代理根地址（默认见 `.env.example`） |
 | `GOOGLE_CLIENT_ID` | Google OAuth 客户端 ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 客户端密钥 |
-| `COMPASS_API_KEY` | Compass 视频生成 API |
-| `COMPASS_API_URL` | Compass API 地址 |
 | `PORT` | 端口，默认 3001 |
 
 ### 前端（h5-video-tool/.env，构建前）
@@ -206,4 +205,4 @@ Write-Host "Done. deploy/ contains frontend and api."
 | 502 Bad Gateway | 检查后端是否运行：`pm2 list` |
 | 前端空白 | 检查 Nginx root 路径、`try_files` |
 | Drive 登录失败 | 检查 Google OAuth 已授权来源/重定向 |
-| 视频生成失败 | 检查 COMPASS_*、GEMINI_* 等环境变量 |
+| 视频生成失败 | 检查 COMPASS_* 等环境变量 |

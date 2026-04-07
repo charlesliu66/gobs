@@ -31,7 +31,7 @@
 ### 3. 配置
 
 1. QAS/config/geelark.json：从 config-templates/geelark.json.template 复制，填入 appId、apiKey、devices、aiVideosPath 等
-2. h5-video-tool-api/.env：从 .env.template 复制为 .env，填入 GEMINI_API_KEY、SEEDANCE_API_KEY 等
+2. h5-video-tool-api/.env：从 .env.template 复制为 .env，填入 COMPASS_API_KEY、SEEDANCE_API_KEY 等
 3. 环境变量 VIDEO_PIPELINE_DIR（可选）：若 video-pipeline 不在 Desktop\cursor_try\video-pipeline，需设置此变量
 
 ### 4. 安装依赖

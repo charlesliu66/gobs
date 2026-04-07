@@ -1,0 +1,5 @@
+node_modules/
+dist/
+uploads/
+# 本地游戏词表（复制 game-taxonomy.example.json 为 game-taxonomy.json 后填写）
+config/game-taxonomy.json

@@ -24,7 +24,7 @@
 |------|------|------|
 | Prompt 输入 + 关键词 | ✅ | `keywords.ts`、`POST /api/prompt/polish` |
 | Drive 检索与素材选择 | ✅ | `DriveMaterialPicker`、`POST /api/drive/search` |
-| **promptPolish 服务** | ✅ | Gemini 生成分镜格式 prompt + 中英双语 searchKeywords |
+| **promptPolish 服务** | ✅ | Compass Gemini（chat/completions）生成分镜格式 prompt + 中英双语 searchKeywords |
 | video-director / storyboard-studio | ⚠️ 部分 | SKILL 文件在 `h5-video-tool-api/src/skills/`，未以正式 API 形式接入 |
 
 ### 1.3 video-director 近期优化

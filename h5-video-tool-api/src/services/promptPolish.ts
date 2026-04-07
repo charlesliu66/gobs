@@ -1,13 +1,15 @@
 /**
  * 基于模糊视频创意 prompt，用 LLM 优化为 VEO 可用的视频描述，
  * 并提取适合 Google Drive 文件名搜索的关键词（中英双语）。
- * 使用 Gemini REST API + axios，确保 GEMINI_PROXY 代理生效。
+ * 通过 Compass Gemini 代理（OpenAI 兼容 chat/completions），密钥优先 COMPASS_API_KEY（KEY2 常为 Veo 专用）；
+ * 可选 GEMINI_PROXY 为 axios 配置 HTTPS 代理（与 Veo 等同机内网场景一致）。
  *
  * 支持模板（templateId）：viral-dance 单镜、cg-trailer/short-drama 多镜分镜。
  */
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { getTemplate } from '../config/prompt-templates/index.js';
+import { resolveCompassApiKeyForGeminiChat } from './compassApiKey.js';
 
 /** VEO 通用规则（Subject + Action 结构，单场景、具体描述） */
 const VEO_BASE_RULES = `
@@ -101,11 +103,22 @@ export interface PolishResult {
   characters?: string[];
 }
 
-function createGeminiAxios() {
+const DEFAULT_COMPASS_API_URL = 'https://compass.llm.shopee.io/compass-api/v1';
+/** Compass 上多数项目已开通；3.x Pro 常需单独白名单，勿作默认 */
+const DEFAULT_COMPASS_GEMINI_MODEL = 'gemini-2.5-flash';
+
+function getCompassLlmConfig() {
+  const apiKey = resolveCompassApiKeyForGeminiChat();
+  const baseURL = (process.env.COMPASS_API_URL?.trim() || DEFAULT_COMPASS_API_URL).replace(/\/$/, '');
+  const model = process.env.COMPASS_GEMINI_MODEL?.trim() || DEFAULT_COMPASS_GEMINI_MODEL;
+  return { apiKey, baseURL, model };
+}
+
+/** 与 Veo 等一致：可选 HTTP(S) 代理访问 Compass */
+function createCompassHttpClient() {
   const proxyUrl = process.env.GEMINI_PROXY?.trim();
   const config: Parameters<typeof axios.create>[0] = {
-    baseURL: 'https://generativelanguage.googleapis.com/v1beta',
-    timeout: 60000,
+    timeout: 120000,
     headers: { 'Content-Type': 'application/json' },
   };
   if (proxyUrl) {
@@ -113,6 +126,133 @@ function createGeminiAxios() {
     config.proxy = false;
   }
   return axios.create(config);
+}
+
+/** OpenAI 兼容：Compass 若返回则可用于计费观测 */
+export interface CompassChatUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+async function postCompassChatCompletions(
+  body: Record<string, unknown>,
+  opts?: { timeout?: number; logLabel?: string },
+): Promise<{ text: string; usage?: CompassChatUsage }> {
+  const { apiKey, baseURL } = getCompassLlmConfig();
+  const client = createCompassHttpClient();
+  try {
+    const { data } = await client.post<{
+      choices?: Array<{ message?: { content?: string | null } }>;
+      error?: { message?: string };
+      usage?: CompassChatUsage;
+    }>(`${baseURL}/chat/completions`, body, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: opts?.timeout,
+    });
+
+    const errMsg = data.error?.message;
+    if (errMsg) throw new Error(errMsg);
+
+    const rawText = data.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!rawText) throw new Error('Compass Gemini 返回内容为空');
+    const usage = data.usage;
+    const label = opts?.logLabel ?? 'chat';
+    if (process.env.EDITOR_LLM_LOG_USAGE === '1' || process.env.EDITOR_LLM_LOG_USAGE === 'true') {
+      console.info(
+        `[LLM usage] ${label}:`,
+        usage ? JSON.stringify(usage) : '(response 无 usage 字段，可能为网关未透传)',
+      );
+    }
+    return { text: rawText, usage };
+  } catch (e) {
+    if (isAxiosError(e)) {
+      const msg =
+        (e.response?.data as { error?: { message?: string } })?.error?.message ||
+        (typeof e.response?.data === 'string' ? e.response.data : e.message);
+      throw new Error(typeof msg === 'string' && msg ? msg : 'Compass Gemini 请求失败');
+    }
+    throw e;
+  }
+}
+
+/**
+ * Compass OpenAI 兼容接口：POST {COMPASS_API_URL}/chat/completions，Authorization: Bearer
+ */
+export async function compassChatCompletion(options: {
+  systemPrompt: string;
+  userText: string;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  const { model } = getCompassLlmConfig();
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: options.systemPrompt },
+      { role: 'user', content: options.userText },
+    ],
+    temperature: options.temperature ?? 0.3,
+  };
+  if (options.maxTokens != null) body.max_tokens = options.maxTokens;
+  const r = await postCompassChatCompletions(body, { logLabel: 'compassChatCompletion' });
+  return r.text;
+}
+
+/** 同 compassChatCompletion，额外返回 usage（剪辑统计用） */
+export async function compassChatCompletionWithUsage(options: {
+  systemPrompt: string;
+  userText: string;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<{ text: string; usage?: CompassChatUsage }> {
+  const { model } = getCompassLlmConfig();
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: options.systemPrompt },
+      { role: 'user', content: options.userText },
+    ],
+    temperature: options.temperature ?? 0.3,
+  };
+  if (options.maxTokens != null) body.max_tokens = options.maxTokens;
+  return postCompassChatCompletions(body, { logLabel: 'compassChatCompletion' });
+}
+
+/** OpenAI 兼容多模态：user 为 content 数组（text + image_url data URL） */
+export async function compassChatCompletionWithContent(options: {
+  systemPrompt: string;
+  userContent: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  >;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  const r = await compassChatCompletionWithContentWithUsage(options);
+  return r.text;
+}
+
+export async function compassChatCompletionWithContentWithUsage(options: {
+  systemPrompt: string;
+  userContent: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  >;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<{ text: string; usage?: CompassChatUsage }> {
+  const { model } = getCompassLlmConfig();
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: options.systemPrompt },
+      { role: 'user', content: options.userContent },
+    ],
+    temperature: options.temperature ?? 0.25,
+  };
+  if (options.maxTokens != null) body.max_tokens = options.maxTokens;
+  return postCompassChatCompletions(body, { timeout: 180_000, logLabel: 'compassChatCompletion.multimodal' });
 }
 
 const STYLE_HINTS: Record<string, string> = {
@@ -133,16 +273,12 @@ export async function polishPrompt(
   rawPrompt: string,
   options?: PolishOptions | string
 ): Promise<PolishResult> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw new Error('GEMINI_API_KEY 未配置');
-
   const opts = typeof options === 'string' ? { styleId: options } : options ?? {};
   const template = opts.templateId ? getTemplate(opts.templateId) : undefined;
   const useCustomMultishot = !template && opts.multishot === true;
   const targetDuration = opts.duration ?? 30;
   const targetAspectRatio = opts.aspectRatio ?? '16:9';
 
-  const client = createGeminiAxios();
   const userText = rawPrompt.trim() || '请输入视频创意';
 
   let systemPrompt: string;
@@ -177,23 +313,11 @@ ${styleHint}`;
     systemPrompt = FALLBACK_STYLE_SYSTEM + styleHint;
   }
 
-  const { data } = await client.post<{
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    error?: { message?: string };
-  }>(
-    `/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
-    {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0.3 },
-    },
-  );
-
-  if (data.error) {
-    throw new Error(data.error.message || 'Gemini API 错误');
-  }
-
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+  const rawText = await compassChatCompletion({
+    systemPrompt,
+    userText,
+    temperature: 0.3,
+  });
 
   const jsonStr = extractJson(rawText);
   try {
@@ -373,10 +497,6 @@ export async function generateCaptionForPost(
   platforms?: string[],
   options?: GenerateCaptionOptions
 ): Promise<CaptionResult | CaptionByPlatformResult> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw new Error('GEMINI_API_KEY 未配置');
-
-  const client = createGeminiAxios();
   const userText = prompt.trim() || '视频创意描述';
   const exCaption = (options?.existingCaption ?? '').trim();
   const exHashtags = (options?.existingHashtags ?? '').trim();
@@ -414,21 +534,11 @@ ${TIKTOK_RULES}
       : userText;
   }
 
-  const { data } = await client.post<{
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    error?: { message?: string };
-  }>(
-    `/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
-    {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userContent }] }],
-      generationConfig: { temperature: 0.45 },
-    },
-  );
-
-  if (data.error) throw new Error(data.error.message || 'Gemini API 错误');
-
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+  const rawText = await compassChatCompletion({
+    systemPrompt,
+    userText: userContent,
+    temperature: 0.45,
+  });
 
   if (usePlatformMode) {
     try {
@@ -506,27 +616,14 @@ export interface ShortDramaExpandResult {
 }
 
 export async function expandShortDramaFromIdea(rawIdea: string): Promise<ShortDramaExpandResult> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw new Error('GEMINI_API_KEY 未配置');
-
-  const client = createGeminiAxios();
   const userText = (rawIdea || '').trim() || '（用户未填写，请基于「都市女频复仇」生成示例）';
 
-  const { data } = await client.post<{
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    error?: { message?: string };
-  }>(
-    `/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
-    {
-      systemInstruction: { parts: [{ text: SHORT_DRAMA_EXPAND_SYSTEM }] },
-      contents: [{ parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0.45, maxOutputTokens: 8192 },
-    },
-  );
-
-  if (data.error) throw new Error(data.error.message || 'Gemini API 错误');
-
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+  const rawText = await compassChatCompletion({
+    systemPrompt: SHORT_DRAMA_EXPAND_SYSTEM,
+    userText,
+    temperature: 0.45,
+    maxTokens: 8192,
+  });
   const jsonStr = extractJson(rawText);
   try {
     const parsed = JSON.parse(jsonStr) as {
@@ -559,9 +656,6 @@ export async function translateCaptionForPost(
   hashtags: string,
   targetLanguage: 'EN' | 'CN' | 'TH' | 'ID'
 ): Promise<CaptionResult> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw new Error('GEMINI_API_KEY 未配置');
-
   const cap = (caption ?? '').trim();
   const tag = (hashtags ?? '').trim();
   if (!cap && !tag) {
@@ -577,25 +671,14 @@ export async function translateCaptionForPost(
           ? '泰语 (Thai)'
           : '印尼语 (Indonesian)';
 
-  const client = createGeminiAxios();
   const userContent = [cap && `文案：${cap}`, tag && `标签：${tag}`].filter(Boolean).join('\n');
   const systemPrompt = `${TRANSLATE_CAPTION_SYSTEM}\n\n## 目标语言\n${langName}。`;
 
-  const { data } = await client.post<{
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    error?: { message?: string };
-  }>(
-    `/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
-    {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userContent }] }],
-      generationConfig: { temperature: 0.2 },
-    },
-  );
-
-  if (data.error) throw new Error(data.error.message || 'Gemini API 错误');
-
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+  const rawText = await compassChatCompletion({
+    systemPrompt,
+    userText: userContent,
+    temperature: 0.2,
+  });
 
   try {
     const parsed = JSON.parse(extractJson(rawText)) as { caption?: string; hashtags?: string };

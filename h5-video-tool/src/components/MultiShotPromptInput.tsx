@@ -1,9 +1,9 @@
 /**
  * 多镜头描述输入：镜头 Tab、每镜时长、每镜 Prompt、「+ 镜头」按钮
- * 每镜旁可生成首尾帧预览（文生图，严格依据当前镜头描述；多镜时文案附带衔接提示）
+ * 首镜：生成首帧+尾帧；后续镜：首帧=上一镜尾帧，生成中间帧+尾帧；画风锁定首镜首帧
  */
 import { useCallback, useState, useEffect, useRef } from 'react';
-import type { ShotItem } from '../context/CreateFlowContext';
+import type { ShotItem, ShotFramePreview } from '../context/CreateFlowContext';
 import { generateFrames } from '../api/storyboard';
 
 const DURATION_OPTIONS = [5, 6, 7, 8] as const;
@@ -17,18 +17,31 @@ interface MultiShotPromptInputProps {
   /** 当此值变化时自动触发「一键生成全部首尾帧」（用于 一键 Prompt / 选择预设 后自动生成分镜预览） */
   triggerGenerateAllFrames?: number;
   /** 首尾帧生成/更新时同步到父组件（如 Context），供视频生成使用 */
-  onShotFramesChange?: (frames: Record<number, { first: string; last: string }>) => void;
+  onShotFramesChange?: (frames: Record<number, ShotFramePreview>) => void;
 }
 
-export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspectRatio = '16:9', triggerGenerateAllFrames, onShotFramesChange }: MultiShotPromptInputProps) {
+type FrameModels = {
+  first: string | null;
+  middle: string | null;
+  last: string | null;
+};
+
+export function MultiShotPromptInput({
+  shots,
+  setShots,
+  maxTotalDuration,
+  aspectRatio = '16:9',
+  triggerGenerateAllFrames,
+  onShotFramesChange,
+}: MultiShotPromptInputProps) {
   const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
   const totalOk = totalDuration <= maxTotalDuration;
   const [loadingFrameIndex, setLoadingFrameIndex] = useState<number | null>(null);
-  const [shotFrames, setShotFrames] = useState<Record<number, { first: string; last: string }>>({});
+  const [shotFrames, setShotFrames] = useState<Record<number, ShotFramePreview>>({});
+  const [shotFrameModels, setShotFrameModels] = useState<Record<number, FrameModels>>({});
   const [frameError, setFrameError] = useState<string | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  // ESC 关闭 Lightbox
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightboxSrc(null);
@@ -38,13 +51,12 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
   }, []);
 
   const lastTriggerRef = useRef(0);
-  // 父组件触发时自动生成全部首尾帧（一键 Prompt / 选择预设后）
   useEffect(() => {
     if (!triggerGenerateAllFrames || triggerGenerateAllFrames <= lastTriggerRef.current) return;
     if (!shots.some((s) => s.prompt?.trim())) return;
     lastTriggerRef.current = triggerGenerateAllFrames;
     void handleGenerateAllFrames();
-  }, [triggerGenerateAllFrames]); // 仅 trigger 变化时执行
+  }, [triggerGenerateAllFrames]);
 
   const handleGenerateFrames = useCallback(
     async (index: number) => {
@@ -55,55 +67,139 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
       try {
         const continuity =
           index > 0 ? '（与上一镜头叙事衔接，同一空间与连续动作）' : '';
-        const req: Parameters<typeof generateFrames>[0] = {
-          prompt: continuity ? `${prompt}${continuity}` : prompt,
+        const text = continuity ? `${prompt}${continuity}` : prompt;
+
+        if (index === 0) {
+          const res = await generateFrames({
+            prompt: text,
+            aspectRatio,
+            shotIndex: 0,
+          });
+          const next: ShotFramePreview = { first: res.firstFrame, last: res.lastFrame };
+          const merged = { ...shotFrames, [index]: next };
+          setShotFrames(merged);
+          setShotFrameModels((prev) => ({
+            ...prev,
+            [index]: {
+              first: res.imagenModelFirst ?? null,
+              middle: null,
+              last: res.imagenModelLast ?? null,
+            },
+          }));
+          onShotFramesChange?.(merged);
+          return;
+        }
+
+        const prevLast = shotFrames[index - 1]?.last;
+        const styleRef = shotFrames[0]?.first;
+        if (!prevLast) {
+          setFrameError('请先生成「镜头1」的首尾帧，再生成当前镜头。');
+          return;
+        }
+        if (!styleRef) {
+          setFrameError('缺少首镜首帧作为画风参考，请先生成镜头1。');
+          return;
+        }
+
+        const res = await generateFrames({
+          prompt: text,
           aspectRatio,
+          shotIndex: index,
+          previousLastFrame: prevLast,
+          styleReferenceFrame: styleRef,
+        });
+
+        const next: ShotFramePreview = {
+          first: res.firstFrame,
+          last: res.lastFrame,
+          middle: res.middleFrame,
         };
-        const res = await generateFrames(req);
-        const next = { ...shotFrames, [index]: { first: res.firstFrame, last: res.lastFrame } };
-        setShotFrames(next);
-        onShotFramesChange?.(next);
+        const merged = { ...shotFrames, [index]: next };
+        setShotFrames(merged);
+        setShotFrameModels((prev) => ({
+          ...prev,
+          [index]: {
+            first: null,
+            middle: res.imagenModelMiddle ?? null,
+            last: res.imagenModelLast ?? null,
+          },
+        }));
+        onShotFramesChange?.(merged);
       } catch (e) {
-        setFrameError(e instanceof Error ? e.message : '首尾帧生成失败');
+        setFrameError(e instanceof Error ? e.message : '分镜预览生成失败');
       } finally {
         setLoadingFrameIndex(null);
       }
     },
-    [shots, aspectRatio, shotFrames]
+    [shots, aspectRatio, shotFrames, onShotFramesChange]
   );
 
-  /** 一键生成全部首尾帧（按顺序逐镜请求；衔接靠文案后缀，不传垫图） */
   const handleGenerateAllFrames = useCallback(async () => {
     const indices = shots
       .map((_, i) => i)
-      .filter((i) => shots[i]?.prompt?.trim());
+      .filter((i) => shots[i]?.prompt?.trim())
+      .sort((a, b) => a - b);
     if (indices.length === 0) {
       setFrameError('请先填写至少一个镜头的描述');
       return;
     }
-    setLoadingFrameIndex(-1); // -1 表示「全部生成中」
+    setLoadingFrameIndex(-1);
     setFrameError(null);
     try {
-      const newFrames: Record<number, { first: string; last: string }> = {};
+      const newFrames: Record<number, ShotFramePreview> = {};
+      const newModels: Record<number, FrameModels> = {};
+
       for (const i of indices) {
         const base = shots[i].prompt.trim();
         const continuity = i > 0 ? '（与上一镜头叙事衔接，同一空间与连续动作）' : '';
-        const req: Parameters<typeof generateFrames>[0] = {
-          prompt: continuity ? `${base}${continuity}` : base,
-          aspectRatio,
-        };
-        const res = await generateFrames(req);
-        newFrames[i] = { first: res.firstFrame, last: res.lastFrame };
-        const next = { ...shotFrames, ...newFrames };
-        setShotFrames(next);
-        onShotFramesChange?.(next);
+        const text = continuity ? `${base}${continuity}` : base;
+
+        if (i === 0) {
+          const res = await generateFrames({ prompt: text, aspectRatio, shotIndex: 0 });
+          newFrames[0] = { first: res.firstFrame, last: res.lastFrame };
+          newModels[0] = {
+            first: res.imagenModelFirst ?? null,
+            middle: null,
+            last: res.imagenModelLast ?? null,
+          };
+        } else {
+          const prevLast = newFrames[i - 1]?.last ?? shotFrames[i - 1]?.last;
+          const styleRef = newFrames[0]?.first ?? shotFrames[0]?.first;
+          if (!prevLast || !styleRef) {
+            setFrameError(`请先完成镜头${i}之前所有镜头的预览生成（需上一镜尾帧与首镜首帧）。`);
+            setLoadingFrameIndex(null);
+            return;
+          }
+          const res = await generateFrames({
+            prompt: text,
+            aspectRatio,
+            shotIndex: i,
+            previousLastFrame: prevLast,
+            styleReferenceFrame: styleRef,
+          });
+          newFrames[i] = {
+            first: res.firstFrame,
+            last: res.lastFrame,
+            middle: res.middleFrame,
+          };
+          newModels[i] = {
+            first: null,
+            middle: res.imagenModelMiddle ?? null,
+            last: res.imagenModelLast ?? null,
+          };
+        }
+
+        const merged = { ...shotFrames, ...newFrames };
+        setShotFrames(merged);
+        setShotFrameModels((prev) => ({ ...prev, ...newModels }));
+        onShotFramesChange?.(merged);
       }
     } catch (e) {
-      setFrameError(e instanceof Error ? e.message : '首尾帧生成失败');
+      setFrameError(e instanceof Error ? e.message : '分镜预览生成失败');
     } finally {
       setLoadingFrameIndex(null);
     }
-  }, [shots, aspectRatio, shotFrames]);
+  }, [shots, aspectRatio, shotFrames, onShotFramesChange]);
 
   const addShot = useCallback(() => {
     setShots((prev) => [...prev, { duration: 5, prompt: '' }]);
@@ -111,9 +207,7 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
 
   const updateShot = useCallback(
     (index: number, updates: Partial<ShotItem>) => {
-      setShots((prev) =>
-        prev.map((s, i) => (i === index ? { ...s, ...updates } : s))
-      );
+      setShots((prev) => prev.map((s, i) => (i === index ? { ...s, ...updates } : s)));
     },
     [setShots]
   );
@@ -143,7 +237,7 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
             disabled={loadingFrameIndex !== null || shots.every((s) => !s.prompt.trim())}
             className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] text-sm hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loadingFrameIndex === -1 ? '生成中…' : '一键生成全部（保持镜头衔接）'}
+            {loadingFrameIndex === -1 ? '生成中…' : '一键生成全部（按镜顺序衔接）'}
           </button>
         )}
       </div>
@@ -167,7 +261,9 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
               className="rounded border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 py-1 text-sm text-[var(--color-text)] focus:outline-none"
             >
               {DURATION_OPTIONS.map((d) => (
-                <option key={d} value={d}>{d}s</option>
+                <option key={d} value={d}>
+                  {d}s
+                </option>
               ))}
             </select>
             {shots.length > 1 && (
@@ -206,41 +302,77 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
                   disabled={!shot.prompt.trim() || loadingFrameIndex !== null}
                   className="px-3 py-1.5 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm hover:bg-[var(--color-primary)]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {loadingFrameIndex === i ? '生成中…' : '生成首尾帧'}
+                  {loadingFrameIndex === i ? '生成中…' : i === 0 ? '生成首尾帧' : '生成中间帧+尾帧（接上一镜）'}
                 </button>
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  首尾帧由当前镜头描述生成；多镜头时自动附带与上一镜衔接提示。素材库图片仍可在生成视频时作为参考。
+                  {i === 0
+                    ? '镜头1：生成首帧与尾帧，并作为全片画风基准。'
+                    : '本镜首帧=上一镜尾帧；仅生成中间帧与尾帧，画风与镜头1一致。素材库图片仍可在生成视频时作为参考。'}
                 </p>
               </div>
               {shotFrames[i] && (
-                <div className="flex gap-2">
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-[var(--color-text-muted)] mb-1">首帧（点击放大）</span>
-                    <button
-                      type="button"
-                      onClick={() => setLightboxSrc(shotFrames[i].first)}
-                      className="block cursor-zoom-in rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 transition-colors"
-                    >
-                      <img
-                        src={shotFrames[i].first}
-                        alt={`镜头${i + 1} 首帧`}
-                        className="w-24 h-auto object-cover"
-                      />
-                    </button>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-[var(--color-text-muted)] mb-1">尾帧（点击放大）</span>
-                    <button
-                      type="button"
-                      onClick={() => setLightboxSrc(shotFrames[i].last)}
-                      className="block cursor-zoom-in rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 transition-colors"
-                    >
-                      <img
-                        src={shotFrames[i].last}
-                        alt={`镜头${i + 1} 尾帧`}
-                        className="w-24 h-auto object-cover"
-                      />
-                    </button>
+                <div className="flex flex-col gap-1">
+                  {(shotFrameModels[i]?.first || shotFrameModels[i]?.middle || shotFrameModels[i]?.last) && (
+                    <p className="text-[10px] leading-tight text-[var(--color-text-subtle)] max-w-[32rem] break-all">
+                      模型：
+                      {i === 0 ? (
+                        <>
+                          首 {shotFrameModels[i]?.first ?? '—'} · 尾 {shotFrameModels[i]?.last ?? '—'}
+                        </>
+                      ) : (
+                        <>
+                          首(沿用) — · 中 {shotFrameModels[i]?.middle ?? '—'} · 尾 {shotFrameModels[i]?.last ?? '—'}
+                        </>
+                      )}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-[var(--color-text-muted)] mb-1 max-w-[5.5rem] text-center">
+                        {i === 0 ? '首帧' : '首帧（上一镜尾）'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLightboxSrc(shotFrames[i].first)}
+                        className="block cursor-zoom-in rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 transition-colors"
+                      >
+                        <img
+                          src={shotFrames[i].first}
+                          alt={`镜头${i + 1} 首帧`}
+                          className="w-24 h-auto object-cover"
+                        />
+                      </button>
+                    </div>
+                    {i > 0 && shotFrames[i].middle && (
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-[var(--color-text-muted)] mb-1">中间帧</span>
+                        <button
+                          type="button"
+                          onClick={() => setLightboxSrc(shotFrames[i].middle!)}
+                          className="block cursor-zoom-in rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 transition-colors"
+                        >
+                          <img
+                            src={shotFrames[i].middle}
+                            alt={`镜头${i + 1} 中间帧`}
+                            className="w-24 h-auto object-cover"
+                          />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-[var(--color-text-muted)] mb-1">尾帧</span>
+                      <button
+                        type="button"
+                        onClick={() => setLightboxSrc(shotFrames[i].last)}
+                        className="block cursor-zoom-in rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 transition-colors"
+                      >
+                        <img
+                          src={shotFrames[i].last}
+                          alt={`镜头${i + 1} 尾帧`}
+                          className="w-24 h-auto object-cover"
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -249,9 +381,7 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
         ))}
       </div>
 
-      {frameError && (
-        <p className="text-sm text-[var(--color-error)]">{frameError}</p>
-      )}
+      {frameError && <p className="text-sm text-[var(--color-error)]">{frameError}</p>}
 
       <button
         type="button"
@@ -262,7 +392,6 @@ export function MultiShotPromptInput({ shots, setShots, maxTotalDuration, aspect
         + 镜头
       </button>
 
-      {/* 图片放大 Lightbox */}
       {lightboxSrc && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-zoom-out"

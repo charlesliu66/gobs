@@ -36,7 +36,7 @@ cd h5-video-tool-api
 
 # 复制配置模板并填写
 cp .env.example .env
-# 编辑 .env，填入 GEMINI_API_KEY、GOOGLE_CLIENT_ID 等
+# 编辑 .env，填入 COMPASS_API_KEY、GOOGLE_CLIENT_ID 等
 
 # 安装依赖
 npm install --production
@@ -117,7 +117,7 @@ VITE_API_BASE_URL=
 
 | 变量 | 说明 |
 |------|------|
-| GEMINI_API_KEY | Gemini API 密钥（Prompt 生成） |
+| COMPASS_API_KEY | Compass 密钥（一键 Prompt / 视频等，与 h5-video-tool-api 一致） |
 | GOOGLE_CLIENT_ID | Google OAuth 客户端 ID |
 | GOOGLE_CLIENT_SECRET | Google OAuth 客户端密钥 |
 | PORT | 服务端口，默认 3001 |

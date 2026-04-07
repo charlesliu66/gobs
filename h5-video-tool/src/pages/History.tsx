@@ -4,6 +4,7 @@ import {
   loadVideoHistory,
   removeVideoFromHistory,
   getVideoFileUrl,
+  getLocalPlaybackSrc,
   saveVideoToHistory,
   toggleVideoHistoryStarred,
   type VideoHistoryItem,
@@ -28,12 +29,6 @@ type HistoryTab = 'cloud' | 'local';
 /** 单行通栏字幕（整段约 1 小时），精细时间轴请用 SRT 模式 */
 function buildSimpleSrt(text: string): string {
   return `1\n00:00:00,000 --> 00:59:59,999\n${text.replace(/\r/g, '').replace(/\n/g, ' ')}\n`;
-}
-
-function localPlaybackSrc(item: VideoHistoryItem): string {
-  if (item.videoUrl?.trim()) return item.videoUrl.trim();
-  if (item.videoPath?.trim()) return getVideoFileUrl(item.videoPath);
-  return '';
 }
 
 function sortLocalItems(items: VideoHistoryItem[]): VideoHistoryItem[] {
@@ -134,6 +129,10 @@ export function History() {
 
   const refreshLocal = useCallback(() => setItems(loadVideoHistory()), []);
 
+  useEffect(() => {
+    if (tab === 'local') refreshLocal();
+  }, [tab, refreshLocal]);
+
   const handleRemoveLocal = useCallback(
     (taskId: string) => {
       removeVideoFromHistory(taskId);
@@ -185,7 +184,7 @@ export function History() {
         const tid = key.slice(6);
         const item = items.find((x) => x.taskId === tid);
         if (!item) return null;
-        const src = localPlaybackSrc(item);
+        const src = getLocalPlaybackSrc(item);
         return src ? absoluteApiUrl(src) : null;
       }
       if (key.startsWith('cloud:')) {
@@ -313,7 +312,7 @@ export function History() {
         </div>
         <p className="text-xs text-[var(--color-text-subtle)] mt-3 max-w-3xl leading-relaxed">
           云端与官网共用 API Key；可<strong>星标</strong>置顶、<strong>删除</strong>仅从当前列表隐藏（不调用远端删任务）。
-          本机记录保存在浏览器，删除后不可恢复。
+          「本机历史」含 Studio 生成的 Veo、<strong>即梦</strong>、可灵代理 URL 等；即梦成片优先存本机文件路径以便预览。本机记录保存在浏览器，删除后不可恢复。
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
@@ -448,7 +447,7 @@ export function History() {
             <div className="p-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-center">
               <p className="text-[var(--color-text-muted)] mb-2">暂无本机生成记录</p>
               <p className="text-sm text-[var(--color-text-subtle)] mb-4">
-                在 Studio 内生成成功后会写入此处；也可在「可灵云端」打开成片并加入本机历史。
+                在 Studio 内生成成功后会写入此处（含即梦 Dreamina 异步/同步成片）；也可在「可灵云端」打开成片并加入本机历史。
               </p>
               <Link
                 to="/studio"
@@ -460,7 +459,7 @@ export function History() {
           ) : (
             <div className="space-y-4">
               {sortedLocalItems.map((item) => {
-                const src = localPlaybackSrc(item);
+                const src = getLocalPlaybackSrc(item);
                 const starred = !!item.starred;
                 return (
                   <div
@@ -492,6 +491,18 @@ export function History() {
                     <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            {item.taskId.startsWith('dreamina-') && (
+                              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/35">
+                                即梦
+                              </span>
+                            )}
+                            {item.taskId.startsWith('kling-') && !item.taskId.startsWith('dreamina-') && (
+                              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                可灵
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-[var(--color-text)] line-clamp-2 mb-1">{item.prompt || '无描述'}</p>
                           <p className="text-xs text-[var(--color-text-muted)]">{formatTime(item.createdAt)}</p>
                         </div>

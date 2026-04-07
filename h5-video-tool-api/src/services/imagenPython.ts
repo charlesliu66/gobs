@@ -1,11 +1,12 @@
 /**
- * 通过 Python SDK 调用 Compass Imagen 图像生成
+ * 通过 Python SDK 调用 Compass 图像生成（默认 Gemini 3 Pro Image → 3.1 Flash Image，重画质优先）
  * 依赖: pip install google-genai
- * 环境变量: COMPASS_API_KEY, COMPASS_API_URL
+ * 环境变量: COMPASS_API_KEY2（优先）/ COMPASS_API_KEY, COMPASS_API_URL
  */
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import { resolveCompassApiKeyPreferKey2 } from './compassApiKey.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_SCRIPT = path.resolve(__dirname, '../../scripts/imagen_generate.py');
@@ -13,14 +14,20 @@ const PY_SCRIPT = path.resolve(__dirname, '../../scripts/imagen_generate.py');
 export interface ImagenPythonOptions {
   prompt: string;
   aspectRatio?: string;
-  /** Imagen 模型，如 imagen-4.0-generate-preview-06-06 */
+  /** 覆盖默认模型，如 gemini-3.1-flash-image-preview、gemini-3-pro-image-preview */
   model?: string;
-  /** 参考图 base64（浪人/场景），用于保持风格一致 */
+  /** 参考图 base64（浪人/场景），用于 edit_image；与画风参考二选一场景不同 */
   referenceImageBase64?: string;
+  /** 首镜首帧 base64（不含 data URL 前缀）：后续镜头生图时锁定影调/质感（Gemini 多模态） */
+  styleReferenceBase64?: string;
+  /** 单次请求覆盖 Compass Key（如前端传入用户自有 Key） */
+  apiKeyOverride?: string;
 }
 
 export interface ImagenPythonResult {
   imageBase64: string;
+  /** 实际调用成功的模型 id（由 imagen_generate.py 返回） */
+  model?: string;
 }
 
 export async function generateImageWithPython(options: ImagenPythonOptions): Promise<ImagenPythonResult> {
@@ -28,11 +35,36 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
   const aspectRatio = options.aspectRatio ?? '16:9';
 
   const env: NodeJS.ProcessEnv = { ...process.env };
-  if (options.model) env.IMAGEN_MODEL = options.model;
-  if (options.referenceImageBase64) env.COMPASS_REF_IMAGE_B64 = options.referenceImageBase64;
+  const resolvedKey = options.apiKeyOverride?.trim()
+    ? options.apiKeyOverride.trim()
+    : resolveCompassApiKeyPreferKey2();
+  env.COMPASS_API_KEY = resolvedKey;
+  env.COMPASS_API_KEY2 = resolvedKey;
+  // 避免继承 shell/其它任务遗留的 IMAGEN_MODEL，导致与 .env 中 COMPASS_IMAGEN_MODEL 不一致
+  if (options.model) {
+    env.IMAGEN_MODEL = options.model;
+  } else {
+    delete env.IMAGEN_MODEL;
+  }
+  // 首尾帧/纯文生图必须不带参考图；若环境里残留 COMPASS_REF_IMAGE_B64，Python 会走 edit_image，画面会被垫图绑架
+  if (options.referenceImageBase64) {
+    env.COMPASS_REF_IMAGE_B64 = options.referenceImageBase64;
+  } else {
+    delete env.COMPASS_REF_IMAGE_B64;
+    delete env.COMPASS_REF_IMAGE_MIME;
+  }
+  if (options.styleReferenceBase64) {
+    env.COMPASS_STYLE_REF_B64 = options.styleReferenceBase64;
+  } else {
+    delete env.COMPASS_STYLE_REF_B64;
+  }
+
+  // Windows 下通过 argv 传中文长 prompt 可能导致 Python 侧乱码或与输入框不一致，改用 UTF-8 环境变量传递
+  env.COMPASS_IMAGEN_PROMPT = prompt;
+  env.COMPASS_IMAGEN_ASPECT = aspectRatio;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('python', [PY_SCRIPT, prompt, aspectRatio], {
+    const proc = spawn('python', [PY_SCRIPT], {
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -53,7 +85,10 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
           reject(new Error(out?.error || '无图像输出'));
           return;
         }
-        resolve({ imageBase64: out.imageBase64 });
+        resolve({
+          imageBase64: out.imageBase64,
+          model: typeof out.model === 'string' ? out.model : undefined,
+        });
       } catch (e) {
         reject(e);
       }

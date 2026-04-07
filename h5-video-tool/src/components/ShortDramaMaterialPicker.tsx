@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { DriveFile } from '../hooks/useGoogleDrive';
 import { AuthThumbnail } from './AuthThumbnail';
+import { DriveExplorer } from './DriveExplorer';
 
 const PLACEHOLDER_PREFIX = 'empty-';
 
@@ -40,6 +41,7 @@ export function ShortDramaMaterialPicker({
   onLogin,
 }: ShortDramaMaterialPickerProps) {
   const [activeSlot, setActiveSlot] = useState<number | 'scene' | null>(null);
+  const [showManualExplorer, setShowManualExplorer] = useState(false);
   const imageFiles = files.filter((f) => (f.mimeType || '').startsWith('image/'));
 
   /** 从 selectedOrder 解析：前 N 个为人物槽（可含 placeholder），其余为场景 */
@@ -90,6 +92,49 @@ export function ShortDramaMaterialPicker({
       syncToSelectedOrder(characterSlots, sceneSlots.filter((f) => f.id !== file.id));
     },
     [characterSlots, sceneSlots, syncToSelectedOrder]
+  );
+
+  const explorerSelectedIds = useMemo(
+    () =>
+      new Set(
+        [...characterSlots.filter((x): x is DriveFile => !!x && !isPlaceholder(x)), ...sceneSlots].map((f) => f.id),
+      ),
+    [characterSlots, sceneSlots],
+  );
+
+  const handleExplorerToggle = useCallback(
+    (id: string, item: { id: string; name: string; mimeType: string }) => {
+      const f: DriveFile = { id, name: item.name, mimeType: item.mimeType };
+      if (!(f.mimeType || '').startsWith('image/')) return;
+      const exists = [...characterSlots, ...sceneSlots].some((x) => x && !isPlaceholder(x) && x.id === id);
+      if (exists) {
+        if (sceneSlots.some((s) => s.id === id)) handleRemoveScene(f);
+        else {
+          const idx = characterSlots.findIndex((c) => c && !isPlaceholder(c) && c.id === id);
+          if (idx >= 0) handleRemoveCharacter(idx);
+        }
+        return;
+      }
+      if (activeSlot === 'scene') {
+        handleAddScene(f);
+        return;
+      }
+      if (typeof activeSlot === 'number') {
+        handleSelectForCharacter(activeSlot, f);
+        return;
+      }
+      const emptyIdx = characterSlots.findIndex((c) => !c);
+      if (emptyIdx >= 0) handleSelectForCharacter(emptyIdx, f);
+    },
+    [
+      characterSlots,
+      sceneSlots,
+      activeSlot,
+      handleAddScene,
+      handleSelectForCharacter,
+      handleRemoveCharacter,
+      handleRemoveScene,
+    ],
   );
 
   if (!accessToken) {
@@ -177,15 +222,42 @@ export function ShortDramaMaterialPicker({
       </div>
 
       {/* 浏览素材 */}
-      <div className="pt-4 border-t border-[var(--color-border)]">
-        <button
-          type="button"
-          onClick={onBrowseFiles}
-          disabled={filesLoading}
-          className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {filesLoading ? '加载中…' : `浏览「${verifiedFolderName || '素材库'}」中的图片`}
-        </button>
+      <div className="pt-4 border-t border-[var(--color-border)] space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={onBrowseFiles}
+            disabled={filesLoading}
+            className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {filesLoading ? '加载中…' : `浏览「${verifiedFolderName || '素材库'}」中的图片`}
+          </button>
+          {verifiedFolderId && verifiedFolderName && (
+            <button
+              type="button"
+              onClick={() => setShowManualExplorer((v) => !v)}
+              className="px-4 py-2 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors text-sm"
+            >
+              {showManualExplorer ? '收起文件夹树' : '手动在文件夹树中选择'}
+            </button>
+          )}
+        </div>
+        {showManualExplorer && verifiedFolderId && verifiedFolderName && (
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <p className="text-xs text-[var(--color-text-muted)] mb-2">
+              进入子文件夹，点击图片勾选到人物槽；可先点击某个人物槽再点图，或先点图自动填入第一个空人物位；「+ 添加」场景后再点图为场景。
+            </p>
+            <DriveExplorer
+              rootFolderId={verifiedFolderId}
+              rootFolderName={verifiedFolderName}
+              accessToken={accessToken}
+              onLogin={onLogin}
+              selectable
+              selectedIds={explorerSelectedIds}
+              onToggleSelect={handleExplorerToggle}
+            />
+          </div>
+        )}
 
         {pickingFor !== null && imageFiles.length > 0 && (
           <div className="mt-3 space-y-2">

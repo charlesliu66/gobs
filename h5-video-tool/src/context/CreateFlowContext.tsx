@@ -6,6 +6,22 @@ export interface ShotItem {
   prompt: string;
 }
 
+/** 分镜预览图：首镜为首+尾；后续镜可含 middle（中间帧） */
+export interface ShotFramePreview {
+  first: string;
+  last: string;
+  middle?: string;
+}
+
+export interface DreaminaMultimodalItem {
+  id: string;
+  kind: 'image' | 'video' | 'audio';
+  /** 不含 data: 前缀的 base64 */
+  base64: string;
+  mimeType: string;
+  fileName?: string;
+}
+
 interface CreateFlowState {
   prompt: string;
   keywords: string[];
@@ -25,12 +41,14 @@ interface CreateFlowState {
   shots: ShotItem[];
   /** 是否开启多镜头描述（仅 multishot 模板可用） */
   multiShotEnabled: boolean;
-  /** 每镜首尾帧 base64 预览（用于视频生成时传入首帧作为参考） */
-  shotFrames: Record<number, { first: string; last: string }>;
+  /** 每镜首尾帧（及可选中间帧）预览；视频生成仍使用每镜 first 作为参考 */
+  shotFrames: Record<number, ShotFramePreview>;
   /** 短剧模式：剧本中的人物/角色名称，用于用户上传对应角色图 */
   characters: string[];
   /** Viral 舞蹈：可灵 Omni 参考视频公网直链（与素材顺序 @图片1/@图片2 配合） */
   viralDanceReferenceVideoUrl: string;
+  /** 即梦「全能参考」上传项（顺序对应 @图片n / @视频n / @音频n） */
+  dreaminaMultimodalItems: DreaminaMultimodalItem[];
   /** 选中的 Veo 模型 */
   videoModel: string;
   /** 比例 16:9 | 9:16 */
@@ -57,9 +75,12 @@ interface CreateFlowContextValue extends CreateFlowState {
   setHasMatchedMaterials: (v: boolean) => void;
   setShots: (v: ShotItem[] | ((prev: ShotItem[]) => ShotItem[])) => void;
   setMultiShotEnabled: (v: boolean) => void;
-  setShotFrames: (v: Record<number, { first: string; last: string }> | ((prev: Record<number, { first: string; last: string }>) => Record<number, { first: string; last: string }>)) => void;
+  setShotFrames: (
+    v: Record<number, ShotFramePreview> | ((prev: Record<number, ShotFramePreview>) => Record<number, ShotFramePreview>),
+  ) => void;
   setCharacters: (v: string[]) => void;
   setViralDanceReferenceVideoUrl: (v: string) => void;
+  setDreaminaMultimodalItems: (v: DreaminaMultimodalItem[] | ((prev: DreaminaMultimodalItem[]) => DreaminaMultimodalItem[])) => void;
   resetFlow: () => void;
 }
 
@@ -84,6 +105,7 @@ const initialState: CreateFlowState = {
   shotFrames: {},
   characters: [],
   viralDanceReferenceVideoUrl: '',
+  dreaminaMultimodalItems: [],
 };
 
 const CreateFlowContext = createContext<CreateFlowContextValue | null>(null);
@@ -135,6 +157,11 @@ export function CreateFlowProvider({ children }: { children: ReactNode }) {
       })),
     setCharacters: (v) => setState((s) => ({ ...s, characters: v })),
     setViralDanceReferenceVideoUrl: (v) => setState((s) => ({ ...s, viralDanceReferenceVideoUrl: v })),
+    setDreaminaMultimodalItems: (v) =>
+      setState((s) => ({
+        ...s,
+        dreaminaMultimodalItems: typeof v === 'function' ? v(s.dreaminaMultimodalItems) : v,
+      })),
     resetFlow,
   };
 

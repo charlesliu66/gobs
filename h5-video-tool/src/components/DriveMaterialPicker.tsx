@@ -109,8 +109,8 @@ export function DriveMaterialPicker({
           {!loading && files.length === 0 && !error && (
             <p className="text-sm text-[var(--color-text-muted)]">
               {keywords.length > 0
-                ? '未找到匹配素材，可调整关键词后再搜索，或点「在 Drive 文件夹中勾选」手动选择'
-                : '点击「一键匹配素材」或上方按钮加载素材'}
+                ? '未找到匹配素材：可调整关键词后再搜索，或使用创作页「手动从 Drive 选择」在文件夹树中勾选'
+                : '点击上方按钮加载素材，或使用创作页「手动从 Drive 选择」浏览子文件夹'}
             </p>
           )}
 

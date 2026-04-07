@@ -83,10 +83,10 @@ export function useGoogleDrive(accessToken: string | null) {
   );
 
   const search = useCallback(
-    async (keywords: string[], folderId?: string, folderHints?: string[]) => {
+    async (keywords: string[], folderId?: string, folderHints?: string[]): Promise<DriveFile[]> => {
       if (!accessToken) {
         setError('请先连接 Google Drive');
-        return;
+        return [];
       }
       setLoading(true);
       setError(null);
@@ -103,10 +103,13 @@ export function useGoogleDrive(accessToken: string | null) {
         if (!res.ok) {
           throw new Error((data.error as string) || '搜索失败');
         }
-        setFiles((data.files as DriveFile[]) || []);
+        const list = (data.files as DriveFile[]) || [];
+        setFiles(list);
+        return list;
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Drive 搜索失败');
         setFiles([]);
+        return [];
       } finally {
         setLoading(false);
       }

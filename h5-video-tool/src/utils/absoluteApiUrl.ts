@@ -3,7 +3,7 @@
  */
 export function absoluteApiUrl(pathOrUrl: string): string {
   const s = pathOrUrl.trim();
-  if (/^https?:\/\//i.test(s)) return s;
+  if (/^(https?:|data:|blob:)/i.test(s)) return s;
   const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (base) return `${base}${s.startsWith('/') ? s : `/${s}`}`;
   if (typeof window !== 'undefined' && window.location?.origin) {

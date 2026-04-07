@@ -304,7 +304,7 @@ export function TabDistribute() {
               </div>
             </div>
             <p className="text-[10px] text-[var(--color-text-subtle)] leading-snug mb-1">
-              基于 Studio 创意 / 历史 prompt，按 TikTok 易火公式改写（钩子、口语、标签组合），不会直接粘贴分镜长 prompt。需后端配置 GEMINI_API_KEY。
+              基于 Studio 创意 / 历史 prompt，按 TikTok 易火公式改写（钩子、口语、标签组合），不会直接粘贴分镜长 prompt。需后端配置 COMPASS_API_KEY（Compass Gemini 文本代理）。
             </p>
             <textarea
                 value={caption}

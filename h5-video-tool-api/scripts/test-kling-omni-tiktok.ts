@@ -3,8 +3,7 @@
  *
  * 前置：
  *   - .env：KLING_API_KEY、KLING_API_BASE_URL（如 clipai.ingarena.net）
- *   - 推荐（无需 ngrok）：KLING_SOCIAL_REF_VIDEO_USE_BASE64=1 — TikTok 下载后以 base64 直接提交 ingarena
- *   - 或：API_PUBLIC_BASE_URL + 本 API(3001) + ngrok，供可灵拉取 /api/video/kling/ref-cache/…
+ *   - **API_PUBLIC_BASE_URL**（或 H5_PUBLIC_API_BASE_URL）：可灵能访问的本 API 根地址，供拉取 /api/video/kling/ref-cache/…（参考视频仅支持 URL）
  *   - 本机已安装 yt-dlp（py -m pip install -U yt-dlp）
  *
  * 用法：
@@ -70,23 +69,18 @@ async function main() {
     }
   }
 
-  const useBase64 = process.env.KLING_SOCIAL_REF_VIDEO_USE_BASE64 === '1';
   const base = getPublicApiBaseUrlForKlingRef();
-  if (!useBase64 && !base) {
+  if (!base) {
     console.error(
-      '请在 .env 二选一：KLING_SOCIAL_REF_VIDEO_USE_BASE64=1（易 DatabaseError）；' +
-        '或设置 API_PUBLIC_BASE_URL / H5_PUBLIC_API_BASE_URL（与 H5 的 VITE_API_BASE_URL 同源）并确保本 API 已启动且外网/公司网可达。',
+      '请在 .env 设置 API_PUBLIC_BASE_URL / H5_PUBLIC_API_BASE_URL（与 H5 的 VITE_API_BASE_URL 同源），' +
+        '为可灵可访问的本 API 根地址；参考视频仅支持 http(s) URL。',
     );
     process.exit(1);
   }
 
   console.log('1/3 下载 TikTok 到本地并生成可灵 video_list 用 video_url…');
   const videoUrl = await prepareSocialVideoUrlForKling(tiktok);
-  const preview =
-    videoUrl.length > 120 && !/^https?:\/\//i.test(videoUrl)
-      ? `${videoUrl.slice(0, 72)}…(base64 共 ${videoUrl.length} 字符)`
-      : videoUrl;
-  console.log('   video_url:', preview);
+  console.log('   video_url:', videoUrl);
 
   const b1 = fs.readFileSync(img1).toString('base64');
   const b2 = fs.readFileSync(img2).toString('base64');

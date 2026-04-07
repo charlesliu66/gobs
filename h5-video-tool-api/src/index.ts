@@ -14,6 +14,12 @@ import storyboardRoutes from './routes/storyboard.js';
 import geelarkRouter from './routes/geelark.js';
 import sjRouter from './routes/sj.js';
 import remixRouter from './routes/remix.js';
+import editorExportRouter from './routes/editorExport.js';
+import editorAssetsRouter from './routes/editorAssets.js';
+import editorAgentRouter from './routes/editorAgent.js';
+import editorAnalyzeRouter from './routes/editorAnalyze.js';
+import editorMusicRouter from './routes/editorMusic.js';
+import studioRouter from './routes/studio.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -31,6 +37,12 @@ app.use('/api/storyboard', storyboardRoutes);
 app.use('/api/geelark', geelarkRouter);
 app.use('/api/sj', sjRouter);
 app.use('/api/remix', remixRouter);
+app.use('/api/editor', editorAssetsRouter);
+app.use('/api/editor', editorAnalyzeRouter);
+app.use('/api/editor', editorAgentRouter);
+app.use('/api/editor', editorMusicRouter);
+app.use('/api/editor', editorExportRouter);
+app.use('/api/studio', studioRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);

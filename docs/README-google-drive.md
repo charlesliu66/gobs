@@ -25,7 +25,7 @@ VITE_GOOGLE_CLIENT_ID=你的客户端ID.apps.googleusercontent.com
 
 **后端** `h5-video-tool-api/.env`（已有 `.env.example`）：
 
-- `GEMINI_API_KEY`：一键 Prompt 使用，在 [Google AI Studio](https://aistudio.google.com/app/apikey) 创建
+- `COMPASS_API_KEY`：一键 Prompt / 文案等 LLM 与视频生成共用（Compass Gemini 代理），见 `h5-video-tool-api/.env.example`
 - `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 可选，Drive 搜索使用用户 token，后端仅做代理
 
 ### 3. 启动服务

@@ -147,10 +147,10 @@ export function BossShowcase({ onBackToPicker }: { onBackToPicker?: () => void }
     if (!verifiedFolderId || !accessToken) return;
     try {
       const kw = ['boss', 'character', 'scenario', ...extractKeywordsFromPrompt(prompt)].slice(0, 8);
-      await search(kw.length ? kw : ['boss', 'character'], verifiedFolderId, ['Character', 'Scenario']);
-      setHasMatchedMaterials(true);
+      const matched = await search(kw.length ? kw : ['boss', 'character'], verifiedFolderId, ['Character', 'Scenario']);
+      setHasMatchedMaterials(matched.length > 0);
     } catch {
-      // ignore
+      setHasMatchedMaterials(false);
     }
   }, [verifiedFolderId, accessToken, prompt, search, setHasMatchedMaterials]);
 

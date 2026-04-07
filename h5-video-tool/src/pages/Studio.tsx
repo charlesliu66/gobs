@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { TabGenerate } from './TabGenerate';
 import { BossShowcase } from './BossShowcase';
 import { TemplatePicker } from '../components/TemplatePicker';
@@ -87,6 +87,15 @@ export function Studio() {
           <h1 className="page-title">Studio</h1>
         <p className="page-subtitle">
           创建和管理你的 AI 生成视频。Studio 创作内容，Gallery 展示与管理。
+        </p>
+        <p className="mt-2 text-sm">
+          <Link
+            to="/studio/production"
+            className="font-medium text-[var(--color-primary)] hover:underline"
+          >
+            高级制片
+          </Link>
+          <span className="text-[var(--color-text-muted)]"> — 故事结构 → 分镜表 → Prompt 组装（分步生成）</span>
         </p>
         {/* 子 Tab：Studio | Gallery */}
         <div className="mt-4 flex gap-1">

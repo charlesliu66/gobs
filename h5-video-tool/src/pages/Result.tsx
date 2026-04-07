@@ -1,7 +1,7 @@
 import { useSearchParams, Link } from 'react-router-dom';
 import { useEffect, useMemo } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
-import { loadVideoHistory, getVideoFileUrl } from '../utils/videoHistory';
+import { loadVideoHistory, getVideoFileUrl, getLocalPlaybackSrc } from '../utils/videoHistory';
 
 export function Result() {
   const [searchParams] = useSearchParams();
@@ -15,11 +15,8 @@ export function Result() {
 
   const historyPlaybackUrl = useMemo(() => {
     if (!historyItem) return null;
-    const u = historyItem.videoUrl?.trim();
-    if (u) return u;
-    const p = historyItem.videoPath?.trim();
-    if (p) return getVideoFileUrl(historyItem.videoPath);
-    return null;
+    const s = getLocalPlaybackSrc(historyItem);
+    return s || null;
   }, [historyItem]);
 
   /**
@@ -36,12 +33,12 @@ export function Result() {
   // 将当前成片同步到 context，便于「去分发」与 taskId 一致
   useEffect(() => {
     if (!taskId || !historyItem) return;
-    const fromUrl = historyItem.videoUrl?.trim();
     const fromPath = historyItem.videoPath?.trim();
-    if (fromUrl) {
-      setVideoResult(fromUrl, taskId, null);
-    } else if (fromPath) {
+    const fromUrl = historyItem.videoUrl?.trim();
+    if (fromPath) {
       setVideoResult(getVideoFileUrl(fromPath), taskId, fromPath);
+    } else if (fromUrl) {
+      setVideoResult(fromUrl, taskId, null);
     }
   }, [taskId, historyItem?.videoUrl, historyItem?.videoPath, historyItem?.taskId, setVideoResult]);
 

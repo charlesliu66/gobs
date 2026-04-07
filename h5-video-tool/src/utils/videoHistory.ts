@@ -7,9 +7,9 @@ const MAX_ITEMS = 100;
 
 export interface VideoHistoryItem {
   taskId: string;
-  /** 本地 output 相对路径（有则优先） */
+  /** 本地 output 相对路径（有则优先；即梦/Veo 等写入本机文件时用它，避免把 base64 塞进 localStorage） */
   videoPath: string;
-  /** 可灵等仅有云端/代理 URL、无本地文件时 */
+  /** 可灵等仅有云端/代理 URL、无本地文件时；勿存即梦 data: 大段 base64（易超配额导致整段历史写入失败） */
   videoUrl?: string;
   prompt: string;
   createdAt: number;
@@ -28,21 +28,51 @@ export function loadVideoHistory(): VideoHistoryItem[] {
   }
 }
 
+const MAX_INLINE_DATA_URL_CHARS = 120_000;
+
+function sanitizeHistoryPayload(item: Omit<VideoHistoryItem, 'createdAt'>): Omit<VideoHistoryItem, 'createdAt'> {
+  let videoUrl = item.videoUrl?.trim() || undefined;
+  const videoPath = item.videoPath?.trim() || '';
+
+  if (videoPath && videoUrl?.startsWith('data:')) {
+    videoUrl = undefined;
+  }
+  if (videoUrl?.startsWith('data:') && videoUrl.length > MAX_INLINE_DATA_URL_CHARS) {
+    videoUrl = undefined;
+  }
+
+  return {
+    ...item,
+    videoPath: videoPath || item.videoPath || '',
+    videoUrl,
+  };
+}
+
 export function saveVideoToHistory(item: Omit<VideoHistoryItem, 'createdAt'>) {
   try {
+    const sanitized = sanitizeHistoryPayload(item);
     const list = loadVideoHistory();
-    const prev = list.find((x) => x.taskId === item.taskId);
-    const starred = item.starred ?? prev?.starred ?? false;
+    const prev = list.find((x) => x.taskId === sanitized.taskId);
+    const starred = sanitized.starred ?? prev?.starred ?? false;
     const entry: VideoHistoryItem = {
-      ...item,
+      ...sanitized,
       createdAt: Date.now(),
-      videoPath: item.videoPath ?? '',
+      videoPath: sanitized.videoPath ?? '',
       starred,
     };
-    const filtered = list.filter((x) => x.taskId !== item.taskId);
+    const filtered = list.filter((x) => x.taskId !== entry.taskId);
     const next = [entry, ...filtered].slice(0, MAX_ITEMS);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {}
+}
+
+/** 列表/预览：优先走本机文件（/api/video/file），避免 data URL 优先导致即梦条目无法展示 */
+export function getLocalPlaybackSrc(item: VideoHistoryItem): string {
+  const p = item.videoPath?.trim();
+  if (p) return getVideoFileUrl(p);
+  const u = item.videoUrl?.trim();
+  if (u) return u;
+  return '';
 }
 
 /** 本机历史条目的星标 */

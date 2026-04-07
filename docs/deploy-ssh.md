@@ -90,7 +90,7 @@ npm install --production
 
 # 复制环境变量
 cp .env.example .env
-nano .env   # 或 vim，填入 GEMINI_API_KEY、SEEDANCE_API_KEY 等
+nano .env   # 或 vim，填入 COMPASS_API_KEY、SEEDANCE_API_KEY 等
 ```
 
 ### 4. 运行 API（PM2 推荐）
@@ -210,7 +210,7 @@ npm run build
 | 502 Bad Gateway | 检查 PM2 中 `qas-api` 是否运行：`pm2 list` |
 | 前端空白/404 | 检查 Nginx root 路径、`try_files` 配置 |
 | CORS 错误 | 确保 API 请求走同一域名的 `/api`，由 Nginx 代理 |
-| 视频生成失败 | 检查 `.env` 中 `COMPASS_API_KEY`、`GEMINI_API_KEY` 等是否填写正确 |
+| 视频生成失败 | 检查 `.env` 中 `COMPASS_API_KEY`、`COMPASS_API_URL` 等是否填写正确 |
 
 ---
 

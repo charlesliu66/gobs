@@ -1,0 +1,8 @@
+{
+  "gameName": "Gold and Glory",
+  "description": "这是一款搜打撤游戏。未设置 EDITOR_GAME_TAXONOMY_PATH 时，若存在 config/game-taxonomy.json 会自动加载。",
+  "roles": ["盗贼", "祭司", "游侠", "浪人", "战士", "法师", "诅咒骑士", "牧师", "瘟疫医生"],
+  "scenes": ["王城", "海岛"],
+  "activities": ["搜索", "打架", "交互", "撤退", "休整", "移动"],
+  "referenceImagesRoot": "config/taxonomy-refs"
+}

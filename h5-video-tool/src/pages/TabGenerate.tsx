@@ -11,10 +11,11 @@ import {
   type ShortDramaExpandResult,
 } from '../api/promptPolish';
 import { getVeoModels } from '../api/video';
-import { useGoogleDrive } from '../hooks/useGoogleDrive';
+import { useGoogleDrive, type DriveFile } from '../hooks/useGoogleDrive';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { useMaterials } from '../context/MaterialsContext';
 import { DriveMaterialPicker } from '../components/DriveMaterialPicker';
+import { DriveExplorer } from '../components/DriveExplorer';
 import { ViralDanceMaterialPicker } from '../components/ViralDanceMaterialPicker';
 import { ShortDramaMaterialPicker } from '../components/ShortDramaMaterialPicker';
 import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
@@ -36,6 +37,12 @@ function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
     scriptContent,
   ].join('\n');
 }
+
+const VIDEO_MODEL_LABELS: Record<string, string> = {
+  'dreamina-multimodal': '即梦 · 全能参考 (Seedance 2.0 Fast)',
+  'dreamina-text2video': '即梦 · 文生视频',
+  'dreamina-image2video': '即梦 · 图生视频',
+};
 
 function ChevronIcon({ className }: { className?: string }) {
   return (
@@ -84,12 +91,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setVideoResolution,
     shots,
     setShots,
+    setShotFrames,
     multiShotEnabled,
     setMultiShotEnabled,
     characters,
     setCharacters,
     viralDanceReferenceVideoUrl,
     setViralDanceReferenceVideoUrl,
+    setDreaminaMultimodalItems,
   } = useCreateFlow();
 
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -118,6 +127,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   });
 
   const { files, loading, error, search, listFolder } = useGoogleDrive(accessToken);
+  /** 默认模板：在文件夹树中手动勾选（不依赖关键词搜索） */
+  const [showDriveManualBrowse, setShowDriveManualBrowse] = useState(false);
   const selectedIds = new Set(selectedOrder.map((f) => f.id));
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -143,6 +154,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       .then((r) => setVeoModels(r.models))
       .catch(() => {});
   }, []);
+
+  /** 切换离「全能参考」时清空已选素材，避免误带大 payload */
+  useEffect(() => {
+    if (videoModel !== 'dreamina-multimodal') {
+      setDreaminaMultimodalItems([]);
+    }
+  }, [videoModel, setDreaminaMultimodalItems]);
 
   useEffect(() => {
     getTemplates().then(setTemplates).catch(() => {});
@@ -298,14 +316,32 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setMatchLoading(true);
     setPolishError(null);
     try {
-      await search(keywords, verifiedFolderId, folderHints.length > 0 ? folderHints : undefined);
-      setHasMatchedMaterials(true);
+      const matched = await search(keywords, verifiedFolderId, folderHints.length > 0 ? folderHints : undefined);
+      setHasMatchedMaterials(matched.length > 0);
+      if (matched.length === 0) {
+        setPolishError('未匹配到素材。可点击「手动从 Drive 选择」在文件夹中勾选，或调整创意后重新一键 Prompt 再匹配。');
+      }
     } catch {
       setPolishError('素材搜索失败');
+      setHasMatchedMaterials(false);
     } finally {
       setMatchLoading(false);
     }
   }, [verifiedFolderId, accessToken, keywords, folderHints, search, setHasMatchedMaterials]);
+
+  /** 与 Boss 展示一致：从资源管理器勾选的文件并入已选顺序（用于默认模板 / Drive 检索流） */
+  const handleToggleFromExplorer = useCallback(
+    (id: string, item: { id: string; name: string; mimeType: string }) => {
+      const file: DriveFile = { id, name: item.name, mimeType: item.mimeType };
+      setSelectedOrder((order) => {
+        const exists = order.some((f) => f.id === id);
+        if (exists) return order.filter((f) => f.id !== id);
+        return [...order, file];
+      });
+      setHasMatchedMaterials(true);
+    },
+    [setSelectedOrder, setHasMatchedMaterials],
+  );
 
   const handleToggleSelect = useCallback(
     (id: string) => {
@@ -398,6 +434,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             setShots={setShots}
             maxTotalDuration={maxDuration}
             aspectRatio={videoAspectRatio}
+            onShotFramesChange={setShotFrames}
           />
         ) : isShortDramaFlow ? (
           <div className="space-y-3">
@@ -656,7 +693,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           >
             {veoModels.map((m) => (
               <option key={m} value={m}>
-                {m}
+                {VIDEO_MODEL_LABELS[m] ?? m}
               </option>
             ))}
           </select>
@@ -750,14 +787,25 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           </div>
         )}
         {!isShortDramaFlow && !isViralDanceTemplate && (
-          <button
-            type="button"
-            onClick={handleOneClickMatch}
-            disabled={matchLoading || loading}
-            className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {matchLoading || loading ? '匹配中…' : '一键匹配素材'}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handleOneClickMatch}
+              disabled={matchLoading || loading}
+              className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {matchLoading || loading ? '匹配中…' : '一键匹配素材'}
+            </button>
+            {verifiedFolderId && (
+              <button
+                type="button"
+                onClick={() => setShowDriveManualBrowse((v) => !v)}
+                className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
+              >
+                {showDriveManualBrowse ? '收起手动选择' : '手动从 Drive 选择'}
+              </button>
+            )}
+          </>
         )}
         <button
           type="button"
@@ -845,7 +893,10 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             </>
           ) : (
             <>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3">从「{verifiedFolderName}」中检索，点击勾选素材</p>
+              <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                从「{verifiedFolderName}」中检索并勾选；或点击上方「手动从 Drive
+                选择」在子文件夹中浏览。无需依赖「一键匹配」即可勾选素材。
+              </p>
               <DriveMaterialPicker
                 keywords={keywords}
                 accessToken={accessToken}
@@ -853,13 +904,29 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 files={files}
                 loading={loading}
                 error={error}
-                onSearch={(kw) => search(kw, verifiedFolderId)}
+                onSearch={(kw) => void search(kw, verifiedFolderId)}
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 selectedOrder={selectedOrder}
                 onReorder={() => {}}
                 folderId={verifiedFolderId}
               />
+              {showDriveManualBrowse && verifiedFolderId && verifiedFolderName && (
+                <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                  <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                    浏览文件夹树，点击图片/视频即可加入已选（再点一次取消）。顺序对应 @图片1、@图片2…
+                  </p>
+                  <DriveExplorer
+                    rootFolderId={verifiedFolderId}
+                    rootFolderName={verifiedFolderName}
+                    accessToken={accessToken}
+                    onLogin={() => login()}
+                    selectable
+                    selectedIds={selectedIds}
+                    onToggleSelect={handleToggleFromExplorer}
+                  />
+                </div>
+              )}
               {selectedOrder.length > 0 && (
                 <p className="mt-3 text-sm text-[var(--color-success)]">
                   已选 {selectedOrder.length} 个素材，顺序映射 @图片1、@图片2…

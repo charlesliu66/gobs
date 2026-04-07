@@ -8,7 +8,8 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true, // 允许局域网访问
-    allowedHosts: ['10.21.76.160.nip.io'], // 允许 nip.io 域名（用于 Google OAuth 局域网）
+    // 仅写 nip.io 时，同事用 http://局域网IP:5173 会因 Host 校验失败打不开；开发环境放行全部主机名
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3001',

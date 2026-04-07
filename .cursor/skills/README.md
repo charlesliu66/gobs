@@ -15,6 +15,7 @@
 | **storyboard-studio** | 分镜规范：镜头、构图、光线、运镜 | 被 video-director 调用 |
 | **game-director-pro** | 游戏宣传片：分镜 → 首尾帧 → 视频 → 成片 | 「做游戏宣传片」「新英雄视频」 |
 | **viral-agent** | 病毒短视频节奏与分镜分析 | 「分析这个视频的节奏」「拆解爆款」 |
+| **dreamina-cli-skill** | 即梦 Dreamina CLI（文生图/视频、任务查询、wrapper JSON） | 「用即梦文生图」「dreamina 查任务」 |
 
 ---
 
@@ -48,6 +49,7 @@ Copy-Item -Path ".cursor\skills\*" -Destination "$env:USERPROFILE\.cursor\skills
 | geelark-publish | GeeLark 云手机、API Key | `config/geelark.json`、`GEELARK_API_KEY` |
 | game-director-pro | 生图 API、视频 API | `.env`（见 skill 内 .env.example） |
 | viral-agent | Viral_Agent 包、ffmpeg、yt-dlp | `VIRAL_AGENT_ROOT` |
+| dreamina-cli-skill | 官方 [Dreamina CLI](https://jimeng.jianying.com/cli)、Python 3 | `dreamina login`；见 skill 内 README |
 
 详见各 Skill 目录内的 `SKILL.md` 与 `README.md`。
 
