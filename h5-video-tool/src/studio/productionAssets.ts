@@ -481,11 +481,14 @@ function motherLikeCharacterName(nm: string): boolean {
   return nm === '母亲' || nm === '妈妈' || /[母妈娘]/.test(nm);
 }
 
-/** 角色是否被本镜文案「点到」：全名包含，或称谓与卡名对应 */
-function characterMentionedInShotBlob(ch: CharacterSheet, blob: string): boolean {
+/** 角色是否被本镜文案「点到」：全名包含、全名拆分部分匹配，或称谓与卡名对应 */
+export function characterMentionedInShotBlob(ch: CharacterSheet, blob: string): boolean {
   const nm = ch.name?.trim();
   if (!nm) return false;
   if (blob.includes(nm)) return true;
+  // 拆分全名，任意部分 >=2 字出现在 blob 里也算匹配（处理「桜木 小樱」→「小樱」）
+  const parts = nm.split(/[\s·・·\-_]+/).filter((p) => p.length >= 2);
+  if (parts.some((p) => blob.includes(p))) return true;
   if (/(父亲|爸爸|爹|老爹)/.test(blob) && fatherLikeCharacterName(nm)) return true;
   if (/(母亲|妈妈|娘|老妈)/.test(blob) && motherLikeCharacterName(nm)) return true;
   return false;
@@ -494,6 +497,13 @@ function characterMentionedInShotBlob(ch: CharacterSheet, blob: string): boolean
 function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
   const nm = ch.name?.trim() ?? '';
   if (nm && blob.includes(nm)) return blob.indexOf(nm);
+  // 拆分部分匹配时取最早出现位置
+  const parts = nm.split(/[\s·・·\-_]+/).filter((p) => p.length >= 2);
+  const partMin = parts.reduce((min, p) => {
+    const idx = blob.indexOf(p);
+    return idx >= 0 ? Math.min(min, idx) : min;
+  }, 1e9);
+  if (partMin < 1e9) return partMin;
   if (nm && /(父亲|爸爸|爹|老爹)/.test(blob) && fatherLikeCharacterName(nm)) {
     const m = blob.match(/父亲|爸爸|爹|老爹/);
     if (m && m.index !== undefined) return m.index;
@@ -506,16 +516,35 @@ function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
 }
 
 /**
+ * 构建镜头检索 blob 文本（供 UI 侧手动覆盖 panel 使用）。
+ */
+export function buildShotBlobText(shot: ProductionShot): string {
+  return [
+    shot.subject,
+    shot.action,
+    shot.dialogue,
+    shot.notes,
+    shot.structuredStill.sp_subject,
+    shot.structuredStill.sp_environment,
+    shot.structuredMotion.mp_motion,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
  * Seedance 2.0 全能参考：按镜内文案匹配出镜角色、当前场景与道具名，收集参考图；顺序与 @图片1…@图片n 一致。
  * - 角色：姓名出现在本镜检索文本中（含「父亲」↔ 龙父 等称谓扩展），且定妆树/变体有图；长名优先避免「龙」误匹配「龙一」。
  * - 场景：本镜 sceneRef 对应场景卡的首张有图变体，置于角色图之后。
  * - 道具：道具名出现在本镜检索文本中且道具有图时加入（关键道具前后一致）。
+ * - manualOverrides：手动覆盖自动匹配结果（角色 ids、场景 id、道具 ids）。
  */
 export function buildShotMultimodalRefPack(
   shot: ProductionShot,
   characterSheets: CharacterSheet[],
   sceneSheets: SceneSheet[],
   propSheets?: PropSheet[],
+  manualOverrides?: ProductionShot['manualRefOverrides'],
 ): {
   multimodalImages: { base64: string; mimeType: string }[];
   /** 与 multimodalImages 下标对齐，供 UI 展示 */
@@ -541,16 +570,25 @@ export function buildShotMultimodalRefPack(
     .filter(Boolean)
     .join(' ');
 
-  const candidates = characterSheets.filter((ch) => characterMentionedInShotBlob(ch, blob));
-  candidates.sort((a, b) => (b.name!.length ?? 0) - (a.name!.length ?? 0));
-  const pickedChars: CharacterSheet[] = [];
-  for (const ch of candidates) {
-    const nm = ch.name!.trim();
-    /** 仅合并「单字龙」与「龙一」这类包含关系，不能把「龙一」与「龙一的父亲」当成同一人 */
-    if (nm.length === 1 && pickedChars.some((p) => p.name !== nm && p.name!.includes(nm))) continue;
-    pickedChars.push(ch);
+  let pickedChars: CharacterSheet[];
+  if (manualOverrides?.characterIds !== undefined) {
+    // 手动指定：按 id 过滤，保留顺序
+    pickedChars = manualOverrides.characterIds
+      .map((id) => characterSheets.find((c) => c.id === id))
+      .filter(Boolean) as CharacterSheet[];
+  } else {
+    // 自动匹配（原有逻辑）
+    const candidates = characterSheets.filter((ch) => characterMentionedInShotBlob(ch, blob));
+    candidates.sort((a, b) => (b.name!.length ?? 0) - (a.name!.length ?? 0));
+    pickedChars = [];
+    for (const ch of candidates) {
+      const nm = ch.name!.trim();
+      /** 仅合并「单字龙」与「龙一」这类包含关系，不能把「龙一」与「龙一的父亲」当成同一人 */
+      if (nm.length === 1 && pickedChars.some((p) => p.name !== nm && p.name!.includes(nm))) continue;
+      pickedChars.push(ch);
+    }
+    pickedChars.sort((a, b) => firstCharacterMentionIndex(a, blob) - firstCharacterMentionIndex(b, blob));
   }
-  pickedChars.sort((a, b) => firstCharacterMentionIndex(a, blob) - firstCharacterMentionIndex(b, blob));
 
   type Entry = {
     base64: string;
@@ -574,7 +612,13 @@ export function buildShotMultimodalRefPack(
     });
   }
 
-  const scene = sceneSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef);
+  const scene = (() => {
+    if (manualOverrides?.sceneId !== undefined) {
+      if (manualOverrides.sceneId === null) return null;
+      return sceneSheets.find((s) => s.id === manualOverrides!.sceneId) ?? null;
+    }
+    return sceneSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef) ?? null;
+  })();
   if (scene) {
     const url = firstSceneVariantImageUrl(scene);
     if (url) {
@@ -596,12 +640,20 @@ export function buildShotMultimodalRefPack(
   }
 
   if (propSheets?.length) {
-    const propCandidates = propSheets.filter((ps) => {
-      const nm = ps.name?.trim();
-      if (!nm || nm.length < 2) return false;
-      return blob.includes(nm);
-    });
-    propCandidates.sort((a, b) => b.name.length - a.name.length);
+    let propCandidates: typeof propSheets;
+    if (manualOverrides?.propIds !== undefined) {
+      // 手动指定道具
+      propCandidates = manualOverrides.propIds
+        .map((id) => propSheets.find((ps) => ps.id === id))
+        .filter(Boolean) as typeof propSheets;
+    } else {
+      propCandidates = propSheets.filter((ps) => {
+        const nm = ps.name?.trim();
+        if (!nm || nm.length < 2) return false;
+        return blob.includes(nm);
+      });
+      propCandidates.sort((a, b) => b.name.length - a.name.length);
+    }
     for (const ps of propCandidates) {
       const url = firstPropVariantImageUrl(ps);
       if (!url) continue;

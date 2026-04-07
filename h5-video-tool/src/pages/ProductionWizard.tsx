@@ -33,6 +33,8 @@ import {
   computeShotRefTags,
   buildShotMultimodalRefPack,
   buildProductionShotVideoStoryboardText,
+  buildShotBlobText,
+  characterMentionedInShotBlob,
   ensureCharacterLookTree,
   flattenLookTreeToVariants,
   getCharacterActiveNode,
@@ -61,6 +63,7 @@ import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
 import { type LibraryCharacter } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
 import { ScenePropImageModal } from '../components/production/ScenePropImageModal';
+import { ImageLightbox } from '../components/ImageLightbox';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -591,6 +594,7 @@ export function ProductionWizard() {
   const [showProjectList, setShowProjectList] = useState(false);
   const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
   const [showLibraryImport, setShowLibraryImport] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
@@ -1475,8 +1479,10 @@ export function ProductionWizard() {
 
   const multimodalRefPack = useMemo(() => {
     if (!shot) return null;
-    return buildShotMultimodalRefPack(shot, chSheets, scSheets, propSheets);
+    return buildShotMultimodalRefPack(shot, chSheets, scSheets, propSheets, shot.manualRefOverrides);
   }, [shot, chSheets, scSheets, propSheets]);
+
+  const shotBlob = useMemo(() => (shot ? buildShotBlobText(shot) : ''), [shot]);
 
   const multimodalAutoPrompt = useMemo(() => {
     if (!shot || !multimodalRefPack) return '';
@@ -2054,7 +2060,12 @@ export function ProductionWizard() {
                           className="group relative aspect-[3/4] w-full cursor-pointer overflow-hidden bg-[var(--color-surface-hover)] text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                         >
                           {mainImg ? (
-                            <img src={mainImg} alt="" className="h-full w-full object-cover object-top" />
+                            <img
+                              src={mainImg}
+                              alt=""
+                              className="h-full w-full object-cover object-top cursor-zoom-in"
+                              onClick={(e) => { e.stopPropagation(); setLightboxSrc(mainImg); }}
+                            />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center px-2 text-center text-[11px] text-[var(--color-text-muted)]">
                               暂无定妆
@@ -2233,7 +2244,12 @@ export function ProductionWizard() {
                         className="relative aspect-video w-full overflow-hidden bg-[var(--color-surface-hover)] cursor-pointer group"
                       >
                         {cover ? (
-                          <img src={cover} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={cover}
+                            alt=""
+                            className="h-full w-full object-cover cursor-zoom-in"
+                            onClick={(e) => { e.stopPropagation(); setLightboxSrc(cover); }}
+                          />
                         ) : (
                           <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-[var(--color-text-muted)]">
                             暂无场景图
@@ -2347,7 +2363,12 @@ export function ProductionWizard() {
                         className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface-hover)] cursor-pointer group"
                       >
                         {cover ? (
-                          <img src={cover} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={cover}
+                            alt=""
+                            className="h-full w-full object-cover cursor-zoom-in"
+                            onClick={(e) => { e.stopPropagation(); setLightboxSrc(cover); }}
+                          />
                         ) : (
                           <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-[var(--color-text-muted)]">
                             暂无道具图
@@ -2614,7 +2635,12 @@ export function ProductionWizard() {
                     <div key={ch.id} className="w-16 text-center">
                       <div className="mx-auto h-14 w-14 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
                         {thumb ? (
-                          <img src={thumb} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-full w-full object-cover cursor-zoom-in"
+                            onClick={() => setLightboxSrc(thumb)}
+                          />
                         ) : (
                           <div className="flex h-full items-center justify-center text-[10px] text-[var(--color-text-muted)]">
                             —
@@ -2660,7 +2686,12 @@ export function ProductionWizard() {
                     <div key={sc.id} className="w-20 text-center">
                       <div className="h-12 w-full overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
                         {sc.variants[0]?.imageDataUrl ? (
-                          <img src={sc.variants[0].imageDataUrl} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={sc.variants[0].imageDataUrl}
+                            alt=""
+                            className="h-full w-full object-cover cursor-zoom-in"
+                            onClick={() => setLightboxSrc(sc.variants[0]!.imageDataUrl!)}
+                          />
                         ) : (
                           <div className="flex h-full items-center justify-center text-[10px]">—</div>
                         )}
@@ -2779,7 +2810,8 @@ export function ProductionWizard() {
                               <img
                                 src={`data:${img.mimeType || 'image/png'};base64,${img.base64}`}
                                 alt=""
-                                className="h-11 w-11 shrink-0 rounded-md object-cover ring-1 ring-[var(--color-border)]"
+                                className="h-11 w-11 shrink-0 rounded-md object-cover ring-1 ring-[var(--color-border)] cursor-zoom-in"
+                                onClick={() => setLightboxSrc(`data:${img.mimeType || 'image/png'};base64,${img.base64}`)}
                               />
                               <span className="min-w-0 truncate text-[11px] text-[var(--color-text)]">
                                 {multimodalRefPack.labels[i] ?? `素材 ${i + 1}`}
@@ -2792,6 +2824,102 @@ export function ProductionWizard() {
                           当前未匹配到任何带图素材。请在本镜主体/对白中写明角色名或父亲/母亲等称谓，并为角色卡、场景卡生成参考图。
                         </div>
                       )}
+                      {/* 手动调整引用对象 */}
+                      <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[11px]">
+                        <summary className="cursor-pointer px-3 py-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                          ▸ 手动调整引用对象（覆盖自动匹配）
+                        </summary>
+                        <div className="space-y-2 p-3">
+                          {/* 角色 */}
+                          <div className="space-y-1">
+                            <div className="font-medium text-[var(--color-text)]">角色</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {chSheets.map((ch) => {
+                                const hasImg = !!getCharacterLookImage(ensureCharacterLookTree(ch));
+                                const overrides = shot.manualRefOverrides;
+                                const autoSelected = characterMentionedInShotBlob(ch, shotBlob);
+                                const manualIds = overrides?.characterIds;
+                                const isSelected = manualIds !== undefined ? manualIds.includes(ch.id) : autoSelected;
+                                return (
+                                  <button
+                                    key={ch.id}
+                                    type="button"
+                                    title={hasImg ? '' : '暂无定妆图，需先生成'}
+                                    onClick={() => {
+                                      const cur = shot.manualRefOverrides?.characterIds
+                                        ?? chSheets.filter((c) => characterMentionedInShotBlob(c, shotBlob)).map((c) => c.id);
+                                      const next = cur.includes(ch.id)
+                                        ? cur.filter((id) => id !== ch.id)
+                                        : [...cur, ch.id];
+                                      patchShot(selectedShotIdx, {
+                                        manualRefOverrides: { ...shot.manualRefOverrides, characterIds: next },
+                                      });
+                                    }}
+                                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors ${
+                                      isSelected && hasImg
+                                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                                        : isSelected && !hasImg
+                                        ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                                        : 'border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)]'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓' : '+'} {ch.name}
+                                    {!hasImg && <span className="text-amber-500">⚠</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {/* 场景 */}
+                          <div className="space-y-1">
+                            <div className="font-medium text-[var(--color-text)]">场景</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {([{ id: null as null, name: '（不引用）', hasImg: true }, ...scSheets.map((sc) => ({
+                                id: sc.id,
+                                name: sc.name,
+                                hasImg: !!sc.variants[0]?.imageDataUrl,
+                              }))]).map((item) => {
+                                const overrides = shot.manualRefOverrides;
+                                const autoSceneId = scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)?.id ?? null;
+                                const selectedId = overrides?.sceneId !== undefined ? overrides.sceneId : autoSceneId;
+                                const isSelected = item.id === selectedId;
+                                return (
+                                  <button
+                                    key={String(item.id)}
+                                    type="button"
+                                    onClick={() => {
+                                      patchShot(selectedShotIdx, {
+                                        manualRefOverrides: {
+                                          ...shot.manualRefOverrides,
+                                          sceneId: item.id === autoSceneId && !overrides?.sceneId ? undefined : item.id,
+                                        },
+                                      });
+                                    }}
+                                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors ${
+                                      isSelected
+                                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                                        : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
+                                    }`}
+                                  >
+                                    {isSelected ? '●' : '○'} {item.name}
+                                    {!item.hasImg && item.id !== null && <span className="text-amber-500">⚠</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {/* 重置 */}
+                          {shot.manualRefOverrides && (
+                            <button
+                              type="button"
+                              onClick={() => patchShot(selectedShotIdx, { manualRefOverrides: undefined })}
+                              className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
+                            >
+                              ↩ 恢复自动匹配
+                            </button>
+                          )}
+                        </div>
+                      </details>
                       <label className="block">
                         <span className="text-[11px] text-[var(--color-text-muted)]">
                           将发送给即梦的完整 Prompt（与左侧资产顺序一致；勿改 @图片 编号与素材顺序的对应关系）
@@ -2848,7 +2976,11 @@ export function ProductionWizard() {
                               .variants[0].imageDataUrl
                           }
                           alt=""
-                          className="h-16 w-28 rounded object-cover"
+                          className="h-16 w-28 rounded object-cover cursor-zoom-in"
+                          onClick={() => {
+                            const url = scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)?.variants[0]?.imageDataUrl;
+                            if (url) setLightboxSrc(url);
+                          }}
                         />
                       ) : (
                         <div className="flex h-16 w-28 items-center justify-center rounded border border-dashed border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">
@@ -3063,7 +3195,8 @@ export function ProductionWizard() {
                     <img
                       src={shot.previewStillDataUrl}
                       alt=""
-                      className="mt-1 max-h-48 w-full rounded-lg border border-[var(--color-border)] object-contain"
+                      className="mt-1 max-h-48 w-full rounded-lg border border-[var(--color-border)] object-contain cursor-zoom-in"
+                      onClick={() => setLightboxSrc(shot.previewStillDataUrl!)}
                     />
                   </div>
                 ) : (
@@ -3260,6 +3393,7 @@ export function ProductionWizard() {
           </div>
         </div>
       )}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     </div>
   );
 }

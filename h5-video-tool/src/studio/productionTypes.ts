@@ -145,6 +145,15 @@ export interface ProductionShot {
    * 未设置时由 autoMatchCharacterStateBySheet 自动推断
    */
   characterStateOverrides?: Record<string, string>;
+  /**
+   * 手动覆盖全能参考的素材列表（角色/场景/道具 sheetId 数组）。
+   * undefined = 全部自动；[] = 不引用任何；[id1,id2] = 只引用这些。
+   */
+  manualRefOverrides?: {
+    characterIds?: string[];
+    sceneId?: string | null;
+    propIds?: string[];
+  };
 }
 
 export interface CharacterVisualProfile {
@@ -305,7 +314,14 @@ export const PRODUCTION_STORAGE_KEY = 'h5-production-project-v1';
 export function emptyProductionProject(): ProductionProject {
   return {
     schemaVersion: '1.0.0',
-    meta: { title: '', styleRefSummary: '', targetPlatform: 'seedance', aspectRatio: '16:9' },
+    meta: {
+      title: '',
+      styleRefSummary: '',
+      targetPlatform: 'seedance',
+      aspectRatio: '16:9',
+      shotVideoDreaminaModel: 'dreamina-multimodal',
+      dreaminaModelVersion: 'seedance2.0',
+    },
     story: null,
     productionDesign: null,
     shots: [],
