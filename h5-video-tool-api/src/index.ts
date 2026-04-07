@@ -20,6 +20,7 @@ import editorAgentRouter from './routes/editorAgent.js';
 import editorAnalyzeRouter from './routes/editorAnalyze.js';
 import editorMusicRouter from './routes/editorMusic.js';
 import studioRouter from './routes/studio.js';
+import productionPersistRouter from './routes/productionPersist.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +44,7 @@ app.use('/api/editor', editorAgentRouter);
 app.use('/api/editor', editorMusicRouter);
 app.use('/api/editor', editorExportRouter);
 app.use('/api/studio', studioRouter);
+app.use('/api/production', productionPersistRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);

@@ -49,6 +49,14 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
+import {
+  uploadProductionImage,
+  saveProductionProject,
+  loadProductionProject,
+  listProductionProjects,
+  resolveProductionImageUrl,
+  type ProjectListItem,
+} from '../api/production';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -537,6 +545,62 @@ export function ProductionWizard() {
     sheet: CharacterSheet;
     intent: PortraitEditIntent;
   } | null>(null);
+  // ── 服务端持久化 ────────────────────────────────────────────────────────────
+  const [serverProjectId, setServerProjectId] = useState<string | null>(() => {
+    try { return localStorage.getItem('h5-production-server-id') ?? null; } catch { return null; }
+  });
+  const [showProjectList, setShowProjectList] = useState(false);
+  const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
+  const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 防抖同步到服务端：project 变化后 3 秒触发 */
+  const scheduleServerSync = useCallback((data: StoredWizard) => {
+    if (serverSyncTimerRef.current) clearTimeout(serverSyncTimerRef.current);
+    serverSyncTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await saveProductionProject(data as unknown as Record<string, unknown>, serverProjectId ?? undefined);
+        setServerProjectId(result.id);
+        try { localStorage.setItem('h5-production-server-id', result.id); } catch { /* ignore */ }
+      } catch (e) {
+        console.warn('[production] 服务端同步失败（localStorage 仍有数据）', e);
+      }
+    }, 3000);
+  }, [serverProjectId]);
+
+  /** 从服务端加载项目列表 */
+  const handleLoadProjectList = useCallback(async () => {
+    try {
+      const { projects } = await listProductionProjects();
+      setProjectList(projects);
+      setShowProjectList(true);
+    } catch (e) {
+      console.warn('[production] 加载项目列表失败', e);
+    }
+  }, []);
+
+  /** 加载指定服务端项目 */
+  const handleLoadServerProject = useCallback(async (id: string) => {
+    try {
+      const raw = await loadProductionProject(id);
+      if (raw && typeof raw === 'object' && 'project' in raw) {
+        const s = raw as StoredWizard;
+        setProject(migrateProject(s.project));
+        if (s.characterBible) setCharacterBible(s.characterBible);
+        if (s.synopsis) setSynopsis(s.synopsis);
+        if (s.structureTemplate) setStructureTemplate(s.structureTemplate);
+        if (s.maxTotalDurationSec) setMaxTotalDurationSec(s.maxTotalDurationSec);
+        if (typeof s.step === 'number') setStep(s.step);
+        if (s.storyGenre) setStoryGenre(s.storyGenre);
+        setServerProjectId(id);
+        try { localStorage.setItem('h5-production-server-id', id); } catch { /* ignore */ }
+        setShowProjectList(false);
+      }
+    } catch (e) {
+      console.warn('[production] 加载项目失败', e);
+      setErr('加载项目失败，请重试');
+    }
+  }, []);
+
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
   const [shotMediaBusy, setShotMediaBusy] = useState<'frame' | 'video' | null>(null);
@@ -667,7 +731,7 @@ export function ProductionWizard() {
   }, [project.meta.styleRefImageDataUrl]);
 
   useEffect(() => {
-    saveStored({
+    const data: StoredWizard = {
       project,
       characterBible,
       synopsis,
@@ -675,8 +739,10 @@ export function ProductionWizard() {
       maxTotalDurationSec,
       step,
       storyGenre,
-    });
-  }, [project, characterBible, synopsis, structureTemplate, maxTotalDurationSec, step, storyGenre]);
+    };
+    saveStored(data);
+    scheduleServerSync(data);
+  }, [project, characterBible, synopsis, structureTemplate, maxTotalDurationSec, step, storyGenre, scheduleServerSync]);
 
   useEffect(() => {
     if (project.shots.length && selectedShotIdx >= project.shots.length) {
@@ -1232,6 +1298,13 @@ export function ProductionWizard() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleLoadProjectList()}
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
+              >
+                📂 项目列表
+              </button>
               <Link to="/studio" className="text-sm text-[var(--color-primary)] hover:underline">
                 ← Studio
               </Link>
@@ -2599,6 +2672,46 @@ export function ProductionWizard() {
           </div>
         </div>
       </footer>
+
+      {/* 项目列表弹窗 */}
+      {showProjectList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-[var(--color-text)]">已保存的项目</h2>
+              <button
+                type="button"
+                onClick={() => setShowProjectList(false)}
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                ✕
+              </button>
+            </div>
+            {projectList.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)] text-center py-8">暂无已保存项目</p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {projectList.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => void handleLoadServerProject(p.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[var(--color-text)]">{p.title || '未命名项目'}</p>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                        步骤 {p.step + 1} · {p.updatedAt ? new Date(p.updatedAt).toLocaleString('zh-CN') : ''}
+                      </p>
+                    </div>
+                    <span className="text-xs text-[var(--color-primary)]">加载 →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
