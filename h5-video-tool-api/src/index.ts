@@ -23,6 +23,8 @@ import studioRouter from './routes/studio.js';
 import productionPersistRouter from './routes/productionPersist.js';
 import characterLibraryRouter from './routes/characterLibrary.js';
 import localUploadRouter from './routes/localUpload.js';
+import batchJobsRouter from './routes/batchJobs.js';
+import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +51,7 @@ app.use('/api/studio', studioRouter);
 app.use('/api/production', productionPersistRouter);
 app.use('/api/character-library', characterLibraryRouter);
 app.use('/api/upload', localUploadRouter);
+app.use('/api/batch-jobs', batchJobsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);
@@ -57,4 +60,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 app.listen(PORT, () => {
   console.log(`API server running at http://localhost:${PORT}`);
+  startBatchJobsPoller();
 });
