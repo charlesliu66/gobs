@@ -6,7 +6,7 @@
   --color-surface: #0f0f12;
   --color-surface-elevated: #16161a;
   --color-surface-hover: #1e1e24;
-  --color-border: #3a3a44;
+  --color-border: #48484f;
   --color-border-focus: #7c3aed;
   --color-primary: #8b5cf6;
   --color-primary-hover: #7c3aed;
@@ -75,17 +75,39 @@ a {
   cursor: pointer;
 }
 
-/* 焦点可见性 */
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
+/* 焦点可见性 — 全局（键盘导航可访问性） */
+:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 选中色 */
+::selection {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* 统一滚动条（暗色主题） */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
 }
 
 /* 过渡 */
 button, a, input, textarea {
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s, transform 0.15s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 排版规范 - 以 TikTok 矩阵为参考，各 tab 统一 */

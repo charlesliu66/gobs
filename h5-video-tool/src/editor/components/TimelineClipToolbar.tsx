@@ -216,7 +216,7 @@ export function TimelineClipToolbar({
               <p className="mb-2 text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">精确入出点（秒）</p>
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1">
-                  <label className="block text-[9px] text-[var(--color-text-muted)] mb-0.5">入点</label>
+                  <label className="block text-[11px] text-[var(--color-text-muted)] mb-0.5">入点</label>
                   <input
                     type="number"
                     step="0.01"
@@ -228,7 +228,7 @@ export function TimelineClipToolbar({
                 </div>
                 <span className="text-[var(--color-text-muted)] mt-4">→</span>
                 <div className="flex-1">
-                  <label className="block text-[9px] text-[var(--color-text-muted)] mb-0.5">出点</label>
+                  <label className="block text-[11px] text-[var(--color-text-muted)] mb-0.5">出点</label>
                   <input
                     type="number"
                     step="0.01"
@@ -268,7 +268,7 @@ export function TimelineClipToolbar({
           </button>
           {speedOpen && hasSelection && (
             <div className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-2 shadow-xl">
-              <p className="mb-1.5 text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">播放速度</p>
+              <p className="mb-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">播放速度</p>
               <div className="flex flex-wrap gap-1">
                 {SPEED_OPTIONS.map((s) => (
                   <button

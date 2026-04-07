@@ -143,10 +143,10 @@ export function Layout() {
               to={to}
               end={endProp ?? to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+                    ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
                 }`
               }
             >
@@ -158,7 +158,7 @@ export function Layout() {
       </nav>
       <div className="p-3 border-t border-[var(--color-border)]">
         <ThemeToggle />
-        <p className="text-[10px] text-center text-[var(--color-text-subtle)] pb-1">GOBS v0.1</p>
+        <p className="text-[11px] text-center text-[var(--color-text-subtle)] pb-1 opacity-70">GOBS v0.1</p>
       </div>
     </div>
   );

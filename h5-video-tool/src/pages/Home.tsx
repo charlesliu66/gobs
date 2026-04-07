@@ -12,7 +12,6 @@ const STEPS = [
     icon: UploadIcon,
     action: '上传素材',
     to: '/materials',
-    color: 'from-violet-600/80 to-purple-500/60',
   },
   {
     num: 2,
@@ -21,7 +20,6 @@ const STEPS = [
     icon: VideoIcon,
     action: '开始创作',
     to: '/studio',
-    color: 'from-indigo-600/80 to-sky-500/60',
   },
   {
     num: 3,
@@ -30,7 +28,6 @@ const STEPS = [
     icon: ShareIcon,
     action: '去发布',
     to: '/distribute',
-    color: 'from-amber-600/80 to-orange-500/60',
   },
 ] as const;
 
@@ -158,7 +155,7 @@ export function Home() {
                   key={idea}
                   type="button"
                   onClick={() => goCreate(idea)}
-                  className="px-2.5 py-1 rounded-full text-xs border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)] transition-colors"
+                  className="px-2.5 py-1 rounded-full text-xs border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/8 transition-all"
                 >
                   {idea}
                 </button>
@@ -167,7 +164,7 @@ export function Home() {
             <button
               type="button"
               onClick={() => goCreate()}
-              className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors shadow"
+              className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] hover:scale-105 active:scale-95 transition-all shadow-lg"
               title="开始创作（Enter）"
             >
               <SendIcon />
@@ -194,20 +191,17 @@ export function Home() {
                   onClick={() => navigate(step.to)}
                   className={`group relative flex-1 flex flex-col gap-3 p-5 rounded-2xl border text-left hover:shadow-lg transition-all overflow-hidden ${
                     isDone
-                      ? 'border-[var(--color-success)]/40 bg-[var(--color-surface-elevated)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40'
+                      ? 'border-[var(--color-success)]/50 bg-[var(--color-surface-elevated)] hover:border-[var(--color-success)]/80'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)]'
                   }`}
                 >
-                  {/* 渐变背景 */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${step.color} opacity-30 group-hover:opacity-45 transition-opacity`} aria-hidden />
-
                   {/* 步骤数 + 完成标记 */}
                   <div className="relative z-10 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] tracking-widest uppercase">
+                    <span className="text-[11px] font-bold text-[var(--color-text-muted)] tracking-widest uppercase">
                       Step {step.num}
                     </span>
                     {isDone && (
-                      <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-success)]">
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-[var(--color-success)]">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
                         已完成
                       </span>
