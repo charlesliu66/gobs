@@ -730,6 +730,7 @@ export function EditorWorkbench() {
         }
         musicPanel={
           <BgmMixPanel
+            project={project}
             setProject={setProject}
             setAssets={setAssets}
             onPushLog={pushLog}
