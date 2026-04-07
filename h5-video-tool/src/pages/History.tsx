@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from '../components/Toast';
 import {
   loadVideoHistory,
   removeVideoFromHistory,
@@ -109,7 +110,11 @@ export function History() {
         }
       })
       .catch((e) => {
-        if (!cancelled) setCloudError(e instanceof Error ? e.message : '无法加载可灵云端列表');
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : '无法加载可灵云端列表';
+          toast.error(msg);
+          setCloudError(msg);
+        }
       })
       .finally(() => {
         if (!cancelled) setCloudLoading(false);
@@ -264,7 +269,8 @@ export function History() {
       setSelectedClipKeys([]);
       navigate(`/result?taskId=${encodeURIComponent(newId)}`);
     } catch (e) {
-      setMergeError(e instanceof Error ? e.message : '合并失败');
+      const msg = e instanceof Error ? e.message : '合并失败';
+      toast.error('合并失败：' + msg);
     } finally {
       setMergeBusy(false);
     }

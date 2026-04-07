@@ -560,6 +560,7 @@ export function ProductionWizard() {
   const [styleRefPreview, setStyleRefPreview] = useState<string | null>(null);
   const stylePreviewRevokeRef = useRef<(() => void) | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [titleSaved, setTitleSaved] = useState(false);
   /** Step2：形象树聚焦的角色 id + 肖像弹窗意图 */
   const [treeFocusCharacterId, setTreeFocusCharacterId] = useState<string | null>(null);
   const [charCardTabs, setCharCardTabs] = useState<Record<string, CharacterCardTab>>({});
@@ -1398,10 +1399,20 @@ export function ProductionWizard() {
             <div className="min-w-0 flex-1">
               <input
                 value={project.meta.title}
-                onChange={(e) => setProject((p) => ({ ...p, meta: { ...p.meta, title: e.target.value } }))}
+                onChange={(e) => {
+                  setProject((p) => ({ ...p, meta: { ...p.meta, title: e.target.value } }));
+                  if (e.target.value.trim()) {
+                    const t1 = setTimeout(() => setTitleSaved(true), 1000);
+                    const t2 = setTimeout(() => setTitleSaved(false), 3000);
+                    return () => { clearTimeout(t1); clearTimeout(t2); };
+                  }
+                }}
                 placeholder="项目名称"
                 className="w-full max-w-xl border-0 bg-transparent text-lg font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
               />
+              {titleSaved && (
+                <span className="text-[10px] text-[var(--color-success)]">✓ 已保存</span>
+              )}
               <div className="mt-1 flex items-center gap-2">
                 <p className="text-xs text-[var(--color-text-muted)]">高级制片 · 故事弧 → 角色资产 → 分镜表 → 生成导出</p>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-primary)]/20 text-[var(--color-primary)]">BETA</span>

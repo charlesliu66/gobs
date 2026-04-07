@@ -134,6 +134,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tipsExpanded, setTipsExpanded] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [expertMode, setExpertMode] = useState(false);
   const [dramaExpandLoading, setDramaExpandLoading] = useState(false);
   const [dramaExpandError, setDramaExpandError] = useState<string | null>(null);
   const [dramaExpanded, setDramaExpanded] = useState<ShortDramaExpandResult | null>(null);
@@ -383,22 +384,36 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         <h1 className="page-title">
           开启你的 视频生成 即刻造梦!
         </h1>
-        {templateId && onBackToPicker && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onBackToPicker}
-            className="text-sm text-[var(--color-primary)] hover:underline"
+            onClick={() => setExpertMode((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              expertMode
+                ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+            }`}
           >
-            重新选择功能
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M12 2v2M12 20v2M4.93 4.93l1.41 1.41M18.66 18.66l1.41 1.41M2 12h2M20 12h2"/></svg>
+            {expertMode ? '专家模式' : '简洁模式'}
           </button>
-        )}
+          {templateId && onBackToPicker && (
+            <button
+              type="button"
+              onClick={onBackToPicker}
+              className="text-sm text-[var(--color-primary)] hover:underline"
+            >
+              重新选择功能
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 输入区 */}
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <span className="text-sm font-medium text-[var(--color-text)]">视频创意描述</span>
-          {(isMultishotTemplate || isCustomMode) && (
+          {expertMode && (isMultishotTemplate || isCustomMode) && (
             <>
               <span className="text-xs text-[var(--color-text-muted)]">
                 当前分镜时长总和: <span className={totalShotsDuration > maxDuration ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}>{totalShotsDuration}秒</span> / {maxDuration}秒
@@ -525,7 +540,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               }
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
             />
-            {isViralDanceTemplate && (
+            {expertMode && isViralDanceTemplate && (
               <div className="mt-3 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <label className="block text-xs font-medium text-[var(--color-text)]">
                   TikTok / 参考视频直链（可灵 Omni · <span className="font-mono text-[10px]">video_list</span>）
@@ -723,18 +738,20 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2">
-          <span>分辨率:</span>
-          <select
-            value={videoResolution}
-            onChange={(e) => setVideoResolution(e.target.value)}
-            className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-          >
-            <option value="720p">720p</option>
-            <option value="1080p">1080p</option>
-            <option value="4k">4K</option>
-          </select>
-        </label>
+        {expertMode && (
+          <label className="flex items-center gap-2">
+            <span>分辨率:</span>
+            <select
+              value={videoResolution}
+              onChange={(e) => setVideoResolution(e.target.value)}
+              className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
+            >
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
+              <option value="4k">4K</option>
+            </select>
+          </label>
+        )}
       </section>
 
       {/* 操作按钮 */}

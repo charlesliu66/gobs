@@ -10,6 +10,7 @@ import {
 } from '../api/geelark';
 import { generateCaptionForPost, translateCaptionForPost, type CaptionByPlatformResult } from '../api/promptPolish';
 import { getRecentPromptForVideo } from '../utils/videoHistory';
+import { toast } from '../components/Toast';
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
@@ -164,7 +165,8 @@ export function TabDistribute() {
         setReportTaskId(taskIds[0]);
       }
     } catch (e) {
-      setPushError(e instanceof Error ? e.message : '推送失败');
+      const msg = e instanceof Error ? e.message : '推送失败';
+      toast.error('发布失败：' + msg);
     } finally {
       setPushing(false);
     }
@@ -312,7 +314,7 @@ export function TabDistribute() {
             <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                placeholder="Ronin edit - Gold and Glory"
+                placeholder="记录精彩瞬间，分享给更多人"
                 rows={2}
                 className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
               />
@@ -325,7 +327,7 @@ export function TabDistribute() {
                 type="text"
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
-                placeholder="#fyp #viral #ronin"
+                placeholder="#日常 #生活记录 #推荐"
                 className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
               />
             </div>

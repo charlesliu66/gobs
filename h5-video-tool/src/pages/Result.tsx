@@ -8,6 +8,8 @@ export function Result() {
   const taskId = searchParams.get('taskId');
   const { videoUrl, taskId: contextTaskId, setVideoResult } = useCreateFlow();
 
+  const navigate = useNavigate();
+
   const historyItem = useMemo(() => {
     if (!taskId) return null;
     return loadVideoHistory().find((x) => x.taskId === taskId) ?? null;
@@ -84,6 +86,44 @@ export function Result() {
             {taskId && (
               <p className="text-xs text-[var(--color-text-subtle)]">任务 ID: {taskId}</p>
             )}
+            <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
+              <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-4">下一步</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/editor')}
+                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
+                >
+                  <span className="text-2xl">✂️</span>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">去剪辑</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">导入到剪辑工作台</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/distribute')}
+                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
+                >
+                  <span className="text-2xl">📱</span>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">去发布</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">选平台账号一键分发</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/geelark-batch')}
+                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
+                >
+                  <span className="text-2xl">📱</span>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">矩阵发布</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">TikTok 多账号批量发</p>
+                  </div>
+                </button>
+              </div>
+            </div>
           </>
         ) : (
           <div className="p-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-center">
