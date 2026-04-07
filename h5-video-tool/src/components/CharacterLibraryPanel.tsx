@@ -71,7 +71,12 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
         {loading ? (
           <p className="text-xs text-[var(--color-text-muted)]">加载中…</p>
         ) : chars.length === 0 ? (
-          <p className="text-xs text-[var(--color-text-muted)]">暂无角色，在高级制片中保存角色到形象库</p>
+          <div className="space-y-2">
+            <p className="text-xs text-[var(--color-text-muted)]">暂无角色</p>
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3 text-[10px] text-[var(--color-text-muted)] leading-relaxed">
+              💡 在<strong className="text-[var(--color-text)]">高级制片</strong>的角色卡里，点击「保存到形象库」可将角色及所有状态保存到这里，方便跨项目复用。
+            </div>
+          </div>
         ) : chars.map((c) => (
           <button
             key={c.id}

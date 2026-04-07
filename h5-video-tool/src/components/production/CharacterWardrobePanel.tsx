@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { CharacterSheet, CharacterState } from '../../studio/productionTypes';
 import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
 import { generateFrames } from '../../api/storyboard';
+import { saveCharacterToLibrary } from '../../api/characterLibrary';
 
 // 前端生成简单 id
 function genId(): string {
@@ -21,6 +22,35 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [genningBase, setGenningBase] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [customLabelInput, setCustomLabelInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [savingToLib, setSavingToLib] = useState(false);
+  const [savedToLib, setSavedToLib] = useState(false);
+
+  const handleSaveToLibrary = useCallback(async () => {
+    setSavingToLib(true);
+    try {
+      await saveCharacterToLibrary({
+        name: sheet.name,
+        isProtagonist: sheet.isProtagonist,
+        baseImageDataUrl: sheet.baseImageDataUrl,
+        baseConfirmed: sheet.baseConfirmed,
+        states: (sheet.states ?? []).map((s) => ({
+          id: s.id,
+          label: s.label,
+          imageDataUrl: s.imageDataUrl,
+          statePrompt: s.statePrompt,
+          notes: s.notes,
+        })),
+      });
+      setSavedToLib(true);
+      setTimeout(() => setSavedToLib(false), 3000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSavingToLib(false);
+    }
+  }, [sheet]);
 
   const states = sheet.states ?? [];
 
@@ -104,10 +134,20 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             <img src={sheet.baseImageDataUrl} alt="基础形象" className="w-20 h-20 rounded-lg object-cover border border-[var(--color-border)]" />
             <div className="flex-1">
               {sheet.baseConfirmed ? (
-                <span className="inline-flex items-center gap-1 text-xs text-[var(--color-success)]">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                  已确认，可生成其他状态
-                </span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1 text-xs text-[var(--color-success)]">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    已确认，可生成其他状态
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveToLibrary()}
+                    disabled={savingToLib}
+                    className="px-2.5 py-1 rounded-lg text-[10px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] transition-colors disabled:opacity-50"
+                  >
+                    {savingToLib ? '保存中…' : savedToLib ? '✓ 已保存到形象库' : '保存到形象库'}
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
@@ -140,10 +180,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             </button>
             <button
               type="button"
-              onClick={() => {
-                const label = window.prompt('状态名称（如：战斗装束）');
-                if (label?.trim()) addState(label.trim());
-              }}
+              onClick={() => { setShowCustomInput((v) => !v); setShowPresetPicker(false); }}
               className="px-2.5 py-1 rounded-lg text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
             >
               + 自定义
@@ -165,6 +202,39 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
                 <span className="ml-2 text-[var(--color-text-muted)]">{labels.join(' · ')}</span>
               </button>
             ))}
+          </div>
+        )}
+
+        {showCustomInput && (
+          <div className="mb-3 flex gap-2">
+            <input
+              autoFocus
+              value={customLabelInput}
+              onChange={(e) => setCustomLabelInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && customLabelInput.trim()) {
+                  addState(customLabelInput.trim());
+                  setCustomLabelInput('');
+                  setShowCustomInput(false);
+                }
+                if (e.key === 'Escape') setShowCustomInput(false);
+              }}
+              placeholder="状态名称，如：战斗装束"
+              className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (customLabelInput.trim()) {
+                  addState(customLabelInput.trim());
+                  setCustomLabelInput('');
+                  setShowCustomInput(false);
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+            >
+              添加
+            </button>
           </div>
         )}
 

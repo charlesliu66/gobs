@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { listUploadedFiles, deleteUploadedFile, resolveUploadUrl, type UploadedFile } from '../api/localUpload';
 
 interface Props {
@@ -21,7 +21,7 @@ export function LocalUploadPanel({ onSelect }: Props) {
   }, []);
 
   // 组件挂载时加载
-  useState(() => { void loadFiles(); });
+  useEffect(() => { void loadFiles(); }, [loadFiles]);
 
   // 上传文件（XMLHttpRequest 获取进度）
   const uploadFile = useCallback((file: File) => {

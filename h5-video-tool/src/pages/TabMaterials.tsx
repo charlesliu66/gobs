@@ -99,7 +99,18 @@ export function TabMaterials() {
     await handleVerify();
   }, [folderId, localFolderUrl, accessToken, login, handleVerify]);
 
-  const [activeTab, setActiveTab] = useState<'local' | 'drive' | 'library'>('local');
+  const [activeTab, setActiveTab] = useState<'local' | 'drive' | 'library'>(() => {
+    try {
+      const saved = localStorage.getItem('h5-materials-tab');
+      if (saved === 'local' || saved === 'drive' || saved === 'library') return saved;
+    } catch { /* ignore */ }
+    return 'local';
+  });
+
+  const switchTab = useCallback((tab: 'local' | 'drive' | 'library') => {
+    setActiveTab(tab);
+    try { localStorage.setItem('h5-materials-tab', tab); } catch { /* ignore */ }
+  }, []);
 
   return (
     <div className="max-w-6xl w-full space-y-6">
@@ -115,7 +126,7 @@ export function TabMaterials() {
             <button
               key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
+              onClick={() => switchTab(id)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === id
                   ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
