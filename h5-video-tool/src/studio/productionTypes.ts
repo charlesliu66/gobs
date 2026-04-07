@@ -219,6 +219,29 @@ export interface CharacterLookNode {
   note?: string;
 }
 
+/**
+ * 角色状态衣橱：每个状态代表角色在不同情境下的形象（日常、战斗、受伤等）。
+ * 生成时以 baseImageDataUrl（基础形象）作为一致性参考。
+ */
+export interface CharacterState {
+  id: string;
+  /** 状态名称，如「日常装束」「战斗装束」「受伤状态」 */
+  label: string;
+  imageDataUrl?: string;
+  /** 生成这个状态用的差异描述（叠加在基础形象描述上） */
+  statePrompt?: string;
+  /** 备注 */
+  notes?: string;
+}
+
+/** 预设状态模板 */
+export const CHARACTER_STATE_PRESETS: Record<string, string[]> = {
+  短剧古装: ['日常装束', '正式场合', '战斗装束', '哭戏状态', '受伤状态'],
+  现代都市: ['日常装束', '职场着装', '约会造型', '运动装束'],
+  游戏角色: ['普通状态', '技能释放', '受击状态', '胜利姿态'],
+  自定义: [],
+};
+
 export interface CharacterSheet {
   id: string;
   name: string;
@@ -228,6 +251,15 @@ export interface CharacterSheet {
   lookTree?: CharacterLookNode[];
   /** 当前定稿形象（分镜/主图引用） */
   activeLookId?: string;
+  /** ── 状态衣橱（新）────────────────────────────────── */
+  /** 基础形象：所有状态生成的参考基准，必须先确认才能生成其他状态 */
+  baseImageDataUrl?: string;
+  /** 基础形象已确认（确认后才开放其他状态生成） */
+  baseConfirmed?: boolean;
+  /** 各情景状态列表 */
+  states?: CharacterState[];
+  /** 当前分镜默认引用的状态 id（空=用基础形象） */
+  activeStateId?: string;
 }
 
 export interface SceneSheet {

@@ -48,6 +48,7 @@ import {
   postExtractStyleReference,
 } from '../api/studio';
 import { CharacterLookTreeCanvas } from '../components/production/CharacterLookTreeCanvas';
+import { CharacterWardrobePanel } from '../components/production/CharacterWardrobePanel';
 import {
   CharacterPortraitEditorModal,
   type PortraitEditIntent,
@@ -73,6 +74,7 @@ const STEPS = [
 ];
 
 type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
+type CharacterCardTab = 'looktree' | 'wardrobe';
 
 interface StoredWizard {
   project: ProductionProject;
@@ -560,6 +562,7 @@ export function ProductionWizard() {
   const [err, setErr] = useState<string | null>(null);
   /** Step2：形象树聚焦的角色 id + 肖像弹窗意图 */
   const [treeFocusCharacterId, setTreeFocusCharacterId] = useState<string | null>(null);
+  const [charCardTabs, setCharCardTabs] = useState<Record<string, CharacterCardTab>>({});
   const [portraitEdit, setPortraitEdit] = useState<{
     sheet: CharacterSheet;
     intent: PortraitEditIntent;
@@ -641,6 +644,7 @@ export function ProductionWizard() {
 
   /** 列表「AI」同款：缺图的角色定稿节点 + 场景主变体；跳过弹窗中待确认的肖像任务 */
   const [batchAssetGen, setBatchAssetGen] = useState<{ current: number; total: number } | null>(null);
+  const batchCancelRef = useRef<boolean>(false);
   const handleBatchGenerateMissingAssets = useCallback(async () => {
     const pd = project.productionDesign;
     const styleLock = !!project.meta.styleRefImageDataUrl?.trim();
@@ -668,13 +672,7 @@ export function ProductionWizard() {
     for (const sc of project.sceneAssets ?? []) {
       const v0 = sc.variants[0];
       if (!v0?.id || v0.imageDataUrl) continue;
-      const prompt = buildSceneImagePrompt(
-        sc,
-        v0,
-        styleRef,
-        pd,
-        { enforceGlobalStyleLock: styleLock },
-      );
+      const prompt = buildSceneImagePrompt(sc, v0, styleRef, pd, { enforceGlobalStyleLock: styleLock });
       tasks.push({ kind: 'scene', sheetId: sc.id, variantId: v0.id, prompt });
     }
 
@@ -697,21 +695,28 @@ export function ProductionWizard() {
     }
 
     setErr(null);
+    batchCancelRef.current = false;
     setBatchAssetGen({ current: 0, total: tasks.length });
     const g = project.meta.styleRefImageDataUrl?.trim();
-    try {
-      for (let i = 0; i < tasks.length; i++) {
-        const t = tasks[i]!;
-        setBatchAssetGen({ current: i + 1, total: tasks.length });
-        setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
+
+    // 并发控制：最多同时 2 个任务
+    const CONCURRENCY = 2;
+    let completedCount = 0;
+    const runTask = async (t: Task) => {
+      if (batchCancelRef.current) return;
+      setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
+      try {
         const res = await generateFrames({
           prompt: t.prompt,
           aspectRatio: ar,
           shotIndex: 0,
           ...(g ? { globalStyleReferenceFrame: g } : {}),
         });
+        if (batchCancelRef.current) return;
         const img = res.firstFrame;
+        // 每张完成立刻更新画面
         setProject((p) => {
+          if (t.kind === 'char') {
           if (t.kind === 'char') {
             const sheets = p.characterAssets ?? [];
             return {
@@ -732,12 +737,35 @@ export function ProductionWizard() {
             propAssets: updateVariantImage(sheets, t.sheetId, t.variantId, img, 'prop') as PropSheet[],
           };
         });
+      } catch (e) {
+        if (!batchCancelRef.current) {
+          console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, e);
+        }
+      } finally {
+        completedCount++;
+        setBatchAssetGen((prev) => prev ? { ...prev, current: completedCount } : null);
       }
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '一键生成失败');
+    };
+
+    // 任务队列并发执行
+    try {
+      const pool: Promise<void>[] = [];
+      for (const task of tasks) {
+        if (batchCancelRef.current) break;
+        const p = runTask(task);
+        pool.push(p);
+        if (pool.length >= CONCURRENCY) {
+          await Promise.race(pool);
+          // 移除已完成的
+          const settled = await Promise.allSettled(pool.map((x) => Promise.race([x, Promise.resolve()])));
+          pool.splice(0, pool.length, ...pool.filter((_, i) => settled[i]?.status !== 'fulfilled'));
+        }
+      }
+      await Promise.allSettled(pool);
     } finally {
       setGenKey(null);
       setBatchAssetGen(null);
+      batchCancelRef.current = false;
     }
   }, [
     project.characterAssets,
@@ -1806,6 +1834,15 @@ export function ProductionWizard() {
                         : '一键补全缺图'}
                     </button>
                   ) : null}
+                  {batchAssetGen !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => { batchCancelRef.current = true; }}
+                      className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      取消
+                    </button>
+                  ) : null}
                   {l2Tab === 'characters' ? (
                     <button
                       type="button"
@@ -1913,15 +1950,51 @@ export function ProductionWizard() {
                         <div className="border-t border-[var(--color-border)]/60 px-2 py-3 text-center">
                           <div className="truncate text-sm font-semibold text-[var(--color-text)]">{ch.name}</div>
                           <div className="mt-1 text-xs text-[var(--color-text-muted)]">共{lookCount}个形象</div>
-                          <button
-                            type="button"
-                            onClick={() => setTreeFocusCharacterId(ch.id)}
-                            className="mt-2 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
-                          >
-                            形象演化
-                          </button>
+                          <div className="mt-2 flex justify-center gap-1">
+                            {(['looktree', 'wardrobe'] as CharacterCardTab[]).map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setCharCardTabs((prev) => ({ ...prev, [ch.id]: t }))}
+                                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                  (charCardTabs[ch.id] ?? 'looktree') === t
+                                    ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+                                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                                }`}
+                              >
+                                {t === 'looktree' ? '形象树' : '状态衣橱'}
+                              </button>
+                            ))}
+                          </div>
+                          {(charCardTabs[ch.id] ?? 'looktree') === 'looktree' ? (
+                            <button
+                              type="button"
+                              onClick={() => setTreeFocusCharacterId(ch.id)}
+                              className="mt-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                            >
+                              形象演化
+                            </button>
+                          ) : null}
                         </div>
-                        <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
+                        {(charCardTabs[ch.id] ?? 'looktree') === 'wardrobe' ? (
+                          <div className="border-t border-[var(--color-border)]/50 p-2">
+                            <CharacterWardrobePanel
+                              sheet={ch}
+                              styleRef={project.meta.styleRefSummary}
+                              styleRefImage={project.meta.styleRefImageDataUrl}
+                              aspectRatio={project.meta.aspectRatio ?? '16:9'}
+                              onUpdate={(updated) =>
+                                setProject((p) => ({
+                                  ...p,
+                                  characterAssets: (p.characterAssets ?? []).map((s) =>
+                                    s.id === ch.id ? updated : s,
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
                           <summary className="cursor-pointer list-none text-center text-[10px] text-[var(--color-text-muted)] [&::-webkit-details-marker]:hidden">
                             变体与 AI 生图
                           </summary>
@@ -1978,6 +2051,7 @@ export function ProductionWizard() {
                             </button>
                           </div>
                         </details>
+                        )}
                       </div>
                     );
                   })}
