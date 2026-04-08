@@ -18,7 +18,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm"
+      className="fixed top-0 right-0 bottom-0 left-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm sm:left-56"
       onClick={onClose}
     >
       <div

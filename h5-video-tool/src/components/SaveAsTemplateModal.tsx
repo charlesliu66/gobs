@@ -39,7 +39,10 @@ export function SaveAsTemplateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50 sm:left-56"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}

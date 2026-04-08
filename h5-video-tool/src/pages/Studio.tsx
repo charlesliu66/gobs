@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { TabGenerate } from './TabGenerate';
-import { BossShowcase } from './BossShowcase';
 import { TemplatePicker } from '../components/TemplatePicker';
 import { TemplateMarket } from '../components/TemplateMarket';
 import { GalleryView } from '../components/GalleryView';
@@ -130,9 +129,7 @@ export function Studio() {
           ) : (
             // 创作区：选模板 or 直接创作
             <div className="max-w-6xl">
-              {templateId === 'boss-showcase' ? (
-                <BossShowcase onBackToPicker={() => setTemplateId('')} />
-              ) : templateId ? (
+              {templateId ? (
                 <TabGenerate
                   onBrowseTemplates={() => switchTab('templates')}
                   onBackToPicker={() => setTemplateId('')}

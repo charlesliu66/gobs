@@ -394,7 +394,7 @@ export function MultiShotPromptInput({
 
       {lightboxSrc && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-zoom-out"
+          className="fixed top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-zoom-out sm:left-56"
           onClick={() => setLightboxSrc(null)}
         >
           <img

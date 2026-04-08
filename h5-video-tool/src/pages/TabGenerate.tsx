@@ -420,8 +420,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           {templateId && onBackToPicker && (
             <button
               type="button"
-              onClick={onBackToPicker}
-              className="text-sm text-[var(--color-primary)] hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowGenerationFlow(false);
+                onBackToPicker();
+              }}
+              className="relative z-10 text-sm text-[var(--color-primary)] hover:underline"
             >
               重新选择功能
             </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -108,8 +108,20 @@ function GeelarkIcon() {
   );
 }
 
+/** 侧边栏「生成视频」：/studio 且不是模板市场子 tab */
+function isStudioMainNavActive(pathname: string, search: string): boolean {
+  if (pathname !== '/studio') return false;
+  return new URLSearchParams(search).get('tab') !== 'templates';
+}
+
+/** 侧边栏「模板市场」：仅当 URL 为 studio 的 templates tab */
+function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
+  if (pathname !== '/studio') return false;
+  return new URLSearchParams(search).get('tab') === 'templates';
+}
+
 export function Layout() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -134,26 +146,28 @@ export function Layout() {
       {/* 导航 */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
-          <>
+          <Fragment key={to}>
             {(idx === 4 || idx === 6) && (
-              <div key={`sep-${idx}`} className="my-1.5 border-t border-[var(--color-border)]/40" />
+              <div className="my-1.5 border-t border-[var(--color-border)]/40" />
             )}
             <NavLink
-              key={to}
               to={to}
               end={endProp ?? to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isActive
+              className={({ isActive }) => {
+                let active = isActive;
+                if (to === '/studio') active = isStudioMainNavActive(pathname, search);
+                else if (to === '/studio?tab=templates') active = isStudioTemplatesNavActive(pathname, search);
+                return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  active
                     ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
                     : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
-                }`
-              }
+                }`;
+              }}
             >
               <Icon />
               {label}
             </NavLink>
-          </>
+          </Fragment>
         ))}
       </nav>
       <div className="p-3 border-t border-[var(--color-border)]">
@@ -170,15 +184,15 @@ export function Layout() {
       {/* 移动端遮罩 */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 sm:hidden"
+          className="fixed inset-0 z-[190] bg-black/50 sm:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* 侧边栏 — 桌面端固定，移动端抽屉 */}
+      {/* 侧边栏 — 高于主内容区 z-50 / z-[100] 蒙层，保证导航始终可点 */}
       <aside
         className={`
-          fixed sm:relative inset-y-0 left-0 z-40
+          fixed sm:relative inset-y-0 left-0 z-[200]
           w-56 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-elevated)]
           transition-transform duration-300 ease-in-out
           sm:translate-x-0
