@@ -10,18 +10,44 @@ export function ErrorFallback({ error, resetErrorBoundary }: Props) {
   return (
     <div
       role="alert"
-      className="min-h-screen flex flex-col items-center justify-center p-8 bg-zinc-900 text-zinc-100"
-      style={{ fontFamily: 'system-ui, sans-serif' }}
+      className="min-h-screen flex flex-col items-center justify-center p-8"
+      style={{
+        fontFamily: 'system-ui, sans-serif',
+        backgroundColor: 'var(--color-surface, #18181b)',
+        color: 'var(--color-text, #e4e4e7)',
+      }}
     >
-      <h1 className="text-xl font-bold text-red-400 mb-4">页面加载出错</h1>
-      <pre className="text-sm text-left max-w-2xl overflow-auto p-4 bg-zinc-800 rounded-lg mb-6">
+      <h1
+        className="text-xl font-bold mb-4"
+        style={{ color: 'var(--color-error, #f87171)' }}
+      >
+        页面加载出错
+      </h1>
+      <pre
+        className="text-sm text-left max-w-2xl overflow-auto p-4 rounded-lg mb-6"
+        style={{
+          backgroundColor: 'var(--color-surface-elevated, #27272a)',
+          color: 'var(--color-text-muted, #a1a1aa)',
+          border: '1px solid var(--color-border, #3f3f46)',
+        }}
+      >
         {error.message}
       </pre>
       {resetErrorBoundary && (
         <button
           type="button"
           onClick={resetErrorBoundary}
-          className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+          className="px-4 py-2 rounded-lg font-medium transition-colors"
+          style={{
+            backgroundColor: 'var(--color-primary, #7c3aed)',
+            color: '#ffffff',
+          }}
+          onMouseOver={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.opacity = '0.85';
+          }}
+          onMouseOut={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+          }}
         >
           重试
         </button>

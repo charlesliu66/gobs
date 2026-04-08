@@ -7,6 +7,10 @@
  * DELETE /api/projects/:id    — 删除项目
  *
  * 存储路径: {API_DATA_DIR}/projects/{username}/{project_id}.json
+ *
+ * 响应格式统一：
+ *   成功: { success: true, data: {...} }  或直接返回数据对象（兼容现有前端）
+ *   失败: { success: false, error: "错误信息" }
  */
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
@@ -48,6 +52,7 @@ interface ProjectMeta {
 /**
  * GET /api/projects
  * 列出当前用户的所有项目
+ * Response: { success: true, projects: ProjectMeta[] }
  */
 router.get('/', async (req: Request, res: Response) => {
   const username = req.user!.username;
@@ -76,10 +81,10 @@ router.get('/', async (req: Request, res: Response) => {
 
     // 按更新时间倒序
     metas.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
-    res.json({ projects: metas });
+    res.json({ success: true, projects: metas });
   } catch (err) {
     console.error('[projects] list error', err);
-    res.status(500).json({ error: '读取项目列表失败' });
+    res.status(500).json({ success: false, error: '读取项目列表失败' });
   }
 });
 
@@ -87,6 +92,7 @@ router.get('/', async (req: Request, res: Response) => {
  * POST /api/projects
  * Body: { name?: string, ...data }
  * 创建项目，返回 project_id
+ * Response: { success: true, id, name, createdAt, updatedAt }
  */
 router.post('/', async (req: Request, res: Response) => {
   const username = req.user!.username;
@@ -107,23 +113,24 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(getProjectPath(username, id), JSON.stringify(project, null, 2), 'utf-8');
-    res.json({ id, name: project.name, createdAt: now, updatedAt: now });
+    res.json({ success: true, id, name: project.name, createdAt: now, updatedAt: now });
   } catch (err) {
     console.error('[projects] create error', err);
-    res.status(500).json({ error: '创建项目失败' });
+    res.status(500).json({ success: false, error: '创建项目失败' });
   }
 });
 
 /**
  * GET /api/projects/:id
- * 读取项目完整数据
+ * 读取项目完整数据（直接返回原始 JSON，前端依赖此格式）
+ * Response: 原始项目 JSON 对象
  */
 router.get('/:id', async (req: Request, res: Response) => {
   const username = req.user!.username;
   const { id } = req.params;
 
   if (!isSafeProjectId(id)) {
-    res.status(400).json({ error: '无效的项目 id' });
+    res.status(400).json({ success: false, error: '无效的项目 id' });
     return;
   }
 
@@ -131,13 +138,14 @@ router.get('/:id', async (req: Request, res: Response) => {
     const raw = await fs.readFile(getProjectPath(username, id), 'utf-8');
     res.json(JSON.parse(raw));
   } catch {
-    res.status(404).json({ error: '项目不存在' });
+    res.status(404).json({ success: false, error: '项目不存在' });
   }
 });
 
 /**
  * PUT /api/projects/:id
  * 更新项目数据
+ * Response: { success: true, id, updatedAt, name }
  */
 router.put('/:id', async (req: Request, res: Response) => {
   const username = req.user!.username;
@@ -145,7 +153,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;
 
   if (!isSafeProjectId(id)) {
-    res.status(400).json({ error: '无效的项目 id' });
+    res.status(400).json({ success: false, error: '无效的项目 id' });
     return;
   }
 
@@ -173,30 +181,31 @@ router.put('/:id', async (req: Request, res: Response) => {
     await fs.mkdir(getProjectsDir(username), { recursive: true });
     await fs.writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
     const updatedName = String(body.name ?? existing.name ?? '未命名项目');
-    res.json({ id, updatedAt: now, name: updatedName });
+    res.json({ success: true, id, updatedAt: now, name: updatedName });
   } catch (err) {
     console.error('[projects] update error', err);
-    res.status(500).json({ error: '保存项目失败' });
+    res.status(500).json({ success: false, error: '保存项目失败' });
   }
 });
 
 /**
  * DELETE /api/projects/:id
+ * Response: { success: true, ok: true }
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   const username = req.user!.username;
   const { id } = req.params;
 
   if (!isSafeProjectId(id)) {
-    res.status(400).json({ error: '无效的项目 id' });
+    res.status(400).json({ success: false, error: '无效的项目 id' });
     return;
   }
 
   try {
     await fs.unlink(getProjectPath(username, id));
-    res.json({ ok: true });
+    res.json({ success: true, ok: true });
   } catch {
-    res.status(404).json({ error: '项目不存在' });
+    res.status(404).json({ success: false, error: '项目不存在' });
   }
 });
 

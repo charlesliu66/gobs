@@ -27,6 +27,7 @@ import productionPersistRouter from './routes/productionPersist.js';
 import characterLibraryRouter from './routes/characterLibrary.js';
 import localUploadRouter from './routes/localUpload.js';
 import batchJobsRouter from './routes/batchJobs.js';
+import characterImageRouter from './routes/characterImage.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 
 const app = express();
@@ -34,6 +35,18 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// ── 请求日志中间件 ──────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    const now = new Date();
+    const ts = now.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+    console.log(`[${ts}] ${req.method} ${req.path} ${res.statusCode} ${ms}ms`);
+  });
+  next();
+});
 
 // JWT 鉴权中间件（/api/auth/login 和 /api/health 豁免）
 app.use(jwtAuthMiddleware);
@@ -60,10 +73,11 @@ app.use('/api/production', productionPersistRouter);
 app.use('/api/character-library', characterLibraryRouter);
 app.use('/api/upload', localUploadRouter);
 app.use('/api/batch-jobs', batchJobsRouter);
+app.use('/api/character', characterImageRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);
-  res.status(500).json({ error: err instanceof Error ? err.message : '服务器内部错误' });
+  res.status(500).json({ success: false, error: err instanceof Error ? err.message : '服务器内部错误' });
 });
 
 app.listen(PORT, () => {

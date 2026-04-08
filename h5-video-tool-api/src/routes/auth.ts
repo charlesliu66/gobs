@@ -37,12 +37,13 @@ function getUsers(): UserConfig[] {
 /**
  * POST /api/auth/login
  * Body: { username: string, password: string }
+ * Response: { success: true, data: { token, user } }
  */
 router.post('/login', (req: Request, res: Response) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
   if (!username || !password) {
-    res.status(400).json({ error: '请提供用户名和密码' });
+    res.status(400).json({ success: false, error: '请提供用户名和密码' });
     return;
   }
 
@@ -50,7 +51,7 @@ router.post('/login', (req: Request, res: Response) => {
   const user = users.find((u) => u.username === username && u.password === password);
 
   if (!user) {
-    res.status(401).json({ error: '用户名或密码错误' });
+    res.status(401).json({ success: false, error: '用户名或密码错误' });
     return;
   }
 
@@ -59,21 +60,25 @@ router.post('/login', (req: Request, res: Response) => {
   const token = jwt.sign(payload, secret, { expiresIn: '7d' });
 
   res.json({
-    token,
-    user: payload,
+    success: true,
+    data: {
+      token,
+      user: payload,
+    },
   });
 });
 
 /**
  * GET /api/auth/me
  * 需要 JWT 鉴权（中间件已在 index.ts 挂载）
+ * Response: { success: true, data: { user } }
  */
 router.get('/me', (req: Request, res: Response) => {
   if (!req.user) {
-    res.status(401).json({ error: '未认证' });
+    res.status(401).json({ success: false, error: '未认证' });
     return;
   }
-  res.json({ user: req.user });
+  res.json({ success: true, data: { user: req.user } });
 });
 
 export default router;

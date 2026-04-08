@@ -76,3 +76,35 @@ export async function generateCharacterPortrait(
   }
   return res.json() as Promise<{ imageDataUrl: string; model?: string | null }>;
 }
+
+export interface StandardizeCharacterImageRequest {
+  imageDataUrl: string;
+  characterName: string;
+  styleRef?: string;
+}
+
+/**
+ * 上传参考图生成标准角色形象（白底正面全身）
+ * 调用后端 /api/character/standardize-image
+ */
+export async function standardizeCharacterImage(
+  req: StandardizeCharacterImageRequest,
+): Promise<{ imageDataUrl: string }> {
+  const res = await fetch(`${BASE}/api/character/standardize-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageDataUrl: req.imageDataUrl,
+      characterName: req.characterName,
+      ...(req.styleRef?.trim() ? { styleRef: req.styleRef.trim() } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+  const data = await res.json() as { success?: boolean; imageDataUrl?: string; error?: string };
+  if (!data.imageDataUrl) throw new Error(data.error || '返回数据异常');
+  return { imageDataUrl: data.imageDataUrl };
+}
+

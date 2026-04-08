@@ -15,6 +15,13 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
+/** 后端统一响应格式 */
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
 export const authApi = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -26,7 +33,9 @@ export const authApi = {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error((err as { error?: string }).error || '登录失败');
     }
-    const data = (await res.json()) as LoginResponse;
+    const body = (await res.json()) as ApiResponse<LoginResponse>;
+    // 兼容新格式 { success, data: { token, user } } 和旧格式 { token, user }
+    const data = body.data ?? (body as unknown as LoginResponse);
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     return data;
@@ -50,3 +59,4 @@ export const authApi = {
     }
   },
 };
+

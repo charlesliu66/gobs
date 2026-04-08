@@ -10,6 +10,9 @@ export interface DriveFile {
 
 const API_BASE = '/api';
 
+/** Google OAuth Client ID 是否已配置；未配置时 Google Drive 功能不可用 */
+export const isGoogleOAuthConfigured = !!(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+
 /** 检查后端是否可达，用于验证前预检 */
 export async function checkBackendHealth(timeoutMs = 5000): Promise<{ ok: boolean; error?: string }> {
   const controller = new AbortController();
@@ -47,6 +50,9 @@ export function useGoogleDrive(accessToken: string | null) {
   /** 验证对 folder 是否有权限 */
   const verifyFolder = useCallback(
     async (folderId: string): Promise<{ ok: boolean; folderName?: string; error?: string }> => {
+      if (!isGoogleOAuthConfigured) {
+        return { ok: false, error: 'Google Drive 未配置，请联系管理员' };
+      }
       if (!accessToken) return { ok: false, error: '请先连接 Google Drive' };
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 秒，略短于后端 15 秒
@@ -84,6 +90,10 @@ export function useGoogleDrive(accessToken: string | null) {
 
   const search = useCallback(
     async (keywords: string[], folderId?: string, folderHints?: string[]): Promise<DriveFile[]> => {
+      if (!isGoogleOAuthConfigured) {
+        setError('Google Drive 未配置，请联系管理员');
+        return [];
+      }
       if (!accessToken) {
         setError('请先连接 Google Drive');
         return [];
@@ -120,7 +130,7 @@ export function useGoogleDrive(accessToken: string | null) {
   /** 列出文件夹内直接子项：子文件夹 + 图片/视频 */
   const listFolder = useCallback(
     async (folderId: string): Promise<{ folders: DriveFile[]; files: DriveFile[] }> => {
-      if (!accessToken) return { folders: [], files: [] };
+      if (!isGoogleOAuthConfigured || !accessToken) return { folders: [], files: [] };
       try {
         const res = await fetch(`${API_BASE}/drive/list`, {
           method: 'POST',

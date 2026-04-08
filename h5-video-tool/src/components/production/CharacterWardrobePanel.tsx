@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { CharacterSheet, CharacterState } from '../../studio/productionTypes';
 import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
 import { getCharacterLookImage } from '../../studio/productionAssets';
-import { generateFrames } from '../../api/storyboard';
+import { generateFrames, standardizeCharacterImage } from '../../api/storyboard';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
 
 // 前端生成简单 id
@@ -21,12 +21,14 @@ interface Props {
 export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectRatio, onUpdate }: Props) {
   const [genningId, setGenningId] = useState<string | null>(null);
   const [genningBase, setGenningBase] = useState(false);
+  const [standardizing, setStandardizing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [customLabelInput, setCustomLabelInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
+  const uploadRefInputRef = useRef<HTMLInputElement>(null);
 
   // 若基础形象未设置，自动从角色当前定稿形象带入
   useEffect(() => {
@@ -83,6 +85,36 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     }
   }, [sheet, styleRef, styleRefImage, aspectRatio, onUpdate]);
 
+  /**
+   * 上传参考图生成标准角色形象：
+   * 用户选择本地图片 → 读取 base64 → 调用后端 /api/character/standardize-image
+   * → 返回白底正面全身标准图，写入 baseImageDataUrl
+   */
+  const handleUploadRefImage = useCallback((file: File | null) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setStandardizing(true);
+      setErr(null);
+      void (async () => {
+        try {
+          const result = await standardizeCharacterImage({
+            imageDataUrl: dataUrl,
+            characterName: sheet.name,
+            styleRef: styleRef.trim() || undefined,
+          });
+          onUpdate({ ...sheet, baseImageDataUrl: result.imageDataUrl, baseConfirmed: true });
+        } catch (e) {
+          setErr(e instanceof Error ? e.message : '参考图处理失败');
+        } finally {
+          setStandardizing(false);
+        }
+      })();
+    };
+    reader.readAsDataURL(file);
+  }, [sheet, styleRef, onUpdate]);
+
   // 生成某个状态
   const handleGenState = useCallback(async (state: CharacterState) => {
     if (!sheet.baseImageDataUrl) { setErr('请先生成并确认基础形象'); return; }
@@ -133,14 +165,34 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             <h4 className="text-xs font-semibold text-[var(--color-text)]">基础形象</h4>
             <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">所有状态生成的参考基准，必须先确认</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleGenBase()}
-            disabled={genningBase}
-            className="px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition-colors"
-          >
-            {genningBase ? '生成中…' : sheet.baseImageDataUrl ? '重新生成' : 'AI 生成'}
-          </button>
+          {/* 两个并排按钮：AI 生成 | 上传参考图 */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleGenBase()}
+              disabled={genningBase || standardizing}
+              className="px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition-colors"
+            >
+              {genningBase ? '生成中…' : sheet.baseImageDataUrl ? '重新生成' : 'AI 生成'}
+            </button>
+            {/* 上传参考图按钮（隐藏 file input） */}
+            <button
+              type="button"
+              onClick={() => uploadRefInputRef.current?.click()}
+              disabled={genningBase || standardizing}
+              className="px-3 py-1.5 rounded-lg text-xs border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)] disabled:opacity-50 transition-colors"
+              title="上传参考图，AI 自动生成白底正面全身标准形象"
+            >
+              {standardizing ? '处理中…' : '上传参考图'}
+            </button>
+            <input
+              ref={uploadRefInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleUploadRefImage(e.target.files?.[0] ?? null)}
+            />
+          </div>
         </div>
         {sheet.baseImageDataUrl ? (
           <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { apiPost } from '../api/client';
 import { klingVideoProxyUrl, type VideoGenerateResponse } from '../api/video';
 import {
@@ -540,7 +540,16 @@ function updateVariantImage(
 }
 
 export function ProductionWizard() {
-  const initial = loadStored();
+  const [searchParams] = useSearchParams();
+  // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
+  const urlProjectId = searchParams.get('projectId');
+  const lastStoredId = (() => {
+    try { return localStorage.getItem('gobs_last_project_id'); } catch { return null; }
+  })();
+  // 决定初始加载来源：URL > localStorage 记录 > 本地 StoredWizard
+  const shouldLoadFromServer = !!(urlProjectId || lastStoredId);
+
+  const initial = shouldLoadFromServer ? null : loadStored();
   const [project, setProject] = useState<ProductionProject>(() =>
     migrateProject(initial?.project ?? emptyProductionProject()),
   );
@@ -587,7 +596,9 @@ export function ProductionWizard() {
   const [scenePropError, setScenePropError] = useState<string | null>(null);
   // ── 服务端持久化 ────────────────────────────────────────────────────────────
   const [serverProjectId, setServerProjectId] = useState<string | null>(() => {
-    try { return localStorage.getItem('h5-production-server-id') ?? null; } catch { return null; }
+    // URL 参数优先，否则读 localStorage 里记录的上次 id
+    if (urlProjectId) return urlProjectId;
+    try { return localStorage.getItem('gobs_last_project_id') ?? null; } catch { return null; }
   });
   const [showProjectList, setShowProjectList] = useState(false);
   const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
@@ -602,7 +613,14 @@ export function ProductionWizard() {
       try {
         const result = await saveProductionProject(data as unknown as Record<string, unknown>, serverProjectId ?? undefined);
         setServerProjectId(result.id);
-        try { localStorage.setItem('h5-production-server-id', result.id); } catch { /* ignore */ }
+        // 写入 localStorage，供下次打开页面自动续接
+        try { localStorage.setItem('gobs_last_project_id', result.id); } catch { /* ignore */ }
+        // 把 projectId 写入 URL，避免刷新丢失（不产生历史记录）
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('projectId') !== result.id) {
+          url.searchParams.set('projectId', result.id);
+          window.history.replaceState(null, '', url.toString());
+        }
       } catch (e) {
         console.warn('[production] 服务端同步失败（localStorage 仍有数据）', e);
       }
@@ -634,7 +652,11 @@ export function ProductionWizard() {
         if (typeof s.step === 'number') setStep(s.step);
         if (s.storyGenre) setStoryGenre(s.storyGenre);
         setServerProjectId(id);
-        try { localStorage.setItem('h5-production-server-id', id); } catch { /* ignore */ }
+        // 写入 localStorage + URL，确保续接
+        try { localStorage.setItem('gobs_last_project_id', id); } catch { /* ignore */ }
+        const url = new URL(window.location.href);
+        url.searchParams.set('projectId', id);
+        window.history.replaceState(null, '', url.toString());
         setShowProjectList(false);
       }
     } catch (e) {
@@ -808,6 +830,50 @@ export function ProductionWizard() {
     stylePreviewRevokeRef.current?.();
     stylePreviewRevokeRef.current = null;
     setStyleRefPreview(null);
+  }, []);
+
+  // 优先从服务端加载（URL 参数 > localStorage 记录的上次 id）
+  useEffect(() => {
+    const idToLoad = urlProjectId || lastStoredId;
+    if (!idToLoad) return;
+    void (async () => {
+      try {
+        const raw = await loadProductionProject(idToLoad);
+        if (raw && typeof raw === 'object' && 'project' in raw) {
+          const s = raw as unknown as StoredWizard;
+          setProject(migrateProject(s.project));
+          if (s.characterBible) setCharacterBible(s.characterBible);
+          if (s.synopsis) setSynopsis(s.synopsis);
+          if (s.structureTemplate) setStructureTemplate(s.structureTemplate);
+          if (s.maxTotalDurationSec) setMaxTotalDurationSec(s.maxTotalDurationSec);
+          if (typeof s.step === 'number') setStep(s.step);
+          if (s.storyGenre) setStoryGenre(s.storyGenre);
+          setServerProjectId(idToLoad);
+          // 确保 URL 带上 projectId
+          const url = new URL(window.location.href);
+          if (url.searchParams.get('projectId') !== idToLoad) {
+            url.searchParams.set('projectId', idToLoad);
+            window.history.replaceState(null, '', url.toString());
+          }
+        }
+      } catch {
+        // 服务端加载失败（项目不存在），降级读 localStorage
+        if (!urlProjectId) {
+          const fallback = loadStored();
+          if (fallback) {
+            setProject(migrateProject(fallback.project));
+            setCharacterBible(fallback.characterBible);
+            setSynopsis(fallback.synopsis);
+            setStructureTemplate(fallback.structureTemplate);
+            setMaxTotalDurationSec(fallback.maxTotalDurationSec);
+            setStep(fallback.step);
+            setStoryGenre(fallback.storyGenre);
+          }
+        }
+      }
+    })();
+  // 仅在挂载时执行一次
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1294,7 +1360,13 @@ export function ProductionWizard() {
     setStep(0);
     setPortraitEdit(null);
     setPortraitJobs({});
+    setServerProjectId(null);
     localStorage.removeItem(PRODUCTION_STORAGE_KEY);
+    localStorage.removeItem('gobs_last_project_id');
+    // 清除 URL 中的 projectId
+    const url = new URL(window.location.href);
+    url.searchParams.delete('projectId');
+    window.history.replaceState(null, '', url.toString());
   }, [clearStylePreview]);
 
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
