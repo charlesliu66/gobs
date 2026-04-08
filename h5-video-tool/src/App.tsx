@@ -20,6 +20,8 @@ import { GeelarkDevices } from './pages/GeelarkDevices';
 import { GeelarkTasks } from './pages/GeelarkTasks';
 import { GeelarkSettings } from './pages/GeelarkSettings';
 import { EditorWorkbench } from './pages/EditorWorkbench';
+import { QuickFilm } from './pages/QuickFilm';
+import { AssetLibrary } from './pages/AssetLibrary';
 import './index.css';
 
 function App() {
@@ -44,6 +46,8 @@ function App() {
                   <Route path="/distribute" element={<TabDistribute />} />
                   <Route path="/result" element={<Result />} />
                   <Route path="/editor" element={<EditorWorkbench />} />
+                  <Route path="/quickfilm" element={<QuickFilm />} />
+                  <Route path="/asset-library" element={<AssetLibrary />} />
                 </Route>
               </Route>
 

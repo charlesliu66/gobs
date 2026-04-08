@@ -5,10 +5,12 @@ import { authApi } from '../api/auth';
 
 const navItems = [
   { to: '/', label: '首页', icon: HomeIcon },
+  { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon, highlight: true },
   { to: '/projects', label: '我的项目', icon: ProjectsIcon },
   { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
   { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
   { to: '/editor', label: '视频剪辑', icon: EditorIcon },
+  { to: '/asset-library', label: '素材库', icon: AssetLibraryIcon },
   { to: '/materials', label: '素材管理', icon: MaterialsIcon },
   { to: '/studio?tab=templates', label: '模板市场', icon: TemplateIcon },
   { to: '/distribute', label: '视频分发', icon: DistributeIcon },
@@ -118,6 +120,25 @@ function GeelarkIcon() {
   );
 }
 
+function QuickFilmIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function AssetLibraryIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="14" y="14" width="7" height="7" rx="1"/>
+    </svg>
+  );
+}
+
 /** 侧边栏「生成视频」：/studio 且不是模板市场子 tab */
 function isStudioMainNavActive(pathname: string, search: string): boolean {
   if (pathname !== '/studio') return false;
@@ -162,9 +183,9 @@ export function Layout() {
       </div>
       {/* 导航 */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
+        {navItems.map(({ to, label, icon: Icon, end: endProp, highlight }, idx) => (
           <Fragment key={to}>
-            {(idx === 5 || idx === 7) && (
+            {(idx === 6 || idx === 8) && (
               <div className="my-1.5 border-t border-[var(--color-border)]/40" />
             )}
             <NavLink
@@ -174,6 +195,9 @@ export function Layout() {
                 let active = isActive;
                 if (to === '/studio') active = isStudioMainNavActive(pathname, search);
                 else if (to === '/studio?tab=templates') active = isStudioTemplatesNavActive(pathname, search);
+                if (highlight && !active) {
+                  return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/8 hover:bg-[var(--color-primary)]/15 border-l-2 border-transparent pl-[10px] hover:translate-x-0.5`;
+                }
                 return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   active
                     ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
@@ -183,6 +207,7 @@ export function Layout() {
             >
               <Icon />
               {label}
+              {highlight && <span className="ml-auto text-[9px] bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded font-bold tracking-wide">NEW</span>}
             </NavLink>
           </Fragment>
         ))}

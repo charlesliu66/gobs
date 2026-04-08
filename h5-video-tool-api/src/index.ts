@@ -28,6 +28,8 @@ import characterLibraryRouter from './routes/characterLibrary.js';
 import localUploadRouter from './routes/localUpload.js';
 import batchJobsRouter from './routes/batchJobs.js';
 import characterImageRouter from './routes/characterImage.js';
+import quickfilmRouter from './routes/quickfilm.js';
+import assetsRouter from './routes/assets.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 
 const app = express();
@@ -74,6 +76,8 @@ app.use('/api/character-library', characterLibraryRouter);
 app.use('/api/upload', localUploadRouter);
 app.use('/api/batch-jobs', batchJobsRouter);
 app.use('/api/character', characterImageRouter);
+app.use('/api/quickfilm', quickfilmRouter);
+app.use('/api/assets', assetsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);
