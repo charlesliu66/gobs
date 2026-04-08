@@ -81,4 +81,27 @@ router.get('/me', (req: Request, res: Response) => {
   res.json({ success: true, data: { user: req.user } });
 });
 
+/**
+ * GET /api/auth/matrix-bridge-token
+ * 为当前已登录用户签发短期 bridge token，供前端在 iframe 中换取 SJ 的 sj_auth cookie
+ */
+router.get('/matrix-bridge-token', (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: '未认证' });
+    return;
+  }
+
+  const secret = process.env.JWT_SECRET || 'gobs-secret-change-in-production';
+  const bridgePayload = {
+    typ: 'matrix_bridge',
+    email: `${req.user.username}@gobs.local`,
+    isa: false,
+    mf: [],
+    cv: 1,
+  };
+  const bridgeToken = jwt.sign(bridgePayload, secret, { expiresIn: '5m' });
+
+  res.json({ success: true, data: { token: bridgeToken } });
+});
+
 export default router;

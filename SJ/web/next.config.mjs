@@ -49,6 +49,7 @@ function parseAllowedDevOriginsFromEnv() {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/sj',
   /** 仓库根另有 package-lock.json 时，避免 Turbopack 误判 workspace 根导致启动异常 */
   turbopack: {
     root: __dirname,
