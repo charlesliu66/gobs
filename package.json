@@ -1,0 +1,12 @@
+{
+  "name": "gobs",
+  "private": true,
+  "description": "一键启动：API + TikTok 矩阵(SJ/web) + GOBS 前端",
+  "scripts": {
+    "dev": "concurrently -n api,matrix,ui,open -c blue,magenta,green,gray \"npm -C h5-video-tool-api run dev\" \"npm -C SJ/web run dev\" \"npm -C h5-video-tool run dev\" \"node scripts/wait-and-open.mjs\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "tailwindcss": "^4.2.0"
+  }
+}

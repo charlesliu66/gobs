@@ -11,7 +11,7 @@
 | **发布视频** | `geelark-post.js` | 1 台或 N 台设备的 TT 账户发布视频，支持自定义/自动生成 description、hashtag |
 | **批量评论** | `geelark-engage.js comment` | 指定 1 台或 N 台设备，对 1 个或 N 个链接批量发评论 |
 | **随机点赞** | `geelark-engage.js like` | 指定 1 台或 N 台设备随机点赞（⚠️ API 不支持指定链接） |
-| **单设备评论** | `geelark-tiktok-comment.js` | 单设备单链接评论，简化用法 |
+| **单设备评论** | `SJ/scripts/geelark-tiktok-comment.js` | 单设备单链接评论，简化用法（TikTok 矩阵脚本见 `SJ/scripts/`） |
 
 ---
 
@@ -108,7 +108,7 @@ node scripts/geelark-engage.js like --env "Test 1,Test 2,Test 3"
 | `geelark-lib.js` | `scripts/geelark-lib.js` | 共享库，配置加载、请求、设备解析 |
 | `geelark-post.js` | `scripts/geelark-post.js` | 依赖 `geelark-publish` skill 的 `publish.js` |
 | `geelark-engage.js` | `scripts/geelark-engage.js` | 批量评论、随机点赞 |
-| `geelark-tiktok-comment.js` | `scripts/geelark-tiktok-comment.js` | 单设备评论（兼容旧用法） |
+| `geelark-tiktok-comment.js` | `SJ/scripts/geelark-tiktok-comment.js` | 单设备评论（TikTok 矩阵） |
 | `geelark-query-tasks.js` | `scripts/geelark-query-tasks.js` | 查询任务状态 |
 
 ---

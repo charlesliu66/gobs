@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
+import { useGobsAuth } from '../context/GobsAuthContext';
 import {
   fetchAccounts,
   publishVideo,
@@ -14,6 +15,7 @@ import { toast } from '../components/Toast';
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
+  const { user } = useGobsAuth();
   const [accounts, setAccounts] = useState<GeelarkAccount[]>([]);
   const [filterRegion, setFilterRegion] = useState<string>('');
   const [filterPlatform, setFilterPlatform] = useState<string>('');
@@ -52,6 +54,27 @@ export function TabDistribute() {
     return () => { cancelled = true; };
   }, []);
 
+  const accountsForPermission = useMemo(() => {
+    if (!user || user.isSuperAdmin) return accounts;
+    const allow = user.publishAccountIds;
+    if (allow == null) return accounts;
+    if (allow.length === 0) return [];
+    const s = new Set(allow);
+    return accounts.filter((a) => s.has(a.id));
+  }, [accounts, user]);
+
+  useEffect(() => {
+    const ids = new Set(accountsForPermission.map((a) => a.id));
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
+      if (next.size === 0 && accountsForPermission.length > 0) {
+        next.add(accountsForPermission[0].id);
+      }
+      return next;
+    });
+  }, [accountsForPermission]);
+
   const loadReport = useCallback(async (taskId: string) => {
     setReportLoading(true);
     setReport(null);
@@ -79,7 +102,7 @@ export function TabDistribute() {
       setCaptionGenError('请先在 Studio 输入 prompt、或完成一次视频生成，或在文案/标签中填写待优化内容');
       return;
     }
-    const selectedAccounts = accounts.filter((a) => selectedIds.has(a.id));
+    const selectedAccounts = accountsForPermission.filter((a) => selectedIds.has(a.id));
     const platforms = [...new Set(selectedAccounts.map((a) => a.platform).filter(Boolean))] as string[];
     setCaptionGenLoading(true);
     setCaptionGenError(null);
@@ -184,9 +207,9 @@ export function TabDistribute() {
     return new Date(ts * 1000).toLocaleString('zh-CN');
   };
 
-  const regions = [...new Set(accounts.map((a) => a.region).filter(Boolean))] as string[];
-  const platforms = [...new Set(accounts.map((a) => a.platform).filter(Boolean))] as string[];
-  const filteredAccounts = accounts.filter((a) => {
+  const regions = [...new Set(accountsForPermission.map((a) => a.region).filter(Boolean))] as string[];
+  const platforms = [...new Set(accountsForPermission.map((a) => a.platform).filter(Boolean))] as string[];
+  const filteredAccounts = accountsForPermission.filter((a) => {
     if (filterRegion && a.region !== filterRegion) return false;
     if (filterPlatform && a.platform !== filterPlatform) return false;
     return true;
@@ -222,6 +245,13 @@ export function TabDistribute() {
             >
               了解 Geelark 矩阵方案 →
             </a>
+          </div>
+        ) : accountsForPermission.length === 0 ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 text-center space-y-2">
+            <p className="text-sm font-medium text-[var(--color-text)]">当前登录账号未被分配任何「内容发布账号」</p>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              请使用超级管理员在「账号设置」中为该用户勾选视频分发目标账号。
+            </p>
           </div>
         ) : (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">

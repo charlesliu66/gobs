@@ -1,9 +1,4 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+import './loadEnv.js';
 import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
@@ -14,8 +9,6 @@ import driveRoutes from './routes/drive.js';
 import promptRoutes from './routes/prompt.js';
 import videoRoutes from './routes/video.js';
 import storyboardRoutes from './routes/storyboard.js';
-import geelarkRouter from './routes/geelark.js';
-import sjRouter from './routes/sj.js';
 import remixRouter from './routes/remix.js';
 import editorExportRouter from './routes/editorExport.js';
 import editorAssetsRouter from './routes/editorAssets.js';
@@ -30,6 +23,7 @@ import batchJobsRouter from './routes/batchJobs.js';
 import characterImageRouter from './routes/characterImage.js';
 import quickfilmRouter, { draftsRouter } from './routes/quickfilm.js';
 import assetsRouter from './routes/assets.js';
+import gobsAuthRouter from './routes/gobsAuth.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 
 const app = express();
@@ -50,7 +44,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// JWT 鉴权中间件（/api/auth/login 和 /api/health 豁免）
+// JWT 鉴权中间件（/api/auth/login、/api/health、/api/gobs-auth/* 豁免）
 app.use(jwtAuthMiddleware);
 
 app.get('/api/health', (_req, res) => {
@@ -58,12 +52,11 @@ app.get('/api/health', (_req, res) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/gobs-auth', gobsAuthRouter);
 app.use('/api/drive', driveRoutes);
 app.use('/api/prompt', promptRoutes);
 app.use('/api/video', videoRoutes);
 app.use('/api/storyboard', storyboardRoutes);
-app.use('/api/geelark', geelarkRouter);
-app.use('/api/sj', sjRouter);
 app.use('/api/remix', remixRouter);
 app.use('/api/editor', editorAssetsRouter);
 app.use('/api/editor', editorAnalyzeRouter);

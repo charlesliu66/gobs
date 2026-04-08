@@ -1,0 +1,31 @@
+---
+description: 启动 Next 开发服务时若端口被占用则先结束占用进程再启动（Windows）
+alwaysApply: true
+---
+
+# 启动项目（web / Next.js）
+
+当用户要求启动项目、`npm run dev`、启动开发服务器等时，在 **`d:\AI\SJ\web`**（或仓库内 `web` 目录）执行，且 **不要**只提示用户手动处理端口。
+
+## Windows（当前环境）
+
+1. **默认端口 3000**：若被占用，先结束监听该端口的进程，再启动。
+   - 使用 PowerShell 示例（在项目根或 `web` 下执行均可）：
+
+```powershell
+$pids = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+foreach ($procId in $pids) { Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue }
+```
+
+2. 若仍报 **`.next/dev/lock`** 或 Turbopack 锁冲突，在确认无需要的 `next dev` 进程后，可删除 `web/.next/dev/lock` 再启动。
+
+3. 然后执行：`Set-Location web; npm run dev`（或等价命令），并在后台长期运行。
+
+4. **不要**把「请自行结束进程」当作完成；除非杀端口失败或权限不足，否则应在本机代用户执行上述步骤后再启动。
+
+## 说明
+
+- 项目脚本为 `next dev -H 0.0.0.0 -p 3000`（本机与局域网 IPv4 均可访问），默认端口 **3000**；若被占用，以终端输出为准。
+- **局域网访问**：若手机或另一台电脑打开本机 IP 仍白屏，在 `web/.env.local` 设置 `ALLOWED_DEV_ORIGINS=你的IPv4`（与 `ipconfig` 一致），并重启 `npm run dev`。
+- **Windows 防火墙**：若仍无法从局域网访问，需管理员 PowerShell 放行入站 TCP 3000（或运行 `web/scripts/windows-firewall-dev3000.ps1`）。
+- 仅结束占用 **监听端口** 的进程，避免无差别结束所有 `node`（除非用户明确要求）。

@@ -1,0 +1,24 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.npmrc
+.snowflake/
+.v0-trash/
+.vercel/
+next.user-config.*
+
+# Environment variables
+.env*.local
+.env
+
+# 本地填写了真实 Token 时不要提交（可选，若只用 Vercel 环境变量可删除此行）
+# lib/geelark-token.ts
+
+# Common ignores
+node_modules/
+.next/
+.DS_Store
+
+# SeaTalk 任务状态快照（本地轮询）
+.data/

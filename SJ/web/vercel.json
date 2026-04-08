@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/task-seatalk-sync",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/warmup-dispatch",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/warmup-shutdown",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}

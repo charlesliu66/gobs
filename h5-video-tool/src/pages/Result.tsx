@@ -88,7 +88,7 @@ export function Result() {
             )}
             <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
               <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-4">下一步</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => navigate('/editor')}
@@ -103,23 +103,12 @@ export function Result() {
                 <button
                   type="button"
                   onClick={() => navigate('/distribute')}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-all text-left group"
-                >
-                  <span className="text-2xl">🚀</span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">手动发布</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">选平台、填文案、单次发</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/geelark-batch')}
                   className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-primary)]/10 transition-all text-left group"
                 >
                   <span className="text-2xl">📲</span>
                   <div>
-                    <p className="text-sm font-medium text-[var(--color-primary)] transition-colors">矩阵批发 ★</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">多账号自动化，TikTok 专属</p>
+                    <p className="text-sm font-medium text-[var(--color-primary)] transition-colors">视频分发</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">选账号、填文案、推送到各平台</p>
                   </div>
                 </button>
               </div>

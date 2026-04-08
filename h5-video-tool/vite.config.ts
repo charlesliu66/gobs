@@ -1,9 +1,21 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 // https://vite.dev/config/
 export default defineConfig({
+  resolve: {
+    /** 保持 sj-ui 联接路径，便于从 h5-video-tool/node_modules 解析 react */
+    preserveSymlinks: true,
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '@sj': path.resolve(__dirname, 'src/sj-ui'),
+    },
+  },
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,

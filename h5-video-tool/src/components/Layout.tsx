@@ -1,22 +1,12 @@
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useMemo, type JSX } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { authApi } from '../api/auth';
+import { useGobsAuth } from '../context/GobsAuthContext';
+import { navTargetToFeature } from '../lib/gobsNav';
+import type { GobsSessionUser } from '../types/gobsAuth';
 
-const navItems = [
-  { to: '/', label: '首页', icon: HomeIcon },
-  { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon, highlight: true },
-  { to: '/projects', label: '我的项目', icon: ProjectsIcon },
-  { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
-  { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
-  { to: '/editor', label: '视频剪辑', icon: EditorIcon },
-  { to: '/asset-library', label: '素材库', icon: AssetLibraryIcon },
-  { to: '/materials', label: '素材管理', icon: MaterialsIcon },
-  { to: '/studio?tab=templates', label: '模板市场', icon: TemplateIcon },
-  { to: '/distribute', label: '视频分发', icon: DistributeIcon },
-  { to: '/geelark-batch', label: 'TikTok 矩阵', icon: GeelarkIcon },
-  { to: '/history', label: '历史记录', icon: HistoryIcon },
-];
+type NavIcon = () => JSX.Element;
+type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
 
 function HomeIcon() {
   return (
@@ -35,6 +25,14 @@ function ProjectsIcon() {
   );
 }
 
+function QuickFilmIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
 function StudioIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -48,7 +46,6 @@ function StudioIcon() {
   );
 }
 
-/** 分镜 / 制片向导 */
 function ProductionIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -69,6 +66,17 @@ function EditorIcon() {
       <line x1="10" y1="8" x2="10" y2="16" />
       <line x1="14" y1="8" x2="14" y2="16" />
       <polygon points="18,10 22,12 18,14" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function AssetLibraryIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -112,7 +120,7 @@ function DistributeIcon() {
   );
 }
 
-function GeelarkIcon() {
+function MatrixIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -120,123 +128,157 @@ function GeelarkIcon() {
   );
 }
 
-function QuickFilmIcon() {
+function SettingsIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
     </svg>
   );
 }
 
-function AssetLibraryIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/>
-      <rect x="14" y="14" width="7" height="7" rx="1"/>
-    </svg>
-  );
-}
+const NAV_GROUPS: NavItemDef[][] = [
+  [
+    { to: '/', label: '首页', icon: HomeIcon },
+    { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon, highlight: true },
+    { to: '/projects', label: '我的项目', icon: ProjectsIcon },
+    { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
+    { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
+    { to: '/editor', label: '视频剪辑', icon: EditorIcon },
+  ],
+  [
+    { to: '/asset-library', label: '素材库', icon: AssetLibraryIcon },
+    { to: '/materials', label: '素材管理', icon: MaterialsIcon },
+    { to: '/studio?tab=templates', label: '模板市场', icon: TemplateIcon },
+    { to: '/distribute', label: '视频分发', icon: DistributeIcon },
+  ],
+  [
+    { to: '/tiktok-matrix', label: 'TikTok 矩阵', icon: MatrixIcon },
+    { to: '/history', label: '历史记录', icon: HistoryIcon },
+  ],
+];
 
-/** 侧边栏「生成视频」：/studio 且不是模板市场子 tab */
 function isStudioMainNavActive(pathname: string, search: string): boolean {
   if (pathname !== '/studio') return false;
   return new URLSearchParams(search).get('tab') !== 'templates';
 }
 
-/** 侧边栏「模板市场」：仅当 URL 为 studio 的 templates tab */
 function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
   if (pathname !== '/studio') return false;
   return new URLSearchParams(search).get('tab') === 'templates';
 }
 
+function filterNavGroup(user: GobsSessionUser, group: NavItemDef[]): NavItemDef[] {
+  return group.filter((it) => {
+    const f = navTargetToFeature(it.to);
+    if (!f) return true;
+    return user.isSuperAdmin || user.features.includes(f);
+  });
+}
+
+function navLinkClass(active: boolean, highlight?: boolean): string {
+  if (highlight && !active) {
+    return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/8 hover:bg-[var(--color-primary)]/15 border-l-2 border-transparent pl-[10px] hover:translate-x-0.5`;
+  }
+  return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+    active
+      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
+      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
+  }`;
+}
+
 export function Layout() {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const currentUser = authApi.getUser();
-
-  function handleLogout() {
-    authApi.logout();
-    navigate('/login', { replace: true });
-  }
+  const { user, logout } = useGobsAuth();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
+  const isTiktokMatrix = pathname === '/tiktok-matrix';
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // 路由切换时关闭移动端侧边栏
-  useEffect(() => { setSidebarOpen(false); }, [pathname]);
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  const visibleGroups = useMemo(() => {
+    if (!user) return NAV_GROUPS.map(() => [] as NavItemDef[]);
+    return NAV_GROUPS.map((g) => filterNavGroup(user, g));
+  }, [user]);
 
   const sidebar = (
-    <div className={`sticky top-0 flex flex-col ${isEditor ? 'h-[100dvh]' : 'h-screen'}`}>
-      {/* Logo */}
+    <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
       <div className="flex items-center justify-between px-4 py-5 border-b border-[var(--color-border)]">
         <img src="/logo.png" alt="GOBS" className="h-12 w-auto max-w-full object-contain" />
-        {/* 移动端关闭按钮 */}
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
           className="sm:hidden p-1 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
         </button>
       </div>
-      {/* 导航 */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, label, icon: Icon, end: endProp, highlight }, idx) => (
-          <Fragment key={to}>
-            {(idx === 6 || idx === 8) && (
+        {visibleGroups.map((group, gi) => (
+          <Fragment key={gi}>
+            {gi > 0 && group.length > 0 && visibleGroups[gi - 1]?.length > 0 && (
               <div className="my-1.5 border-t border-[var(--color-border)]/40" />
             )}
-            <NavLink
-              to={to}
-              end={endProp ?? to === '/'}
-              className={({ isActive }) => {
-                let active = isActive;
-                if (to === '/studio') active = isStudioMainNavActive(pathname, search);
-                else if (to === '/studio?tab=templates') active = isStudioTemplatesNavActive(pathname, search);
-                if (highlight && !active) {
-                  return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/8 hover:bg-[var(--color-primary)]/15 border-l-2 border-transparent pl-[10px] hover:translate-x-0.5`;
-                }
-                return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  active
-                    ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
-                }`;
-              }}
-            >
-              <Icon />
-              {label}
-              {highlight && <span className="ml-auto text-[9px] bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded font-bold tracking-wide">NEW</span>}
-            </NavLink>
+            {group.map(({ to, label, icon: Icon, end: endProp, highlight }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={endProp ?? to === '/'}
+                className={({ isActive }) => {
+                  let active = isActive;
+                  if (to === '/studio') active = isStudioMainNavActive(pathname, search);
+                  else if (to === '/studio?tab=templates') active = isStudioTemplatesNavActive(pathname, search);
+                  return navLinkClass(active, highlight);
+                }}
+              >
+                <Icon />
+                {label}
+                {highlight && (
+                  <span className="ml-auto text-[9px] bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded font-bold tracking-wide">
+                    NEW
+                  </span>
+                )}
+              </NavLink>
+            ))}
           </Fragment>
         ))}
       </nav>
-      <div className="p-3 border-t border-[var(--color-border)] space-y-2">
-        {/* 用户信息 + 退出 */}
-        {currentUser && (
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs font-bold">
-              {currentUser.displayName.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-[var(--color-text)]">{currentUser.displayName}</p>
-              <p className="truncate text-[10px] text-[var(--color-text-subtle)]">@{currentUser.username}</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="退出登录"
-              className="flex-shrink-0 rounded-md p-1 text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-hover)] hover:text-red-400 transition"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </button>
-          </div>
+      <div className="mt-auto p-3 border-t border-[var(--color-border)] space-y-2">
+        {user?.isSuperAdmin && (
+          <NavLink
+            to="/settings/accounts"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isActive
+                  ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px]'
+              }`
+            }
+          >
+            <SettingsIcon />
+            账号设置
+          </NavLink>
         )}
+        <button
+          type="button"
+          onClick={() => {
+            void (async () => {
+              await logout();
+              navigate('/login', { replace: true });
+            })();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px] text-left"
+        >
+          <span className="text-lg leading-none">⎋</span>
+          退出登录
+        </button>
         <ThemeToggle />
         <p className="text-[11px] text-center text-[var(--color-text-subtle)] pb-1 opacity-70">GOBS v0.1</p>
       </div>
@@ -244,18 +286,17 @@ export function Layout() {
   );
 
   return (
-    <div className={`flex bg-[var(--color-surface)] ${
-      isEditor || isProductionWizard ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
-    }`}>
-      {/* 移动端遮罩 */}
+    <div
+      className={`flex bg-[var(--color-surface)] ${
+        isEditor || isProductionWizard || isTiktokMatrix ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
+      }`}
+    >
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-[190] bg-black/50 sm:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-
-      {/* 侧边栏 — 高于主内容区 z-50 / z-[100] 蒙层，保证导航始终可点 */}
       <aside
         className={`
           fixed sm:relative inset-y-0 left-0 z-[200]
@@ -267,15 +308,16 @@ export function Layout() {
       >
         {sidebar}
       </aside>
-
-      {/* 主内容区 */}
-      <main className={`flex-1 min-w-0 flex flex-col ${
-        isEditor || isProductionWizard
-          ? 'min-h-0 overflow-hidden bg-[var(--color-surface)] p-0'
-          : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
-      }`}>
-        {/* 移动端顶部栏：全屏页（editor/production）隐藏 */}
-        {!isEditor && !isProductionWizard && (
+      <main
+        className={`flex-1 min-w-0 flex flex-col ${
+          isEditor || isProductionWizard || isTiktokMatrix
+            ? `min-h-0 overflow-hidden bg-[var(--color-surface)] p-0 ${
+                isTiktokMatrix ? 'h-full max-h-[100dvh] [&>*]:min-h-0 [&>*]:min-w-0 [&>*]:flex-1' : ''
+              }`
+            : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
+        }`}
+      >
+        {!isEditor && !isProductionWizard && !isTiktokMatrix && (
           <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
             <button
               type="button"
@@ -283,7 +325,9 @@ export function Layout() {
               className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
             <span className="text-sm font-semibold text-[var(--color-text)]">GOBS</span>

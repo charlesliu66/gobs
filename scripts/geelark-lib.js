@@ -14,6 +14,7 @@ const CONFIG_PATHS = [
   () => process.env.GEELARK_CONFIG,
   () => path.join(process.cwd(), 'config', 'geelark.json'),
   () => path.join(process.cwd(), '..', 'config', 'geelark.json'),
+  () => path.join(process.cwd(), '..', '..', 'config', 'geelark.json'),
   () => path.join(process.env.USERPROFILE || process.env.HOME || '', 'Desktop', 'cursor_try', 'QAS', 'config', 'geelark.json'),
 ].filter(Boolean);
 

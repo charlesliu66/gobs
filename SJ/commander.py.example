@@ -1,0 +1,14 @@
+# 复制为 commander.py 放在「仓库根目录」或「web/」下，或设置 COMMENT_COMMANDER_PY_PATH。
+# 生成评论时服务端会自动读取并作为 Safety Filter 与规则库一并送入模型。
+#
+# 示例：用注释描述禁止项（模型会按文本理解；也可写 Python 常量/函数名作为文档）
+
+SAFETY_RULES_DOC = """
+禁止：人身攻击、仇恨言论、色情、赌博、非法药物、自残、诈骗引流。
+语气：积极、尊重；不拉踩竞品；不编造未证实信息。
+长度：单条评论建议不超过 200 字。
+"""
+
+def describe_safety_filter() -> str:
+    """供人工阅读；LLM 会阅读本文件全文作为约束。"""
+    return SAFETY_RULES_DOC.strip()
