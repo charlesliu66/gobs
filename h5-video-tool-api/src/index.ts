@@ -7,6 +7,9 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
+import { jwtAuthMiddleware } from './middleware/auth.js';
+import authRouter from './routes/auth.js';
+import projectsRouter from './routes/projects.js';
 import driveRoutes from './routes/drive.js';
 import promptRoutes from './routes/prompt.js';
 import videoRoutes from './routes/video.js';
@@ -32,9 +35,14 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// JWT 鉴权中间件（/api/auth/login 和 /api/health 豁免）
+app.use(jwtAuthMiddleware);
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'h5-video-tool-api' });
 });
+app.use('/api/auth', authRouter);
+app.use('/api/projects', projectsRouter);
 app.use('/api/drive', driveRoutes);
 app.use('/api/prompt', promptRoutes);
 app.use('/api/video', videoRoutes);

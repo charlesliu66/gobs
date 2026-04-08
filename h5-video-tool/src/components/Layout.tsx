@@ -1,9 +1,11 @@
 import { Fragment, useState, useEffect } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
+import { authApi } from '../api/auth';
 
 const navItems = [
   { to: '/', label: '首页', icon: HomeIcon },
+  { to: '/projects', label: '我的项目', icon: ProjectsIcon },
   { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
   { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
   { to: '/editor', label: '视频剪辑', icon: EditorIcon },
@@ -19,6 +21,14 @@ function HomeIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+
+function ProjectsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
@@ -122,6 +132,13 @@ function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
 
 export function Layout() {
   const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const currentUser = authApi.getUser();
+
+  function handleLogout() {
+    authApi.logout();
+    navigate('/login', { replace: true });
+  }
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -147,7 +164,7 @@ export function Layout() {
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, label, icon: Icon, end: endProp }, idx) => (
           <Fragment key={to}>
-            {(idx === 4 || idx === 6) && (
+            {(idx === 5 || idx === 7) && (
               <div className="my-1.5 border-t border-[var(--color-border)]/40" />
             )}
             <NavLink
@@ -170,7 +187,31 @@ export function Layout() {
           </Fragment>
         ))}
       </nav>
-      <div className="p-3 border-t border-[var(--color-border)]">
+      <div className="p-3 border-t border-[var(--color-border)] space-y-2">
+        {/* 用户信息 + 退出 */}
+        {currentUser && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs font-bold">
+              {currentUser.displayName.charAt(0)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-[var(--color-text)]">{currentUser.displayName}</p>
+              <p className="truncate text-[10px] text-[var(--color-text-subtle)]">@{currentUser.username}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="退出登录"
+              className="flex-shrink-0 rounded-md p-1 text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-hover)] hover:text-red-400 transition"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+        )}
         <ThemeToggle />
         <p className="text-[11px] text-center text-[var(--color-text-subtle)] pb-1 opacity-70">GOBS v0.1</p>
       </div>

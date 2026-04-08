@@ -444,8 +444,18 @@ export async function generateProductionDesign(story: StoryArcLayer): Promise<Pr
     maxTokens: 8192,
   });
   const parsed = parseLlmJson<ProductionDesignLayer>(raw, '服化道 L2');
-  if (!parsed.wardrobe || !parsed.soundMusic) {
-    throw new Error('服化道解析失败：缺少 wardrobe 或 soundMusic');
+  // 容错：缺字段时补默认值，避免整个流程中断
+  if (!parsed.wardrobe) {
+    console.warn('[studio/production-design] wardrobe 字段缺失，使用默认空数组');
+    parsed.wardrobe = [];
+  }
+  if (!parsed.soundMusic) {
+    console.warn('[studio/production-design] soundMusic 字段缺失，使用默认值');
+    parsed.soundMusic = {
+      bgmStyle: '根据剧情自动匹配',
+      sfxNotes: '自然音效',
+      voiceOver: '',
+    } as any;
   }
   return parsed;
 }
