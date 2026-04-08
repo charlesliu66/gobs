@@ -37,6 +37,9 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     return;
   }
   /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
+  if (req.path === '/api/prompt/templates') {
+    return next();
+  }
   if (req.path.startsWith('/api/gobs-auth')) {
     next();
     return;
