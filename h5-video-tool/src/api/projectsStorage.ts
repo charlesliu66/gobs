@@ -2,6 +2,7 @@
  * 项目持久化 API — 统一使用 /api/production/project/* 接口
  */
 import { apiGet, apiPost, apiDelete } from './client';
+import { emptyProductionProject, type StructureTemplate } from '../studio/productionTypes';
 
 export interface ProjectListItem {
   id: string;
@@ -16,11 +17,37 @@ export async function listProjects(): Promise<ProjectListItem[]> {
   return res.projects;
 }
 
+export interface CreateProductionProjectPayload {
+  project: ReturnType<typeof emptyProductionProject>;
+  characterBible: string;
+  synopsis: string;
+  structureTemplate: StructureTemplate;
+  maxTotalDurationSec: number;
+  step: number;
+  storyGenre: string;
+}
+
+export function buildCreateProjectPayload(name: string): CreateProductionProjectPayload {
+  const project = emptyProductionProject();
+  project.meta = {
+    ...project.meta,
+    title: name,
+  };
+
+  return {
+    project,
+    characterBible: '',
+    synopsis: '',
+    structureTemplate: 'three_act',
+    maxTotalDurationSec: 60,
+    step: 0,
+    storyGenre: '',
+  };
+}
+
 /** 创建新项目 */
 export async function createProject(name: string): Promise<{ id: string; updatedAt: string }> {
-  return apiPost<{ id: string; updatedAt: string }>('/api/production/project/save', {
-    project: { meta: { title: name } },
-  });
+  return apiPost<{ id: string; updatedAt: string }>('/api/production/project/save', buildCreateProjectPayload(name));
 }
 
 /** 删除项目 */

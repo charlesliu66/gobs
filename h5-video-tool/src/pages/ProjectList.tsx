@@ -47,7 +47,7 @@ export function ProjectList() {
       const meta = await createProject(name);
       setShowCreate(false);
       setNewName('');
-      navigate(`/studio/production?projectId=${meta.id}`);
+      navigate(`/studio/production?projectId=${encodeURIComponent(meta.id)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
