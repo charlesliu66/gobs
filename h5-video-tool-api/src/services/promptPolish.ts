@@ -141,39 +141,61 @@ async function postCompassChatCompletions(
 ): Promise<{ text: string; usage?: CompassChatUsage }> {
   const { apiKey, baseURL } = getCompassLlmConfig();
   const client = createCompassHttpClient();
-  try {
-    const { data } = await client.post<{
-      choices?: Array<{ message?: { content?: string | null } }>;
-      error?: { message?: string };
-      usage?: CompassChatUsage;
-    }>(`${baseURL}/chat/completions`, body, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      timeout: opts?.timeout,
-    });
+  const maxAttempts = 3;
 
-    const errMsg = data.error?.message;
-    if (errMsg) throw new Error(errMsg);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const { data } = await client.post<{
+        choices?: Array<{ message?: { content?: string | null } }>;
+        error?: { message?: string };
+        usage?: CompassChatUsage;
+      }>(`${baseURL}/chat/completions`, body, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: opts?.timeout,
+      });
 
-    const rawText = data.choices?.[0]?.message?.content?.trim() ?? '';
-    if (!rawText) throw new Error('Compass Gemini 返回内容为空');
-    const usage = data.usage;
-    const label = opts?.logLabel ?? 'chat';
-    if (process.env.EDITOR_LLM_LOG_USAGE === '1' || process.env.EDITOR_LLM_LOG_USAGE === 'true') {
-      console.info(
-        `[LLM usage] ${label}:`,
-        usage ? JSON.stringify(usage) : '(response 无 usage 字段，可能为网关未透传)',
-      );
-    }
-    return { text: rawText, usage };
-  } catch (e) {
-    if (isAxiosError(e)) {
-      const msg =
-        (e.response?.data as { error?: { message?: string } })?.error?.message ||
-        (typeof e.response?.data === 'string' ? e.response.data : e.message);
+      const errMsg = data.error?.message;
+      if (errMsg) throw new Error(errMsg);
+
+      const rawText = data.choices?.[0]?.message?.content?.trim() ?? '';
+      if (!rawText) throw new Error('Compass Gemini 返回内容为空');
+      const usage = data.usage;
+      const label = opts?.logLabel ?? 'chat';
+      if (process.env.EDITOR_LLM_LOG_USAGE === '1' || process.env.EDITOR_LLM_LOG_USAGE === 'true') {
+        console.info(
+          `[LLM usage] ${label}:`,
+          usage ? JSON.stringify(usage) : '(response 无 usage 字段，可能为网关未透传)',
+        );
+      }
+      return { text: rawText, usage };
+    } catch (e) {
+      const isLast = attempt === maxAttempts;
+      let msg = 'Compass Gemini 请求失败';
+      if (isAxiosError(e)) {
+        msg =
+          (e.response?.data as { error?: { message?: string } })?.error?.message ||
+          (typeof e.response?.data === 'string' ? e.response.data : e.message) ||
+          msg;
+        const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        if (!isLast && transient) {
+          console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
+          await new Promise((r) => setTimeout(r, attempt * 1000));
+          continue;
+        }
+      } else if (e instanceof Error) {
+        msg = e.message || msg;
+        const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        if (!isLast && transient) {
+          console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
+          await new Promise((r) => setTimeout(r, attempt * 1000));
+          continue;
+        }
+      }
       throw new Error(typeof msg === 'string' && msg ? msg : 'Compass Gemini 请求失败');
     }
-    throw e;
   }
+
+  throw new Error('Compass Gemini 请求失败');
 }
 
 /**
