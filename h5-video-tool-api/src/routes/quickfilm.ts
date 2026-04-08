@@ -122,3 +122,126 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
 });
 
 export default quickfilmRouter;
+
+// ─── Draft routes ─────────────────────────────────────────────────────────────
+
+import { Router as DraftRouter } from 'express';
+const draftsRouter = DraftRouter();
+
+function isSafeId(id: string): boolean {
+  return /^[\w-]{1,64}$/.test(id);
+}
+
+function getDraftsDir(username: string): string {
+  if (!isSafeId(username)) throw new Error('非法用户名');
+  return path.join(getApiDataDir(), 'quickfilm', 'drafts', username);
+}
+
+interface DraftBody {
+  id?: string;
+  name?: string;
+  story?: string;
+  protagonist?: string;
+  protagonistDesc?: string;
+  style?: string;
+  customStyle?: string;
+  styleImageBase64?: string;
+  assetFiles?: Array<{ name: string; base64: string }>;
+}
+
+/**
+ * POST /api/quickfilm/drafts — 保存草稿
+ */
+draftsRouter.post('/', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const body = req.body as DraftBody;
+  const draftId = (body.id && isSafeId(body.id)) ? body.id : nanoid(12);
+  const dir = getDraftsDir(username);
+  const now = new Date().toISOString();
+
+  const draft = {
+    id: draftId,
+    name: body.name || (body.story?.slice(0, 20) || '未命名草稿'),
+    story: body.story ?? '',
+    protagonist: body.protagonist ?? '',
+    protagonistDesc: body.protagonistDesc ?? '',
+    style: body.style ?? '现代',
+    customStyle: body.customStyle ?? '',
+    styleImageBase64: body.styleImageBase64,
+    assetFiles: body.assetFiles ?? [],
+    updatedAt: now,
+    createdAt: now,
+  };
+
+  // If updating existing draft, preserve createdAt
+  const filePath = path.join(dir, `${draftId}.json`);
+  try {
+    const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as { createdAt?: string };
+    if (existing.createdAt) draft.createdAt = existing.createdAt;
+  } catch { /* new draft */ }
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(draft, null, 2), 'utf-8');
+    res.json({ success: true, id: draftId });
+  } catch (err) {
+    console.error('[quickfilm/drafts] save error', err);
+    res.status(500).json({ error: '保存草稿失败' });
+  }
+});
+
+/**
+ * GET /api/quickfilm/drafts — 列出草稿
+ */
+draftsRouter.get('/', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const dir = getDraftsDir(username);
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+    const drafts = files.map((f) => {
+      const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')) as Record<string, unknown>;
+      return { id: raw.id as string, name: raw.name as string, updatedAt: raw.updatedAt as string, createdAt: raw.createdAt as string };
+    });
+    drafts.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+    res.json({ success: true, drafts });
+  } catch (err) {
+    console.error('[quickfilm/drafts] list error', err);
+    res.status(500).json({ error: '读取草稿列表失败' });
+  }
+});
+
+/**
+ * GET /api/quickfilm/drafts/:id — 读取草稿
+ */
+draftsRouter.get('/:id', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const { id } = req.params;
+  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
+
+  try {
+    const raw = fs.readFileSync(path.join(getDraftsDir(username), `${id}.json`), 'utf-8');
+    res.json(JSON.parse(raw));
+  } catch {
+    res.status(404).json({ error: '草稿不存在' });
+  }
+});
+
+/**
+ * DELETE /api/quickfilm/drafts/:id — 删除草稿
+ */
+draftsRouter.delete('/:id', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const { id } = req.params;
+  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
+
+  try {
+    fs.unlinkSync(path.join(getDraftsDir(username), `${id}.json`));
+    res.json({ success: true });
+  } catch {
+    res.status(404).json({ error: '草稿不存在' });
+  }
+});
+
+export { draftsRouter };

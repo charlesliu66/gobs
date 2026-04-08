@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { startQuickFilm, getJobStatus, confirmStoryboard } from '../api/quickfilm';
-import type { ShotWithAssets, JobStep } from '../api/quickfilm';
+import { startQuickFilm, getJobStatus, confirmStoryboard, saveDraft, listDrafts, loadDraft, deleteDraft } from '../api/quickfilm';
+import type { ShotWithAssets, JobStep, DraftMeta } from '../api/quickfilm';
 import { toast } from '../components/Toast';
 
 // ─── Step 1: 输入 ────────────────────────────────────────────────────────────
@@ -36,6 +36,85 @@ function Step1({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const styleImgRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+
+  // Draft state
+  const [drafts, setDrafts] = useState<DraftMeta[]>([]);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load drafts on mount
+  useEffect(() => {
+    listDrafts().then(setDrafts).catch(() => {/* ignore */});
+  }, []);
+
+  // Auto-save draft 10s after input changes
+  useEffect(() => {
+    if (!form.story.trim() && !form.protagonist.trim()) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      void handleSaveDraft(true);
+    }, 10000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.story, form.protagonist, form.protagonistDesc, form.style, form.customStyle]);
+
+  async function handleSaveDraft(silent = false) {
+    if (!form.story.trim() && !form.protagonist.trim()) return;
+    setSavingDraft(true);
+    try {
+      const res = await saveDraft({
+        id: currentDraftId ?? undefined,
+        name: form.story.slice(0, 20) || '未命名草稿',
+        story: form.story,
+        protagonist: form.protagonist,
+        protagonistDesc: form.protagonistDesc,
+        style: form.style,
+        customStyle: form.customStyle,
+        styleImageBase64: form.styleImageBase64,
+        assetFiles: form.assetFiles,
+      });
+      setCurrentDraftId(res.id);
+      const updated = await listDrafts();
+      setDrafts(updated);
+      if (!silent) toast.success('草稿已保存');
+    } catch (err) {
+      if (!silent) toast.error(err instanceof Error ? err.message : '保存草稿失败');
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function handleLoadDraft(id: string) {
+    try {
+      const draft = await loadDraft(id);
+      setForm({
+        story: draft.story,
+        protagonist: draft.protagonist,
+        protagonistDesc: draft.protagonistDesc,
+        style: (STYLE_OPTIONS as readonly string[]).includes(draft.style) ? draft.style as StyleOption : '自定义',
+        customStyle: draft.customStyle,
+        styleImageBase64: draft.styleImageBase64,
+        assetFiles: draft.assetFiles ?? [],
+      });
+      setCurrentDraftId(id);
+      setShowDrafts(false);
+      toast.success('草稿已加载');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '加载草稿失败');
+    }
+  }
+
+  async function handleDeleteDraft(id: string) {
+    try {
+      await deleteDraft(id);
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
+      if (currentDraftId === id) setCurrentDraftId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '删除草稿失败');
+    }
+  }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -89,7 +168,59 @@ function Step1({
       <div className="text-center mb-10">
         <h1 className="text-3xl font-bold text-[var(--color-text)] mb-2">🎬 一键成片</h1>
         <p className="text-[var(--color-text-muted)] text-base">填三个问题，剩下交给我们</p>
+        {/* 草稿入口 */}
+        {drafts.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDrafts(true)}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-[var(--color-primary)] hover:underline"
+          >
+            📋 草稿列表
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--color-primary)] text-white text-xs font-bold">{drafts.length}</span>
+          </button>
+        )}
       </div>
+
+      {/* 草稿列表弹窗 */}
+      {showDrafts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setShowDrafts(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-4 text-base font-semibold text-[var(--color-text)]">📋 草稿列表</h2>
+            {drafts.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)]">暂无草稿</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {drafts.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadDraft(d.id)}
+                      className="flex-1 text-left"
+                    >
+                      <p className="text-sm font-medium text-[var(--color-text)] truncate">{d.name}</p>
+                      <p className="text-[11px] text-[var(--color-text-subtle)]">
+                        {new Date(d.updatedAt).toLocaleString('zh-CN')}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraft(d.id)}
+                      className="ml-2 text-xs text-red-400 hover:text-red-300"
+                    >删除</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDrafts(false)}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* 故事描述 */}
@@ -220,6 +351,16 @@ function Step1({
             </div>
           )}
         </div>
+
+        {/* 保存草稿按钮 */}
+        <button
+          type="button"
+          onClick={() => handleSaveDraft(false)}
+          disabled={savingDraft || (!form.story.trim() && !form.protagonist.trim())}
+          className="w-full py-3 rounded-2xl border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-all flex items-center justify-center gap-2"
+        >
+          {savingDraft ? '保存中…' : '💾 保存草稿'}
+        </button>
 
         {/* 提交按钮 */}
         <button
@@ -373,11 +514,23 @@ function Step2({
 
 // ─── Step 3: 分镜确认 ─────────────────────────────────────────────────────────
 
-function ShotCard({ shot, index }: { shot: ShotWithAssets; index: number }) {
+function ShotCard({
+  shot,
+  index,
+  assetFiles,
+  onUpdateShot,
+}: {
+  shot: ShotWithAssets;
+  index: number;
+  assetFiles: Array<{ name: string; base64: string }>;
+  onUpdateShot: (updated: ShotWithAssets) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [showAssetPicker, setShowAssetPicker] = useState<'character' | 'scene' | null>(null);
   const hasAssets =
     (shot.matchedAssets?.characterRefs?.length ?? 0) > 0 ||
     shot.matchedAssets?.sceneRef != null;
+  const hasUserAssets = shot.userMatchedAssets?.characterRef || shot.userMatchedAssets?.sceneRef;
 
   return (
     <div className="bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl overflow-hidden transition-all hover:border-[var(--color-border-focus)]/50">
@@ -471,6 +624,108 @@ function ShotCard({ shot, index }: { shot: ShotWithAssets; index: number }) {
               </div>
             </div>
           )}
+
+          {/* 手动匹配素材 */}
+          <div className="mt-2 pt-2 border-t border-[var(--color-border)]">
+            <p className="text-xs text-[var(--color-text-subtle)] mb-2">手动匹配素材：</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* 角色参考 */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--color-text-subtle)]">👤 角色：</span>
+                {shot.userMatchedAssets?.characterRef ? (
+                  <div className="flex items-center gap-1">
+                    <img
+                      src={`data:image/png;base64,${shot.userMatchedAssets.characterRef}`}
+                      alt="角色参考"
+                      className="w-8 h-8 rounded object-cover border border-[var(--color-primary)]/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onUpdateShot({ ...shot, userMatchedAssets: { ...shot.userMatchedAssets, characterRef: undefined } })}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >×</button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">未匹配</span>
+                )}
+                {assetFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAssetPicker('character')}
+                    className="text-xs text-[var(--color-primary)] hover:underline"
+                  >选择</button>
+                )}
+              </div>
+              {/* 场景参考 */}
+              <div className="flex items-center gap-1.5 ml-3">
+                <span className="text-xs text-[var(--color-text-subtle)]">🏞 场景：</span>
+                {shot.userMatchedAssets?.sceneRef ? (
+                  <div className="flex items-center gap-1">
+                    <img
+                      src={`data:image/png;base64,${shot.userMatchedAssets.sceneRef}`}
+                      alt="场景参考"
+                      className="w-8 h-8 rounded object-cover border border-[var(--color-success)]/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onUpdateShot({ ...shot, userMatchedAssets: { ...shot.userMatchedAssets, sceneRef: undefined } })}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >×</button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">未匹配</span>
+                )}
+                {assetFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAssetPicker('scene')}
+                    className="text-xs text-[var(--color-primary)] hover:underline"
+                  >选择</button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 素材选择弹窗 */}
+          {showAssetPicker && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setShowAssetPicker(null)}>
+              <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="mb-4 text-sm font-semibold text-[var(--color-text)]">
+                  选择{showAssetPicker === 'character' ? '角色' : '场景'}素材
+                </h3>
+                {assetFiles.length === 0 ? (
+                  <p className="text-sm text-[var(--color-text-muted)]">暂无可用素材</p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
+                    {assetFiles.map((f, fi) => (
+                      <button
+                        key={fi}
+                        type="button"
+                        onClick={() => {
+                          const key = showAssetPicker === 'character' ? 'characterRef' : 'sceneRef';
+                          onUpdateShot({
+                            ...shot,
+                            userMatchedAssets: { ...shot.userMatchedAssets, [key]: f.base64 },
+                          });
+                          setShowAssetPicker(null);
+                        }}
+                        className="rounded-lg border border-[var(--color-border)] overflow-hidden hover:border-[var(--color-primary)] transition aspect-square"
+                      >
+                        <img src={`data:image/png;base64,${f.base64}`} alt={f.name} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowAssetPicker(null)}
+                    className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                  >取消</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -481,10 +736,12 @@ function Step3({
   jobId,
   storyboard,
   logline,
+  assetFiles,
 }: {
   jobId: string;
   storyboard: ShotWithAssets[];
   logline?: string;
+  assetFiles: Array<{ name: string; base64: string }>;
 }) {
   const navigate = useNavigate();
   const [shots, setShots] = useState<ShotWithAssets[]>(storyboard);
@@ -534,7 +791,13 @@ function Step3({
       {/* 分镜列表 */}
       <div className="space-y-2">
         {shots.map((shot, i) => (
-          <ShotCard key={shot.shotIndex} shot={shot} index={i} />
+          <ShotCard
+            key={shot.shotIndex}
+            shot={shot}
+            index={i}
+            assetFiles={assetFiles}
+            onUpdateShot={(updated) => setShots((prev) => prev.map((s, j) => j === i ? updated : s))}
+          />
         ))}
       </div>
 
@@ -576,10 +839,12 @@ export function QuickFilm() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [storyboard, setStoryboard] = useState<ShotWithAssets[]>([]);
   const [logline, setLogline] = useState<string | undefined>();
+  const [assetFiles, setAssetFiles] = useState<Array<{ name: string; base64: string }>>([]);
 
   async function handleFormSubmit(form: Step1Form) {
     try {
       const style = form.style === '自定义' ? form.customStyle || '现代' : form.style;
+      setAssetFiles(form.assetFiles);
       const { jobId: id } = await startQuickFilm({
         story: form.story,
         protagonist: form.protagonist || '主角',
@@ -633,7 +898,7 @@ export function QuickFilm() {
       {step === 1 && <Step1 onSubmit={handleFormSubmit} />}
       {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} />}
       {step === 3 && jobId && (
-        <Step3 jobId={jobId} storyboard={storyboard} logline={logline} />
+        <Step3 jobId={jobId} storyboard={storyboard} logline={logline} assetFiles={assetFiles} />
       )}
     </div>
   );

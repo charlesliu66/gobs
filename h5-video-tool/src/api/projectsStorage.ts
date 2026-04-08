@@ -52,6 +52,13 @@ export async function saveProject(
 }
 
 /**
+ * 重命名项目
+ */
+export async function renameProject(id: string, name: string): Promise<ProjectMeta> {
+  return apiPut<ProjectMeta>(`/api/projects/${encodeURIComponent(id)}`, { name });
+}
+
+/**
  * 删除项目
  */
 export async function deleteProject(id: string): Promise<{ ok: boolean }> {

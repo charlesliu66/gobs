@@ -1,4 +1,4 @@
-import { apiPost, apiGet } from './client';
+import { apiPost, apiGet, apiDelete } from './client';
 
 export interface QuickFilmStartInput {
   story: string;
@@ -61,6 +61,7 @@ export interface ShotWithAssets {
     mp_audio: string;
   };
   matchedAssets?: MatchedAssets;
+  userMatchedAssets?: { characterRef?: string; sceneRef?: string };
 }
 
 export interface JobStatus {
@@ -86,4 +87,44 @@ export async function confirmStoryboard(
   storyboard: ShotWithAssets[],
 ): Promise<{ batchJobId: string }> {
   return apiPost(`/api/quickfilm/${jobId}/confirm`, { storyboard });
+}
+
+// ─── Draft API ────────────────────────────────────────────────────────────────
+
+export interface DraftMeta {
+  id: string;
+  name: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface DraftData {
+  id: string;
+  name: string;
+  story: string;
+  protagonist: string;
+  protagonistDesc: string;
+  style: string;
+  customStyle: string;
+  styleImageBase64?: string;
+  assetFiles: Array<{ name: string; base64: string }>;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export async function saveDraft(data: Partial<DraftData>): Promise<{ success: boolean; id: string }> {
+  return apiPost('/api/quickfilm/drafts', data);
+}
+
+export async function listDrafts(): Promise<DraftMeta[]> {
+  const res = await apiGet<{ drafts: DraftMeta[] }>('/api/quickfilm/drafts');
+  return res.drafts;
+}
+
+export async function loadDraft(id: string): Promise<DraftData> {
+  return apiGet(`/api/quickfilm/drafts/${encodeURIComponent(id)}`);
+}
+
+export async function deleteDraft(id: string): Promise<{ success: boolean }> {
+  return apiDelete(`/api/quickfilm/drafts/${encodeURIComponent(id)}`);
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listProjects, createProject, deleteProject, type ProjectMeta } from '../api/projectsStorage';
+import { listProjects, createProject, deleteProject, renameProject, type ProjectMeta } from '../api/projectsStorage';
 
 export function ProjectList() {
   const navigate = useNavigate();
@@ -11,6 +11,17 @@ export function ProjectList() {
   const [newName, setNewName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // 重命名状态
+  const [renameTarget, setRenameTarget] = useState<ProjectMeta | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+
+  // 删除确认弹窗状态
+  const [deleteTarget, setDeleteTarget] = useState<ProjectMeta | null>(null);
+
+  // 操作菜单状态
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   async function fetchProjects() {
     setLoading(true);
@@ -34,7 +45,7 @@ export function ProjectList() {
       const meta = await createProject(name);
       setShowCreate(false);
       setNewName('');
-      navigate(`/projects/${meta.id}`);
+      navigate(`/studio/production?projectId=${meta.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
@@ -42,16 +53,37 @@ export function ProjectList() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('确认删除该项目？此操作不可撤销。')) return;
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     setDeletingId(id);
     try {
       await deleteProject(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
+      setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleRenameConfirm() {
+    if (!renameTarget) return;
+    const trimmed = renameName.trim();
+    if (!trimmed) return;
+    setRenaming(true);
+    try {
+      await renameProject(renameTarget.id, trimmed);
+      setProjects((prev) =>
+        prev.map((p) => (p.id === renameTarget.id ? { ...p, name: trimmed } : p)),
+      );
+      setRenameTarget(null);
+      setRenameName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '重命名失败');
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -183,27 +215,95 @@ export function ProjectList() {
                 </p>
               </button>
 
-              {/* Delete btn */}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); void handleDelete(p.id); }}
-                disabled={deletingId === p.id}
-                className="absolute right-3 top-3 hidden rounded-md p-1.5 text-[var(--color-text-subtle)] hover:bg-red-500/10 hover:text-red-400 group-hover:flex disabled:opacity-50"
-                title="删除项目"
-              >
-                {deletingId === p.id
-                  ? <span className="text-xs">删除中</span>
-                  : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                      <path d="M10 11v6M14 11v6" />
-                    </svg>
-                  )
-                }
-              </button>
+              {/* Action menu */}
+              <div className="absolute right-3 top-3 hidden group-hover:block">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === p.id ? null : p.id); }}
+                  className="rounded-md p-1.5 text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
+                  title="更多操作"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+                  </svg>
+                </button>
+                {menuOpenId === p.id && (
+                  <div className="absolute right-0 top-8 z-10 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); setRenameTarget(p); setRenameName(p.name); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
+                    >
+                      ✏️ 重命名
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); setDeleteTarget(p); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+                    >
+                      🗑️ 删除
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 重命名弹窗 */}
+      {renameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+            <h2 className="mb-4 text-base font-semibold text-[var(--color-text)]">重命名项目</h2>
+            <input
+              autoFocus
+              type="text"
+              placeholder="项目名称"
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !renaming && handleRenameConfirm()}
+              className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-border-focus)] focus:ring-1 focus:ring-[var(--color-primary)]"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setRenameTarget(null); setRenameName(''); }}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >取消</button>
+              <button
+                type="button"
+                onClick={handleRenameConfirm}
+                disabled={renaming || !renameName.trim()}
+                className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+              >{renaming ? '保存中…' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+            <h2 className="mb-2 text-base font-semibold text-[var(--color-text)]">删除项目</h2>
+            <p className="mb-6 text-sm text-[var(--color-text-muted)]">
+              确定要删除项目 &ldquo;{deleteTarget.name}&rdquo; 吗？此操作不可撤销。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >取消</button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deletingId === deleteTarget.id}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
+              >{deletingId === deleteTarget.id ? '删除中…' : '确认删除'}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
