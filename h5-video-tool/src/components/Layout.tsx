@@ -1,12 +1,16 @@
 import { Fragment, useState, useEffect, useMemo, type JSX } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { useGobsAuth } from '../context/GobsAuthContext';
-import { navTargetToFeature } from '../lib/gobsNav';
-import type { GobsSessionUser } from '../types/gobsAuth';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
+
+function getStoredUser(): { username: string; displayName: string } | null {
+  try {
+    const raw = localStorage.getItem('gobs_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 function HomeIcon() {
   return (
@@ -168,12 +172,8 @@ function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
   return new URLSearchParams(search).get('tab') === 'templates';
 }
 
-function filterNavGroup(user: GobsSessionUser, group: NavItemDef[]): NavItemDef[] {
-  return group.filter((it) => {
-    const f = navTargetToFeature(it.to);
-    if (!f) return true;
-    return user.isSuperAdmin || user.features.includes(f);
-  });
+function filterNavGroup(group: NavItemDef[]): NavItemDef[] {
+  return group;
 }
 
 function navLinkClass(active: boolean, highlight?: boolean): string {
@@ -190,7 +190,7 @@ function navLinkClass(active: boolean, highlight?: boolean): string {
 export function Layout() {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useGobsAuth();
+  const user = getStoredUser();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
   const isTiktokMatrix = pathname === '/tiktok-matrix';
@@ -201,9 +201,8 @@ export function Layout() {
   }, [pathname]);
 
   const visibleGroups = useMemo(() => {
-    if (!user) return NAV_GROUPS.map(() => [] as NavItemDef[]);
-    return NAV_GROUPS.map((g) => filterNavGroup(user, g));
-  }, [user]);
+    return NAV_GROUPS.map((g) => filterNavGroup(g));
+  }, []);
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
@@ -251,7 +250,7 @@ export function Layout() {
         ))}
       </nav>
       <div className="mt-auto p-3 border-t border-[var(--color-border)] space-y-2">
-        {user?.isSuperAdmin && (
+        {user && (
           <NavLink
             to="/settings/accounts"
             className={({ isActive }) =>
@@ -269,10 +268,9 @@ export function Layout() {
         <button
           type="button"
           onClick={() => {
-            void (async () => {
-              await logout();
-              navigate('/login', { replace: true });
-            })();
+            localStorage.removeItem('gobs_token');
+            localStorage.removeItem('gobs_user');
+            navigate('/login', { replace: true });
           }}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px] text-left"
         >

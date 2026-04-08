@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
-import { useGobsAuth } from '../context/GobsAuthContext';
+
 import {
   fetchAccounts,
   publishVideo,
@@ -15,7 +15,6 @@ import { toast } from '../components/Toast';
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
-  const { user } = useGobsAuth();
   const [accounts, setAccounts] = useState<GeelarkAccount[]>([]);
   const [filterRegion, setFilterRegion] = useState<string>('');
   const [filterPlatform, setFilterPlatform] = useState<string>('');
@@ -55,13 +54,8 @@ export function TabDistribute() {
   }, []);
 
   const accountsForPermission = useMemo(() => {
-    if (!user || user.isSuperAdmin) return accounts;
-    const allow = user.publishAccountIds;
-    if (allow == null) return accounts;
-    if (allow.length === 0) return [];
-    const s = new Set(allow);
-    return accounts.filter((a) => s.has(a.id));
-  }, [accounts, user]);
+    return accounts;
+  }, [accounts]);
 
   useEffect(() => {
     const ids = new Set(accountsForPermission.map((a) => a.id));
