@@ -4,6 +4,8 @@ import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
 import { getCharacterLookImage } from '../../studio/productionAssets';
 import { generateFrames, standardizeCharacterImage } from '../../api/storyboard';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
+import { fetchAssets, getAssetImage } from '../../api/assets';
+import type { Asset } from '../../api/assets';
 
 // 前端生成简单 id
 function genId(): string {
@@ -29,6 +31,10 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
   const uploadRefInputRef = useRef<HTMLInputElement>(null);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [assetList, setAssetList] = useState<Asset[]>([]);
+  const [assetImages, setAssetImages] = useState<Record<string, string>>({});
+  const [loadingAssets, setLoadingAssets] = useState(false);
 
   // 若基础形象未设置，自动从角色当前定稿形象带入
   useEffect(() => {
@@ -66,6 +72,44 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
       setSavingToLib(false);
     }
   }, [sheet]);
+
+  // 从素材库选择
+  const handleOpenAssetPicker = useCallback(async () => {
+    setShowAssetPicker(true);
+    setLoadingAssets(true);
+    try {
+      const index = await fetchAssets();
+      const characters = index.assets.filter((a) => a.type === 'character');
+      setAssetList(characters);
+      // Load images for all character assets
+      for (const asset of characters) {
+        if (!assetImages[asset.id]) {
+          getAssetImage(asset.id).then(({ imageDataUrl }) => {
+            setAssetImages((prev) => ({ ...prev, [asset.id]: imageDataUrl }));
+          }).catch(() => { /* ignore */ });
+        }
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '加载素材库失败');
+      setShowAssetPicker(false);
+    } finally {
+      setLoadingAssets(false);
+    }
+  }, [assetImages]);
+
+  const handleSelectAsset = useCallback(async (asset: Asset) => {
+    try {
+      let imageUrl = assetImages[asset.id];
+      if (!imageUrl) {
+        const result = await getAssetImage(asset.id);
+        imageUrl = result.imageDataUrl;
+      }
+      onUpdate({ ...sheet, baseImageDataUrl: imageUrl, baseConfirmed: true });
+      setShowAssetPicker(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '获取素材图片失败');
+    }
+  }, [assetImages, sheet, onUpdate]);
 
   const states = sheet.states ?? [];
 
@@ -192,6 +236,15 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
               className="hidden"
               onChange={(e) => handleUploadRefImage(e.target.files?.[0] ?? null)}
             />
+            <button
+              type="button"
+              onClick={() => void handleOpenAssetPicker()}
+              disabled={genningBase || standardizing}
+              className="px-3 py-1.5 rounded-lg text-xs border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)] disabled:opacity-50 transition-colors"
+              title="从素材库选择角色图片作为基础形象"
+            >
+              从素材库选择
+            </button>
           </div>
         </div>
         {sheet.baseImageDataUrl ? (
@@ -378,6 +431,43 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
           </div>
         )}
       </div>
+
+      {/* 素材库选择弹窗 */}
+      {showAssetPicker && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowAssetPicker(false)}>
+          <div className="bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-5 max-w-lg w-full max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-sm text-[var(--color-text)]">📁 从素材库选择角色</h3>
+              <button type="button" onClick={() => setShowAssetPicker(false)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-lg">✕</button>
+            </div>
+            {loadingAssets ? (
+              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">加载中…</div>
+            ) : assetList.length === 0 ? (
+              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">素材库中没有角色类型的素材</div>
+            ) : (
+              <div className="flex-1 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {assetList.map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    onClick={() => void handleSelectAsset(asset)}
+                    className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)] transition-all"
+                  >
+                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-[var(--color-surface-hover)] flex items-center justify-center">
+                      {assetImages[asset.id] ? (
+                        <img src={assetImages[asset.id]} alt={asset.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-2xl">👤</div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-[var(--color-text-muted)] text-center truncate w-full">{asset.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

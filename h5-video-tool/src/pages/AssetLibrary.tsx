@@ -1,9 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { fetchAssets, uploadAsset, updateAsset, deleteAsset, scanAssets, autoTagAsset, getAssetImage } from '../api/assets';
 import type { Asset, AssetIndex, AssetType, AutoTagResult } from '../api/assets';
 import { saveCharacterToLibrary } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
-import { useEffect } from 'react';
 
 const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   character: '👤 角色',
@@ -19,13 +18,27 @@ function AssetCard({
   onEdit,
   onDelete,
   onImportToLibrary,
+  cachedImage,
+  onLoadImage,
+  onPreviewImage,
 }: {
   asset: Asset;
   onEdit: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
   onImportToLibrary: (asset: Asset) => void;
+  cachedImage?: string;
+  onLoadImage: (id: string) => void;
+  onPreviewImage: (imageUrl: string) => void;
 }) {
-  const hasThumbnail = Boolean(asset.thumbnailBase64);
+  const hasThumbnail = Boolean(cachedImage || asset.thumbnailBase64);
+  const thumbnailSrc = cachedImage || (asset.thumbnailBase64 ? `data:image/png;base64,${asset.thumbnailBase64}` : undefined);
+
+  // Load image on mount if not cached
+  useEffect(() => {
+    if (!cachedImage && !asset.thumbnailBase64) {
+      onLoadImage(asset.id);
+    }
+  }, [asset.id, cachedImage, asset.thumbnailBase64, onLoadImage]);
 
   return (
     <div
@@ -33,10 +46,18 @@ function AssetCard({
       onClick={() => onEdit(asset)}
     >
       {/* 缩略图 */}
-      <div className="aspect-square bg-[var(--color-surface-hover)] flex items-center justify-center relative overflow-hidden">
-        {hasThumbnail ? (
+      <div
+        className="aspect-square bg-[var(--color-surface-hover)] flex items-center justify-center relative overflow-hidden"
+        onClick={(e) => {
+          if (thumbnailSrc) {
+            e.stopPropagation();
+            onPreviewImage(thumbnailSrc);
+          }
+        }}
+      >
+        {hasThumbnail && thumbnailSrc ? (
           <img
-            src={`data:image/png;base64,${asset.thumbnailBase64}`}
+            src={thumbnailSrc}
             alt={asset.name}
             className="w-full h-full object-cover"
           />
@@ -220,6 +241,9 @@ export function AssetLibrary() {
   const [importTarget, setImportTarget] = useState<Asset | null>(null);
   const [importName, setImportName] = useState('');
   const [importing, setImporting] = useState(false);
+  const [imageCache, setImageCache] = useState<Record<string, string>>({});
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const loadingImages = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -236,6 +260,19 @@ export function AssetLibrary() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const loadImage = useCallback(async (id: string) => {
+    if (loadingImages.current.has(id)) return;
+    loadingImages.current.add(id);
+    try {
+      const { imageDataUrl } = await getAssetImage(id);
+      setImageCache((prev) => ({ ...prev, [id]: imageDataUrl }));
+    } catch {
+      // silently fail
+    } finally {
+      loadingImages.current.delete(id);
+    }
+  }, []);
 
   async function handleScan() {
     setScanning(true);
@@ -449,6 +486,9 @@ export function AssetLibrary() {
               onEdit={setEditingAsset}
               onDelete={handleDelete}
               onImportToLibrary={handleImportToLibrary}
+              cachedImage={imageCache[asset.id]}
+              onLoadImage={loadImage}
+              onPreviewImage={setPreviewImage}
             />
           ))}
         </div>
@@ -537,6 +577,28 @@ export function AssetLibrary() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 图片大图预览 */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center cursor-pointer"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img
+            src={previewImage}
+            alt="预览"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition"
+            onClick={() => setPreviewImage(null)}
+          >
+            ✕
+          </button>
         </div>
       )}
 
