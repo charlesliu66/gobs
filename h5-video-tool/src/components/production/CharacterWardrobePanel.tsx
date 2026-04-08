@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { CharacterSheet, CharacterState } from '../../studio/productionTypes';
 import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
+import { getCharacterLookImage } from '../../studio/productionAssets';
 import { generateFrames } from '../../api/storyboard';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
 
@@ -26,6 +27,18 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
+
+  // 若基础形象未设置，自动从角色当前定稿形象带入
+  useEffect(() => {
+    if (!sheet.baseImageDataUrl) {
+      const activeImage = getCharacterLookImage(sheet);
+      if (activeImage) {
+        onUpdate({ ...sheet, baseImageDataUrl: activeImage, baseConfirmed: true });
+      }
+    }
+  // 仅在 sheet.id 变化时触发，避免循环
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet.id]);
 
   const handleSaveToLibrary = useCallback(async () => {
     setSavingToLib(true);

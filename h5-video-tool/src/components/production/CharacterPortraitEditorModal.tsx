@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildCharacterImagePrompt, ensureCharacterLookTree } from '../../studio/productionAssets';
+import { buildCharacterImagePrompt, ensureCharacterLookTree, getCharacterLookImage } from '../../studio/productionAssets';
 import type { AssetVariant, CharacterSheet, ProductionDesignLayer } from '../../studio/productionTypes';
 import type { GenerateCharacterPortraitRequest } from '../../api/storyboard';
 import { getPortraitJobKey, type PortraitEditIntent, type PortraitJobState } from './portraitJobKey';
 import { CharacterWardrobePanel } from './CharacterWardrobePanel';
+import { saveCharacterToLibrary } from '../../api/characterLibrary';
 
 export type { PortraitEditIntent } from './portraitJobKey';
 
@@ -59,6 +60,8 @@ export function CharacterPortraitEditorModal({
   const [extraPrompt, setExtraPrompt] = useState('');
   const [refDataUrl, setRefDataUrl] = useState<string | null>(null);
   const [compassKey, setCompassKey] = useState('');
+  const [savingToLib, setSavingToLib] = useState(false);
+  const [savedToLib, setSavedToLib] = useState(false);
 
   const busy = portraitJob?.status === 'generating';
   const preview = portraitJob?.status === 'done' ? portraitJob.previewDataUrl : null;
@@ -168,6 +171,33 @@ export function CharacterPortraitEditorModal({
     onConfirm(preview);
     onClose();
   };
+
+  const handleSaveToLibrary = useCallback(async () => {
+    setSavingToLib(true);
+    try {
+      const baseImage = characterSheet.baseImageDataUrl ?? getCharacterLookImage(characterSheet);
+      await saveCharacterToLibrary({
+        name: characterSheet.name,
+        isProtagonist: characterSheet.isProtagonist,
+        baseImageDataUrl: baseImage,
+        baseConfirmed: characterSheet.baseConfirmed ?? !!baseImage,
+        states: (characterSheet.states ?? []).map((s) => ({
+          id: s.id,
+          label: s.label,
+          imageDataUrl: s.imageDataUrl,
+          statePrompt: s.statePrompt,
+          notes: s.notes,
+        })),
+      });
+      setSavedToLib(true);
+      setTimeout(() => setSavedToLib(false), 3000);
+    } catch (e) {
+      // 错误静默展示在按钮上
+      console.error(e);
+    } finally {
+      setSavingToLib(false);
+    }
+  }, [characterSheet]);
 
   const localErr =
     !promptVariant
@@ -376,14 +406,24 @@ export function CharacterPortraitEditorModal({
             {modalTab === 'wardrobe' ? '关闭' : '取消'}
           </button>
           {modalTab === 'portrait' && (
-            <button
-              type="button"
-              disabled={!preview}
-              onClick={handleConfirm}
-              className="rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              {editIntent.mode === 'branch' ? '确认并加入形象树' : '确认应用此形象'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => void handleSaveToLibrary()}
+                disabled={savingToLib}
+                className="rounded-lg px-4 py-2 text-sm border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] disabled:opacity-50 transition-colors"
+              >
+                {savingToLib ? '保存中…' : savedToLib ? '✓ 已保存到形象库' : '保存到形象库'}
+              </button>
+              <button
+                type="button"
+                disabled={!preview}
+                onClick={handleConfirm}
+                className="rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {editIntent.mode === 'branch' ? '确认并加入形象树' : '确认应用此形象'}
+              </button>
+            </>
           )}
         </div>
       </div>
