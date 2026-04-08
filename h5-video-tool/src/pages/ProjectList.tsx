@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listProjects, createProject, deleteProject, renameProject, type ProjectMeta } from '../api/projectsStorage';
+import { listProjects, createProject, deleteProject, renameProject, type ProjectListItem } from '../api/projectsStorage';
+
+const STEP_LABELS = ['剧本', '服化道', '分镜', '完成'] as const;
 
 export function ProjectList() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,12 +15,12 @@ export function ProjectList() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // 重命名状态
-  const [renameTarget, setRenameTarget] = useState<ProjectMeta | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ProjectListItem | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renaming, setRenaming] = useState(false);
 
   // 删除确认弹窗状态
-  const [deleteTarget, setDeleteTarget] = useState<ProjectMeta | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectListItem | null>(null);
 
   // 操作菜单状态
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export function ProjectList() {
     try {
       await renameProject(renameTarget.id, trimmed);
       setProjects((prev) =>
-        prev.map((p) => (p.id === renameTarget.id ? { ...p, name: trimmed } : p)),
+        prev.map((p) => (p.id === renameTarget.id ? { ...p, title: trimmed } : p)),
       );
       setRenameTarget(null);
       setRenameName('');
@@ -204,15 +206,17 @@ export function ProjectList() {
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">{p.name}</p>
+                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">{p.title}</p>
                     <p className="mt-0.5 text-[11px] text-[var(--color-text-subtle)]">
                       更新于 {formatDate(p.updatedAt)}
                     </p>
                   </div>
                 </div>
-                <p className="text-[11px] text-[var(--color-text-subtle)]">
-                  创建于 {formatDate(p.createdAt)}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--color-primary)]">
+                    {STEP_LABELS[p.step] ?? `步骤${p.step}`}
+                  </span>
+                </div>
               </button>
 
               {/* Action menu */}
@@ -231,7 +235,7 @@ export function ProjectList() {
                   <div className="absolute right-0 top-8 z-10 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1 shadow-xl">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); setRenameTarget(p); setRenameName(p.name); }}
+                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); setRenameTarget(p); setRenameName(p.title); }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
                     >
                       ✏️ 重命名
@@ -288,7 +292,7 @@ export function ProjectList() {
           <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
             <h2 className="mb-2 text-base font-semibold text-[var(--color-text)]">删除项目</h2>
             <p className="mb-6 text-sm text-[var(--color-text-muted)]">
-              确定要删除项目 &ldquo;{deleteTarget.name}&rdquo; 吗？此操作不可撤销。
+              确定要删除项目 &ldquo;{deleteTarget.title}&rdquo; 吗？此操作不可撤销。
             </p>
             <div className="flex justify-end gap-2">
               <button

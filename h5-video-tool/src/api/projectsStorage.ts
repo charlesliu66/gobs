@@ -1,66 +1,47 @@
 /**
- * 项目持久化 API（调后端 /api/projects）
+ * 项目持久化 API — 统一使用 /api/production/project/* 接口
  */
-import { apiGet, apiPost, apiPut, apiDelete } from './client';
+import { apiGet, apiPost, apiDelete } from './client';
 
-export interface ProjectMeta {
+export interface ProjectListItem {
   id: string;
-  name: string;
-  createdAt: string;
+  title: string;
   updatedAt: string;
+  step: number;
 }
 
-export interface ProjectData extends ProjectMeta {
-  username: string;
-  data: Record<string, unknown>;
-}
-
-/**
- * 列出当前用户所有项目
- */
-export async function listProjects(): Promise<ProjectMeta[]> {
-  const res = await apiGet<{ projects: ProjectMeta[] }>('/api/projects');
+/** 列出所有项目 */
+export async function listProjects(): Promise<ProjectListItem[]> {
+  const res = await apiGet<{ projects: ProjectListItem[] }>('/api/production/project/list');
   return res.projects;
 }
 
-/**
- * 创建新项目，返回 meta（含 id）
- */
-export async function createProject(name: string): Promise<ProjectMeta> {
-  return apiPost<ProjectMeta>('/api/projects', { name });
+/** 创建新项目 */
+export async function createProject(name: string): Promise<{ id: string; updatedAt: string }> {
+  return apiPost<{ id: string; updatedAt: string }>('/api/production/project/save', {
+    project: { meta: { title: name } },
+  });
 }
 
-/**
- * 读取项目完整数据
- */
-export async function getProject(id: string): Promise<ProjectData> {
-  return apiGet<ProjectData>(`/api/projects/${encodeURIComponent(id)}`);
-}
-
-/**
- * 保存/更新项目数据
- * @param id 项目 id
- * @param name 项目名称
- * @param data 任意 JSON 数据
- */
-export async function saveProject(
-  id: string,
-  name: string,
-  data: Record<string, unknown>,
-): Promise<ProjectMeta> {
-  return apiPut<ProjectMeta>(`/api/projects/${encodeURIComponent(id)}`, { name, data });
-}
-
-/**
- * 重命名项目
- */
-export async function renameProject(id: string, name: string): Promise<ProjectMeta> {
-  return apiPut<ProjectMeta>(`/api/projects/${encodeURIComponent(id)}`, { name });
-}
-
-/**
- * 删除项目
- */
+/** 删除项目 */
 export async function deleteProject(id: string): Promise<{ ok: boolean }> {
-  return apiDelete<{ ok: boolean }>(`/api/projects/${encodeURIComponent(id)}`);
+  return apiDelete<{ ok: boolean }>(`/api/production/project?id=${encodeURIComponent(id)}`);
+}
+
+/** 重命名项目（先 load 完整数据再 save，只改 title） */
+export async function renameProject(id: string, newTitle: string): Promise<{ id: string; updatedAt: string }> {
+  // 先加载完整项目数据
+  const full = await apiGet<Record<string, unknown>>(`/api/production/project/load?id=${encodeURIComponent(id)}`);
+  const project = (full.project as Record<string, unknown>) || {};
+  const meta = (project.meta as Record<string, unknown>) || {};
+
+  // 更新 title，保持其他数据不变
+  return apiPost<{ id: string; updatedAt: string }>('/api/production/project/save', {
+    ...full,
+    id,
+    project: {
+      ...project,
+      meta: { ...meta, title: newTitle },
+    },
+  });
 }
