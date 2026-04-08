@@ -59,3 +59,7 @@ export async function deleteAsset(id: string): Promise<{ success: boolean }> {
 export async function scanAssets(): Promise<{ success: boolean; count: number }> {
   return apiPost('/api/assets/scan', {});
 }
+
+export async function getAssetImage(id: string): Promise<{ imageDataUrl: string }> {
+  return apiGet(`/api/assets/${encodeURIComponent(id)}/image`);
+}

@@ -40,8 +40,6 @@ export async function generateFrames(req: GenerateFramesRequest): Promise<Genera
   });
 }
 
-const BASE = import.meta.env.VITE_API_BASE_URL || '';
-
 export interface GenerateCharacterPortraitRequest {
   prompt: string;
   aspectRatio?: string;
@@ -57,24 +55,15 @@ export interface GenerateCharacterPortraitRequest {
 export async function generateCharacterPortrait(
   req: GenerateCharacterPortraitRequest,
 ): Promise<{ imageDataUrl: string; model?: string | null }> {
-  const res = await fetch(`${BASE}/api/storyboard/portrait`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: req.prompt.trim(),
-      aspectRatio: req.aspectRatio ?? '9:16',
-      ...(req.referenceImage ? { referenceImage: req.referenceImage } : {}),
-      ...(req.globalStyleReferenceFrame
-        ? { globalStyleReferenceFrame: req.globalStyleReferenceFrame }
-        : {}),
-      ...(req.compassApiKey?.trim() ? { compassApiKey: req.compassApiKey.trim() } : {}),
-    }),
+  return apiPost<{ imageDataUrl: string; model?: string | null }>('/api/storyboard/portrait', {
+    prompt: req.prompt.trim(),
+    aspectRatio: req.aspectRatio ?? '9:16',
+    ...(req.referenceImage ? { referenceImage: req.referenceImage } : {}),
+    ...(req.globalStyleReferenceFrame
+      ? { globalStyleReferenceFrame: req.globalStyleReferenceFrame }
+      : {}),
+    ...(req.compassApiKey?.trim() ? { compassApiKey: req.compassApiKey.trim() } : {}),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error || res.statusText);
-  }
-  return res.json() as Promise<{ imageDataUrl: string; model?: string | null }>;
 }
 
 export interface StandardizeCharacterImageRequest {
@@ -90,20 +79,14 @@ export interface StandardizeCharacterImageRequest {
 export async function standardizeCharacterImage(
   req: StandardizeCharacterImageRequest,
 ): Promise<{ imageDataUrl: string }> {
-  const res = await fetch(`${BASE}/api/character/standardize-image`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const data = await apiPost<{ success?: boolean; imageDataUrl?: string; error?: string }>(
+    '/api/character/standardize-image',
+    {
       imageDataUrl: req.imageDataUrl,
       characterName: req.characterName,
       ...(req.styleRef?.trim() ? { styleRef: req.styleRef.trim() } : {}),
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error || res.statusText);
-  }
-  const data = await res.json() as { success?: boolean; imageDataUrl?: string; error?: string };
+    },
+  );
   if (!data.imageDataUrl) throw new Error(data.error || '返回数据异常');
   return { imageDataUrl: data.imageDataUrl };
 }

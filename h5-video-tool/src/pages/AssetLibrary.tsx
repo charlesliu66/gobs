@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
-import { fetchAssets, uploadAsset, updateAsset, deleteAsset, scanAssets, autoTagAsset } from '../api/assets';
+import { fetchAssets, uploadAsset, updateAsset, deleteAsset, scanAssets, autoTagAsset, getAssetImage } from '../api/assets';
 import type { Asset, AssetIndex, AssetType, AutoTagResult } from '../api/assets';
+import { saveCharacterToLibrary } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
 import { useEffect } from 'react';
 
@@ -17,10 +18,12 @@ function AssetCard({
   asset,
   onEdit,
   onDelete,
+  onImportToLibrary,
 }: {
   asset: Asset;
   onEdit: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
+  onImportToLibrary: (asset: Asset) => void;
 }) {
   const hasThumbnail = Boolean(asset.thumbnailBase64);
 
@@ -44,6 +47,16 @@ function AssetCard({
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all flex gap-1">
+          {asset.type === 'character' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onImportToLibrary(asset); }}
+              className="w-6 h-6 bg-blue-500/80 text-white rounded-md text-xs flex items-center justify-center hover:bg-blue-600 transition"
+              title="导入形象库"
+            >
+              ⬆
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete(asset); }}
@@ -204,6 +217,9 @@ export function AssetLibrary() {
   const [filterType, setFilterType] = useState<string>('all');
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{ imageBase64: string; filename: string; autoTag: AutoTagResult } | null>(null);
+  const [importTarget, setImportTarget] = useState<Asset | null>(null);
+  const [importName, setImportName] = useState('');
+  const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -292,6 +308,31 @@ export function AssetLibrary() {
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '删除失败');
+    }
+  }
+
+  function handleImportToLibrary(asset: Asset) {
+    setImportTarget(asset);
+    setImportName(asset.name);
+  }
+
+  async function handleConfirmImport() {
+    if (!importTarget || !importName.trim()) return;
+    setImporting(true);
+    try {
+      const { imageDataUrl } = await getAssetImage(importTarget.id);
+      await saveCharacterToLibrary({
+        name: importName.trim(),
+        baseImageDataUrl: imageDataUrl,
+        states: [],
+        tags: importTarget.tags,
+      });
+      toast.success('已导入形象库');
+      setImportTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '导入失败');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -407,6 +448,7 @@ export function AssetLibrary() {
               asset={asset}
               onEdit={setEditingAsset}
               onDelete={handleDelete}
+              onImportToLibrary={handleImportToLibrary}
             />
           ))}
         </div>
@@ -454,6 +496,44 @@ export function AssetLibrary() {
                 className="flex-1 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-sm font-semibold hover:bg-[var(--color-primary-hover)] disabled:opacity-60 transition"
               >
                 {uploading ? '添加中...' : '确认添加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 导入形象库弹窗 */}
+      {importTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="font-bold text-[var(--color-text)] mb-4">👤 导入到形象库</h3>
+            <div className="space-y-3 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">角色名称</label>
+                <input
+                  value={importName}
+                  onChange={(e) => setImportName(e.target.value)}
+                  placeholder="输入角色名称"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] transition"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setImportTarget(null)}
+                className="flex-1 py-2.5 border border-[var(--color-border)] rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={importing || !importName.trim()}
+                className="flex-1 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-sm font-semibold hover:bg-[var(--color-primary-hover)] disabled:opacity-60 transition"
+              >
+                {importing ? '导入中...' : '确认导入'}
               </button>
             </div>
           </div>

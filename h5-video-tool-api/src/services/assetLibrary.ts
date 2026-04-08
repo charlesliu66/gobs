@@ -165,11 +165,13 @@ export async function autoTagImage(input: {
   "description": "一句话描述：颜色/特征/风格/用途"
 }
 
-type 选择规则：
-- character：包含人物角色、立绘、角色全身/半身图
-- scene：背景图、场景、地点、环境
-- prop：道具、武器、装备、物件
-- style：风格参考图、概念艺术图、无明确主体的氛围图
+type 选择规则（按优先级判断）：
+1. character（最高优先级）：包含人物/角色/生物形象的图片，无论是全身、半身、头像、Q版、像素风还是写实风，只要图片主体是"一个有面部或身体特征的角色"就归类为 character。游戏角色立绘、皮肤图、头像图、人物原画、角色概念图都属于 character。
+2. scene：以环境/地点/背景为主体的图片，图中没有突出的角色人物
+3. style：抽象风格参考图、色彩板、无明确主体的概念氛围图
+4. prop：只包含单独的物件/道具/武器/装备，画面中没有人物角色
+
+⚠️ 重要：如果画面中有人物角色拿着武器/道具，应归类为 character 而不是 prop！
 
 tags 规则：
 - 包含：角色名/类型（如主角、少女、武士）、外观特征、风格标签（古装、现代、赛博朋克）
@@ -208,7 +210,7 @@ function guessTagsFromFilename(filename: string): AutoTagResult {
   const base = path.basename(filename, path.extname(filename));
   const lower = base.toLowerCase();
 
-  let type: AssetType = 'prop';
+  let type: AssetType = 'character';
   const tags: string[] = [base];
 
   if (['角色', 'char', 'character', '立绘', '皮肤'].some((k) => lower.includes(k))) {

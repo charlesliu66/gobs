@@ -122,6 +122,49 @@ assetsRouter.post('/upload', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/assets/:id/image
+ * 返回素材图片的 base64 数据
+ */
+assetsRouter.get('/:id/image', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const index = await loadAssetIndex();
+    const asset = index.assets.find((a) => a.id === id);
+    if (!asset) {
+      res.status(404).json({ error: '素材不存在' });
+      return;
+    }
+
+    // 尝试从 localPath 或相对路径读取文件
+    let filePath = asset.localPath;
+    if (!filePath || !fs.existsSync(filePath)) {
+      filePath = path.join(getApiDataDir(), asset.file);
+    }
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '素材文件不存在' });
+      return;
+    }
+
+    const imageBuffer = fs.readFileSync(filePath);
+    const base64 = imageBuffer.toString('base64');
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+    };
+    const mime = mimeMap[ext] ?? 'image/png';
+
+    res.json({ imageDataUrl: `data:${mime};base64,${base64}` });
+  } catch (err) {
+    console.error('[assets/:id/image] 失败', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : '获取图片失败' });
+  }
+});
+
+/**
  * PUT /api/assets/:id
  * 更新素材元数据
  */
