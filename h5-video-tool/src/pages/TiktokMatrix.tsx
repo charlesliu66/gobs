@@ -6,8 +6,8 @@ const TT_GREEN = '#25F4EE';
 function resolveMatrixUrl(): string {
   const full = import.meta.env.VITE_SJ_MATRIX_BASE_URL?.trim();
   if (full) return full.replace(/\/$/, '');
-  const port = String(import.meta.env.VITE_SJ_MATRIX_PORT ?? '3000').trim() || '3000';
-  return `http://${window.location.hostname}:${port}`;
+  // 生产环境通过 Nginx /sj/ 代理，不走独立端口
+  return `${window.location.origin}/sj`;
 }
 
 function parseMatrixTcpTarget(base: string): { host: string; port: number } | null {
