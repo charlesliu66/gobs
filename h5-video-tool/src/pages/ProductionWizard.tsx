@@ -93,6 +93,14 @@ interface StoredWizard {
   storyGenre: string;
 }
 
+interface BatchAssetGenState {
+  current: number;
+  total: number;
+  success: number;
+  failed: number;
+  startedAt: number;
+}
+
 function migrateProject(p: ProductionProject): ProductionProject {
   const next: ProductionProject = { ...p };
   if (p.story) {
@@ -689,7 +697,7 @@ export function ProductionWizard() {
   }, []);
 
   /** 列表「AI」同款：缺图的角色定稿节点 + 场景主变体；跳过弹窗中待确认的肖像任务 */
-  const [batchAssetGen, setBatchAssetGen] = useState<{ current: number; total: number } | null>(null);
+  const [batchAssetGen, setBatchAssetGen] = useState<BatchAssetGenState | null>(null);
   const batchCancelRef = useRef<boolean>(false);
   const handleBatchGenerateMissingAssets = useCallback(async () => {
     const pd = project.productionDesign;
@@ -742,7 +750,13 @@ export function ProductionWizard() {
 
     setErr(null);
     batchCancelRef.current = false;
-    setBatchAssetGen({ current: 0, total: tasks.length });
+    setBatchAssetGen({
+      current: 0,
+      total: tasks.length,
+      success: 0,
+      failed: 0,
+      startedAt: Date.now(),
+    });
     const g = project.meta.styleRefImageDataUrl?.trim();
 
     // 并发控制：最多同时 2 个任务
@@ -755,12 +769,18 @@ export function ProductionWizard() {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
       try {
-        const res = await generateFrames({
-          prompt: t.prompt,
-          aspectRatio: ar,
-          shotIndex: 0,
-          ...(g ? { globalStyleReferenceFrame: g } : {}),
-        });
+        const timeoutMs = 90_000;
+        const res = await Promise.race([
+          generateFrames({
+            prompt: t.prompt,
+            aspectRatio: ar,
+            shotIndex: 0,
+            ...(g ? { globalStyleReferenceFrame: g } : {}),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`生成超时（>${Math.round(timeoutMs / 1000)}s）`)), timeoutMs),
+          ),
+        ]);
         if (batchCancelRef.current) return;
         const img = res.firstFrame;
         // 每张完成立刻更新画面，后台上传替换为持久 URL
@@ -802,7 +822,14 @@ export function ProductionWizard() {
         }
       } finally {
         completedCount++;
-        setBatchAssetGen((prev) => prev ? { ...prev, current: completedCount } : null);
+        setBatchAssetGen((prev) => prev
+          ? {
+              ...prev,
+              current: completedCount,
+              success: successCount,
+              failed: failedCount,
+            }
+          : null);
       }
     };
 
@@ -1666,6 +1693,18 @@ export function ProductionWizard() {
             ? '检查分镜与 @ 引用后可导出 Prompt'
             : '可复制 Seedance 块或前往 Studio 多镜创作';
 
+  if (isServerBootstrapping) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center">
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-6 py-5 text-center">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+          <p className="text-sm font-medium text-[var(--color-text)]">项目加载中…</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">正在同步云端项目数据，请稍候</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* 顶栏：标题 + 步骤条（中间区域独立滚动，本区不随内容滚动） */}
@@ -2120,6 +2159,11 @@ export function ProductionWizard() {
                         ? `一键生成中 ${batchAssetGen.current}/${batchAssetGen.total}`
                         : '一键补全缺图'}
                     </button>
+                  ) : null}
+                  {batchAssetGen !== null ? (
+                    <span className="text-[11px] text-[var(--color-text-muted)]">
+                      成功 {batchAssetGen.success} / 失败 {batchAssetGen.failed}
+                    </span>
                   ) : null}
                   {batchAssetGen !== null ? (
                     <button

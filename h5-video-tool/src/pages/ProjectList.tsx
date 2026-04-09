@@ -13,6 +13,7 @@ export function ProjectList() {
   const [newName, setNewName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [enteringProjectId, setEnteringProjectId] = useState<string | null>(null);
 
   // 重命名状态
   const [renameTarget, setRenameTarget] = useState<ProjectListItem | null>(null);
@@ -103,6 +104,14 @@ export function ProjectList() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {enteringProjectId && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-5 py-4 text-center">
+            <div className="mx-auto mb-2 h-7 w-7 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+            <p className="text-sm text-[var(--color-text)]">项目加载中…</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -193,7 +202,10 @@ export function ProjectList() {
               {/* Card body — clickable */}
               <button
                 type="button"
-                onClick={() => navigate(`/studio/production?projectId=${p.id}`)}
+                onClick={() => {
+                  setEnteringProjectId(p.id);
+                  navigate(`/studio/production?projectId=${p.id}`);
+                }}
                 className="block w-full text-left"
               >
                 <div className="mb-3 flex items-start gap-3">

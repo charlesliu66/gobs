@@ -45,6 +45,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 高级制片图片回显：<img src> 无法带 Bearer，放行只读图片接口
+  if (req.method === 'GET' && req.path === '/api/production/image') {
+    next();
+    return;
+  }
   /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
   if (req.path === '/api/prompt/templates') {
     return next();

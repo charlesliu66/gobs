@@ -9,9 +9,16 @@ interface Props {
   onSelect?: (file: UploadedFile) => void;
 }
 
+type UploadingItem = {
+  name: string;
+  progress: number;
+  kind: 'image' | 'video' | 'other';
+  previewUrl?: string;
+};
+
 export function LocalUploadPanel({ onSelect }: Props) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [uploading, setUploading] = useState<{ name: string; progress: number }[]>([]);
+  const [uploading, setUploading] = useState<UploadingItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sizeError, setSizeError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +35,26 @@ export function LocalUploadPanel({ onSelect }: Props) {
   // 组件挂载时加载
   useEffect(() => { void loadFiles(); }, [loadFiles]);
 
+  const finishUploading = useCallback((name: string) => {
+    setUploading((prev) => {
+      const hit = prev.find((u) => u.name === name);
+      if (hit?.previewUrl) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((u) => u.name !== name);
+    });
+  }, []);
+
+  // 组件卸载时兜底释放 preview URL
+  useEffect(() => {
+    return () => {
+      setUploading((prev) => {
+        prev.forEach((u) => {
+          if (u.previewUrl) URL.revokeObjectURL(u.previewUrl);
+        });
+        return prev;
+      });
+    };
+  }, []);
+
   // 上传文件（XMLHttpRequest 获取进度）
   const uploadFile = useCallback((file: File) => {
     // 客户端文件大小预检
@@ -36,7 +63,13 @@ export function LocalUploadPanel({ onSelect }: Props) {
       return;
     }
     setSizeError(null);
-    setUploading((prev) => [...prev, { name: file.name, progress: 0 }]);
+    const kind: UploadingItem['kind'] = file.type.startsWith('image/')
+      ? 'image'
+      : file.type.startsWith('video/')
+        ? 'video'
+        : 'other';
+    const previewUrl = kind === 'image' || kind === 'video' ? URL.createObjectURL(file) : undefined;
+    setUploading((prev) => [...prev, { name: file.name, progress: 0, kind, previewUrl }]);
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append('file', file);
@@ -51,7 +84,7 @@ export function LocalUploadPanel({ onSelect }: Props) {
     };
 
     xhr.onload = () => {
-      setUploading((prev) => prev.filter((u) => u.name !== file.name));
+      finishUploading(file.name);
       if (xhr.status < 300) {
         const result = JSON.parse(xhr.responseText) as UploadedFile;
         setFiles((prev) => [{ ...result, url: resolveUploadUrl(result.url) }, ...prev]);
@@ -59,11 +92,11 @@ export function LocalUploadPanel({ onSelect }: Props) {
     };
 
     xhr.onerror = () => {
-      setUploading((prev) => prev.filter((u) => u.name !== file.name));
+      finishUploading(file.name);
     };
 
     xhr.send(formData);
-  }, []);
+  }, [finishUploading]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -120,6 +153,15 @@ export function LocalUploadPanel({ onSelect }: Props) {
         <div className="space-y-2">
           {uploading.map((u) => (
             <div key={u.name} className="flex items-center gap-3 p-2 rounded-lg bg-[var(--color-surface-elevated)]">
+              <div className="h-12 w-20 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] flex-shrink-0">
+                {u.kind === 'image' && u.previewUrl ? (
+                  <img src={u.previewUrl} alt={u.name} className="h-full w-full object-cover" />
+                ) : u.kind === 'video' && u.previewUrl ? (
+                  <video src={u.previewUrl} className="h-full w-full object-cover" muted preload="metadata" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--color-text-muted)]">文件</div>
+                )}
+              </div>
               <div className="flex-1">
                 <p className="text-xs text-[var(--color-text)] truncate">{u.name}</p>
                 <div className="mt-1 h-1.5 rounded-full bg-[var(--color-border)]">
@@ -129,7 +171,7 @@ export function LocalUploadPanel({ onSelect }: Props) {
                   />
                 </div>
               </div>
-              <span className="text-xs text-[var(--color-text-muted)]">{u.progress}%</span>
+              <span className="text-xs text-[var(--color-text-muted)] min-w-[42px] text-right">{u.progress}%</span>
             </div>
           ))}
         </div>

@@ -16,7 +16,7 @@ interface Props {
 
 export function CharacterLibraryPanel({ onImportToProject }: Props) {
   const [chars, setChars] = useState<LibraryCharacterSummary[]>([]);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<LibraryCharacter | null>(null);
   const [shareInfo, setShareInfo] = useState<{ url: string; expiresAt: string } | null>(null);
@@ -47,16 +47,26 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (deleteConfirmId !== id) {
-      setDeleteConfirmId(id);
+    const target = chars.find((c) => c.id === id);
+    const ok = window.confirm(`确定删除角色「${target?.name ?? '该角色'}」吗？此操作不可撤销。`);
+    if (!ok) {
       return;
     }
-    setDeleteConfirmId(null);
-    await deleteCharacterFromLibrary(id);
-    setChars((prev) => prev.filter((c) => c.id !== id));
-    if (selected?.id === id) setSelected(null);
-    toast.success('角色已删除');
-  }, [selected, deleteConfirmId]);
+    setDeletingId(id);
+    setErr(null);
+    try {
+      await deleteCharacterFromLibrary(id);
+      setChars((prev) => prev.filter((c) => c.id !== id));
+      if (selected?.id === id) setSelected(null);
+      toast.success('角色已删除');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '删除失败';
+      setErr(msg);
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [chars, selected]);
 
   const handleShare = useCallback(async (id: string) => {
     try {
@@ -85,28 +95,41 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
             </div>
           </div>
         ) : chars.map((c) => (
-          <button
+          <div
             key={c.id}
-            type="button"
-            onClick={() => void handleSelect(c.id)}
-            className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
+            className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors border ${
               selected?.id === c.id
-                ? 'bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/40'
-                : 'hover:bg-[var(--color-surface-hover)] border border-transparent'
+                ? 'bg-[var(--color-primary)]/20 border-[var(--color-primary)]/40'
+                : 'hover:bg-[var(--color-surface-hover)] border-transparent'
             }`}
           >
-            {c.baseImageDataUrl ? (
-              <img src={c.baseImageDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-[var(--color-surface-hover)] flex items-center justify-center flex-shrink-0 text-[var(--color-text-muted)]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <button
+              type="button"
+              onClick={() => void handleSelect(c.id)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              {c.baseImageDataUrl ? (
+                <img src={c.baseImageDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-surface-hover)] flex items-center justify-center flex-shrink-0 text-[var(--color-text-muted)]">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-[var(--color-text)]">{c.name}</p>
+                <p className="text-[10px] text-[var(--color-text-muted)]">{c.stateCount} 个状态</p>
               </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-[var(--color-text)] truncate">{c.name}</p>
-              <p className="text-[10px] text-[var(--color-text-muted)]">{c.stateCount} 个状态</p>
-            </div>
-          </button>
+            </button>
+            <button
+              type="button"
+              disabled={deletingId === c.id}
+              onClick={() => void handleDelete(c.id)}
+              className="rounded-md px-1.5 py-1 text-[10px] text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+              title="删除角色"
+            >
+              {deletingId === c.id ? '删…' : '删'}
+            </button>
+          </div>
         ))}
       </div>
 
@@ -148,13 +171,10 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
                 <button
                   type="button"
                   onClick={() => void handleDelete(selected.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                    deleteConfirmId === selected.id
-                      ? 'border-red-500/60 bg-red-500/15 text-red-400'
-                      : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
-                  }`}
+                  disabled={deletingId === selected.id}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
                 >
-                  {deleteConfirmId === selected.id ? '再次点击确认删除' : '删除'}
+                  {deletingId === selected.id ? '删除中…' : '删除'}
                 </button>
               </div>
             </div>
