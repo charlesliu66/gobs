@@ -4,6 +4,8 @@
  * 环境变量: COMPASS_API_KEY2（优先）/ COMPASS_API_KEY, COMPASS_API_URL
  */
 import path from 'path';
+import fs from 'fs/promises';
+import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { resolveCompassApiKeyPreferKey2 } from './compassApiKey.js';
@@ -47,16 +49,29 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
     delete env.IMAGEN_MODEL;
   }
   // 首尾帧/纯文生图必须不带参考图；若环境里残留 COMPASS_REF_IMAGE_B64，Python 会走 edit_image，画面会被垫图绑架
+  // 大 base64 通过临时文件传递，避免 E2BIG 错误
+  const tempFiles: string[] = [];
+
   if (options.referenceImageBase64) {
-    env.COMPASS_REF_IMAGE_B64 = options.referenceImageBase64;
+    const tmpRef = path.join(os.tmpdir(), `compass_ref_${Date.now()}.b64`);
+    await fs.writeFile(tmpRef, options.referenceImageBase64, 'utf-8');
+    env.COMPASS_REF_IMAGE_B64_FILE = tmpRef;
+    tempFiles.push(tmpRef);
+    delete env.COMPASS_REF_IMAGE_B64;
   } else {
     delete env.COMPASS_REF_IMAGE_B64;
+    delete env.COMPASS_REF_IMAGE_B64_FILE;
     delete env.COMPASS_REF_IMAGE_MIME;
   }
   if (options.styleReferenceBase64) {
-    env.COMPASS_STYLE_REF_B64 = options.styleReferenceBase64;
+    const tmpStyle = path.join(os.tmpdir(), `compass_style_${Date.now()}.b64`);
+    await fs.writeFile(tmpStyle, options.styleReferenceBase64, 'utf-8');
+    env.COMPASS_STYLE_REF_B64_FILE = tmpStyle;
+    tempFiles.push(tmpStyle);
+    delete env.COMPASS_STYLE_REF_B64;
   } else {
     delete env.COMPASS_STYLE_REF_B64;
+    delete env.COMPASS_STYLE_REF_B64_FILE;
   }
 
   // Windows 下通过 argv 传中文长 prompt 可能导致 Python 侧乱码或与输入框不一致，改用 UTF-8 环境变量传递
@@ -75,6 +90,9 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
     proc.stderr?.on('data', (d) => (stderr += d.toString()));
 
     proc.on('close', (code) => {
+      // 清理临时文件
+      for (const f of tempFiles) { fs.unlink(f).catch(() => {}); }
+
       if (code !== 0) {
         reject(new Error(stderr || `Python 脚本退出码 ${code}`));
         return;
@@ -94,6 +112,9 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
       }
     });
 
-    proc.on('error', (e) => reject(e));
+    proc.on('error', (e) => {
+      for (const f of tempFiles) { fs.unlink(f).catch(() => {}); }
+      reject(e);
+    });
   });
 }
