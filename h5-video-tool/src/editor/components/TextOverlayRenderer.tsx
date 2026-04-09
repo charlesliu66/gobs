@@ -4,7 +4,7 @@
  * 根据当前播放时间（timeSec），渲染所有激活的文字片段到视频上层。
  * 每个版式有独立的入场/出场动画，用 CSS keyframes + 计时控制。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TextClip, TextPresetId } from '../types/timeline';
 import { getTextPreset } from '../textPresets';
 import type { TextPreset } from '../textPresets';

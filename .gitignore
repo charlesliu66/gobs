@@ -35,3 +35,6 @@ subweb/
 
 # 打包脚本生成的迁移目录（勿提交）
 QAS-package/
+gobs-sj-deploy.tar.gz
+*.tar.gz
+*.tar.gz

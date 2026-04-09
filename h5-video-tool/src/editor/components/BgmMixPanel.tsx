@@ -101,17 +101,27 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     const raw = prompt.trim() || '适合视频内容的背景音乐，器乐';
     setBusy(true);
     try {
+      let finalPrompt = raw;
+      let finalNegative = negativePrompt;
       onPushLog?.('正在优化配乐风格…');
-      const out = await polishEditorMusicPrompt(raw);
-      setPrompt(out.prompt);
-      if (out.negativePrompt) setNegativePrompt(out.negativePrompt);
-      await generateAndTileMusic(out.prompt, out.negativePrompt ?? '', totalSec, setAssets, setProject, onPushLog);
+      try {
+        const out = await polishEditorMusicPrompt(raw);
+        finalPrompt = out.prompt;
+        finalNegative = out.negativePrompt ?? finalNegative;
+        setPrompt(finalPrompt);
+        if (out.negativePrompt) setNegativePrompt(out.negativePrompt);
+      } catch (e) {
+        onPushLog?.(
+          `配乐润色失败，已降级为原始描述继续生成：${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      await generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog);
     } catch (e) {
       onPushLog?.(`配乐失败：${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
-  }, [prompt, busy, totalSec, setAssets, setProject, onPushLog]);
+  }, [prompt, negativePrompt, busy, totalSec, setAssets, setProject, onPushLog]);
 
   const runGenerate = useCallback(async () => {
     const t = prompt.trim();

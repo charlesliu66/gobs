@@ -220,7 +220,7 @@ export function MediaLibrary({
                         {a.originalName}
                       </p>
                       <p className="text-[10px] text-[var(--color-text-muted)]">
-                        {(a.size / 1024 / 1024).toFixed(1)} MB
+                        {(((a.size ?? 0) / 1024 / 1024).toFixed(1))} MB
                       </p>
                     </div>
                   </div>

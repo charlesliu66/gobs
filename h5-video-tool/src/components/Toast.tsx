@@ -7,7 +7,7 @@
  *   toast.info('正在上传…');
  *   toast.warning('文件过大');
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 type ToastKind = 'success' | 'error' | 'info' | 'warning';

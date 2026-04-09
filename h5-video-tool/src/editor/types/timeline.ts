@@ -233,7 +233,9 @@ export function computeDurationSec(project: TimelineProject): number {
   let max = 0;
   for (const track of project.tracks) {
     for (const c of track.clips) {
-      const end = c.timelineStart + (c.sourceEnd - c.sourceStart);
+      const end = 'timelineEnd' in c
+        ? c.timelineEnd
+        : c.timelineStart + (c.sourceEnd - c.sourceStart);
       if (end > max) max = end;
     }
   }

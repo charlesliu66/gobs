@@ -20,14 +20,26 @@ API_KEY = (
 BASE_URL = os.environ.get("COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1").strip()
 # 优先用 COMPASS_IMAGEN_MODEL；未设置时按下列顺序尝试（仅 Gemini 3.x 图像模型，见 ai.google.dev 文档）
 DEFAULT_MODEL = os.environ.get("COMPASS_IMAGEN_MODEL", "").strip()
-# 重画质：先 Gemini 3 Pro Image，失败再 3.1 Flash Image（均为官方 preview id）
+# 默认提速：先 Gemini 3.1 Flash Image，失败再 Gemini 3 Pro Image（均为官方 preview id）
 FALLBACK_MODELS = [
-    "gemini-3-pro-image-preview",
     "gemini-3.1-flash-image-preview",
+    "gemini-3-pro-image-preview",
 ]
 REF_B64 = os.environ.get("COMPASS_REF_IMAGE_B64", "").strip()
+# 支持从文件读取大 base64（避免 E2BIG）
+if not REF_B64:
+    ref_file = os.environ.get("COMPASS_REF_IMAGE_B64_FILE", "").strip()
+    if ref_file and os.path.isfile(ref_file):
+        with open(ref_file, "r") as f:
+            REF_B64 = f.read().strip()
+
 # 首镜首帧：后续镜头 Gemini 多模态锁定画风（非 edit_image，避免场景被垫图绑架）
 STYLE_REF_B64 = os.environ.get("COMPASS_STYLE_REF_B64", "").strip()
+if not STYLE_REF_B64:
+    style_file = os.environ.get("COMPASS_STYLE_REF_B64_FILE", "").strip()
+    if style_file and os.path.isfile(style_file):
+        with open(style_file, "r") as f:
+            STYLE_REF_B64 = f.read().strip()
 
 
 def _is_gemini_image_model(model_id: str) -> bool:

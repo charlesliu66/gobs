@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from '../components/Toast';
 import {
   loadVideoHistory,
@@ -80,6 +80,7 @@ function TrashIcon() {
 
 export function History() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tab, setTab] = useState<HistoryTab>('cloud');
   const [items, setItems] = useState<VideoHistoryItem[]>(() => loadVideoHistory());
   const [cloudItems, setCloudItems] = useState<KlingVideoListRow[]>([]);
@@ -120,6 +121,14 @@ export function History() {
   const [mergeSrtText, setMergeSrtText] = useState('');
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const defaultTab = (location.state as { defaultTab?: HistoryTab } | null)?.defaultTab;
+    if (defaultTab === 'batch' || defaultTab === 'local' || defaultTab === 'cloud') {
+      setTab(defaultTab);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const cloudStarred = useMemo(() => loadCloudStarredIds(), [prefsVersion, cloudItems]);
   const cloudHidden = useMemo(() => loadCloudHiddenIds(), [prefsVersion, cloudItems]);

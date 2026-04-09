@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { TimelineProject } from '../types/timeline';
+import type { AspectRatioPreset, TimelineProject } from '../types/timeline';
 import { startEditorExport, getEditorExportStatus } from '../../api/editor';
 import { toast } from '../../components/Toast';
 
@@ -9,7 +9,7 @@ type ExportQuality = 'fast' | 'balanced' | 'high';
 
 interface ExportPanelProps {
   project: TimelineProject;
-  aspectRatio: string;
+  aspectRatio: AspectRatioPreset;
   onPushLog: (msg: string) => void;
 }
 

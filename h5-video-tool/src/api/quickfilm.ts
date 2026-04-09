@@ -85,7 +85,7 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export async function confirmStoryboard(
   jobId: string,
   storyboard: ShotWithAssets[],
-): Promise<{ batchJobId: string }> {
+): Promise<{ batchJobId: string; queued?: number; projectId?: string }> {
   return apiPost(`/api/quickfilm/${jobId}/confirm`, { storyboard });
 }
 

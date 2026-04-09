@@ -93,6 +93,14 @@ interface StoredWizard {
   storyGenre: string;
 }
 
+interface BatchAssetGenState {
+  current: number;
+  total: number;
+  success: number;
+  failed: number;
+  startedAt: number;
+}
+
 function migrateProject(p: ProductionProject): ProductionProject {
   const next: ProductionProject = { ...p };
   if (p.story) {
@@ -605,6 +613,9 @@ export function ProductionWizard() {
   const [showLibraryImport, setShowLibraryImport] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 防止“服务端项目尚未加载完成时”把空白初始态覆盖回服务端
+  const [isServerBootstrapping, setIsServerBootstrapping] = useState(shouldLoadFromServer);
+  const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
 
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
   const scheduleServerSync = useCallback((data: StoredWizard) => {
@@ -657,6 +668,7 @@ export function ProductionWizard() {
         const url = new URL(window.location.href);
         url.searchParams.set('projectId', id);
         window.history.replaceState(null, '', url.toString());
+        setCanAutoPersist(true);
         setShowProjectList(false);
       }
     } catch (e) {
@@ -685,7 +697,7 @@ export function ProductionWizard() {
   }, []);
 
   /** 列表「AI」同款：缺图的角色定稿节点 + 场景主变体；跳过弹窗中待确认的肖像任务 */
-  const [batchAssetGen, setBatchAssetGen] = useState<{ current: number; total: number } | null>(null);
+  const [batchAssetGen, setBatchAssetGen] = useState<BatchAssetGenState | null>(null);
   const batchCancelRef = useRef<boolean>(false);
   const handleBatchGenerateMissingAssets = useCallback(async () => {
     const pd = project.productionDesign;
@@ -738,22 +750,37 @@ export function ProductionWizard() {
 
     setErr(null);
     batchCancelRef.current = false;
-    setBatchAssetGen({ current: 0, total: tasks.length });
+    setBatchAssetGen({
+      current: 0,
+      total: tasks.length,
+      success: 0,
+      failed: 0,
+      startedAt: Date.now(),
+    });
     const g = project.meta.styleRefImageDataUrl?.trim();
 
     // 并发控制：最多同时 2 个任务
     const CONCURRENCY = 2;
     let completedCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+    const failMessages: string[] = [];
     const runTask = async (t: Task) => {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
       try {
-        const res = await generateFrames({
-          prompt: t.prompt,
-          aspectRatio: ar,
-          shotIndex: 0,
-          ...(g ? { globalStyleReferenceFrame: g } : {}),
-        });
+        const timeoutMs = 90_000;
+        const res = await Promise.race([
+          generateFrames({
+            prompt: t.prompt,
+            aspectRatio: ar,
+            shotIndex: 0,
+            ...(g ? { globalStyleReferenceFrame: g } : {}),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`生成超时（>${Math.round(timeoutMs / 1000)}s）`)), timeoutMs),
+          ),
+        ]);
         if (batchCancelRef.current) return;
         const img = res.firstFrame;
         // 每张完成立刻更新画面，后台上传替换为持久 URL
@@ -785,31 +812,56 @@ export function ProductionWizard() {
           const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
           uploadProductionImage(img, mime, `${t.kind}-${t.sheetId}`).then(({ url }) => applyBatchImg(url)).catch(() => {});
         }
+        successCount++;
       } catch (e) {
+        failedCount++;
+        const msg = e instanceof Error ? e.message : '生成失败';
+        if (failMessages.length < 3) failMessages.push(msg);
         if (!batchCancelRef.current) {
-          console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, e);
+          console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, msg);
         }
       } finally {
         completedCount++;
-        setBatchAssetGen((prev) => prev ? { ...prev, current: completedCount } : null);
+        setBatchAssetGen((prev) => prev
+          ? {
+              ...prev,
+              current: completedCount,
+              success: successCount,
+              failed: failedCount,
+            }
+          : null);
       }
     };
 
-    // 任务队列并发执行
+    // 任务队列并发执行（worker 池）
     try {
-      const pool: Promise<void>[] = [];
-      for (const task of tasks) {
-        if (batchCancelRef.current) break;
-        const p = runTask(task);
-        pool.push(p);
-        if (pool.length >= CONCURRENCY) {
-          await Promise.race(pool);
-          // 移除已完成的
-          const settled = await Promise.allSettled(pool.map((x) => Promise.race([x, Promise.resolve()])));
-          pool.splice(0, pool.length, ...pool.filter((_, i) => settled[i]?.status !== 'fulfilled'));
+      let cursor = 0;
+      const worker = async () => {
+        while (!batchCancelRef.current) {
+          const idx = cursor++;
+          if (idx >= tasks.length) break;
+          const task = tasks[idx];
+          if (!task) break;
+          await runTask(task);
         }
+      };
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, tasks.length) },
+        () => worker(),
+      );
+      await Promise.all(workers);
+
+      if (batchCancelRef.current) {
+        setErr('已取消补全缺图。');
+      } else if (successCount === 0) {
+        setErr(`补全失败：${failMessages[0] ?? '请检查云端 API 的 Compass/Imagen 配置是否可用。'}`);
+      } else if (failedCount > 0) {
+        const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
+        setErr(`部分补全成功：${successCount} 项成功，${failedCount} 项失败${hint}`);
+        toast.error(`补全完成：${successCount} 成功，${failedCount} 失败`);
+      } else {
+        toast.success(`已补全 ${successCount} 项缺图`);
       }
-      await Promise.allSettled(pool);
     } finally {
       setGenKey(null);
       setBatchAssetGen(null);
@@ -835,7 +887,11 @@ export function ProductionWizard() {
   // 优先从服务端加载（URL 参数 > localStorage 记录的上次 id）
   useEffect(() => {
     const idToLoad = urlProjectId || lastStoredId;
-    if (!idToLoad) return;
+    if (!idToLoad) {
+      setIsServerBootstrapping(false);
+      setCanAutoPersist(true);
+      return;
+    }
     void (async () => {
       try {
         const raw = await loadProductionProject(idToLoad);
@@ -855,6 +911,7 @@ export function ProductionWizard() {
             url.searchParams.set('projectId', idToLoad);
             window.history.replaceState(null, '', url.toString());
           }
+          setCanAutoPersist(true);
         }
       } catch {
         // 服务端加载失败（项目不存在），降级读 localStorage
@@ -869,7 +926,14 @@ export function ProductionWizard() {
             setStep(fallback.step);
             setStoryGenre(fallback.storyGenre);
           }
+          setCanAutoPersist(true);
+        } else {
+          // URL 指定项目加载失败时，暂停自动保存，避免把空白初始态覆盖回服务端
+          setCanAutoPersist(false);
+          setErr('项目加载失败，已暂停自动保存以避免覆盖云端数据。请刷新重试。');
         }
+      } finally {
+        setIsServerBootstrapping(false);
       }
     })();
   // 仅在挂载时执行一次
@@ -891,6 +955,7 @@ export function ProductionWizard() {
   }, [project.meta.styleRefImageDataUrl]);
 
   useEffect(() => {
+    if (isServerBootstrapping || !canAutoPersist) return;
     const data: StoredWizard = {
       project,
       characterBible,
@@ -902,7 +967,18 @@ export function ProductionWizard() {
     };
     saveStored(data);
     scheduleServerSync(data);
-  }, [project, characterBible, synopsis, structureTemplate, maxTotalDurationSec, step, storyGenre, scheduleServerSync]);
+  }, [
+    project,
+    characterBible,
+    synopsis,
+    structureTemplate,
+    maxTotalDurationSec,
+    step,
+    storyGenre,
+    scheduleServerSync,
+    isServerBootstrapping,
+    canAutoPersist,
+  ]);
 
   useEffect(() => {
     if (project.shots.length && selectedShotIdx >= project.shots.length) {
@@ -1228,31 +1304,61 @@ export function ProductionWizard() {
   }, []);
 
   const handleImportFromLibrary = useCallback((libChar: LibraryCharacter) => {
-    const id = `ch-lib-${Date.now()}`;
-    const rootId = `${id}-v0`;
-    const newChar: CharacterSheet = {
-      id,
-      name: libChar.name,
-      isProtagonist: libChar.isProtagonist ?? false,
-      variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-      lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-      activeLookId: rootId,
-      baseImageDataUrl: libChar.baseImageDataUrl,
-      baseConfirmed: libChar.baseConfirmed ?? false,
-      states: libChar.states?.map((s) => ({
-        id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        label: s.label,
-        imageDataUrl: s.imageDataUrl,
-        statePrompt: s.statePrompt ?? '',
-        notes: s.notes ?? '',
-      })) ?? [],
-    };
-    setProject((p) => ({
-      ...p,
-      characterAssets: [...(p.characterAssets ?? []), newChar],
-    }));
+    const normalize = (v: string) => v.trim().toLowerCase();
+    setProject((p) => {
+      const list = [...(p.characterAssets ?? [])];
+      const existingIdx = list.findIndex((c) => normalize(c.name) === normalize(libChar.name));
+      if (existingIdx >= 0) {
+        const existing = list[existingIdx]!;
+        const ensured = ensureCharacterLookTree(existing);
+        const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
+        const merged = root && libChar.baseImageDataUrl
+          ? setCharacterLookNodeImage(ensured, root.id, libChar.baseImageDataUrl)
+          : ensured;
+        list[existingIdx] = {
+          ...merged,
+          baseImageDataUrl: libChar.baseImageDataUrl,
+          baseConfirmed: libChar.baseConfirmed ?? true,
+          // 保留项目中的主角标识，避免导入后出现多个主角
+          isProtagonist: existing.isProtagonist,
+          states: libChar.states?.map((s) => ({
+            id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            label: s.label,
+            imageDataUrl: s.imageDataUrl,
+            statePrompt: s.statePrompt ?? '',
+            notes: s.notes ?? '',
+          })) ?? existing.states,
+        };
+        return { ...p, characterAssets: list };
+      }
+
+      const id = `ch-lib-${Date.now()}`;
+      const rootId = `${id}-v0`;
+      const hasProtagonist = list.some((c) => c.isProtagonist);
+      const newChar: CharacterSheet = {
+        id,
+        name: libChar.name,
+        isProtagonist: hasProtagonist ? false : (libChar.isProtagonist ?? false),
+        variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+        lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+        activeLookId: rootId,
+        baseImageDataUrl: libChar.baseImageDataUrl,
+        baseConfirmed: libChar.baseConfirmed ?? false,
+        states: libChar.states?.map((s) => ({
+          id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          label: s.label,
+          imageDataUrl: s.imageDataUrl,
+          statePrompt: s.statePrompt ?? '',
+          notes: s.notes ?? '',
+        })) ?? [],
+      };
+      return {
+        ...p,
+        characterAssets: [...list, newChar],
+      };
+    });
     setShowLibraryImport(false);
-    toast.success(`已导入角色「${libChar.name}」`);
+    toast.success(`已应用角色形象「${libChar.name}」`);
   }, []);
 
   const handleFile = useCallback((file: File | null) => {
@@ -1587,10 +1693,22 @@ export function ProductionWizard() {
             ? '检查分镜与 @ 引用后可导出 Prompt'
             : '可复制 Seedance 块或前往 Studio 多镜创作';
 
+  if (isServerBootstrapping) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.12),transparent_45%)]">
+        <div className="gobs-card rounded-2xl px-7 py-6 text-center">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+          <p className="text-sm font-medium text-[var(--color-text)]">项目加载中…</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">正在同步云端项目数据，请稍候</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.1),transparent_35%)]">
       {/* 顶栏：标题 + 步骤条（中间区域独立滚动，本区不随内容滚动） */}
-      <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-6 py-4">
+      <div className="gobs-glass shrink-0 border-b border-[var(--color-border)]/80 px-6 py-4">
         <div className="mx-auto flex max-w-6xl flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -2041,6 +2159,11 @@ export function ProductionWizard() {
                         ? `一键生成中 ${batchAssetGen.current}/${batchAssetGen.total}`
                         : '一键补全缺图'}
                     </button>
+                  ) : null}
+                  {batchAssetGen !== null ? (
+                    <span className="text-[11px] text-[var(--color-text-muted)]">
+                      成功 {batchAssetGen.success} / 失败 {batchAssetGen.failed}
+                    </span>
                   ) : null}
                   {batchAssetGen !== null ? (
                     <button

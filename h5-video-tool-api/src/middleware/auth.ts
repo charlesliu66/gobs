@@ -36,7 +36,34 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 浏览器 <video>/<audio> 标签无法附带 Bearer，放行媒体文件流读取
+  if (req.method === 'GET' && req.path.startsWith('/api/editor/assets/files/')) {
+    next();
+    return;
+  }
+  if (req.method === 'GET' && req.path.startsWith('/api/editor/music/files/')) {
+    next();
+    return;
+  }
+  // 高级制片图片回显：<img src> 无法带 Bearer，放行只读图片接口
+  if (req.method === 'GET' && req.path === '/api/production/image') {
+    next();
+    return;
+  }
+  // 兼容部分代理转发后前缀被剥离的情况
+  if (req.method === 'GET' && req.path === '/image') {
+    next();
+    return;
+  }
+  // 风控大师封面代理：<img src> 无法附带 Authorization
+  if (req.method === 'GET' && req.path === '/api/risk-sentiment/cover-proxy') {
+    next();
+    return;
+  }
   /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
+  if (req.path === '/api/prompt/templates') {
+    return next();
+  }
   if (req.path.startsWith('/api/gobs-auth')) {
     next();
     return;

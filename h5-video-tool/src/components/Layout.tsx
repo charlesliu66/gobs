@@ -1,12 +1,60 @@
 import { Fragment, useState, useEffect, useMemo, type JSX } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { useGobsAuth } from '../context/GobsAuthContext';
-import { navTargetToFeature } from '../lib/gobsNav';
-import type { GobsSessionUser } from '../types/gobsAuth';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
+
+function PlatformIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <path d="M10 7h4" />
+      <path d="M17 10v4" />
+      <path d="M7 10v4" />
+      <path d="M7 14h7" />
+    </svg>
+  );
+}
+
+function MemoryIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a7 7 0 0 0-7 7v6a3 3 0 0 0 3 3h1l2 3 2-3h1a3 3 0 0 0 3-3V9a7 7 0 0 0-7-7z" />
+      <path d="M9 10h6" />
+      <path d="M9 14h4" />
+    </svg>
+  );
+}
+
+function OpsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+function LearningIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v18" />
+      <path d="M5 8l7-5 7 5" />
+      <path d="M19 16l-7 5-7-5" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function getStoredUser(): { username: string; displayName: string } | null {
+  try {
+    const raw = localStorage.getItem('gobs_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 function HomeIcon() {
   return (
@@ -140,7 +188,11 @@ function SettingsIcon() {
 const NAV_GROUPS: NavItemDef[][] = [
   [
     { to: '/', label: '首页', icon: HomeIcon },
-    { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon, highlight: true },
+    { to: '/platform', label: '平台框架', icon: PlatformIcon, highlight: true },
+    { to: '/platform/memory', label: '记忆系统', icon: MemoryIcon },
+    { to: '/platform/learning-lab', label: '学习实验台', icon: LearningIcon },
+    { to: '/platform/ops', label: '运营中心', icon: OpsIcon },
+    { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon },
     { to: '/projects', label: '我的项目', icon: ProjectsIcon },
     { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
     { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
@@ -153,7 +205,7 @@ const NAV_GROUPS: NavItemDef[][] = [
     { to: '/distribute', label: '视频分发', icon: DistributeIcon },
   ],
   [
-    { to: '/tiktok-matrix', label: 'TikTok 矩阵', icon: MatrixIcon },
+    { to: '/tiktok-matrix', label: '风控大师', icon: MatrixIcon },
     { to: '/history', label: '历史记录', icon: HistoryIcon },
   ],
 ];
@@ -168,29 +220,41 @@ function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
   return new URLSearchParams(search).get('tab') === 'templates';
 }
 
-function filterNavGroup(user: GobsSessionUser, group: NavItemDef[]): NavItemDef[] {
-  return group.filter((it) => {
-    const f = navTargetToFeature(it.to);
-    if (!f) return true;
-    return user.isSuperAdmin || user.features.includes(f);
-  });
+function getProductionNavTo(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  const currentId = pathname === '/studio/production' ? params.get('projectId') : null;
+  let projectId = currentId;
+  if (!projectId) {
+    try {
+      projectId = localStorage.getItem('gobs_last_project_id');
+    } catch {
+      projectId = null;
+    }
+  }
+  return projectId
+    ? `/studio/production?projectId=${encodeURIComponent(projectId)}`
+    : '/studio/production';
+}
+
+function filterNavGroup(group: NavItemDef[]): NavItemDef[] {
+  return group;
 }
 
 function navLinkClass(active: boolean, highlight?: boolean): string {
   if (highlight && !active) {
-    return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/8 hover:bg-[var(--color-primary)]/15 border-l-2 border-transparent pl-[10px] hover:translate-x-0.5`;
+    return `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/18 border border-transparent hover:translate-x-0.5`;
   }
   return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
     active
-      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
-      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
+      ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35 shadow-sm'
+      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border border-transparent'
   }`;
 }
 
 export function Layout() {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useGobsAuth();
+  const user = getStoredUser();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
   const isTiktokMatrix = pathname === '/tiktok-matrix';
@@ -201,13 +265,12 @@ export function Layout() {
   }, [pathname]);
 
   const visibleGroups = useMemo(() => {
-    if (!user) return NAV_GROUPS.map(() => [] as NavItemDef[]);
-    return NAV_GROUPS.map((g) => filterNavGroup(user, g));
-  }, [user]);
+    return NAV_GROUPS.map((g) => filterNavGroup(g));
+  }, []);
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
-      <div className="flex items-center justify-between px-4 py-5 border-b border-[var(--color-border)]">
+      <div className="gobs-glass flex items-center justify-between border-b border-[var(--color-border)]/70 px-4 py-5">
         <img src="/logo.png" alt="GOBS" className="h-12 w-auto max-w-full object-contain" />
         <button
           type="button"
@@ -220,7 +283,7 @@ export function Layout() {
           </svg>
         </button>
       </div>
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
         {visibleGroups.map((group, gi) => (
           <Fragment key={gi}>
             {gi > 0 && group.length > 0 && visibleGroups[gi - 1]?.length > 0 && (
@@ -228,8 +291,8 @@ export function Layout() {
             )}
             {group.map(({ to, label, icon: Icon, end: endProp, highlight }) => (
               <NavLink
-                key={to}
-                to={to}
+                key={`${to}:${label}`}
+                to={to === '/studio/production' ? getProductionNavTo(pathname, search) : to}
                 end={endProp ?? to === '/'}
                 className={({ isActive }) => {
                   let active = isActive;
@@ -250,15 +313,15 @@ export function Layout() {
           </Fragment>
         ))}
       </nav>
-      <div className="mt-auto p-3 border-t border-[var(--color-border)] space-y-2">
-        {user?.isSuperAdmin && (
+      <div className="gobs-glass mt-auto space-y-2 border-t border-[var(--color-border)]/70 p-3">
+        {user && (
           <NavLink
             to="/settings/accounts"
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px]'
+                  ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border border-transparent'
               }`
             }
           >
@@ -269,12 +332,11 @@ export function Layout() {
         <button
           type="button"
           onClick={() => {
-            void (async () => {
-              await logout();
-              navigate('/login', { replace: true });
-            })();
+            localStorage.removeItem('gobs_token');
+            localStorage.removeItem('gobs_user');
+            navigate('/login', { replace: true });
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px] text-left"
+          className="w-full text-left flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
         >
           <span className="text-lg leading-none">⎋</span>
           退出登录
@@ -300,7 +362,7 @@ export function Layout() {
       <aside
         className={`
           fixed sm:relative inset-y-0 left-0 z-[200]
-          w-56 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-elevated)]
+          w-60 flex-shrink-0 border-r border-[var(--color-border)]/70 bg-[var(--color-surface-elevated)]/85
           transition-transform duration-300 ease-in-out
           sm:translate-x-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
