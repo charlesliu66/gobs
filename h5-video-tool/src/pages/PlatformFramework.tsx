@@ -80,6 +80,9 @@ export function PlatformFramework() {
               <Link to="/platform/learning-lab" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
                 去跑学习闭环 Demo
               </Link>
+              <Link to="/platform/ops" className="rounded-xl border border-emerald-400/20 bg-emerald-400/8 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/14 hover:text-emerald-200">
+                运营中心（Paperclip 借鉴）
+              </Link>
               <Link to="/studio" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
                 去旧工作台
               </Link>

@@ -12,6 +12,14 @@ export type PlatformGame = {
   status: '待补资料' | '分析中' | '已就绪';
   assets: number;
   docs: number;
+  goals: PlatformGoal[];
+};
+
+export type PlatformGoal = {
+  id: string;
+  title: string;
+  metric?: string;
+  children?: PlatformGoal[];
 };
 
 export type PlatformStrategy = {
@@ -25,6 +33,32 @@ export type PlatformStrategy = {
   trend: number;
   reason: string;
   mode: '自动提升' | '自动降低' | '人工锁定';
+  goalChain: string[];
+  agentType: AgentType;
+  approvalLevel: '自动执行' | '通知可否决' | '人工批准';
+};
+
+export type AgentType = '内容生产' | '买量投放' | '社区舆情' | 'KOL管理' | '产品优化';
+
+export type AgentBudget = {
+  agentType: AgentType;
+  monthlyBudget: number;
+  spent: number;
+  unit: string;
+  actionCount: number;
+  avgCost: number;
+  status: '正常' | '预警' | '已超限';
+};
+
+export type HeartbeatLog = {
+  id: string;
+  time: string;
+  gameId: string;
+  source: string;
+  summary: string;
+  insightsGenerated: number;
+  actionsGenerated: number;
+  status: '完成' | '运行中' | '失败';
 };
 
 export type PlatformFeedbackLog = {
@@ -52,6 +86,9 @@ type PlatformMemoryContextValue = {
   strategies: PlatformStrategy[];
   feedbackLogs: PlatformFeedbackLog[];
   runLearningCycle: (input: { suggestionId: string; decision: PlatformDecision; outcome: PlatformOutcome }) => void;
+  agentBudgets: AgentBudget[];
+  heartbeatLogs: HeartbeatLog[];
+  triggerHeartbeat: () => void;
 };
 
 const PlatformMemoryContext = createContext<PlatformMemoryContextValue | null>(null);
@@ -66,6 +103,37 @@ const initialGames: PlatformGame[] = [
     status: '已就绪',
     assets: 34,
     docs: 12,
+    goals: [
+      {
+        id: 'goal-1',
+        title: '首发 30 天 DAU 突破 50 万',
+        metric: 'DAU ≥ 500K',
+        children: [
+          {
+            id: 'goal-1-1',
+            title: 'TikTok 内容矩阵覆盖 SEA 3 个市场',
+            metric: '3 市场各 ≥ 5 个爆款视频',
+            children: [
+              { id: 'goal-1-1-1', title: '版本卖点混剪本地化扩量' },
+              { id: 'goal-1-1-2', title: '角色剧情向内容测试' },
+            ],
+          },
+          {
+            id: 'goal-1-2',
+            title: 'Meta Ads CPI 控制在 US$0.8 以内',
+            metric: 'CPI ≤ $0.8',
+            children: [
+              { id: 'goal-1-2-1', title: '素材 AB 测试与疲劳检测' },
+            ],
+          },
+          {
+            id: 'goal-1-3',
+            title: '舆情零重大事件',
+            metric: '无需官方道歉或下架',
+          },
+        ],
+      },
+    ],
   },
   {
     id: 'g2',
@@ -76,6 +144,17 @@ const initialGames: PlatformGame[] = [
     status: '分析中',
     assets: 21,
     docs: 8,
+    goals: [
+      {
+        id: 'goal-2',
+        title: '爬坡期月流水突破 US$200K',
+        metric: 'Revenue ≥ $200K/月',
+        children: [
+          { id: 'goal-2-1', title: '付费转化率提升到 3.5%' },
+          { id: 'goal-2-2', title: 'KOL 合作覆盖 TH/ID 头部 10 位' },
+        ],
+      },
+    ],
   },
 ];
 
@@ -83,7 +162,7 @@ const initialStrategies: PlatformStrategy[] = [
   {
     id: 'a1',
     gameId: 'g1',
-    name: '复用“版本卖点混剪”模板扩展到泰语市场',
+    name: '复用"版本卖点混剪"模板扩展到泰语市场',
     scope: 'SLG / 首发期 / TikTok',
     risk: '低风险',
     weight: 78,
@@ -91,6 +170,9 @@ const initialStrategies: PlatformStrategy[] = [
     trend: 12,
     reason: '近 7 天 CTR 与 CVR 连续优于均值',
     mode: '自动提升',
+    goalChain: ['首发 30 天 DAU 突破 50 万', 'TikTok 内容矩阵覆盖 SEA 3 个市场', '版本卖点混剪本地化扩量'],
+    agentType: '内容生产',
+    approvalLevel: '自动执行',
   },
   {
     id: 'a2',
@@ -103,6 +185,9 @@ const initialStrategies: PlatformStrategy[] = [
     trend: -8,
     reason: '高风险对外动作需人工介入',
     mode: '人工锁定',
+    goalChain: ['首发 30 天 DAU 突破 50 万', '舆情零重大事件'],
+    agentType: '社区舆情',
+    approvalLevel: '人工批准',
   },
   {
     id: 'a3',
@@ -115,18 +200,30 @@ const initialStrategies: PlatformStrategy[] = [
     trend: -18,
     reason: '素材疲劳导致 CPM 上升、ROI 下滑',
     mode: '自动降低',
+    goalChain: ['爬坡期月流水突破 US$200K', '付费转化率提升到 3.5%'],
+    agentType: '买量投放',
+    approvalLevel: '通知可否决',
   },
+];
+
+const initialBudgets: AgentBudget[] = [
+  { agentType: '内容生产', monthlyBudget: 5000, spent: 1840, unit: 'tokens/视频', actionCount: 23, avgCost: 80, status: '正常' },
+  { agentType: '买量投放', monthlyBudget: 20000, spent: 14200, unit: 'USD', actionCount: 8, avgCost: 1775, status: '预警' },
+  { agentType: '社区舆情', monthlyBudget: 2000, spent: 420, unit: 'tokens', actionCount: 12, avgCost: 35, status: '正常' },
+  { agentType: 'KOL管理', monthlyBudget: 8000, spent: 3100, unit: 'USD', actionCount: 5, avgCost: 620, status: '正常' },
+  { agentType: '产品优化', monthlyBudget: 1000, spent: 180, unit: 'tokens', actionCount: 3, avgCost: 60, status: '正常' },
+];
+
+const initialHeartbeats: HeartbeatLog[] = [
+  { id: 'hb-1', time: '今天 08:00', gameId: 'g1', source: '定时心跳', summary: '拉取 TikTok/Meta/YouTube 24h 数据，生成 2 条洞察、1 条 Action。', insightsGenerated: 2, actionsGenerated: 1, status: '完成' },
+  { id: 'hb-2', time: '今天 08:00', gameId: 'g2', source: '定时心跳', summary: '拉取 Meta Ads 数据，检测到素材疲劳信号。', insightsGenerated: 1, actionsGenerated: 1, status: '完成' },
+  { id: 'hb-3', time: '昨天 20:00', gameId: 'g1', source: '事件触发', summary: '评论负面情绪急升触发舆情检测。', insightsGenerated: 1, actionsGenerated: 1, status: '完成' },
 ];
 
 const initialUploadedFiles = ['世界观设定.pdf', '版本卖点整理.docx', '近30天素材表现.xlsx'];
 
 function nowLabel() {
-  return new Date().toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
@@ -135,19 +232,16 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
   const [uploadedFiles, setUploadedFiles] = useState<string[]>(initialUploadedFiles);
   const [strategies, setStrategies] = useState<PlatformStrategy[]>(initialStrategies);
   const [feedbackLogs, setFeedbackLogs] = useState<PlatformFeedbackLog[]>([]);
+  const [agentBudgets, setAgentBudgets] = useState<AgentBudget[]>(initialBudgets);
+  const [heartbeatLogs, setHeartbeatLogs] = useState<HeartbeatLog[]>(initialHeartbeats);
 
   const addGame = (payload: { name: string; genre: string; stage: PlatformGame['stage'] }) => {
     const name = payload.name.trim();
     if (!name) return;
     const next: PlatformGame = {
-      id: `g${Date.now()}`,
-      name,
-      genre: payload.genre,
-      stage: payload.stage,
-      region: '待设置',
-      status: '待补资料',
-      assets: 0,
-      docs: 0,
+      id: `g${Date.now()}`, name, genre: payload.genre, stage: payload.stage,
+      region: '待设置', status: '待补资料', assets: 0, docs: 0,
+      goals: [{ id: `goal-${Date.now()}`, title: `${name} 核心目标（待设定）` }],
     };
     setGames((prev) => [next, ...prev]);
     setSelectedGameId(next.id);
@@ -159,14 +253,28 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
     setGames((prev) =>
       prev.map((game) =>
         game.id === selectedGameId
-          ? {
-              ...game,
-              docs: game.docs + 1,
-              status: game.docs + 1 >= 10 ? '已就绪' : game.docs + 1 >= 6 ? '分析中' : '待补资料',
-            }
+          ? { ...game, docs: game.docs + 1, status: game.docs + 1 >= 10 ? '已就绪' : game.docs + 1 >= 6 ? '分析中' : '待补资料' }
           : game,
       ),
     );
+  };
+
+  const triggerHeartbeat = () => {
+    const insights = 1 + Math.floor(Math.random() * 3);
+    const actions = Math.floor(Math.random() * 2);
+    setHeartbeatLogs((prev) => [
+      {
+        id: `hb-${Date.now()}`,
+        time: nowLabel(),
+        gameId: selectedGameId,
+        source: '手动触发',
+        summary: `拉取最新数据，生成 ${insights} 条洞察${actions > 0 ? `、${actions} 条 Action 建议` : ''}。`,
+        insightsGenerated: insights,
+        actionsGenerated: actions,
+        status: '完成',
+      },
+      ...prev,
+    ]);
   };
 
   const runLearningCycle = (input: { suggestionId: string; decision: PlatformDecision; outcome: PlatformOutcome }) => {
@@ -192,32 +300,25 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
       result = input.outcome === '风险规避' ? '人工改写后规避了风险。' : '人工改写后得到新的执行反馈。';
       impact = input.outcome === '风险规避' ? '风险控制' : input.outcome === '负反馈' ? '负向' : '正向';
     } else {
-      if (input.outcome === '强正反馈') {
-        weightDelta = 12;
-        priorityDelta = 10;
-        learning = '该策略被验证有效，应提升模板权重与相似建议优先级。';
-        result = '核心指标明显优于基线。';
-        impact = '正向';
-      } else if (input.outcome === '轻正反馈') {
-        weightDelta = 5;
-        priorityDelta = 4;
-        learning = '该策略有效但收益一般，继续保留并观察在不同市场是否稳定复现。';
-        result = '指标小幅优于基线。';
-        impact = '正向';
-      } else if (input.outcome === '负反馈') {
-        weightDelta = -14;
-        priorityDelta = -11;
-        learning = '执行后效果变差，应显著降权，并把替代策略提前推荐。';
-        result = 'ROI 或效率指标低于预期。';
-        impact = '负向';
-      } else {
-        weightDelta = strategy.risk === '高风险' ? 4 : -3;
-        priorityDelta = -6;
-        learning = '虽然没有增长，但规避了高风险事件；这类场景应优先走人工审核门。';
-        result = '避免了可能的舆情或品牌风险。';
-        impact = '风险控制';
-      }
+      if (input.outcome === '强正反馈') { weightDelta = 12; priorityDelta = 10; learning = '该策略被验证有效，应提升模板权重与相似建议优先级。'; result = '核心指标明显优于基线。'; impact = '正向'; }
+      else if (input.outcome === '轻正反馈') { weightDelta = 5; priorityDelta = 4; learning = '该策略有效但收益一般，继续保留并观察。'; result = '指标小幅优于基线。'; impact = '正向'; }
+      else if (input.outcome === '负反馈') { weightDelta = -14; priorityDelta = -11; learning = '执行后效果变差，应显著降权。'; result = 'ROI 或效率指标低于预期。'; impact = '负向'; }
+      else { weightDelta = strategy.risk === '高风险' ? 4 : -3; priorityDelta = -6; learning = '规避了高风险事件，应优先走人工审核门。'; result = '避免了可能的舆情或品牌风险。'; impact = '风险控制'; }
     }
+
+    // Update budget spent
+    setAgentBudgets((prev) =>
+      prev.map((b) =>
+        b.agentType === strategy.agentType
+          ? {
+              ...b,
+              spent: b.spent + b.avgCost,
+              actionCount: b.actionCount + 1,
+              status: (b.spent + b.avgCost) / b.monthlyBudget > 0.9 ? '已超限' : (b.spent + b.avgCost) / b.monthlyBudget > 0.7 ? '预警' : '正常',
+            }
+          : b,
+      ),
+    );
 
     setStrategies((prev) =>
       prev.map((item) =>
@@ -228,47 +329,22 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
               priority: Math.max(0, Math.min(100, item.priority + priorityDelta)),
               trend: weightDelta,
               reason: learning,
-              mode:
-                input.decision === '拒绝'
-                  ? '人工锁定'
-                  : weightDelta >= 0
-                    ? '自动提升'
-                    : '自动降低',
+              mode: input.decision === '拒绝' ? '人工锁定' : weightDelta >= 0 ? '自动提升' : '自动降低',
             }
           : item,
       ),
     );
 
     setFeedbackLogs((prev) => [
-      {
-        id: `${input.suggestionId}-${Date.now()}`,
-        time: nowLabel(),
-        gameId: strategy.gameId,
-        suggestionId: strategy.id,
-        suggestion: strategy.name,
-        decision: input.decision,
-        outcome: input.outcome,
-        result,
-        learning,
-        impact,
-        weightDelta,
-        priorityDelta,
-      },
+      { id: `${input.suggestionId}-${Date.now()}`, time: nowLabel(), gameId: strategy.gameId, suggestionId: strategy.id, suggestion: strategy.name, decision: input.decision, outcome: input.outcome, result, learning, impact, weightDelta, priorityDelta },
       ...prev,
     ]);
   };
 
   const value = useMemo<PlatformMemoryContextValue>(() => ({
-    games,
-    selectedGameId,
-    setSelectedGameId,
-    addGame,
-    uploadedFiles,
-    addUploadedFile,
-    strategies,
-    feedbackLogs,
-    runLearningCycle,
-  }), [games, selectedGameId, uploadedFiles, strategies, feedbackLogs]);
+    games, selectedGameId, setSelectedGameId, addGame, uploadedFiles, addUploadedFile,
+    strategies, feedbackLogs, runLearningCycle, agentBudgets, heartbeatLogs, triggerHeartbeat,
+  }), [games, selectedGameId, uploadedFiles, strategies, feedbackLogs, agentBudgets, heartbeatLogs]);
 
   return <PlatformMemoryContext.Provider value={value}>{children}</PlatformMemoryContext.Provider>;
 }
