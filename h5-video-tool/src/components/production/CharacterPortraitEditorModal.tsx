@@ -54,6 +54,10 @@ export function CharacterPortraitEditorModal({
 }: CharacterPortraitEditorModalProps) {
   const sheet = useMemo(() => ensureCharacterLookTree(characterSheet), [characterSheet]);
   const lookTree = sheet.lookTree ?? [];
+  // Keep a local editable copy for wardrobe tab interactions.
+  // Parent state is still updated via onSheetUpdate, but this ensures
+  // the current modal view reflects changes immediately.
+  const [wardrobeSheet, setWardrobeSheet] = useState<CharacterSheet>(() => ensureCharacterLookTree(characterSheet));
 
   const [modalTab, setModalTab] = useState<'portrait' | 'wardrobe'>('portrait');
   const [genMode, setGenMode] = useState<'text' | 'reference'>('text');
@@ -90,6 +94,10 @@ export function CharacterPortraitEditorModal({
       setRefDataUrl(null);
     }
   }, [characterSheet.id, editIntent, lookTree, storyBio, wardrobeSupplementDefault]);
+
+  useEffect(() => {
+    setWardrobeSheet(ensureCharacterLookTree(characterSheet));
+  }, [characterSheet.id]);
 
   const persistKey = useCallback((k: string) => {
     setCompassKey(k);
@@ -261,11 +269,14 @@ export function CharacterPortraitEditorModal({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {modalTab === 'wardrobe' ? (
             <CharacterWardrobePanel
-              sheet={characterSheet}
+              sheet={wardrobeSheet}
               styleRef={styleRef}
               styleRefImage={styleRefImage}
               aspectRatio={productionAspectRatio ?? aspectRatio}
-              onUpdate={(updated) => onSheetUpdate?.(updated)}
+              onUpdate={(updated) => {
+                setWardrobeSheet(updated);
+                onSheetUpdate?.(updated);
+              }}
             />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

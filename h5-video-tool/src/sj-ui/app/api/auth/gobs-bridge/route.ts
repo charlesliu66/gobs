@@ -87,7 +87,9 @@ export async function GET(req: NextRequest) {
     }
 
     const sessionToken = await signSessionToken(record)
-    const res = NextResponse.redirect(new URL("/", req.url))
+    // Avoid absolute redirect leaking internal upstream host in reverse-proxy mode.
+    // Hidden iframe only needs cookie write success.
+    const res = NextResponse.json({ success: true })
     res.cookies.set(COOKIE_NAME, sessionToken, getSjAuthCookieWriteOptions(60 * 60 * 24 * 7))
     return res
   } catch {

@@ -744,6 +744,9 @@ export function ProductionWizard() {
     // 并发控制：最多同时 2 个任务
     const CONCURRENCY = 2;
     let completedCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+    const failMessages: string[] = [];
     const runTask = async (t: Task) => {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
@@ -785,9 +788,13 @@ export function ProductionWizard() {
           const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
           uploadProductionImage(img, mime, `${t.kind}-${t.sheetId}`).then(({ url }) => applyBatchImg(url)).catch(() => {});
         }
+        successCount++;
       } catch (e) {
+        failedCount++;
+        const msg = e instanceof Error ? e.message : '生成失败';
+        if (failMessages.length < 3) failMessages.push(msg);
         if (!batchCancelRef.current) {
-          console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, e);
+          console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, msg);
         }
       } finally {
         completedCount++;
@@ -795,21 +802,35 @@ export function ProductionWizard() {
       }
     };
 
-    // 任务队列并发执行
+    // 任务队列并发执行（worker 池）
     try {
-      const pool: Promise<void>[] = [];
-      for (const task of tasks) {
-        if (batchCancelRef.current) break;
-        const p = runTask(task);
-        pool.push(p);
-        if (pool.length >= CONCURRENCY) {
-          await Promise.race(pool);
-          // 移除已完成的
-          const settled = await Promise.allSettled(pool.map((x) => Promise.race([x, Promise.resolve()])));
-          pool.splice(0, pool.length, ...pool.filter((_, i) => settled[i]?.status !== 'fulfilled'));
+      let cursor = 0;
+      const worker = async () => {
+        while (!batchCancelRef.current) {
+          const idx = cursor++;
+          if (idx >= tasks.length) break;
+          const task = tasks[idx];
+          if (!task) break;
+          await runTask(task);
         }
+      };
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, tasks.length) },
+        () => worker(),
+      );
+      await Promise.all(workers);
+
+      if (batchCancelRef.current) {
+        setErr('已取消补全缺图。');
+      } else if (successCount === 0) {
+        setErr(`补全失败：${failMessages[0] ?? '请检查云端 API 的 Compass/Imagen 配置是否可用。'}`);
+      } else if (failedCount > 0) {
+        const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
+        setErr(`部分补全成功：${successCount} 项成功，${failedCount} 项失败${hint}`);
+        toast.error(`补全完成：${successCount} 成功，${failedCount} 失败`);
+      } else {
+        toast.success(`已补全 ${successCount} 项缺图`);
       }
-      await Promise.allSettled(pool);
     } finally {
       setGenKey(null);
       setBatchAssetGen(null);
@@ -1228,31 +1249,61 @@ export function ProductionWizard() {
   }, []);
 
   const handleImportFromLibrary = useCallback((libChar: LibraryCharacter) => {
-    const id = `ch-lib-${Date.now()}`;
-    const rootId = `${id}-v0`;
-    const newChar: CharacterSheet = {
-      id,
-      name: libChar.name,
-      isProtagonist: libChar.isProtagonist ?? false,
-      variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-      lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-      activeLookId: rootId,
-      baseImageDataUrl: libChar.baseImageDataUrl,
-      baseConfirmed: libChar.baseConfirmed ?? false,
-      states: libChar.states?.map((s) => ({
-        id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        label: s.label,
-        imageDataUrl: s.imageDataUrl,
-        statePrompt: s.statePrompt ?? '',
-        notes: s.notes ?? '',
-      })) ?? [],
-    };
-    setProject((p) => ({
-      ...p,
-      characterAssets: [...(p.characterAssets ?? []), newChar],
-    }));
+    const normalize = (v: string) => v.trim().toLowerCase();
+    setProject((p) => {
+      const list = [...(p.characterAssets ?? [])];
+      const existingIdx = list.findIndex((c) => normalize(c.name) === normalize(libChar.name));
+      if (existingIdx >= 0) {
+        const existing = list[existingIdx]!;
+        const ensured = ensureCharacterLookTree(existing);
+        const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
+        const merged = root && libChar.baseImageDataUrl
+          ? setCharacterLookNodeImage(ensured, root.id, libChar.baseImageDataUrl)
+          : ensured;
+        list[existingIdx] = {
+          ...merged,
+          baseImageDataUrl: libChar.baseImageDataUrl,
+          baseConfirmed: libChar.baseConfirmed ?? true,
+          // 保留项目中的主角标识，避免导入后出现多个主角
+          isProtagonist: existing.isProtagonist,
+          states: libChar.states?.map((s) => ({
+            id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            label: s.label,
+            imageDataUrl: s.imageDataUrl,
+            statePrompt: s.statePrompt ?? '',
+            notes: s.notes ?? '',
+          })) ?? existing.states,
+        };
+        return { ...p, characterAssets: list };
+      }
+
+      const id = `ch-lib-${Date.now()}`;
+      const rootId = `${id}-v0`;
+      const hasProtagonist = list.some((c) => c.isProtagonist);
+      const newChar: CharacterSheet = {
+        id,
+        name: libChar.name,
+        isProtagonist: hasProtagonist ? false : (libChar.isProtagonist ?? false),
+        variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+        lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
+        activeLookId: rootId,
+        baseImageDataUrl: libChar.baseImageDataUrl,
+        baseConfirmed: libChar.baseConfirmed ?? false,
+        states: libChar.states?.map((s) => ({
+          id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          label: s.label,
+          imageDataUrl: s.imageDataUrl,
+          statePrompt: s.statePrompt ?? '',
+          notes: s.notes ?? '',
+        })) ?? [],
+      };
+      return {
+        ...p,
+        characterAssets: [...list, newChar],
+      };
+    });
     setShowLibraryImport(false);
-    toast.success(`已导入角色「${libChar.name}」`);
+    toast.success(`已应用角色形象「${libChar.name}」`);
   }, []);
 
   const handleFile = useCallback((file: File | null) => {

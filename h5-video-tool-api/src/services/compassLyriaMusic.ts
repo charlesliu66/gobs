@@ -58,8 +58,8 @@ export async function generateLyriaInstrumentalWavs(
     },
   };
 
-  try {
-    const { status, data } = await axios.post<{
+  const doRequest = async () =>
+    axios.post<{
       predictions?: unknown[];
       error?: { message?: string };
     }>(url, body, {
@@ -70,6 +70,18 @@ export async function generateLyriaInstrumentalWavs(
       timeout: 300_000,
       validateStatus: () => true,
     });
+
+  try {
+    let resp;
+    try {
+      resp = await doRequest();
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      if (!/ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN/i.test(msg)) throw firstErr;
+      // 网络抖动重试一次
+      resp = await doRequest();
+    }
+    const { status, data } = resp;
 
     if (status < 200 || status >= 300) {
       const errMsg =

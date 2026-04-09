@@ -17,6 +17,7 @@ export function TiktokMatrix() {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: number | null = null;
 
     async function doBridge() {
       try {
@@ -34,8 +35,19 @@ export function TiktokMatrix() {
         // Use hidden iframe to set sj_auth cookie
         const iframe = bridgeRef.current;
         if (iframe) {
-          iframe.onload = () => {
-            if (!cancelled) setState('ready');
+          iframe.onload = async () => {
+            try {
+              const sessionRes = await fetch(`${matrixUrl}/api/auth/session`, { credentials: 'include' });
+              if (!sessionRes.ok) throw new Error(`矩阵会话校验失败(${sessionRes.status})`);
+              const sessionBody = (await sessionRes.json()) as { user?: unknown };
+              if (!sessionBody.user) throw new Error('矩阵会话未建立');
+              if (!cancelled) setState('ready');
+            } catch (e) {
+              if (!cancelled) {
+                setErrorMsg(e instanceof Error ? e.message : '矩阵会话校验失败');
+                setState('error');
+              }
+            }
           };
           iframe.onerror = () => {
             if (!cancelled) {
@@ -46,12 +58,13 @@ export function TiktokMatrix() {
           iframe.src = bridgeUrl;
         }
 
-        // Fallback timeout
-        setTimeout(() => {
-          if (!cancelled && state !== 'ready') {
-            setState('ready');
+        // Timeout guard: prevent infinite loading when iframe silently hangs.
+        timeoutId = window.setTimeout(() => {
+          if (!cancelled) {
+            setErrorMsg('桥接超时，请重试');
+            setState('error');
           }
-        }, 5000);
+        }, 8000);
       } catch (err: unknown) {
         if (!cancelled) {
           setErrorMsg(err instanceof Error ? err.message : '未知错误');
@@ -61,7 +74,10 @@ export function TiktokMatrix() {
     }
 
     doBridge();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
   }, []);
 
   if (state === 'error') {

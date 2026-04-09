@@ -32,6 +32,32 @@ export interface ImagenPythonResult {
   model?: string;
 }
 
+function getPythonCandidates(): string[] {
+  const env = process.env.PYTHON_EXE?.trim();
+  if (env) return [env];
+  if (process.platform === 'win32') return ['python', 'py', 'python3'];
+  return ['python3', 'python'];
+}
+
+function runImagenScript(
+  pythonExe: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(pythonExe, [PY_SCRIPT], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', (d) => (stdout += d.toString()));
+    proc.stderr?.on('data', (d) => (stderr += d.toString()));
+    proc.on('close', (code) => resolve({ stdout, stderr, code }));
+    proc.on('error', (e) => reject(e));
+  });
+}
+
 export async function generateImageWithPython(options: ImagenPythonOptions): Promise<ImagenPythonResult> {
   const prompt = options.prompt.trim();
   const aspectRatio = options.aspectRatio ?? '16:9';
@@ -77,44 +103,51 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
   // Windows 下通过 argv 传中文长 prompt 可能导致 Python 侧乱码或与输入框不一致，改用 UTF-8 环境变量传递
   env.COMPASS_IMAGEN_PROMPT = prompt;
   env.COMPASS_IMAGEN_ASPECT = aspectRatio;
+  const cands = getPythonCandidates();
+  let lastError: unknown = null;
+  let lastStderr = '';
+  let lastCode: number | null = null;
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn('python', [PY_SCRIPT], {
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    proc.stdout?.on('data', (d) => (stdout += d.toString()));
-    proc.stderr?.on('data', (d) => (stderr += d.toString()));
-
-    proc.on('close', (code) => {
-      // 清理临时文件
-      for (const f of tempFiles) { fs.unlink(f).catch(() => {}); }
-
-      if (code !== 0) {
-        reject(new Error(stderr || `Python 脚本退出码 ${code}`));
-        return;
-      }
+  try {
+    for (const exe of cands) {
       try {
+        const { stdout, stderr, code } = await runImagenScript(exe, env);
+        lastStderr = stderr;
+        lastCode = code;
+        if (code !== 0) {
+          continue;
+        }
         const out = JSON.parse(stdout.trim());
         if (!out?.ok || !out.imageBase64) {
-          reject(new Error(out?.error || '无图像输出'));
-          return;
+          throw new Error(out?.error || '无图像输出');
         }
-        resolve({
+        return {
           imageBase64: out.imageBase64,
           model: typeof out.model === 'string' ? out.model : undefined,
-        });
+        };
       } catch (e) {
-        reject(e);
+        const msg = e instanceof Error ? e.message : String(e);
+        // ENOENT 继续尝试下一个 python 可执行名
+        if (/ENOENT/i.test(msg)) {
+          lastError = e;
+          continue;
+        }
+        throw e;
       }
-    });
+    }
 
-    proc.on('error', (e) => {
-      for (const f of tempFiles) { fs.unlink(f).catch(() => {}); }
-      reject(e);
-    });
-  });
+    if (lastStderr || lastCode !== null) {
+      throw new Error(lastStderr || `Python 脚本退出码 ${lastCode}`);
+    }
+    throw new Error(
+      `无法启动 Python 解释器（已尝试: ${cands.join(', ')}）。` +
+        (lastError ? `最后错误: ${String(lastError)}。` : '') +
+        '请在服务端安装 python3，或在后端 .env 中设置 PYTHON_EXE=/usr/bin/python3 后重启 gobs-api。',
+    );
+  } finally {
+    // 清理临时文件
+    for (const f of tempFiles) {
+      fs.unlink(f).catch(() => {});
+    }
+  }
 }

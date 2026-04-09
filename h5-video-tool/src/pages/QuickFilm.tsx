@@ -750,9 +750,10 @@ function Step3({
   async function handleConfirm() {
     setConfirming(true);
     try {
-      await confirmStoryboard(jobId, shots);
-      toast.success('已开始生成视频！完成后在"我的项目"查看');
-      setTimeout(() => navigate('/projects'), 1800);
+      const res = await confirmStoryboard(jobId, shots);
+      const queued = res.queued ?? shots.length;
+      toast.success(`已提交 ${queued} 个生成任务，请到「历史 → 批量任务看板」查看进度`);
+      setTimeout(() => navigate('/history', { state: { defaultTab: 'batch' } }), 1400);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '提交失败，请重试');
     } finally {

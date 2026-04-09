@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { CharacterSheet, CharacterState } from '../../studio/productionTypes';
 import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
-import { getCharacterLookImage } from '../../studio/productionAssets';
+import { ensureCharacterLookTree, getCharacterLookImage, setCharacterLookNodeImage } from '../../studio/productionAssets';
 import { generateFrames, standardizeCharacterImage } from '../../api/storyboard';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
 import { fetchAssets, getAssetImage } from '../../api/assets';
@@ -36,12 +36,24 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [assetImages, setAssetImages] = useState<Record<string, string>>({});
   const [loadingAssets, setLoadingAssets] = useState(false);
 
+  const buildSheetWithBaseImage = useCallback((imageUrl: string): CharacterSheet => {
+    const ensured = ensureCharacterLookTree(sheet);
+    const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
+    const withRoot = root ? setCharacterLookNodeImage(ensured, root.id, imageUrl) : ensured;
+    return {
+      ...withRoot,
+      baseImageDataUrl: imageUrl,
+      baseConfirmed: true,
+      activeLookId: withRoot.activeLookId ?? root?.id,
+    };
+  }, [sheet]);
+
   // 若基础形象未设置，自动从角色当前定稿形象带入
   useEffect(() => {
     if (!sheet.baseImageDataUrl) {
       const activeImage = getCharacterLookImage(sheet);
       if (activeImage) {
-        onUpdate({ ...sheet, baseImageDataUrl: activeImage, baseConfirmed: true });
+        onUpdate(buildSheetWithBaseImage(activeImage));
       }
     }
   // 仅在 sheet.id 变化时触发，避免循环
@@ -104,12 +116,12 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
         const result = await getAssetImage(asset.id);
         imageUrl = result.imageDataUrl;
       }
-      onUpdate({ ...sheet, baseImageDataUrl: imageUrl, baseConfirmed: true });
+      onUpdate(buildSheetWithBaseImage(imageUrl));
       setShowAssetPicker(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '获取素材图片失败');
     }
-  }, [assetImages, sheet, onUpdate]);
+  }, [assetImages, onUpdate, buildSheetWithBaseImage]);
 
   const states = sheet.states ?? [];
 
@@ -121,13 +133,13 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     try {
       const prompt = `${styleRef}\n角色：${sheet.name}${sheet.isProtagonist ? '（主角）' : ''}。全身正面，中性表情，标准站姿，白色简洁背景，电影感，高清，无文字。`;
       const res = await generateFrames({ prompt, aspectRatio, shotIndex: 0, ...(styleRefImage ? { globalStyleReferenceFrame: styleRefImage } : {}) });
-      onUpdate({ ...sheet, baseImageDataUrl: res.firstFrame, baseConfirmed: true });
+      onUpdate(buildSheetWithBaseImage(res.firstFrame));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '生成失败');
     } finally {
       setGenningBase(false);
     }
-  }, [sheet, styleRef, styleRefImage, aspectRatio, onUpdate]);
+  }, [sheet, styleRef, styleRefImage, aspectRatio, onUpdate, buildSheetWithBaseImage]);
 
   /**
    * 上传参考图生成标准角色形象：
@@ -148,7 +160,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             characterName: sheet.name,
             styleRef: styleRef.trim() || undefined,
           });
-          onUpdate({ ...sheet, baseImageDataUrl: result.imageDataUrl, baseConfirmed: true });
+          onUpdate(buildSheetWithBaseImage(result.imageDataUrl));
         } catch (e) {
           setErr(e instanceof Error ? e.message : '参考图处理失败');
         } finally {
@@ -157,7 +169,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
       })();
     };
     reader.readAsDataURL(file);
-  }, [sheet, styleRef, onUpdate]);
+  }, [sheet, styleRef, onUpdate, buildSheetWithBaseImage]);
 
   // 生成某个状态
   const handleGenState = useCallback(async (state: CharacterState) => {

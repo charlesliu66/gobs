@@ -6,7 +6,10 @@ import { createJob, loadJob, runJobAsync } from '../services/quickFilmService.js
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { getApiDataDir } from '../config/apiDataDir.js';
+import { addJob, type BatchJob } from '../services/batchJobsQueue.js';
+import { isDreaminaEnabled, submitDreaminaVideo } from '../services/dreaminaVideo.js';
 
 const quickfilmRouter = Router();
 
@@ -104,6 +107,11 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
     return;
   }
 
+  if (!isDreaminaEnabled()) {
+    res.status(400).json({ error: '即梦未启用，无法执行一键成片。请先配置 dreamina-cli 并重启 API。' });
+    return;
+  }
+
   // 保存用户确认的分镜
   job.storyboard = storyboard as typeof job.storyboard;
   const batchJobId = nanoid();
@@ -115,10 +123,69 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
     'utf-8',
   );
 
-  // TODO: 触发视频批量生成任务（接入现有 batchJobsQueue）
-  console.log('[quickfilm/confirm] storyboard confirmed, batchJobId:', batchJobId);
+  const projectId = `quickfilm-${jobId}`;
+  const now = new Date().toISOString();
+  const shots = storyboard as Array<{
+    shotIndex?: number;
+    durationSec?: number;
+    subject?: string;
+    action?: string;
+    dialogue?: string;
+    notes?: string;
+    structuredStill?: { sp_subject?: string; sp_environment?: string };
+    structuredMotion?: { mp_motion?: string; mp_camera?: string; mp_tempo?: string };
+    userMatchedAssets?: { characterRef?: string; sceneRef?: string };
+  }>;
 
-  res.json({ batchJobId });
+  const queued: BatchJob[] = [];
+  for (let i = 0; i < shots.length; i++) {
+    const shot = shots[i]!;
+    const prompt = [
+      shot.subject ? `主体：${shot.subject}` : '',
+      shot.action ? `动作：${shot.action}` : '',
+      shot.structuredStill?.sp_environment ? `环境：${shot.structuredStill.sp_environment}` : '',
+      shot.structuredStill?.sp_subject ? `画面主体：${shot.structuredStill.sp_subject}` : '',
+      shot.structuredMotion?.mp_motion ? `运动：${shot.structuredMotion.mp_motion}` : '',
+      shot.structuredMotion?.mp_camera ? `运镜：${shot.structuredMotion.mp_camera}` : '',
+      shot.structuredMotion?.mp_tempo ? `节奏：${shot.structuredMotion.mp_tempo}` : '',
+      shot.dialogue ? `对白：${shot.dialogue}` : '',
+      shot.notes ? `备注：${shot.notes}` : '',
+      `风格：${job.style}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const refBase64 = shot.userMatchedAssets?.characterRef || shot.userMatchedAssets?.sceneRef || undefined;
+    const model = refBase64 ? 'dreamina-image2video' : 'dreamina-text2video';
+
+    const { submitId, taskId } = await submitDreaminaVideo({
+      prompt,
+      aspectRatio: '9:16',
+      duration: Math.max(4, Math.min(15, Math.round(shot.durationSec ?? 5))),
+      model,
+      imageBase64: refBase64,
+      imageMimeType: refBase64 ? 'image/png' : undefined,
+    });
+
+    const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
+    const bj: BatchJob = {
+      id,
+      submitId,
+      taskId: taskId || `dreamina-${submitId}`,
+      projectId,
+      shotIndex: shot.shotIndex ?? i,
+      shotDescription: `${shot.subject ?? ''} ${shot.action ?? ''}`.trim() || `QuickFilm 分镜 ${i + 1}`,
+      model,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await addJob(bj);
+    queued.push(bj);
+  }
+
+  console.log('[quickfilm/confirm] storyboard confirmed and queued:', { batchJobId, queued: queued.length, projectId });
+  res.json({ batchJobId, queued: queued.length, projectId });
 });
 
 export default quickfilmRouter;

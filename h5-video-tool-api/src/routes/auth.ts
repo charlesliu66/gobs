@@ -95,8 +95,10 @@ router.get('/matrix-bridge-token', (req: Request, res: Response) => {
   const bridgePayload = {
     typ: 'matrix_bridge',
     email: `${req.user.username}@gobs.local`,
-    isa: false,
-    mf: [],
+    // Current deployment uses Gobs as the single identity source.
+    // Any successfully authenticated Gobs user gets full SJ console capability.
+    isa: true,
+    mf: ['home', 'devices', 'batch_login', 'tasks', 'settings', 'warmup'],
     cv: 1,
   };
   const bridgeToken = jwt.sign(bridgePayload, secret, { expiresIn: '5m' });

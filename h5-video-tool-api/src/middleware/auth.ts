@@ -36,6 +36,15 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 浏览器 <video>/<audio> 标签无法附带 Bearer，放行媒体文件流读取
+  if (req.method === 'GET' && req.path.startsWith('/api/editor/assets/files/')) {
+    next();
+    return;
+  }
+  if (req.method === 'GET' && req.path.startsWith('/api/editor/music/files/')) {
+    next();
+    return;
+  }
   /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
   if (req.path === '/api/prompt/templates') {
     return next();

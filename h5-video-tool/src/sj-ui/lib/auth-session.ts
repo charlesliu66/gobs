@@ -6,6 +6,24 @@ const COOKIE_NAME = "sj_auth"
 
 export { COOKIE_NAME }
 
+function resolveCookieSecure(): boolean {
+  const raw = (process.env.SJ_AUTH_COOKIE_SECURE || "").trim().toLowerCase()
+  if (raw === "1" || raw === "true") return true
+  if (raw === "0" || raw === "false") return false
+
+  // In production we prefer secure cookies by default.
+  // But if deployment is plain HTTP (no TLS), browsers reject Secure cookies.
+  const publicBase = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.PUBLIC_BASE_URL ||
+    ""
+  )
+    .trim()
+    .toLowerCase()
+  if (publicBase.startsWith("http://")) return false
+  return process.env.NODE_ENV === "production"
+}
+
 /**
  * 会话 Cookie 写入选项。
  * 开发环境下矩阵常被 GOBS（localhost:5173 等）以 iframe 嵌入，与矩阵（:3000）为跨站上下文，
@@ -14,13 +32,14 @@ export { COOKIE_NAME }
  */
 export function getSjAuthCookieWriteOptions(maxAgeSeconds: number) {
   const prod = process.env.NODE_ENV === "production"
+  const secure = resolveCookieSecure()
   if (prod) {
     return {
       httpOnly: true as const,
       path: "/",
       maxAge: maxAgeSeconds,
       sameSite: "lax" as const,
-      secure: true,
+      secure,
     }
   }
   return {
@@ -28,20 +47,21 @@ export function getSjAuthCookieWriteOptions(maxAgeSeconds: number) {
     path: "/",
     maxAge: maxAgeSeconds,
     sameSite: "none" as const,
-    secure: true,
+    secure,
   }
 }
 
 /** 清除会话时需与写入时 SameSite/Secure 一致，否则浏览器可能删不掉 */
 export function getSjAuthCookieDeleteOptions() {
   const prod = process.env.NODE_ENV === "production"
+  const secure = resolveCookieSecure()
   if (prod) {
     return {
       httpOnly: true as const,
       path: "/",
       maxAge: 0,
       sameSite: "lax" as const,
-      secure: true,
+      secure,
     }
   }
   return {
@@ -49,7 +69,7 @@ export function getSjAuthCookieDeleteOptions() {
     path: "/",
     maxAge: 0,
     sameSite: "none" as const,
-    secure: true,
+    secure,
   }
 }
 

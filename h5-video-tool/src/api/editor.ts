@@ -3,6 +3,21 @@ import type { AspectRatioPreset, TimelineProject } from '../editor/types/timelin
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('gobs_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function handleUnauthorized(res: Response): void {
+  if (res.status === 401) {
+    localStorage.removeItem('gobs_token');
+    localStorage.removeItem('gobs_user');
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login';
+    }
+  }
+}
+
 export interface EditorAssetDto {
   id: string;
   url: string;
@@ -22,7 +37,9 @@ export async function listEditorAssets(): Promise<{ assets: EditorAssetDto[] }> 
 export async function deleteEditorAsset(id: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/assets/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+    headers: getAuthHeaders(),
   });
+  handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error || res.statusText);
@@ -30,7 +47,10 @@ export async function deleteEditorAsset(id: string): Promise<void> {
 }
 
 export async function getEditorUploadConfig(): Promise<{ maxMb: number; maxBytes: number }> {
-  const res = await fetch(`${BASE}/api/editor/upload-config`);
+  const res = await fetch(`${BASE}/api/editor/upload-config`, {
+    headers: getAuthHeaders(),
+  });
+  handleUnauthorized(res);
   if (!res.ok) {
     const mb = 500;
     return { maxMb: mb, maxBytes: mb * 1024 * 1024 };
@@ -44,8 +64,10 @@ export async function uploadEditorAsset(file: File): Promise<{ asset: EditorAsse
   fd.append('originalName', file.name);
   const res = await fetch(`${BASE}/api/editor/assets/upload`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: fd,
   });
+  handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error || res.statusText);
@@ -143,9 +165,11 @@ export async function applyEditorAgentStream(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify(body),
   });
+  handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error || res.statusText);
