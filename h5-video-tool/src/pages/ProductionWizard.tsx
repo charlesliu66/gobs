@@ -1695,8 +1695,8 @@ export function ProductionWizard() {
 
   if (isServerBootstrapping) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center">
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-6 py-5 text-center">
+      <div className="flex h-full min-h-0 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.12),transparent_45%)]">
+        <div className="gobs-card rounded-2xl px-7 py-6 text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
           <p className="text-sm font-medium text-[var(--color-text)]">项目加载中…</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">正在同步云端项目数据，请稍候</p>
@@ -1706,9 +1706,9 @@ export function ProductionWizard() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.1),transparent_35%)]">
       {/* 顶栏：标题 + 步骤条（中间区域独立滚动，本区不随内容滚动） */}
-      <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-6 py-4">
+      <div className="gobs-glass shrink-0 border-b border-[var(--color-border)]/80 px-6 py-4">
         <div className="mx-auto flex max-w-6xl flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">

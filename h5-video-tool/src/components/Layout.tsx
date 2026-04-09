@@ -242,12 +242,12 @@ function filterNavGroup(group: NavItemDef[]): NavItemDef[] {
 
 function navLinkClass(active: boolean, highlight?: boolean): string {
   if (highlight && !active) {
-    return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/8 hover:bg-[var(--color-primary)]/15 border-l-2 border-transparent pl-[10px] hover:translate-x-0.5`;
+    return `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/18 border border-transparent hover:translate-x-0.5`;
   }
   return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
     active
-      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
-      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border-l-2 border-transparent pl-[10px]'
+      ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35 shadow-sm'
+      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] hover:translate-x-0.5 border border-transparent'
   }`;
 }
 
@@ -270,7 +270,7 @@ export function Layout() {
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
-      <div className="flex items-center justify-between px-4 py-5 border-b border-[var(--color-border)]">
+      <div className="gobs-glass flex items-center justify-between border-b border-[var(--color-border)]/70 px-4 py-5">
         <img src="/logo.png" alt="GOBS" className="h-12 w-auto max-w-full object-contain" />
         <button
           type="button"
@@ -283,7 +283,7 @@ export function Layout() {
           </svg>
         </button>
       </div>
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
         {visibleGroups.map((group, gi) => (
           <Fragment key={gi}>
             {gi > 0 && group.length > 0 && visibleGroups[gi - 1]?.length > 0 && (
@@ -313,15 +313,15 @@ export function Layout() {
           </Fragment>
         ))}
       </nav>
-      <div className="mt-auto p-3 border-t border-[var(--color-border)] space-y-2">
+      <div className="gobs-glass mt-auto space-y-2 border-t border-[var(--color-border)]/70 p-3">
         {user && (
           <NavLink
             to="/settings/accounts"
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-l-2 border-[var(--color-primary)] pl-[10px]'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px]'
+                  ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border border-transparent'
               }`
             }
           >
@@ -336,7 +336,7 @@ export function Layout() {
             localStorage.removeItem('gobs_user');
             navigate('/login', { replace: true });
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border-l-2 border-transparent pl-[10px] text-left"
+          className="w-full text-left flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
         >
           <span className="text-lg leading-none">⎋</span>
           退出登录
@@ -362,7 +362,7 @@ export function Layout() {
       <aside
         className={`
           fixed sm:relative inset-y-0 left-0 z-[200]
-          w-56 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-elevated)]
+          w-60 flex-shrink-0 border-r border-[var(--color-border)]/70 bg-[var(--color-surface-elevated)]/85
           transition-transform duration-300 ease-in-out
           sm:translate-x-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}

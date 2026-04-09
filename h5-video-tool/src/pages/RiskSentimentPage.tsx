@@ -1,5 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('gobs_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers ?? {});
+  for (const [k, v] of Object.entries(getAuthHeaders())) {
+    headers.set(k, v);
+  }
+  return fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
+    ...init,
+    headers,
+  });
+}
+
 /** 经同源代理拉取 TikTok CDN 封面，避免防盗链导致灰块 */
 function coverDisplaySrc(url?: string): string | undefined {
   const u = url?.trim();
@@ -272,7 +291,7 @@ export function RiskSentimentPage() {
 
   const loadState = useCallback(async () => {
     setErr(null);
-    const res = await fetch('/api/risk-sentiment/state', { credentials: 'include' });
+    const res = await authFetch('/api/risk-sentiment/state');
     const data = (await res.json().catch(() => ({}))) as { ok?: boolean; snapshot?: RiskSnapshot; error?: string };
     if (!res.ok || !data.ok) {
       setErr(data.error || '加载失败');
@@ -288,7 +307,7 @@ export function RiskSentimentPage() {
   }, []);
 
   const loadPhones = useCallback(async () => {
-    const res = await fetch('/api/risk-sentiment/phones', { credentials: 'include' });
+    const res = await authFetch('/api/risk-sentiment/phones');
     const data = (await res.json().catch(() => ({}))) as { ok?: boolean; phones?: GeelarkPhone[] };
     if (res.ok && data.phones) {
       setPhones(data.phones);
@@ -305,9 +324,8 @@ export function RiskSentimentPage() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch('/api/risk-sentiment/refresh', {
+      const res = await authFetch('/api/risk-sentiment/refresh', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ game: game || '未命名游戏', days, keywords, limit }),
       });
@@ -440,9 +458,8 @@ export function RiskSentimentPage() {
       setSendErr('请勾选任务、选择云手机并填写评论');
       return;
     }
-    const res = await fetch('/api/risk-sentiment/send', {
+    const res = await authFetch('/api/risk-sentiment/send', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items }),
     });
@@ -458,13 +475,13 @@ export function RiskSentimentPage() {
   const o = snapshot?.overview;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--color-surface)]">
-      <div className="shrink-0 space-y-3 border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.12),transparent_36%)]">
+      <div className="gobs-glass shrink-0 space-y-3 border-b border-[var(--color-border)]/75 p-3">
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex min-w-[140px] flex-col gap-1 text-[11px] text-[var(--color-text-muted)]">
             游戏
             <input
-              className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]"
               value={game}
               onChange={(e) => setGame(e.target.value)}
               placeholder="例如 Free Fire、freefire"
@@ -472,7 +489,7 @@ export function RiskSentimentPage() {
           </label>
           <div className="flex flex-col gap-1 text-[11px] text-[var(--color-text-muted)]">
             时间范围
-            <div className="flex rounded border border-[var(--color-border)] p-0.5">
+            <div className="flex rounded-xl border border-[var(--color-border)] p-0.5">
               {([7, 14, 30] as const).map((d) => (
                 <button
                   key={d}
@@ -495,7 +512,7 @@ export function RiskSentimentPage() {
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword())}
                 placeholder="仅本地备忘；TikTok 采集只使用上方「游戏」对应单一 # 标签"
               />
-              <button type="button" className="rounded border border-[var(--color-border)] px-2 text-xs" onClick={addKeyword}>
+                <button type="button" className="rounded-xl border border-[var(--color-border)] px-2 text-xs" onClick={addKeyword}>
                 添加
               </button>
             </div>
@@ -515,7 +532,7 @@ export function RiskSentimentPage() {
           <label className="flex flex-col gap-1 text-[11px] text-[var(--color-text-muted)]">
             采集数量
             <select
-              className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value) as 10 | 30 | 50)}
             >
@@ -527,7 +544,7 @@ export function RiskSentimentPage() {
           <button
             type="button"
             disabled={loading}
-            className="rounded bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-lg disabled:opacity-50"
             onClick={() => void onRefresh()}
           >
             {loading ? '分析中…' : '立即刷新'}
@@ -566,7 +583,7 @@ export function RiskSentimentPage() {
           </div>
         ) : (
           <>
-            <div className="mb-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-sm">
+            <div className="gobs-card mb-4 rounded-2xl p-4 shadow-sm">
               <div className="text-xs font-semibold tracking-wide text-[var(--color-text-muted)]">舆情总览</div>
               <div className="mt-3 grid gap-5 md:grid-cols-[minmax(0,160px)_1fr] md:items-start">
                 <div className="flex flex-col">
@@ -610,7 +627,7 @@ export function RiskSentimentPage() {
             </div>
 
             <div className="mb-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-sm">
+              <div className="gobs-card rounded-2xl p-4 shadow-sm">
                 <div className="text-sm font-semibold">关键词矩阵</div>
                 <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-muted)]">
                   监测维度与关键词（结合本次游戏名、采集标签与本批标题/评论中的真实词）；下方为词云概览。
@@ -653,7 +670,7 @@ export function RiskSentimentPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-sm">
+              <div className="gobs-card rounded-2xl p-4 shadow-sm">
                 <div className="text-sm font-semibold">情感与告警</div>
                 <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
                   情感分布见上方「舆情总览」；以下为分级告警（绿 / 黄 / 橙 / 红）。无模型数据时按本批占比与风险标签自动生成。
@@ -684,7 +701,7 @@ export function RiskSentimentPage() {
               </div>
             </div>
 
-            <div className="mb-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-sm">
+            <div className="gobs-card mb-4 rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-semibold">近期趋势（样本内 · 与游戏相关）</div>
               <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-muted)]">
                 参考 social-trend-monitor：基于<strong>本批 TikTok 视频</strong>归纳的相对崛起话题或内容形态，非全站实时排行榜。
@@ -891,7 +908,7 @@ export function RiskSentimentPage() {
               </div>
             </div>
 
-            <div className="mb-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-sm">
+            <div className="gobs-card mb-2 rounded-2xl p-4 shadow-sm">
               <div className="mb-1 text-sm font-semibold">执行任务（评论下发）</div>
               <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">
                 以下为模型生成的具体评论任务；勾选后可在底部选择云手机并发送。每页最多 {PAGE_SIZE} 条。
@@ -953,9 +970,8 @@ export function RiskSentimentPage() {
                         type="button"
                         className="rounded border border-[var(--color-border)] px-2 py-1"
                         onClick={async () => {
-                          const res = await fetch('/api/risk-sentiment/regenerate-comments', {
+                          const res = await authFetch('/api/risk-sentiment/regenerate-comments', {
                             method: 'POST',
-                            credentials: 'include',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ videoId: t.videoId }),
                           });
@@ -975,7 +991,7 @@ export function RiskSentimentPage() {
         )}
       </div>
 
-      <div className="shrink-0 z-30 border-t border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2">
+      <div className="gobs-glass z-30 shrink-0 border-t border-[var(--color-border)]/75 px-3 py-2">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 text-[11px]">
           <div className="flex flex-wrap gap-3 text-[var(--color-text-muted)]">
             <span>已选任务：{selectedTaskIds.size}</span>

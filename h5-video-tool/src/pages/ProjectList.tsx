@@ -103,19 +103,19 @@ export function ProjectList() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="mx-auto max-w-5xl">
       {enteringProjectId && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-5 py-4 text-center">
+          <div className="gobs-card rounded-2xl px-6 py-5 text-center">
             <div className="mx-auto mb-2 h-7 w-7 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
             <p className="text-sm text-[var(--color-text)]">项目加载中…</p>
           </div>
         </div>
       )}
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="gobs-card mb-6 flex items-center justify-between rounded-2xl px-5 py-4">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--color-text)]">我的项目</h1>
+          <h1 className="text-2xl font-semibold text-[var(--color-text)]">我的项目</h1>
           <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
             管理您的制片项目，点击进入高级制片向导
           </p>
@@ -123,7 +123,7 @@ export function ProjectList() {
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-primary-hover)]"
+          className="flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-lg transition hover:bg-[var(--color-primary-hover)]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -135,7 +135,7 @@ export function ProjectList() {
       {/* Create dialog */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+          <div className="gobs-card w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <h2 className="mb-4 text-base font-semibold text-[var(--color-text)]">新建项目</h2>
             <input
               autoFocus
@@ -197,7 +197,7 @@ export function ProjectList() {
           {projects.map((p) => (
             <div
               key={p.id}
-              className="group relative rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 transition hover:border-[var(--color-primary)]/40 hover:shadow-lg"
+              className="gobs-card group relative rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-2xl"
             >
               {/* Card body — clickable */}
               <button
@@ -209,7 +209,7 @@ export function ProjectList() {
                 className="block w-full text-left"
               >
                 <div className="mb-3 flex items-start gap-3">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)]/15">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)]/15">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2">
                       <rect x="2" y="4" width="20" height="14" rx="2" />
                       <line x1="6" y1="4" x2="6" y2="22" />
@@ -244,7 +244,7 @@ export function ProjectList() {
                   </svg>
                 </button>
                 {menuOpenId === p.id && (
-                  <div className="absolute right-0 top-8 z-10 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1 shadow-xl">
+                  <div className="gobs-glass absolute right-0 top-8 z-10 w-32 rounded-xl border border-[var(--color-border)] py-1 shadow-xl">
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); setRenameTarget(p); setRenameName(p.title); }}
@@ -270,7 +270,7 @@ export function ProjectList() {
       {/* 重命名弹窗 */}
       {renameTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+          <div className="gobs-card w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <h2 className="mb-4 text-base font-semibold text-[var(--color-text)]">重命名项目</h2>
             <input
               autoFocus
@@ -301,7 +301,7 @@ export function ProjectList() {
       {/* 删除确认弹窗 */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+          <div className="gobs-card w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <h2 className="mb-2 text-base font-semibold text-[var(--color-text)]">删除项目</h2>
             <p className="mb-6 text-sm text-[var(--color-text-muted)]">
               确定要删除项目 &ldquo;{deleteTarget.title}&rdquo; 吗？此操作不可撤销。

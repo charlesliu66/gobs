@@ -122,19 +122,26 @@ export function Home() {
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-14 pb-12 pt-10 px-2">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-2 pb-12 pt-8">
 
       {/* ── Hero ─────────────────────────────────────────────────────────────── */}
-      <section className="text-center flex flex-col items-center gap-4">
-        <h1 className="text-3xl sm:text-4xl font-semibold text-[var(--color-text)] tracking-tight">
-          洞察即灵感，秒速出视频
-        </h1>
-        <p className="text-sm text-[var(--color-text-muted)]">
-          上传素材 → 即梦 AI 生成 → 一键分发社媒
-        </p>
+      <section className="gobs-card relative overflow-hidden rounded-3xl p-6 sm:p-8">
+        <div className="pointer-events-none absolute -left-10 top-0 h-40 w-40 rounded-full bg-[var(--color-primary)]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 right-0 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="relative text-center flex flex-col items-center gap-4">
+          <span className="rounded-full border border-[var(--color-primary)]/35 bg-[var(--color-primary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-primary-hover)]">
+            GOBS Creative Suite
+          </span>
+          <h1 className="text-3xl font-semibold text-[var(--color-text)] tracking-tight sm:text-5xl">
+            洞察即灵感，秒速出视频
+          </h1>
+          <p className="max-w-2xl text-sm text-[var(--color-text-muted)] sm:text-base">
+            上传素材、生成分镜、自动出片、分发社媒，完整链路在一个工作台完成。
+          </p>
+        </div>
 
         {/* 快速输入框 */}
-        <div className="mt-2 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-sm overflow-hidden">
+        <div className="gobs-glass relative mt-5 w-full overflow-hidden rounded-2xl border border-[var(--color-border)]/70 shadow-xl">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -146,16 +153,16 @@ export function Home() {
             }}
             rows={4}
             placeholder="直接输入创意，按 Enter 开始生成…"
-            className="w-full px-5 py-4 bg-transparent text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-subtle)] resize-none focus:outline-none min-h-[100px]"
+            className="min-h-[120px] w-full resize-none bg-transparent px-5 py-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none"
           />
-          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]/40">
+          <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)]/70 bg-[var(--color-surface)]/30 px-4 py-3">
             <div className="flex flex-wrap gap-1.5">
               {QUICK_IDEAS.map((idea) => (
                 <button
                   key={idea}
                   type="button"
                   onClick={() => goCreate(idea)}
-                  className="px-2.5 py-1 rounded-full text-xs border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/8 transition-all"
+                  className="rounded-full border border-[var(--color-border)]/80 px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/65 hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary-hover)] transition-all"
                 >
                   {idea}
                 </button>
@@ -164,7 +171,7 @@ export function Home() {
             <button
               type="button"
               onClick={() => goCreate()}
-              className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] hover:scale-105 active:scale-95 transition-all shadow-lg"
+              className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-all hover:scale-105 hover:bg-[var(--color-primary-hover)] active:scale-95"
               title="开始创作（Enter）"
             >
               <SendIcon />
@@ -174,8 +181,8 @@ export function Home() {
       </section>
 
       {/* ── 三步流程 ──────────────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-5 text-center">
+      <section className="gobs-card rounded-3xl p-5 sm:p-6">
+        <h2 className="mb-5 text-center text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
           三步完成从素材到发布
         </h2>
 
@@ -192,7 +199,7 @@ export function Home() {
                   className={`group relative flex-1 flex flex-col gap-3 p-5 rounded-2xl border text-left hover:shadow-lg transition-all overflow-hidden ${
                     isDone
                       ? 'border-[var(--color-success)]/50 bg-[var(--color-surface-elevated)] hover:border-[var(--color-success)]/80'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)]'
+                      : 'border-[var(--color-border)]/75 bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)]'
                   }`}
                 >
                   {/* 步骤数 + 完成标记 */}
@@ -248,8 +255,8 @@ export function Home() {
       </section>
 
       {/* ── 快捷入口 ──────────────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-5">
+      <section className="gobs-card rounded-3xl p-5 sm:p-6">
+        <h2 className="mb-5 text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
           快捷入口
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
