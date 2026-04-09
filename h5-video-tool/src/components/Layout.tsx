@@ -205,7 +205,7 @@ const NAV_GROUPS: NavItemDef[][] = [
     { to: '/distribute', label: '视频分发', icon: DistributeIcon },
   ],
   [
-    { to: '/tiktok-matrix', label: 'TikTok 矩阵', icon: MatrixIcon },
+    { to: '/tiktok-matrix', label: '风控大师', icon: MatrixIcon },
     { to: '/history', label: '历史记录', icon: HistoryIcon },
   ],
 ];
@@ -218,6 +218,22 @@ function isStudioMainNavActive(pathname: string, search: string): boolean {
 function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
   if (pathname !== '/studio') return false;
   return new URLSearchParams(search).get('tab') === 'templates';
+}
+
+function getProductionNavTo(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  const currentId = pathname === '/studio/production' ? params.get('projectId') : null;
+  let projectId = currentId;
+  if (!projectId) {
+    try {
+      projectId = localStorage.getItem('gobs_last_project_id');
+    } catch {
+      projectId = null;
+    }
+  }
+  return projectId
+    ? `/studio/production?projectId=${encodeURIComponent(projectId)}`
+    : '/studio/production';
 }
 
 function filterNavGroup(group: NavItemDef[]): NavItemDef[] {
@@ -275,8 +291,8 @@ export function Layout() {
             )}
             {group.map(({ to, label, icon: Icon, end: endProp, highlight }) => (
               <NavLink
-                key={to}
-                to={to}
+                key={`${to}:${label}`}
+                to={to === '/studio/production' ? getProductionNavTo(pathname, search) : to}
                 end={endProp ?? to === '/'}
                 className={({ isActive }) => {
                   let active = isActive;

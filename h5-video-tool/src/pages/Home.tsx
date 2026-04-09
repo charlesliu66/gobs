@@ -287,5 +287,5 @@ const SHORTCUTS = [
   { emoji: '📂', label: '历史视频', to: '/history', hot: false },
   { emoji: '✂️', label: '视频剪辑', to: '/editor', hot: false },
   { emoji: '📱', label: '视频分发', to: '/distribute', hot: false },
-  { emoji: '📲', label: 'TikTok 矩阵', to: '/tiktok-matrix', hot: false },
+  { emoji: '📲', label: '风控大师', to: '/tiktok-matrix', hot: false },
 ] as const;
