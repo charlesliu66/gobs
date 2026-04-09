@@ -6,7 +6,7 @@
  * - 预览视频（点击展开）
  * - 一键导入到剪辑时间轴
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getBatchJobs, cancelBatchJob, type BatchJobDto } from '../api/batchJobs';
 
 const STATUS_LABEL: Record<BatchJobDto['status'], string> = {

@@ -8,9 +8,11 @@ export interface EditorAssetDto {
   url: string;
   kind: 'video';
   originalName: string;
-  mime: string;
-  size: number;
-  createdAt: string;
+  mime?: string;
+  size?: number;
+  createdAt?: string;
+  durationSec?: number;
+  meta?: Record<string, unknown>;
 }
 
 export async function listEditorAssets(): Promise<{ assets: EditorAssetDto[] }> {

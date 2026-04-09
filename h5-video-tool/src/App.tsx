@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'rea
 import { CreateFlowProvider } from './context/CreateFlowContext';
 import { MaterialsProvider } from './context/MaterialsContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { PlatformMemoryProvider } from './context/PlatformMemoryContext';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/Toast';
 import { Login } from './pages/Login';
@@ -36,9 +37,10 @@ function RequireAuth() {
 function App() {
   return (
     <ThemeProvider>
-      <CreateFlowProvider>
-        <MaterialsProvider>
-          <BrowserRouter>
+      <PlatformMemoryProvider>
+        <CreateFlowProvider>
+          <MaterialsProvider>
+            <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route element={<RequireAuth />}>
@@ -68,10 +70,11 @@ function App() {
                 </Route>
               </Route>
             </Routes>
-          </BrowserRouter>
-          <ToastContainer />
-        </MaterialsProvider>
-      </CreateFlowProvider>
+            </BrowserRouter>
+            <ToastContainer />
+          </MaterialsProvider>
+        </CreateFlowProvider>
+      </PlatformMemoryProvider>
     </ThemeProvider>
   );
 }

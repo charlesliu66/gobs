@@ -530,8 +530,6 @@ function ShotCard({
   const hasAssets =
     (shot.matchedAssets?.characterRefs?.length ?? 0) > 0 ||
     shot.matchedAssets?.sceneRef != null;
-  const hasUserAssets = shot.userMatchedAssets?.characterRef || shot.userMatchedAssets?.sceneRef;
-
   return (
     <div className="bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl overflow-hidden transition-all hover:border-[var(--color-border-focus)]/50">
       {/* 折叠视图（默认） */}
