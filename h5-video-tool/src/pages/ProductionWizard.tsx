@@ -605,6 +605,9 @@ export function ProductionWizard() {
   const [showLibraryImport, setShowLibraryImport] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 防止“服务端项目尚未加载完成时”把空白初始态覆盖回服务端
+  const [isServerBootstrapping, setIsServerBootstrapping] = useState(shouldLoadFromServer);
+  const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
 
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
   const scheduleServerSync = useCallback((data: StoredWizard) => {
@@ -657,6 +660,7 @@ export function ProductionWizard() {
         const url = new URL(window.location.href);
         url.searchParams.set('projectId', id);
         window.history.replaceState(null, '', url.toString());
+        setCanAutoPersist(true);
         setShowProjectList(false);
       }
     } catch (e) {
@@ -856,7 +860,11 @@ export function ProductionWizard() {
   // 优先从服务端加载（URL 参数 > localStorage 记录的上次 id）
   useEffect(() => {
     const idToLoad = urlProjectId || lastStoredId;
-    if (!idToLoad) return;
+    if (!idToLoad) {
+      setIsServerBootstrapping(false);
+      setCanAutoPersist(true);
+      return;
+    }
     void (async () => {
       try {
         const raw = await loadProductionProject(idToLoad);
@@ -876,6 +884,7 @@ export function ProductionWizard() {
             url.searchParams.set('projectId', idToLoad);
             window.history.replaceState(null, '', url.toString());
           }
+          setCanAutoPersist(true);
         }
       } catch {
         // 服务端加载失败（项目不存在），降级读 localStorage
@@ -890,7 +899,14 @@ export function ProductionWizard() {
             setStep(fallback.step);
             setStoryGenre(fallback.storyGenre);
           }
+          setCanAutoPersist(true);
+        } else {
+          // URL 指定项目加载失败时，暂停自动保存，避免把空白初始态覆盖回服务端
+          setCanAutoPersist(false);
+          setErr('项目加载失败，已暂停自动保存以避免覆盖云端数据。请刷新重试。');
         }
+      } finally {
+        setIsServerBootstrapping(false);
       }
     })();
   // 仅在挂载时执行一次
@@ -912,6 +928,7 @@ export function ProductionWizard() {
   }, [project.meta.styleRefImageDataUrl]);
 
   useEffect(() => {
+    if (isServerBootstrapping || !canAutoPersist) return;
     const data: StoredWizard = {
       project,
       characterBible,
@@ -923,7 +940,18 @@ export function ProductionWizard() {
     };
     saveStored(data);
     scheduleServerSync(data);
-  }, [project, characterBible, synopsis, structureTemplate, maxTotalDurationSec, step, storyGenre, scheduleServerSync]);
+  }, [
+    project,
+    characterBible,
+    synopsis,
+    structureTemplate,
+    maxTotalDurationSec,
+    step,
+    storyGenre,
+    scheduleServerSync,
+    isServerBootstrapping,
+    canAutoPersist,
+  ]);
 
   useEffect(() => {
     if (project.shots.length && selectedShotIdx >= project.shots.length) {
