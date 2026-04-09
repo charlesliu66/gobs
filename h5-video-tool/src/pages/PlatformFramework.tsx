@@ -262,6 +262,18 @@ export function PlatformFramework() {
                 从游戏绑定开始
               </button>
               <Link
+                to="/platform/memory"
+                className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white"
+              >
+                去看记忆系统
+              </Link>
+              <Link
+                to="/platform/learning-lab"
+                className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white"
+              >
+                去跑学习闭环 Demo
+              </Link>
+              <Link
                 to="/studio"
                 className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white"
               >

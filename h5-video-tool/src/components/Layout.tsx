@@ -19,6 +19,27 @@ function PlatformIcon() {
   );
 }
 
+function MemoryIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a7 7 0 0 0-7 7v6a3 3 0 0 0 3 3h1l2 3 2-3h1a3 3 0 0 0 3-3V9a7 7 0 0 0-7-7z" />
+      <path d="M9 10h6" />
+      <path d="M9 14h4" />
+    </svg>
+  );
+}
+
+function LearningIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v18" />
+      <path d="M5 8l7-5 7 5" />
+      <path d="M19 16l-7 5-7-5" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 function getStoredUser(): { username: string; displayName: string } | null {
   try {
     const raw = localStorage.getItem('gobs_user');
@@ -159,6 +180,8 @@ const NAV_GROUPS: NavItemDef[][] = [
   [
     { to: '/', label: '首页', icon: HomeIcon },
     { to: '/platform', label: '平台框架', icon: PlatformIcon, highlight: true },
+    { to: '/platform/memory', label: '记忆系统', icon: MemoryIcon },
+    { to: '/platform/learning-lab', label: '学习实验台', icon: LearningIcon },
     { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon },
     { to: '/projects', label: '我的项目', icon: ProjectsIcon },
     { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },

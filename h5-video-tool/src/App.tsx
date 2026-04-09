@@ -19,6 +19,8 @@ import { AssetLibrary } from './pages/AssetLibrary';
 import { TiktokMatrix } from './pages/TiktokMatrix';
 import { SettingsAccounts } from './pages/SettingsAccounts';
 import { PlatformFramework } from './pages/PlatformFramework';
+import { PlatformMemory } from './pages/PlatformMemory';
+import { PlatformLearningLab } from './pages/PlatformLearningLab';
 import './index.css';
 
 /** 简单 JWT 路由守卫：检查 localStorage 有 token 即放行 */
@@ -57,6 +59,8 @@ function App() {
                   <Route path="/platform/brain" element={<PlatformFramework />} />
                   <Route path="/platform/data" element={<PlatformFramework />} />
                   <Route path="/platform/actions" element={<PlatformFramework />} />
+                  <Route path="/platform/memory" element={<PlatformMemory />} />
+                  <Route path="/platform/learning-lab" element={<PlatformLearningLab />} />
                   <Route path="/tiktok-matrix" element={<TiktokMatrix />} />
                   <Route path="/settings/accounts" element={<SettingsAccounts />} />
                   <Route path="/geelark-batch" element={<Navigate to="/tiktok-matrix" replace />} />
