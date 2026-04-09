@@ -18,6 +18,7 @@ import { QuickFilm } from './pages/QuickFilm';
 import { AssetLibrary } from './pages/AssetLibrary';
 import { TiktokMatrix } from './pages/TiktokMatrix';
 import { SettingsAccounts } from './pages/SettingsAccounts';
+import { PlatformFramework } from './pages/PlatformFramework';
 import './index.css';
 
 /** 简单 JWT 路由守卫：检查 localStorage 有 token 即放行 */
@@ -51,6 +52,11 @@ function App() {
                   <Route path="/editor" element={<EditorWorkbench />} />
                   <Route path="/quickfilm" element={<QuickFilm />} />
                   <Route path="/asset-library" element={<AssetLibrary />} />
+                  <Route path="/platform" element={<PlatformFramework />} />
+                  <Route path="/platform/bind" element={<PlatformFramework />} />
+                  <Route path="/platform/brain" element={<PlatformFramework />} />
+                  <Route path="/platform/data" element={<PlatformFramework />} />
+                  <Route path="/platform/actions" element={<PlatformFramework />} />
                   <Route path="/tiktok-matrix" element={<TiktokMatrix />} />
                   <Route path="/settings/accounts" element={<SettingsAccounts />} />
                   <Route path="/geelark-batch" element={<Navigate to="/tiktok-matrix" replace />} />

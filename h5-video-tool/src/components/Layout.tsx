@@ -5,6 +5,20 @@ import { ThemeToggle } from './ThemeToggle';
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
 
+function PlatformIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <path d="M10 7h4" />
+      <path d="M17 10v4" />
+      <path d="M7 10v4" />
+      <path d="M7 14h7" />
+    </svg>
+  );
+}
+
 function getStoredUser(): { username: string; displayName: string } | null {
   try {
     const raw = localStorage.getItem('gobs_user');
@@ -144,7 +158,8 @@ function SettingsIcon() {
 const NAV_GROUPS: NavItemDef[][] = [
   [
     { to: '/', label: '首页', icon: HomeIcon },
-    { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon, highlight: true },
+    { to: '/platform', label: '平台框架', icon: PlatformIcon, highlight: true },
+    { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon },
     { to: '/projects', label: '我的项目', icon: ProjectsIcon },
     { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
     { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
