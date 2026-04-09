@@ -104,6 +104,11 @@ def list_remote_frontend(client: paramiko.SSHClient, remote_frontend_dir: str) -
     return result
 
 
+def remote_dir_exists(client: paramiko.SSHClient, remote_dir: str) -> bool:
+    code, out, _ = run_remote(client, "bash -lc " + repr(f'if [ -d "{remote_dir}" ]; then echo 1; else echo 0; fi'), timeout=30)
+    return code == 0 and out.strip() == "1"
+
+
 def sftp_download_dir(
     sftp: paramiko.SFTPClient, remote_dir: str, local_dir: Path, max_files: int = 4000
 ) -> int:
@@ -137,8 +142,9 @@ def main() -> int:
     parser.add_argument("--env", required=True, help="Path to .env file")
     parser.add_argument("--repo-candidates", nargs="*", default=["~/gobs", "~/app", "~/project"])
     parser.add_argument("--commit-message", default="sync(cloud): align with cloud server state")
-    parser.add_argument("--mode", choices=["sync-git", "snapshot-frontend"], default="sync-git")
+    parser.add_argument("--mode", choices=["sync-git", "snapshot-frontend", "snapshot-deploy"], default="sync-git")
     parser.add_argument("--remote-frontend", default="~/gobs/frontend")
+    parser.add_argument("--remote-backend-dist", default="~/gobs/backend/dist")
     parser.add_argument("--local-snapshot-dir", default="deploy/cloud-baseline/frontend")
     args = parser.parse_args()
 
@@ -150,6 +156,7 @@ def main() -> int:
 
     candidates = [c.replace("~", "/home/" + args.user, 1) for c in args.repo_candidates]
     remote_frontend = args.remote_frontend.replace("~", "/home/" + args.user, 1)
+    remote_backend_dist = args.remote_backend_dist.replace("~", "/home/" + args.user, 1)
 
     client = ssh_connect(args.host, args.user, password)
     try:
@@ -163,7 +170,7 @@ def main() -> int:
             print(json.dumps(payload, ensure_ascii=False))
             return 0
 
-        # snapshot-frontend
+        # snapshot-frontend / snapshot-deploy
         info = list_remote_frontend(client, remote_frontend)
         if info.get("EXISTS") != "1":
             print(json.dumps({"ok": False, "error": "REMOTE_FRONTEND_DIR_NOT_FOUND"}, ensure_ascii=False))
@@ -171,16 +178,23 @@ def main() -> int:
         sftp = client.open_sftp()
         try:
             count = sftp_download_dir(sftp, remote_frontend, Path(args.local_snapshot_dir))
+            backend_count = 0
+            if args.mode == "snapshot-deploy":
+                backend_local = Path(args.local_snapshot_dir).parent / "backend-dist"
+                if remote_dir_exists(client, remote_backend_dist):
+                    backend_count = sftp_download_dir(sftp, remote_backend_dist, backend_local)
         finally:
             sftp.close()
         print(
             json.dumps(
                 {
                     "ok": True,
-                    "mode": "snapshot-frontend",
+                    "mode": args.mode,
                     "remote_frontend": remote_frontend,
                     "downloaded_files": count,
                     "local_snapshot_dir": args.local_snapshot_dir,
+                    "remote_backend_dist": remote_backend_dist if args.mode == "snapshot-deploy" else "",
+                    "downloaded_backend_files": backend_count if args.mode == "snapshot-deploy" else 0,
                 },
                 ensure_ascii=False,
             )

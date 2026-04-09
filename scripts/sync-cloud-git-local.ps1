@@ -47,10 +47,12 @@ try {
 
 if (-not $remoteOk) {
     if ($CloudFirstSnapshotFallback) {
-        Invoke-Step "2) Non-git cloud: snapshot frontend to local"
+        Invoke-Step "2) Non-git cloud: snapshot frontend/backend to local"
         $snapshotDir = Join-Path $root "deploy\cloud-baseline\frontend"
         if (Test-Path $snapshotDir) { Remove-Item -Recurse -Force $snapshotDir }
-        $snapRaw = python "$helper" --mode snapshot-frontend --host $ServerHost --user $User --env "$EnvPath" --remote-frontend "/home/$User/gobs/frontend" --local-snapshot-dir "$snapshotDir" 2>&1
+        $backendSnapshotDir = Join-Path $root "deploy\cloud-baseline\backend-dist"
+        if (Test-Path $backendSnapshotDir) { Remove-Item -Recurse -Force $backendSnapshotDir }
+        $snapRaw = python "$helper" --mode snapshot-deploy --host $ServerHost --user $User --env "$EnvPath" --remote-frontend "/home/$User/gobs/frontend" --remote-backend-dist "/home/$User/gobs/backend/dist" --local-snapshot-dir "$snapshotDir" 2>&1
         $snapText = ($snapRaw | Out-String).Trim()
         Write-Host $snapText
     } else {

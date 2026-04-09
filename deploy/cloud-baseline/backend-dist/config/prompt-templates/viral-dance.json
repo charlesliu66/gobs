@@ -1,0 +1,12 @@
+{
+  "id": "viral-dance",
+  "name": "Viral Dance",
+  "nameZh": "Viral 舞蹈",
+  "description": "8 秒竖屏，参考 TikTok 舞蹈动作 + Drive 角色/场景图，走可灵 Omni（ingarena：image_list + video_list）。上方填参考视频直链，素材顺序 @图片1=角色、@图片2=场景",
+  "duration": 8,
+  "aspectRatio": "9:16",
+  "pipelineMode": "single",
+  "outputMode": "single-shot",
+  "systemPromptSuffix": "本模板面向 **可灵 Kling Omni**（非 Google VEO）。用户会在 H5 单独填写 **参考视频 http(s) 直链**（对应接口 `video_list`，动作/舞蹈来源），并在素材库按顺序选择图片：**第 1 张 = 角色，第 2 张 = 场景**（对应 `image_list` 与文案里的 @图片1 / @图片2）。\n\n**polishedPrompt 句式（必须遵守）**：围绕下面骨架展开，把 [角色][场景] 换成用户创意里的具体描述（可中文）：\n「参考使用【TikTok视频】中 [角色] 的动作，让【图片1】中的 [角色] 在【图片2】中的 [场景] 中动起来。」\n若用户只有 **一张** 参考图，改为说明该图是「仅角色」或「仅场景」，并在句中用文字补全缺失的场景或角色。\n\n**写作要求**：前 3 秒抓眼、竖屏舞蹈感、卡点节奏；不写具体艺人名或曲名（版权规避）。可补充光线、镜头、画风（电影感、柔光、跟拍等）。\n\n输出 **单段** polishedPrompt，**语言与用户输入一致**，不要分镜、不要时间码。",
+  "defaultSearchKeywords": ["dance", "viral", "trending"]
+}
