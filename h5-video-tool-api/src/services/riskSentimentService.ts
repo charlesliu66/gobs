@@ -9,6 +9,7 @@ import { compassChatCompletion } from './compassLlm.js';
 import { getGeelarkOpenApiV1Base, geelarkApiTraceId, resolveGeelarkBearerToken } from './geelarkClient.js';
 
 const DATA_FILE = join(process.cwd(), '.data', 'risk-sentiment.json');
+const EXECUTION_LOG_FILE = join(process.cwd(), '.data', 'risk-execution-log.json');
 /** 可选：粘贴你从 skills.sh / 自建 skill 里选中的「分析侧重点」全文，会拼进 Compass 系统提示，影响「风控大师建议」等输出 */
 const RISK_EXTRA_PROMPT_FILE = join(process.cwd(), 'config', 'risk-sentiment-extra-prompt.md');
 
@@ -63,6 +64,43 @@ export type CommentTask = {
   candidates: string[];
   selectedIndex: number;
   editedText?: string;
+  /** 攻击性：反驳不实信息、维护游戏；防御性：认同作者观点、缓冲或正向引导 */
+  executionNature: 'attack' | 'defense';
+  /** @deprecated 不再下发；仅兼容旧快照 */
+  meaningZh?: string;
+};
+
+/** 风控大师 · 三方案之一：智能平衡 / 保守 / 激进 */
+export type StrategyProfileKey = 'balanced' | 'conservative' | 'aggressive';
+
+/** 建议控评时的执行纲领（行动代号、方向、攻防占比、预期效果） */
+export type RiskExecutionProgram = {
+  codename: string;
+  directionSummary: string;
+  /** 攻击性/纠偏向执行层评论占比 0–100 */
+  attackPct: number;
+  /** 防御缓冲/引导向执行层评论占比 0–100 */
+  defensePct: number;
+  expectedEffect: string;
+};
+
+export type RiskStrategyBlock = {
+  conclusion: string;
+  level: '低风险' | '中风险' | '高风险';
+  narrative: string;
+  riskPoints: string[];
+  actions: string[];
+  /** 下一步运营/社区侧优先事项（1～3 句） */
+  nextFocus?: string;
+  /** 本批评论任务的态度分布与整体口吻建议 */
+  commentToneSummary?: string;
+};
+
+export type RiskStrategyVariant = RiskStrategyBlock & {
+  /** 是否建议在本批次开展评论执行（控评） */
+  recommendControlComment: boolean;
+  /** 当 recommendControlComment 为 true 时建议填写 */
+  executionProgram?: RiskExecutionProgram;
 };
 
 export type RiskSnapshot = {
@@ -85,18 +123,12 @@ export type RiskSnapshot = {
   topics: Array<{ term: string; count: number }>;
   videos: RiskVideo[];
   creators: RiskCreator[];
-  strategy: {
-    conclusion: string;
-    level: '低风险' | '中风险' | '高风险';
-    narrative: string;
-    riskPoints: string[];
-    actions: string[];
-    /** 下一步运营/社区侧优先事项（1～3 句） */
-    nextFocus?: string;
-    /** 本批评论任务的态度分布与整体口吻建议 */
-    commentToneSummary?: string;
-  };
+  strategy: RiskStrategyBlock;
   commentTasks: CommentTask[];
+  /** 三方案：智能平衡 / 保守 / 激进（与 commentTasksByProfile 对应） */
+  strategyProfiles?: Record<StrategyProfileKey, RiskStrategyVariant>;
+  /** 各方案对应的评论执行任务（文案与态度分布可不同） */
+  commentTasksByProfile?: Record<StrategyProfileKey, CommentTask[]>;
   lastRefreshStatus: 'idle' | 'ok' | 'error';
   lastError?: string;
   apifyUsedMock?: boolean;
@@ -144,6 +176,8 @@ const defaultSnapshot = (partial?: Partial<RiskSnapshot>): RiskSnapshot => ({
     ...partial?.strategy,
   },
   commentTasks: partial?.commentTasks ?? [],
+  strategyProfiles: partial?.strategyProfiles,
+  commentTasksByProfile: partial?.commentTasksByProfile,
   lastRefreshStatus: partial?.lastRefreshStatus ?? 'idle',
   lastError: partial?.lastError,
   apifyUsedMock: partial?.apifyUsedMock,
@@ -179,6 +213,14 @@ export async function loadSnapshot(): Promise<RiskSnapshot> {
         ...base.strategy,
         ...(j.strategy && typeof j.strategy === 'object' ? j.strategy : {}),
       },
+      strategyProfiles:
+        j.strategyProfiles && typeof j.strategyProfiles === 'object'
+          ? (j.strategyProfiles as RiskSnapshot['strategyProfiles'])
+          : undefined,
+      commentTasksByProfile:
+        j.commentTasksByProfile && typeof j.commentTasksByProfile === 'object'
+          ? (j.commentTasksByProfile as RiskSnapshot['commentTasksByProfile'])
+          : undefined,
       effectiveKeywords: Array.isArray(j.effectiveKeywords) ? j.effectiveKeywords : undefined,
       keywordMatrix: Array.isArray(j.keywordMatrix) ? j.keywordMatrix : [],
       listeningAlerts: Array.isArray(j.listeningAlerts) ? j.listeningAlerts : [],
@@ -205,6 +247,50 @@ export async function loadSnapshot(): Promise<RiskSnapshot> {
 async function saveSnapshot(s: RiskSnapshot) {
   await ensureDataDir();
   await writeFile(DATA_FILE, JSON.stringify(s, null, 2), 'utf8');
+}
+
+export type RiskExecutionLogEntry = {
+  id: string;
+  at: number;
+  profile?: StrategyProfileKey;
+  game?: string;
+  ok: boolean;
+  message: string;
+  taskIds: string[];
+  errors: string[];
+  items: Array<{ videoUrl: string; comment: string; envId: string; deviceName?: string }>;
+};
+
+export async function appendRiskExecutionLog(
+  partial: Omit<RiskExecutionLogEntry, 'id' | 'at'>,
+): Promise<RiskExecutionLogEntry> {
+  await ensureDataDir();
+  const full: RiskExecutionLogEntry = {
+    id: `ex-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    at: Date.now(),
+    ...partial,
+  };
+  let list: RiskExecutionLogEntry[] = [];
+  try {
+    const raw = await readFile(EXECUTION_LOG_FILE, 'utf8');
+    const j = parseJsonRelaxed(raw) as unknown;
+    list = Array.isArray(j) ? (j as RiskExecutionLogEntry[]) : [];
+  } catch {
+    list = [];
+  }
+  list.unshift(full);
+  await writeFile(EXECUTION_LOG_FILE, JSON.stringify(list.slice(0, 500), null, 2), 'utf8');
+  return full;
+}
+
+export async function listRiskExecutionLogs(): Promise<RiskExecutionLogEntry[]> {
+  try {
+    const raw = await readFile(EXECUTION_LOG_FILE, 'utf8');
+    const j = parseJsonRelaxed(raw) as unknown;
+    return Array.isArray(j) ? (j as RiskExecutionLogEntry[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 /** 兼容多种 Apify TikTok Actor 返回的封面字段 */
@@ -424,7 +510,7 @@ async function loadRiskSentimentExtraPrompt(): Promise<string> {
     if (!existsSync(RISK_EXTRA_PROMPT_FILE)) return '';
     const t = (await readFile(RISK_EXTRA_PROMPT_FILE, 'utf8')).trim();
     if (!t) return '';
-    return `\n\n【附加：用户自定义分析侧重点】\n你必须服从以下补充要求撰写 strategy（conclusion / narrative / riskPoints / actions）及 overview.helperText，不得忽略：\n${t}`;
+    return `\n\n【附加：用户自定义分析侧重点】\n你必须服从以下补充要求撰写 strategyProfiles（三方案）与 overview.helperText，不得忽略：\n${t}`;
   } catch {
     return '';
   }
@@ -825,7 +911,203 @@ function buildListeningAlertsFromOverview(
   return alerts.slice(0, 4);
 }
 
-function mergeActionsFromStrategy(strategy: RiskSnapshot['strategy']): string[] {
+const STRATEGY_PROFILE_KEYS: StrategyProfileKey[] = ['balanced', 'conservative', 'aggressive'];
+
+function inferRecommendControlFromConclusion(conclusion: string): boolean {
+  return /控评|覆盖评论|评论执行|对冲|纠偏|引导舆论|压制|反击/.test(conclusion);
+}
+
+function parseExecutionProgram(raw: unknown): RiskExecutionProgram | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const codename = String(o.codename ?? o.codeName ?? '').trim();
+  if (!codename) return undefined;
+  const atk = Number(o.attackPct ?? o.attack_pct ?? 35);
+  const def = Number(o.defensePct ?? o.defense_pct ?? 65);
+  return {
+    codename,
+    directionSummary:
+      String(o.directionSummary ?? o.direction ?? '').trim() || '按本方案叙事与风险点执行评论层引导与缓冲。',
+    attackPct: Math.min(100, Math.max(0, Number.isFinite(atk) ? atk : 35)),
+    defensePct: Math.min(100, Math.max(0, Number.isFinite(def) ? def : 65)),
+    expectedEffect:
+      String(o.expectedEffect ?? o.expected_effect ?? '').trim() || '改善评论区观感并稳定讨论方向。',
+  };
+}
+
+function parseStrategyBlockFromRaw(raw: unknown, narrativeFallback: string): RiskStrategyBlock {
+  const rawSt = raw as Record<string, unknown> | undefined;
+  if (!rawSt || typeof rawSt !== 'object' || !String(rawSt.narrative ?? '').trim()) {
+    return {
+      conclusion: '建议：暂不控评',
+      level: '低风险',
+      narrative: narrativeFallback,
+      riskPoints: [],
+      actions: [],
+    };
+  }
+  return {
+    conclusion: String(rawSt.conclusion ?? '建议：暂不控评'),
+    level: (['低风险', '中风险', '高风险'].includes(String(rawSt.level))
+      ? (String(rawSt.level) as RiskStrategyBlock['level'])
+      : '中风险') as RiskStrategyBlock['level'],
+    narrative: String(rawSt.narrative ?? ''),
+    riskPoints: Array.isArray(rawSt.riskPoints)
+      ? (rawSt.riskPoints as unknown[]).map((x) => String(x).trim()).filter(Boolean)
+      : [],
+    actions: Array.isArray(rawSt.actions)
+      ? (rawSt.actions as unknown[]).map((x) => String(x).trim()).filter(Boolean)
+      : [],
+    nextFocus: String(rawSt.nextFocus ?? rawSt.next_focus ?? '').trim() || undefined,
+    commentToneSummary: String(rawSt.commentToneSummary ?? rawSt.comment_tone_summary ?? '').trim() || undefined,
+  };
+}
+
+function parseStrategyVariantFromRaw(raw: unknown, fallback: RiskStrategyBlock): RiskStrategyVariant {
+  const block = parseStrategyBlockFromRaw(raw, fallback.narrative);
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const recommend =
+    typeof o.recommendControlComment === 'boolean'
+      ? o.recommendControlComment
+      : inferRecommendControlFromConclusion(block.conclusion);
+  const ep = parseExecutionProgram(o.executionProgram ?? o.execution_program);
+  return {
+    ...block,
+    recommendControlComment: recommend,
+    executionProgram: recommend ? ep : undefined,
+  };
+}
+
+function inferExecutionNature(attitude: CommentAttitude, raw?: string): 'attack' | 'defense' {
+  const s = (raw ?? '').toLowerCase();
+  if (s === 'attack' || s === '攻击性' || s === 'offense') return 'attack';
+  if (s === 'defense' || s === '防御性' || s === 'defence') return 'defense';
+  if (attitude === '纠偏澄清') return 'attack';
+  return 'defense';
+}
+
+/** CJK 统一表意文字（汉字等）；en/id 任务评论中不得出现 */
+const HAS_CJK_UNIFIED_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+
+const FALLBACK_COMMENT_EN = [
+  "Thanks for sharing — the team's always reading community feedback.",
+  'Appreciate the honest take on the game.',
+  'Solid content — looking forward to more from you.',
+  'Great breakdown, thanks for posting.',
+  'Love seeing different perspectives on the game here.',
+];
+
+const FALLBACK_COMMENT_ID = [
+  'Makasih udah share — timnya memang dengerin feedback player.',
+  'Kontennya informatif banget, thanks.',
+  'Suka banget breakdown-nya, ditunggu video berikutnya.',
+  'Setuju sebagian poinnya, thanks sharing.',
+  'Infonya oke, makasih.',
+];
+
+const FALLBACK_COMMENT_ZH = ['感谢分享，期待更多内容！', '说得挺客观的，支持一下。', '感谢制作，已关注。'];
+
+function langAllowsChinese(lang: string): boolean {
+  const lc = (lang || 'en').toLowerCase();
+  return lc === 'zh' || lc.startsWith('zh');
+}
+
+function sanitizeCommentTaskLang(t: CommentTask): CommentTask {
+  const lang = String(t.lang ?? 'en');
+  const allowZh = langAllowsChinese(lang);
+  const lc = lang.toLowerCase();
+  const pool = lc === 'id' || lc === 'in' ? FALLBACK_COMMENT_ID : allowZh ? FALLBACK_COMMENT_ZH : FALLBACK_COMMENT_EN;
+  const raw = t.candidates?.length ? t.candidates : [];
+  const candidates = raw.map((c, i) => {
+    const s = String(c ?? '').trim();
+    if (!s) return pool[i % pool.length];
+    if (allowZh) return s;
+    if (HAS_CJK_UNIFIED_RE.test(s)) return pool[i % pool.length];
+    return s;
+  });
+  const filled = candidates.length ? candidates : allowZh ? [...FALLBACK_COMMENT_ZH] : pool.slice(0, 3);
+  return {
+    ...t,
+    candidates: filled,
+    meaningZh: undefined,
+  };
+}
+
+function mapTaskRowsToCommentTasks(
+  taskRows: Array<Record<string, unknown>> | undefined,
+  mergedVideos: RiskVideo[],
+  profileKey: StrategyProfileKey,
+): CommentTask[] {
+  const rows = taskRows ?? [];
+  return rows.map((t, i) => {
+    const vid = String(t.videoId ?? '');
+    const video = mergedVideos.find((x) => x.id === vid);
+    const candidates = Array.isArray(t.candidates) ? (t.candidates as string[]).filter(Boolean).slice(0, 5) : [];
+    const attitude = (t.attitude as CommentAttitude) || '中性互动';
+    const natureRaw = String(t.executionNature ?? t.nature ?? t.execution_nature ?? '').trim();
+    const base: CommentTask = {
+      id: `ct-${profileKey}-${vid}-${i}`,
+      videoId: vid,
+      videoUrl: video?.url ?? '',
+      authorNickname: video?.author ?? '',
+      sentiment: video?.sentiment ?? 'neutral',
+      attitude,
+      lang: String(t.lang ?? 'en'),
+      candidates: candidates.length ? candidates : ['Thanks for sharing — looking forward to more updates!'],
+      selectedIndex: 0,
+      executionNature: inferExecutionNature(attitude, natureRaw),
+    };
+    return sanitizeCommentTaskLang(base);
+  });
+}
+
+function cloneCommentTasksForProfile(source: CommentTask[], profileKey: StrategyProfileKey): CommentTask[] {
+  return source.map((t, i) => ({
+    ...t,
+    id: `ct-${profileKey}-${t.videoId}-${i}`,
+  }));
+}
+
+function blockFromVariant(v: RiskStrategyVariant): RiskStrategyBlock {
+  const { recommendControlComment: _r, executionProgram: _e, ...rest } = v;
+  return rest;
+}
+
+function defaultStrategyProfilesFromBlock(
+  strategy: RiskStrategyBlock,
+  recommendBalanced: boolean,
+): Record<StrategyProfileKey, RiskStrategyVariant> {
+  const b: RiskStrategyVariant = {
+    ...strategy,
+    recommendControlComment: recommendBalanced,
+    executionProgram: undefined,
+  };
+  return {
+    balanced: { ...b },
+    conservative: {
+      ...strategy,
+      recommendControlComment: false,
+      narrative: strategy.narrative,
+      executionProgram: undefined,
+    },
+    aggressive: {
+      ...strategy,
+      recommendControlComment: true,
+      narrative: strategy.narrative,
+      executionProgram: undefined,
+    },
+  };
+}
+
+function enrichStrategyVariant(v: RiskStrategyVariant, tasks: CommentTask[]): RiskStrategyVariant {
+  const tone = (v.commentToneSummary ?? '').trim() || summarizeCommentTaskAttitudes(tasks);
+  const next =
+    (v.nextFocus ?? '').trim() ||
+    (v.actions?.[0] ? `下一步优先：${v.actions[0]}` : '按本方案叙事与执行纲领推进监测与互动。');
+  return { ...v, commentToneSummary: tone, nextFocus: next };
+}
+
+function mergeActionsFromStrategy(strategy: RiskStrategyBlock): string[] {
   const actions = [...(strategy.actions ?? [])];
   const rp = strategy.riskPoints ?? [];
   for (const r of rp) {
@@ -857,12 +1139,19 @@ function summarizeCommentTaskAttitudes(tasks: CommentTask[]): string {
   return `本批推荐评论任务态度分布：${parts.join('；')}。执行时请按每条任务的 attitude 选择口吻。`;
 }
 
-function enrichStrategyPlanFields(strategy: RiskSnapshot['strategy'], tasks: CommentTask[]): RiskSnapshot['strategy'] {
+function enrichStrategyPlanFields(strategy: RiskStrategyBlock, tasks: CommentTask[]): RiskStrategyBlock {
   const tone = (strategy.commentToneSummary ?? '').trim() || summarizeCommentTaskAttitudes(tasks);
   const next =
     (strategy.nextFocus ?? '').trim() ||
-    (strategy.actions?.[0] ? `下一步优先：${strategy.actions[0]}` : '结合 narrative 与页面底部「执行任务」推进监测与互动。');
+    (strategy.actions?.[0] ? `下一步优先：${strategy.actions[0]}` : '结合叙事与执行纲领推进监测与互动。');
   return { ...strategy, commentToneSummary: tone, nextFocus: next };
+}
+
+function patchCommentTasksLegacy(ts: CommentTask[]): CommentTask[] {
+  return (ts ?? []).map((t) => {
+    const withNature = t.executionNature ? t : { ...t, executionNature: inferExecutionNature(t.attitude) };
+    return sanitizeCommentTaskLang(withNature);
+  });
 }
 
 /** 旧快照缺字段时，用本批 videos/topics/overview 补全矩阵、告警与行动项 */
@@ -888,14 +1177,74 @@ function rehydrateSnapshot(snap: RiskSnapshot): RiskSnapshot {
     const merged = mergeActionsFromStrategy(strategy);
     if (merged.length) strategy = { ...strategy, actions: merged };
   }
-  strategy = enrichStrategyPlanFields(strategy, snap.commentTasks ?? []);
+
+  const baseTasks = snap.commentTasks ?? [];
+  let commentTasksByProfile: Record<StrategyProfileKey, CommentTask[]> = {
+    balanced: baseTasks,
+    conservative: baseTasks,
+    aggressive: baseTasks,
+  };
+  if (snap.commentTasksByProfile && typeof snap.commentTasksByProfile === 'object') {
+    for (const k of STRATEGY_PROFILE_KEYS) {
+      const arr = snap.commentTasksByProfile[k];
+      if (Array.isArray(arr) && arr.length) commentTasksByProfile[k] = arr;
+    }
+  }
+
+  let strategyProfiles = snap.strategyProfiles;
+  if (!strategyProfiles?.balanced || !strategyProfiles?.conservative || !strategyProfiles?.aggressive) {
+    const rec = inferRecommendControlFromConclusion(strategy.conclusion);
+    strategyProfiles = defaultStrategyProfilesFromBlock(strategy, rec);
+  }
+
+  const nextProfiles: Record<StrategyProfileKey, RiskStrategyVariant> = { ...strategyProfiles! };
+  for (const k of STRATEGY_PROFILE_KEYS) {
+    let v = nextProfiles[k];
+    if (!v) {
+      v = { ...strategy, recommendControlComment: k === 'aggressive' ? true : inferRecommendControlFromConclusion(strategy.conclusion) };
+    }
+    if (!v.actions?.length) {
+      const merged = mergeActionsFromStrategy(v);
+      if (merged.length) v = { ...v, actions: merged };
+    }
+    v = enrichStrategyVariant(v, commentTasksByProfile[k] ?? []);
+    nextProfiles[k] = v;
+  }
+
+  nextProfiles.conservative = enrichStrategyVariant(
+    { ...nextProfiles.conservative, recommendControlComment: false, executionProgram: undefined },
+    [],
+  );
+  commentTasksByProfile.conservative = [];
+
+  if (!commentTasksByProfile.aggressive?.length && commentTasksByProfile.balanced?.length) {
+    commentTasksByProfile.aggressive = cloneCommentTasksForProfile(commentTasksByProfile.balanced, 'aggressive');
+    nextProfiles.aggressive = enrichStrategyVariant(nextProfiles.aggressive, commentTasksByProfile.aggressive);
+  }
+
+  for (const k of STRATEGY_PROFILE_KEYS) {
+    commentTasksByProfile[k] = patchCommentTasksLegacy(commentTasksByProfile[k] ?? []);
+  }
+
+  strategy = blockFromVariant(nextProfiles.balanced);
 
   const overview = {
     ...snap.overview,
     score: deriveOverviewScoreFromPcts(snap.overview.positivePct, snap.overview.negativePct),
   };
 
-  return { ...snap, overview, keywordMatrix, listeningAlerts, strategy };
+  const balancedTasks = commentTasksByProfile.balanced;
+
+  return {
+    ...snap,
+    overview,
+    keywordMatrix,
+    listeningAlerts,
+    strategy,
+    strategyProfiles: nextProfiles,
+    commentTasksByProfile,
+    commentTasks: balancedTasks,
+  };
 }
 
 const ANALYSIS_SYSTEM = `你是游戏舆情与 TikTok 风控分析助手。输入中每条视频可能带有 **topComments**（按点赞从高到低截取的高赞评论样本，含点赞数 likes）。输出**严格 JSON**（不要 markdown），结构如下：
@@ -938,23 +1287,40 @@ const ANALYSIS_SYSTEM = `你是游戏舆情与 TikTok 风控分析助手。输�
       "status": "未跟进" | "已观察" | "已投放" | "合作中"
     }
   ],
-  "strategy": {
-    "conclusion": "建议：防御型控评" | "建议：借势扩散" | "建议：暂不控评" 或类似简短中文,
-    "level": "低风险" | "中风险" | "高风险",
-    "narrative": string,
-    "riskPoints": string[],
-    "actions": string[],
-    "nextFocus": "1～3句：下一步运营/社区侧优先做什么（可执行）",
-    "commentToneSummary": "1～3句：本批 commentTasks 各态度分布与整体评论口吻建议"
+  "strategyProfiles": {
+    "balanced": {
+      "conclusion": "建议：防御型控评" | "建议：借势扩散" | "建议：暂不控评" 或类似简短中文,
+      "level": "低风险" | "中风险" | "高风险",
+      "narrative": string,
+      "riskPoints": string[],
+      "actions": string[],
+      "nextFocus": "1～3句",
+      "commentToneSummary": "1～3句：与本 profile 下 commentTasks 态度分布一致",
+      "recommendControlComment": boolean,
+      "executionProgram": null | {
+        "codename": "简短行动代号，如：剿灭浪人差评行动",
+        "directionSummary": "本批控评的总体方向（中文）",
+        "attackPct": 0-100,
+        "defensePct": 0-100,
+        "expectedEffect": "希望达到的效果（中文）"
+      }
+    },
+    "conservative": { 同 balanced 结构 },
+    "aggressive": { 同 balanced 结构 }
   },
-  "commentTasks": [
-    {
-      "videoId": string,
-      "attitude": "正面引导" | "中性互动" | "防御缓冲" | "纠偏澄清",
-      "lang": "en" | "id" | "zh",
-      "candidates": [ "评论1", "评论2", "评论3" ]
-    }
-  ],
+  "commentTasksByProfile": {
+    "balanced": [
+      {
+        "videoId": string,
+        "attitude": "正面引导" | "中性互动" | "防御缓冲" | "纠偏澄清",
+        "lang": "en" | "id" | "zh",
+        "executionNature": "attack" | "defense",
+        "candidates": [ "与 lang 完全一致的短评（en=全英文；id=全印尼语；zh=中文）", "..." ]
+      }
+    ],
+    "conservative": [],
+    "aggressive": [ 与 balanced 单条结构相同 ]
+  },
   "keywordMatrix": [
     {
       "category": "品牌/游戏 或 行业/竞品/危机 等维度",
@@ -982,16 +1348,19 @@ const ANALYSIS_SYSTEM = `你是游戏舆情与 TikTok 风控分析助手。输�
 - **若某视频提供了 topComments（非空）**：该视频及整体的情感判断必须**优先依据评论原文**；overview 三个占比、各视频 sentiment、riskTag、analysis 应反映评论里 praise / 玩梗 / 质疑 / 谩骂 / 对比 / 避雷 等真实语气；标题与互动为辅。
 - **若某视频未提供 topComments 或为空**：则仅依据标题、作者与互动估计，并在 narrative 或单条 analysis 中可注明「未抓取评论样本」。
 - topics 为 6–12 个高频词（英文或中文短语），可结合评论高频词。
-- commentTasks 优先覆盖负面/高风险视频，每条 3–5 条英文或印尼语自然短评（符合 attitude 与 lang）。
+- **三方案说明（必须同时给出 strategyProfiles 与 commentTasksByProfile 三个键）：**
+  - **balanced（平衡）**：结合样本**独立判断**是否建议控评（recommendControlComment）。若建议控评，commentTasksByProfile.balanced 须混合攻防；每条任务必填 **executionNature**；**candidates 每条文案必须与 lang 一致**：lang=en 时全英文且不得含汉字；lang=id 时全印尼语且不得含汉字；lang=zh 时可用中文。executionProgram 中 attackPct/defensePct 之和约 100。
+  - **conservative（保守）**：**不开展评论执行**：recommendControlComment **必须为 false**，**commentTasksByProfile.conservative 必须为空数组 []**，narrative 说明以监测与运营响应为主、不下场控评。
+  - **aggressive（激进）**：原则上 recommendControlComment 为 **true**（样本与游戏无关时可 false 并说明）；任务须混合 attack 与 defense；字段同 balanced。
+- 每个 profile 的 narrative / riskPoints / actions 必须自洽；nextFocus、commentToneSummary 与该 profile 下 commentTasks 态度分布一致。
+- 三个 profile 的 commentTasks 优先覆盖负面/高风险视频；每条 3–5 条候选评论，语言自然，符合 attitude 与 lang。**禁止**在 lang 为 en 或 id 的 candidates 中出现中日韩统一表意文字（汉字等）。
 - overview 三个占比 positivePct+neutralPct+negativePct 必须加总为 100（允许四舍五入误差 ±1）。
 - 占比含义：在**有评论样本时以评论为主**；无评论时按标题/元数据估计。negativePct 应反映评论中的批评、质疑、不满等，而非强行压成 0。
 - positiveSummary / neutralSummary / negativeSummary 必填，各约 25–80 字，必须与占比语义一致，并点明**主要依据是评论还是标题**（有评论时写清「评论里…」）。
-- strategy.narrative 必须具体可执行：先总判再分点，避免空话；riskPoints 与 actions 必须与结论一致。
-- strategy.nextFocus、strategy.commentToneSummary 必填；与 commentTasks 中 attitude 分布一致。
 - overview.score 可忽略（服务端会按 positivePct/negativePct 重新换算，与情感占比一致）。
 - **keywordMatrix 必填**：至少 4 行，覆盖 游戏/品牌、玩法或内容类型、行业或竞品对比、危机/负向预警 等维度；keywords 必须能从输入 game、searchKeywords 或本批标题/评论中找到依据。
 - **listeningAlerts 必填**：1～4 条，level 与当前批次情感与风险一致；绿=常态；黄=需关注；橙=同日处置；红=紧急/重大负面信号。
-- **recentTrends 必填**：summary 2～5 句；risingItems 2～5 条。仅根据**本批视频样本**归纳「相对崛起」的话题/形式；若样本同质化或无明显崛起点，须在 summary 中说明，risingItems 可少于 2 条但不可编造数据。`;
+- **recentTrends**：可给简短 summary，risingItems 0～3 条即可（服务端可能不使用）。`;
 
 async function runCompassFullAnalysis(input: {
   game: string;
@@ -1067,24 +1436,6 @@ async function runCompassFullAnalysis(input: {
   });
 
   const creators = (parsed.creators as RiskCreator[]) ?? [];
-  const taskRows = (parsed.commentTasks as Array<Record<string, unknown>>) ?? [];
-
-  const commentTasks: CommentTask[] = taskRows.map((t, i) => {
-    const vid = String(t.videoId ?? '');
-    const video = mergedVideos.find((x) => x.id === vid);
-    const candidates = Array.isArray(t.candidates) ? (t.candidates as string[]).filter(Boolean).slice(0, 5) : [];
-    return {
-      id: `ct-${vid}-${i}`,
-      videoId: vid,
-      videoUrl: video?.url ?? '',
-      authorNickname: video?.author ?? '',
-      sentiment: video?.sentiment ?? 'neutral',
-      attitude: (t.attitude as CommentAttitude) || '中性互动',
-      lang: String(t.lang ?? 'en'),
-      candidates: candidates.length ? candidates : ['Thanks for sharing — looking forward to more updates!'],
-      selectedIndex: 0,
-    };
-  });
 
   const pRec = parsed as Record<string, unknown>;
   let keywordMatrix = parseKeywordMatrix(pRec.keywordMatrix ?? pRec.keyword_matrix);
@@ -1099,36 +1450,69 @@ async function runCompassFullAnalysis(input: {
 
   const recentTrends = parseRecentTrends(parsed.recentTrends, input.game);
 
-  const rawSt = parsed.strategy as Record<string, unknown> | undefined;
-  const strategyBase: RiskSnapshot['strategy'] =
-    rawSt && typeof rawSt === 'object' && String(rawSt.narrative ?? '').trim()
-      ? {
-          conclusion: String(rawSt.conclusion ?? '建议：暂不控评'),
-          level: (['低风险', '中风险', '高风险'].includes(String(rawSt.level))
-            ? (String(rawSt.level) as RiskSnapshot['strategy']['level'])
-            : '中风险') as RiskSnapshot['strategy']['level'],
-          narrative: String(rawSt.narrative ?? ''),
-          riskPoints: Array.isArray(rawSt.riskPoints)
-            ? (rawSt.riskPoints as unknown[]).map((x) => String(x).trim()).filter(Boolean)
-            : [],
-          actions: Array.isArray(rawSt.actions)
-            ? (rawSt.actions as unknown[]).map((x) => String(x).trim()).filter(Boolean)
-            : [],
-          nextFocus: String(rawSt.nextFocus ?? rawSt.next_focus ?? '').trim() || undefined,
-          commentToneSummary: String(rawSt.commentToneSummary ?? rawSt.comment_tone_summary ?? '').trim() || undefined,
-        }
-      : {
-          conclusion: '建议：暂不控评',
-          level: '低风险',
-          narrative: '分析结果不完整，请重试。',
-          riskPoints: [],
-          actions: [],
-        };
+  const fallbackNarrative = '模型未返回完整策略结构，请再点击「立即刷新」尝试。';
+  const spRaw = parsed.strategyProfiles as Record<string, unknown> | undefined;
+  const ctpRaw = parsed.commentTasksByProfile as Record<string, unknown> | undefined;
+  const legacyStrategy = parsed.strategy as Record<string, unknown> | undefined;
+  const legacyTasks = (parsed.commentTasks as Array<Record<string, unknown>>) ?? [];
 
-  let strategyWithActions = strategyBase.actions?.length
-    ? strategyBase
-    : { ...strategyBase, actions: mergeActionsFromStrategy(strategyBase) };
-  strategyWithActions = enrichStrategyPlanFields(strategyWithActions, commentTasks);
+  const baseFallbackBlock = parseStrategyBlockFromRaw(legacyStrategy, fallbackNarrative);
+
+  const useNewShape =
+    spRaw &&
+    typeof spRaw === 'object' &&
+    STRATEGY_PROFILE_KEYS.every((k) => spRaw[k] && typeof spRaw[k] === 'object') &&
+    ctpRaw &&
+    typeof ctpRaw === 'object';
+
+  let strategyProfiles: Record<StrategyProfileKey, RiskStrategyVariant>;
+  let commentTasksByProfile: Record<StrategyProfileKey, CommentTask[]>;
+
+  if (useNewShape) {
+    strategyProfiles = {} as Record<StrategyProfileKey, RiskStrategyVariant>;
+    commentTasksByProfile = {} as Record<StrategyProfileKey, CommentTask[]>;
+    for (const k of STRATEGY_PROFILE_KEYS) {
+      let v = parseStrategyVariantFromRaw(spRaw[k], baseFallbackBlock);
+      if (!v.actions?.length) v = { ...v, actions: mergeActionsFromStrategy(v) };
+      const rows = (ctpRaw[k] as Array<Record<string, unknown>> | undefined) ?? [];
+      const taskRows = rows.length ? rows : legacyTasks;
+      commentTasksByProfile[k] = mapTaskRowsToCommentTasks(taskRows, mergedVideos, k);
+      v = enrichStrategyVariant(v, commentTasksByProfile[k]);
+      strategyProfiles[k] = v;
+    }
+  } else {
+    let single = parseStrategyBlockFromRaw(legacyStrategy, fallbackNarrative);
+    if (!single.actions?.length) single = { ...single, actions: mergeActionsFromStrategy(single) };
+    const lt = mapTaskRowsToCommentTasks(legacyTasks, mergedVideos, 'balanced');
+    single = enrichStrategyPlanFields(single, lt);
+    const rec = inferRecommendControlFromConclusion(single.conclusion);
+    strategyProfiles = defaultStrategyProfilesFromBlock(single, rec);
+    commentTasksByProfile = {
+      balanced: mapTaskRowsToCommentTasks(legacyTasks, mergedVideos, 'balanced'),
+      conservative: mapTaskRowsToCommentTasks(legacyTasks, mergedVideos, 'conservative'),
+      aggressive: mapTaskRowsToCommentTasks(legacyTasks, mergedVideos, 'aggressive'),
+    };
+    for (const k of STRATEGY_PROFILE_KEYS) {
+      let v = strategyProfiles[k];
+      if (!v.actions?.length) v = { ...v, actions: mergeActionsFromStrategy(v) };
+      v = enrichStrategyVariant(v, commentTasksByProfile[k]);
+      strategyProfiles[k] = v;
+    }
+  }
+
+  /** 保守方案：不控评、无执行任务；激进若为空则复制平衡方案任务避免前端空白 */
+  {
+    const cons = { ...strategyProfiles.conservative, recommendControlComment: false, executionProgram: undefined };
+    strategyProfiles.conservative = enrichStrategyVariant(cons, []);
+    commentTasksByProfile.conservative = [];
+    if (!commentTasksByProfile.aggressive.length && commentTasksByProfile.balanced.length) {
+      commentTasksByProfile.aggressive = cloneCommentTasksForProfile(commentTasksByProfile.balanced, 'aggressive');
+      strategyProfiles.aggressive = enrichStrategyVariant(strategyProfiles.aggressive, commentTasksByProfile.aggressive);
+    }
+  }
+
+  const balancedTasks = commentTasksByProfile.balanced;
+  const strategyOut = blockFromVariant(strategyProfiles.balanced);
 
   return defaultSnapshot({
     game: input.game,
@@ -1140,8 +1524,10 @@ async function runCompassFullAnalysis(input: {
     topics,
     videos: mergedVideos,
     creators,
-    strategy: strategyWithActions,
-    commentTasks,
+    strategy: strategyOut,
+    commentTasks: balancedTasks,
+    strategyProfiles,
+    commentTasksByProfile,
     lastRefreshStatus: 'ok',
     keywordMatrix,
     listeningAlerts,
@@ -1193,13 +1579,21 @@ export async function refreshRiskSentiment(params: {
   }
 }
 
-const REGEN_SYSTEM = `你是 TikTok 游戏社区评论写手。根据视频标题与情感，输出严格 JSON：{"candidates":["...","...","..."]}，3-5 条，符合指定态度与语言，短句、自然、无引号编号。`;
+const REGEN_SYSTEM = `你是 TikTok 游戏社区评论写手。根据输入 JSON 里的 lang 字段书写 candidates：
+- lang 为 "en"：全部英文短句，不得出现汉字或日文、韩文表意文字。
+- lang 为 "id"：全部印尼语短句，不得出现汉字等。
+- lang 为 "zh"：可用简体中文。
+输出严格 JSON：{"candidates":["...","..."]}，3-5 条，符合 attitude，短句自然，无引号编号。`;
 
-export async function regenerateCommentsForVideo(videoId: string): Promise<RiskSnapshot> {
+export async function regenerateCommentsForVideo(
+  videoId: string,
+  profile: StrategyProfileKey = 'balanced',
+): Promise<RiskSnapshot> {
   const snap = await loadSnapshot();
   const video = snap.videos.find((v) => v.id === videoId);
   if (!video) throw new Error('未找到视频');
-  const task = snap.commentTasks.find((t) => t.videoId === videoId);
+  const pool = snap.commentTasksByProfile?.[profile] ?? snap.commentTasks;
+  const task = pool.find((t) => t.videoId === videoId);
   const lang = task?.lang ?? 'en';
   const attitude = task?.attitude ?? '中性互动';
 
@@ -1211,6 +1605,7 @@ export async function regenerateCommentsForVideo(videoId: string): Promise<RiskS
       sentiment: video.sentiment,
       attitude,
       lang,
+      profile,
     }),
     temperature: 0.4,
     maxTokens: 1024,
@@ -1219,30 +1614,40 @@ export async function regenerateCommentsForVideo(videoId: string): Promise<RiskS
   const candidates = parsed.candidates?.filter(Boolean).slice(0, 5) ?? [];
   if (!candidates.length) throw new Error('模型未返回评论候选');
 
-  const idx = snap.commentTasks.findIndex((t) => t.videoId === videoId);
-  if (idx >= 0) {
-    snap.commentTasks[idx] = {
-      ...snap.commentTasks[idx],
+  const by = { ...(snap.commentTasksByProfile ?? {}) } as Record<StrategyProfileKey, CommentTask[]>;
+  const list = [...(by[profile] ?? snap.commentTasks)];
+  const idx = list.findIndex((t) => t.videoId === videoId);
+  const patch = (t: CommentTask): CommentTask =>
+    sanitizeCommentTaskLang({
+      ...t,
       candidates,
       selectedIndex: 0,
       editedText: undefined,
-    };
-  } else {
-    snap.commentTasks.push({
-      id: `ct-${videoId}-${Date.now()}`,
-      videoId,
-      videoUrl: video.url,
-      authorNickname: video.author,
-      sentiment: video.sentiment,
-      attitude,
-      lang,
-      candidates,
-      selectedIndex: 0,
     });
+  if (idx >= 0) {
+    list[idx] = patch(list[idx]);
+  } else {
+    list.push(
+      sanitizeCommentTaskLang({
+        id: `ct-${profile}-${videoId}-${Date.now()}`,
+        videoId,
+        videoUrl: video.url,
+        authorNickname: video.author,
+        sentiment: video.sentiment,
+        attitude,
+        lang,
+        candidates,
+        selectedIndex: 0,
+        executionNature: task?.executionNature ?? inferExecutionNature(attitude),
+      }),
+    );
   }
+  by[profile] = list;
+  snap.commentTasksByProfile = by;
+  if (profile === 'balanced') snap.commentTasks = list;
   snap.updatedAt = Date.now();
   await saveSnapshot(snap);
-  return snap;
+  return loadSnapshot();
 }
 
 export type GeelarkPhone = { id: string; name: string; serialNo?: string; status?: number };

@@ -17,7 +17,7 @@ import { Result } from './pages/Result';
 import { EditorWorkbench } from './pages/EditorWorkbench';
 import { QuickFilm } from './pages/QuickFilm';
 import { AssetLibrary } from './pages/AssetLibrary';
-import { TiktokMatrix } from './pages/TiktokMatrix';
+import { RiskMasterPanel } from './pages/RiskSentimentEmbed';
 import { SettingsAccounts } from './pages/SettingsAccounts';
 import { PlatformFramework } from './pages/PlatformFramework';
 import { PlatformMemory } from './pages/PlatformMemory';
@@ -65,7 +65,7 @@ function App() {
                   <Route path="/platform/memory" element={<PlatformMemory />} />
                   <Route path="/platform/learning-lab" element={<PlatformLearningLab />} />
                   <Route path="/platform/ops" element={<PlatformOpsCenter />} />
-                  <Route path="/tiktok-matrix" element={<TiktokMatrix />} />
+                  <Route path="/tiktok-matrix" element={<RiskMasterPanel />} />
                   <Route path="/settings/accounts" element={<SettingsAccounts />} />
                   <Route path="/geelark-batch" element={<Navigate to="/tiktok-matrix" replace />} />
                   <Route path="/geelark" element={<Navigate to="/tiktok-matrix" replace />} />
