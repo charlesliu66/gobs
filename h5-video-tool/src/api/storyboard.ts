@@ -11,6 +11,8 @@ export interface GenerateFramesRequest {
   styleReferenceFrame?: string;
   /** 立项「全片画风」参考图 data URL；存在时优先于 styleReferenceFrame 作为多模态画风基准 */
   globalStyleReferenceFrame?: string;
+  /** true=快速单帧模式（只返回一张图，lastFrame 与 firstFrame 相同） */
+  singleFrameOnly?: boolean;
 }
 
 export type GenerateFramesMode = 'first_shot' | 'continuation';
@@ -37,6 +39,7 @@ export async function generateFrames(req: GenerateFramesRequest): Promise<Genera
     ...(req.globalStyleReferenceFrame
       ? { globalStyleReferenceFrame: req.globalStyleReferenceFrame }
       : {}),
+    ...(req.singleFrameOnly ? { singleFrameOnly: true } : {}),
   });
 }
 

@@ -5,6 +5,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import type { ShotItem, ShotFramePreview } from '../context/CreateFlowContext';
 import { generateFrames } from '../api/storyboard';
+import { RunningStatus } from './RunningStatus';
 
 const DURATION_OPTIONS = [5, 6, 7, 8] as const;
 const PROMPT_MAX_LENGTH = 512;
@@ -241,6 +242,11 @@ export function MultiShotPromptInput({
           </button>
         )}
       </div>
+      <RunningStatus
+        active={loadingFrameIndex !== null}
+        label={loadingFrameIndex === -1 ? '正在批量生成分镜预览' : '正在生成分镜帧'}
+        stallAfterSec={25}
+      />
 
       <div className="flex flex-wrap gap-2">
         {shots.map((shot, i) => (

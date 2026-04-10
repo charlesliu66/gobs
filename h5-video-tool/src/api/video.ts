@@ -54,6 +54,15 @@ export interface VideoGenerateRequest {
   multimodalAudios?: { base64: string; mimeType?: string }[];
   /** 即梦 CLI `--model-version`（如 seedance2.0、seedance2.0fast）；空则读服务端 DREAMINA_*_MODEL */
   dreaminaModelVersion?: string;
+  /** 即梦全能参考：后端自动将自由文本重写为结构化 prompt（默认 true） */
+  autoComposePrompt?: boolean;
+  /** 即梦全能参考：主角/场景参考图索引提示（按 @图片n 的 n-1） */
+  dreaminaPromptHints?: {
+    roleImageIndex?: number;
+    sceneImageIndex?: number;
+    roleName?: string;
+    sceneName?: string;
+  };
 }
 
 export interface VeoModelsResponse {
@@ -194,6 +203,24 @@ export interface DreaminaTaskPollResponse {
 export async function getDreaminaTaskStatus(submitId: string): Promise<DreaminaTaskPollResponse> {
   const id = encodeURIComponent(submitId);
   return apiGet<DreaminaTaskPollResponse>(`/api/video/dreamina/task/${id}`);
+}
+
+/** 服务端 output 目录近期视频（即梦等落盘），path 为相对 api data 根目录，用于 /api/video/file?path= */
+export interface OutputRecentVideoItem {
+  path: string;
+  mtimeMs: number;
+  size: number;
+}
+
+export async function getOutputRecentVideos(opts?: {
+  limit?: number;
+  dreaminaOnly?: boolean;
+}): Promise<{ items: OutputRecentVideoItem[] }> {
+  const q = new URLSearchParams();
+  if (opts?.limit) q.set('limit', String(opts.limit));
+  if (opts?.dreaminaOnly) q.set('dreaminaOnly', '1');
+  const qs = q.toString();
+  return apiGet<{ items: OutputRecentVideoItem[] }>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
 }
 
 export async function generateMultishot(req: MultishotGenerateRequest): Promise<MultishotGenerateResponse> {

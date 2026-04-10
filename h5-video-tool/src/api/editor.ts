@@ -52,7 +52,7 @@ export async function getEditorUploadConfig(): Promise<{ maxMb: number; maxBytes
   });
   handleUnauthorized(res);
   if (!res.ok) {
-    const mb = 500;
+    const mb = 2048;
     return { maxMb: mb, maxBytes: mb * 1024 * 1024 };
   }
   return res.json() as Promise<{ maxMb: number; maxBytes: number }>;
@@ -62,11 +62,22 @@ export async function uploadEditorAsset(file: File): Promise<{ asset: EditorAsse
   const fd = new FormData();
   fd.append('file', file);
   fd.append('originalName', file.name);
-  const res = await fetch(`${BASE}/api/editor/assets/upload`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: fd,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/editor/assets/upload`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: fd,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/Failed to fetch|NetworkError|network/i.test(msg)) {
+      throw new Error(
+        '上传请求未到达 API（网络中断/CORS/网关限制）。若上传大文件，请检查 Nginx 的 client_max_body_size 是否已放宽。',
+      );
+    }
+    throw e;
+  }
   handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

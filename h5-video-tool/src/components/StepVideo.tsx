@@ -24,6 +24,7 @@ import { submitBatchJobs } from '../api/batchJobs';
 import { KlingJobCard } from './KlingJobCard';
 import { DreaminaJobCard } from './DreaminaJobCard';
 import { DreaminaMultimodalRefs } from './DreaminaMultimodalRefs';
+import { RunningStatus } from './RunningStatus';
 
 /** 可灵轮询间隔 */
 const KLING_POLL_MS = 30_000;
@@ -223,6 +224,19 @@ export function StepVideo() {
     shots.length > 0 &&
     shots.some((_, i) => !shotFrames[i]?.first);
 
+  const buildDreaminaPromptHints = () => {
+    const imageItems = dreaminaMultimodalItems.filter((i) => i.kind === 'image');
+    const roleImageIndex = imageItems.findIndex((i) => i.semanticRole === 'role');
+    const sceneImageIndex = imageItems.findIndex((i) => i.semanticRole === 'scene');
+    return {
+      autoComposePrompt: true,
+      dreaminaPromptHints: {
+        ...(roleImageIndex >= 0 ? { roleImageIndex } : {}),
+        ...(sceneImageIndex >= 0 ? { sceneImageIndex } : {}),
+      },
+    };
+  };
+
   /** 🌙 夜间批量提交：遍历所有分镜，逐个调用 submitDreaminaAsync，收集 submitId 后存入后端队列 */
   const handleBatchNight = async () => {
     if (shots.length === 0) return;
@@ -332,6 +346,7 @@ export function StepVideo() {
                   multimodalAudios: dreaminaMultimodalItems
                     .filter((i) => i.kind === 'audio')
                     .map((i) => ({ base64: i.base64, mimeType: i.mimeType })),
+                  ...buildDreaminaPromptHints(),
                 }
               : {}),
           });
@@ -400,6 +415,7 @@ export function StepVideo() {
               multimodalAudios: dreaminaMultimodalItems
                 .filter((i) => i.kind === 'audio')
                 .map((i) => ({ base64: i.base64, mimeType: i.mimeType })),
+              ...buildDreaminaPromptHints(),
             }
           : {}),
       });
@@ -456,10 +472,15 @@ export function StepVideo() {
                 ? '正在提交即梦任务…'
                 : '开始生成'}
         </button>
+        <RunningStatus
+          active={loading || klingSubmitting || dreaminaSubmitting}
+          label={loading ? '正在生成视频' : '正在提交视频任务'}
+          stallAfterSec={30}
+        />
 
         <p className="text-xs text-[var(--color-text-muted)]">
           {dreaminaAsync && isDreaminaModelId(videoModel) && !useMock
-            ? '即梦为异步排队：提交后可继续点击「开始生成」创建新任务；下方卡片展示各任务排队与成片。'
+            ? '即梦为异步排队：提交后可继续点击「开始生成」创建新任务；下方卡片展示各任务排队与成片。全能参考会自动重写为结构化 Prompt（支持主角/场景一键纠正）。'
             : klingAsync && isKlingModelId(videoModel) && !useMock
               ? '可灵异步：可同时保留多个进行中的任务。'
               : null}
@@ -506,6 +527,11 @@ export function StepVideo() {
                 ? `提交中… (${batchProgress?.submitted ?? 0}/${batchProgress?.total ?? shots.length})`
                 : '🌙 夜间批量提交全部分镜'}
             </button>
+            <RunningStatus
+              active={batchSubmitting}
+              label="正在批量提交分镜任务"
+              stallAfterSec={25}
+            />
           </div>
         )}
 

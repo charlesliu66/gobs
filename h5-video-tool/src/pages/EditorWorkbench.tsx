@@ -67,6 +67,24 @@ function mixEditorMusicUrl(path: string): string {
   return `${API_BASE.replace(/\/$/, '')}${p}`;
 }
 
+function isLikelyQuotaOrRateLimitError(msg: string): boolean {
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit|429|too many requests/i.test(msg);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** 公开示例视频（MDN CC0），用于本地预览联调 */
 const DEMO_VIDEO_URL =
   'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm';
@@ -210,17 +228,25 @@ export function EditorWorkbench() {
     async (userMessage: string) => {
       pushLog('进度：检测到配乐需求，正在润色并生成 BGM（Lyria）…');
       try {
-        const out = await polishEditorMusicPrompt(userMessage);
+        const out = await withTimeout(
+          polishEditorMusicPrompt(userMessage),
+          45_000,
+          '配乐提示词润色超时（45s）',
+        );
         setBgmFormSync({
           prompt: out.prompt,
           negativePrompt: out.negativePrompt,
           key: Date.now(),
         });
-        const res = await generateEditorMusic({
-          prompt: out.prompt,
-          negativePrompt: out.negativePrompt || undefined,
-          sampleCount: 1,
-        });
+        const res = await withTimeout(
+          generateEditorMusic({
+            prompt: out.prompt,
+            negativePrompt: out.negativePrompt || undefined,
+            sampleCount: 1,
+          }),
+          160_000,
+          'Lyria 生成超时（160s）',
+        );
         const item = res.items[0];
         if (!item) throw new Error('未返回音频');
         const url = mixEditorMusicUrl(item.url);
@@ -237,7 +263,11 @@ export function EditorWorkbench() {
         setProject((p) => setBgmClipOnProject(p, item.id, item.durationSec));
         pushLog('已根据对话自动完成配乐；不满意可在左下「配乐生成」微调后再点「生成」。');
       } catch (e) {
-        pushLog(`自动配乐未成功：${e instanceof Error ? e.message : String(e)}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        const hint = isLikelyQuotaOrRateLimitError(msg)
+          ? '（疑似模型限流/配额不足）'
+          : '';
+        pushLog(`自动配乐未成功：${msg}${hint}`);
       }
     },
     [pushLog, setAssets, setProject],

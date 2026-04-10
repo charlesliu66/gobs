@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { generateEditorMusic, polishEditorMusicPrompt } from '../../api/editor';
 import type { MediaAsset, TimelineProject } from '../types/timeline';
 import { setBgmClipOnProject, computeDurationSec } from '../types/timeline';
+import { RunningStatus } from '../../components/RunningStatus';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -13,6 +14,24 @@ function mixAudioUrl(path: string): string {
 }
 
 const LYRIA_CLIP_SEC = 32.8;
+
+function isLikelyQuotaOrRateLimitError(msg: string): boolean {
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit|429|too many requests/i.test(msg);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /** 根据时间轴时长和风格，自动生成并拼接多段 BGM */
 async function generateAndTileMusic(
@@ -84,12 +103,18 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     const raw = prompt.trim() || '高燃游戏战斗配乐，器乐，节奏快';
     setPolishBusy(true);
     try {
-      const out = await polishEditorMusicPrompt(raw);
+      const out = await withTimeout(
+        polishEditorMusicPrompt(raw),
+        45_000,
+        '配乐提示词润色超时（45s）',
+      );
       setPrompt(out.prompt);
       if (out.negativePrompt) setNegativePrompt(out.negativePrompt);
       onPushLog?.('已优化配乐 prompt（英文）');
     } catch (e) {
-      onPushLog?.(`优化失败：${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
+      onPushLog?.(`优化失败：${msg}${hint}`);
     } finally {
       setPolishBusy(false);
     }
@@ -105,7 +130,11 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
       let finalNegative = negativePrompt;
       onPushLog?.('正在优化配乐风格…');
       try {
-        const out = await polishEditorMusicPrompt(raw);
+        const out = await withTimeout(
+          polishEditorMusicPrompt(raw),
+          45_000,
+          '配乐提示词润色超时（45s）',
+        );
         finalPrompt = out.prompt;
         finalNegative = out.negativePrompt ?? finalNegative;
         setPrompt(finalPrompt);
@@ -115,9 +144,15 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
           `配乐润色失败，已降级为原始描述继续生成：${e instanceof Error ? e.message : String(e)}`,
         );
       }
-      await generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog);
+      await withTimeout(
+        generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog),
+        160_000,
+        'Lyria 生成超时（160s）',
+      );
     } catch (e) {
-      onPushLog?.(`配乐失败：${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
+      onPushLog?.(`配乐失败：${msg}${hint}`);
     } finally {
       setBusy(false);
     }
@@ -128,9 +163,15 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     if (!t || busy) return;
     setBusy(true);
     try {
-      await generateAndTileMusic(t, negativePrompt, totalSec, setAssets, setProject, onPushLog);
+      await withTimeout(
+        generateAndTileMusic(t, negativePrompt, totalSec, setAssets, setProject, onPushLog),
+        160_000,
+        'Lyria 生成超时（160s）',
+      );
     } catch (e) {
-      onPushLog?.(`配乐失败：${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
+      onPushLog?.(`配乐失败：${msg}${hint}`);
     } finally {
       setBusy(false);
     }
@@ -220,6 +261,11 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
             {busy ? '…' : '仅生成'}
           </button>
         </div>
+        <RunningStatus
+          active={busy || polishBusy}
+          label={polishBusy ? '正在优化配乐提示词' : '正在生成配乐'}
+          stallAfterSec={30}
+        />
       </div>
     </div>
   );

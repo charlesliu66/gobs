@@ -68,6 +68,7 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
           base64,
           mimeType: file.type || (kind === 'image' ? 'image/png' : kind === 'video' ? 'video/mp4' : 'audio/mpeg'),
           fileName: file.name,
+          semanticRole: undefined,
         });
       }
       onChange(next);
@@ -77,6 +78,17 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
 
   const remove = (id: string) => {
     onChange(items.filter((x) => x.id !== id));
+  };
+
+  const markRole = (id: string, role: 'role' | 'scene') => {
+    onChange(
+      items.map((x) => {
+        if (x.kind !== 'image') return x;
+        if (x.id === id) return { ...x, semanticRole: role };
+        if (x.semanticRole === role) return { ...x, semanticRole: undefined };
+        return x;
+      }),
+    );
   };
 
   const imageIdx = (() => {
@@ -113,7 +125,7 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
       <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
         支持 1–12 个素材（图最多 9、视频最多 3、音频最多 3）。在上方「故事/分镜」里用&nbsp;
         <strong>@图片1</strong>、<strong>@视频1</strong>、<strong>@音频1</strong>
-        等引用，编号按下方各类型上传顺序分别计数（与即梦 Seedance 全能参考一致）。
+        等引用，编号按下方各类型上传顺序分别计数（与即梦 Seedance 全能参考一致）。可点「主角/场景」两下修正自动匹配。
       </p>
       <input
         ref={inputRef}
@@ -157,6 +169,34 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
               >
                 <span className="text-[var(--color-primary)]">{tag}</span>
                 <span className="truncate max-w-[120px]">{it.fileName ?? it.kind}</span>
+                {it.kind === 'image' && (
+                  <>
+                    <button
+                      type="button"
+                      className={`px-1.5 py-0.5 rounded border ${
+                        it.semanticRole === 'role'
+                          ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
+                      }`}
+                      onClick={() => markRole(it.id, 'role')}
+                      title="设为主角参考"
+                    >
+                      主角
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-1.5 py-0.5 rounded border ${
+                        it.semanticRole === 'scene'
+                          ? 'border-[var(--color-success)] text-[var(--color-success)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
+                      }`}
+                      onClick={() => markRole(it.id, 'scene')}
+                      title="设为场景参考"
+                    >
+                      场景
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   className="text-[var(--color-error)] hover:underline"
