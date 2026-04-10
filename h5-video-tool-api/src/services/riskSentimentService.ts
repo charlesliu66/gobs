@@ -46,6 +46,12 @@ export type RiskCreator = {
   recentVideoCount: number;
   avgEngagementRate: number;
   contentTendency: string;
+  /** 倾向的补充解释（更细） */
+  tendencyDetail?: string;
+  /** 创作者当前最可用能力标签（逗号分隔） */
+  strengths?: string;
+  /** 建议协作方式（投放/联动） */
+  collaborationSuggestion?: string;
   potentialScore: number;
   sampleUrl?: string;
   status: '未跟进' | '已观察' | '已投放' | '合作中';
@@ -809,6 +815,99 @@ function parseRecentTrends(raw: unknown, game: string): RiskSnapshot['recentTren
   };
 }
 
+function normalizeCreators(raw: unknown): RiskCreator[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  const out: RiskCreator[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    const c = arr[i] as Record<string, unknown>;
+    const nickname = String(c.nickname ?? c.name ?? '').trim() || `creator_${i + 1}`;
+    const contentTendency =
+      String(c.contentTendency ?? c.tendency ?? '').trim() || '内容方向待补充';
+    const tendencyDetail = String(c.tendencyDetail ?? c.tendency_detail ?? '').trim() || undefined;
+    const strengths = String(c.strengths ?? c.advantages ?? '').trim() || undefined;
+    const collaborationSuggestion =
+      String(c.collaborationSuggestion ?? c.collaboration_suggestion ?? '').trim() || undefined;
+    const statusRaw = String(c.status ?? '未跟进').trim();
+    const status: RiskCreator['status'] =
+      statusRaw === '已观察' || statusRaw === '已投放' || statusRaw === '合作中'
+        ? statusRaw
+        : '未跟进';
+    out.push({
+      id: String(c.id ?? c.creatorId ?? `creator-${i + 1}`),
+      nickname,
+      followers: Math.max(0, Number(c.followers ?? 0) || 0),
+      recentVideoCount: Math.max(0, Number(c.recentVideoCount ?? c.videoCount ?? 0) || 0),
+      avgEngagementRate: Math.max(0, Number(c.avgEngagementRate ?? c.engagementRate ?? 0) || 0),
+      contentTendency,
+      ...(tendencyDetail ? { tendencyDetail } : {}),
+      ...(strengths ? { strengths } : {}),
+      ...(collaborationSuggestion ? { collaborationSuggestion } : {}),
+      potentialScore: Math.max(0, Math.min(100, Number(c.potentialScore ?? 0) || 0)),
+      sampleUrl: String(c.sampleUrl ?? c.url ?? '').trim() || undefined,
+      status,
+    });
+  }
+  return out.slice(0, 200);
+}
+
+function fallbackCreatorsFromVideos(videos: RiskVideo[]): RiskCreator[] {
+  const byAuthor = new Map<
+    string,
+    { followers: number; count: number; likes: number; comments: number; shares: number; sampleUrl?: string }
+  >();
+  for (const v of videos) {
+    const name = String(v.author ?? '').trim();
+    if (!name) continue;
+    const prev = byAuthor.get(name) ?? {
+      followers: 0,
+      count: 0,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      sampleUrl: undefined,
+    };
+    prev.count += 1;
+    prev.likes += Math.max(0, Number(v.likes ?? 0));
+    prev.comments += Math.max(0, Number(v.comments ?? 0));
+    prev.shares += Math.max(0, Number(v.shares ?? 0));
+    prev.followers = Math.max(prev.followers, Math.max(0, Number(v.followers ?? 0)));
+    if (!prev.sampleUrl && v.url) prev.sampleUrl = v.url;
+    byAuthor.set(name, prev);
+  }
+  const rows = [...byAuthor.entries()]
+    .map(([nickname, x]) => {
+      const interactions = x.likes + x.comments + x.shares;
+      const avgRate = x.followers > 0 ? ((interactions / Math.max(1, x.count)) / x.followers) * 100 : 0;
+      const potential = Math.max(35, Math.min(95, Math.round(avgRate * 2.2 + x.count * 4)));
+      return {
+        nickname,
+        followers: x.followers,
+        recentVideoCount: x.count,
+        avgEngagementRate: Number(avgRate.toFixed(1)),
+        potentialScore: potential,
+        sampleUrl: x.sampleUrl,
+      };
+    })
+    .sort((a, b) => b.potentialScore - a.potentialScore)
+    .slice(0, 20);
+
+  return rows.map((r, i) => ({
+    id: `auto-creator-${i + 1}`,
+    nickname: r.nickname,
+    followers: r.followers,
+    recentVideoCount: r.recentVideoCount,
+    avgEngagementRate: r.avgEngagementRate,
+    contentTendency: '基于本批热视频自动推断',
+    tendencyDetail: '模型未返回达人细分说明，已按作者近批样本互动自动补齐。',
+    strengths: '高互动内容、话题承接',
+    collaborationSuggestion:
+      r.potentialScore >= 75 ? '优先进入测试合作池，先小预算试投再放量。' : '先保持观察，确认内容稳定后再考虑合作。',
+    potentialScore: r.potentialScore,
+    sampleUrl: r.sampleUrl,
+    status: '未跟进',
+  }));
+}
+
 function fallbackKeywordMatrix(game: string, searchKeywords: string[]): RiskSnapshot['keywordMatrix'] {
   const tags = searchKeywords.map((k) => k.replace(/^#/, '').trim()).filter(Boolean);
   const g = game.trim() || '当前游戏';
@@ -1061,6 +1160,38 @@ function mapTaskRowsToCommentTasks(
   });
 }
 
+function buildFallbackCommentTasksFromVideos(
+  videos: RiskVideo[],
+  profileKey: StrategyProfileKey,
+): CommentTask[] {
+  const ranked = [...videos]
+    .sort((a, b) => {
+      const sa = Number(a.likes ?? 0) + Number(a.comments ?? 0) * 2 + Number(a.shares ?? 0) * 3;
+      const sb = Number(b.likes ?? 0) + Number(b.comments ?? 0) * 2 + Number(b.shares ?? 0) * 3;
+      return sb - sa;
+    })
+    .slice(0, 8);
+  const picked = ranked.filter((v) => v.sentiment === 'negative' || v.riskTag === '高风险');
+  const base = (picked.length ? picked : ranked).slice(0, 6);
+  return base.map((v, i) => {
+    const attack = v.sentiment === 'negative' || v.riskTag === '高风险';
+    const attitude: CommentAttitude = attack ? '纠偏澄清' : '防御缓冲';
+    const candidates = attack ? FALLBACK_COMMENT_EN.slice(0, 3) : FALLBACK_COMMENT_EN.slice(2, 5);
+    return sanitizeCommentTaskLang({
+      id: `ct-${profileKey}-${v.id}-${i}`,
+      videoId: v.id,
+      videoUrl: v.url,
+      authorNickname: v.author,
+      sentiment: v.sentiment,
+      attitude,
+      lang: 'en',
+      candidates,
+      selectedIndex: 0,
+      executionNature: attack ? 'attack' : 'defense',
+    });
+  });
+}
+
 function cloneCommentTasksForProfile(source: CommentTask[], profileKey: StrategyProfileKey): CommentTask[] {
   return source.map((t, i) => ({
     ...t,
@@ -1217,6 +1348,11 @@ function rehydrateSnapshot(snap: RiskSnapshot): RiskSnapshot {
   );
   commentTasksByProfile.conservative = [];
 
+  if (nextProfiles.balanced.recommendControlComment && !commentTasksByProfile.balanced.length) {
+    commentTasksByProfile.balanced = buildFallbackCommentTasksFromVideos(snap.videos ?? [], 'balanced');
+    nextProfiles.balanced = enrichStrategyVariant(nextProfiles.balanced, commentTasksByProfile.balanced);
+  }
+
   if (!commentTasksByProfile.aggressive?.length && commentTasksByProfile.balanced?.length) {
     commentTasksByProfile.aggressive = cloneCommentTasksForProfile(commentTasksByProfile.balanced, 'aggressive');
     nextProfiles.aggressive = enrichStrategyVariant(nextProfiles.aggressive, commentTasksByProfile.aggressive);
@@ -1234,9 +1370,11 @@ function rehydrateSnapshot(snap: RiskSnapshot): RiskSnapshot {
   };
 
   const balancedTasks = commentTasksByProfile.balanced;
+  const creators = snap.creators?.length ? snap.creators : fallbackCreatorsFromVideos(snap.videos ?? []);
 
   return {
     ...snap,
+    creators,
     overview,
     keywordMatrix,
     listeningAlerts,
@@ -1282,6 +1420,9 @@ const ANALYSIS_SYSTEM = `你是游戏舆情与 TikTok 风控分析助手。输�
       "recentVideoCount": number,
       "avgEngagementRate": 0-100,
       "contentTendency": string,
+      "tendencyDetail": string,
+      "strengths": "逗号分隔，如 游戏教学、赛事解说、版本实测",
+      "collaborationSuggestion": string,
       "potentialScore": 0-100,
       "sampleUrl": string,
       "status": "未跟进" | "已观察" | "已投放" | "合作中"
@@ -1435,7 +1576,10 @@ async function runCompassFullAnalysis(input: {
     };
   });
 
-  const creators = (parsed.creators as RiskCreator[]) ?? [];
+  let creators = normalizeCreators(parsed.creators);
+  if (!creators.length) {
+    creators = fallbackCreatorsFromVideos(mergedVideos);
+  }
 
   const pRec = parsed as Record<string, unknown>;
   let keywordMatrix = parseKeywordMatrix(pRec.keywordMatrix ?? pRec.keyword_matrix);
@@ -1505,6 +1649,10 @@ async function runCompassFullAnalysis(input: {
     const cons = { ...strategyProfiles.conservative, recommendControlComment: false, executionProgram: undefined };
     strategyProfiles.conservative = enrichStrategyVariant(cons, []);
     commentTasksByProfile.conservative = [];
+    if (strategyProfiles.balanced.recommendControlComment && !commentTasksByProfile.balanced.length) {
+      commentTasksByProfile.balanced = buildFallbackCommentTasksFromVideos(mergedVideos, 'balanced');
+      strategyProfiles.balanced = enrichStrategyVariant(strategyProfiles.balanced, commentTasksByProfile.balanced);
+    }
     if (!commentTasksByProfile.aggressive.length && commentTasksByProfile.balanced.length) {
       commentTasksByProfile.aggressive = cloneCommentTasksForProfile(commentTasksByProfile.balanced, 'aggressive');
       strategyProfiles.aggressive = enrichStrategyVariant(strategyProfiles.aggressive, commentTasksByProfile.aggressive);

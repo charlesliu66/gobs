@@ -201,6 +201,9 @@ type RiskSnapshot = {
     recentVideoCount: number;
     avgEngagementRate: number;
     contentTendency: string;
+    tendencyDetail?: string;
+    strengths?: string;
+    collaborationSuggestion?: string;
     potentialScore: number;
     sampleUrl?: string;
     status: string;
@@ -1099,6 +1102,9 @@ export function RiskSentimentPage() {
                         粉丝 {c.followers} · 相关视频 {c.recentVideoCount} · 互动率 {c.avgEngagementRate}%
                       </div>
                       <div>倾向：{c.contentTendency}</div>
+                      {c.tendencyDetail ? <div className="text-zinc-400">说明：{c.tendencyDetail}</div> : null}
+                      {c.strengths ? <div className="text-zinc-300">擅长：{c.strengths}</div> : null}
+                      {c.collaborationSuggestion ? <div className="text-zinc-400">建议：{c.collaborationSuggestion}</div> : null}
                       <div>潜力 {c.potentialScore} · {c.status}</div>
                       {c.sampleUrl && (
                         <a href={c.sampleUrl} target="_blank" rel="noreferrer" className="text-teal-400">
@@ -1167,6 +1173,16 @@ export function RiskSentimentPage() {
                 <p className="mt-1 text-sm text-zinc-400">
                   方案：{PROFILE_ORDER.find((p) => p.key === strategyProfile)?.label ?? strategyProfile} · 云手机按列表顺序轮流分配
                 </p>
+                {activeVariant?.executionProgram ? (
+                  <div className="mt-2 rounded-lg border border-teal-800/50 bg-teal-950/20 px-3 py-2 text-xs text-teal-100">
+                    <div>
+                      策略摘要：{activeVariant.executionProgram.directionSummary}
+                    </div>
+                    <div className="mt-1 text-teal-200/90">
+                      攻击性 {activeVariant.executionProgram.attackPct}% · 防御性 {activeVariant.executionProgram.defensePct}%
+                    </div>
+                  </div>
+                ) : null}
                 <p className="mt-2 text-xs leading-relaxed text-zinc-400">
                   <span className="font-medium text-zinc-200">评论性质说明：</span>
                   「攻击性」针对不实或偏颇说法，澄清并维护游戏；「防御性」在作者说得有理时表态赞同并补充正面信息。下方发往 TikTok 的正文须与每条标注的语言一致（英语 / 印尼语 / 中文），不要混用。
