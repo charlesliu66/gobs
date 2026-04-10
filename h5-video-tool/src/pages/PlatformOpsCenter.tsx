@@ -35,6 +35,21 @@ function statusBadge(status: string) {
   return 'bg-emerald-500/12 text-emerald-400';
 }
 
+const actionDispatchCards = [
+  {
+    lane: 'Live Ops',
+    items: ['Bug 反馈接 Jira', '产品建议需求池', '常规活动落地'],
+    now: '人工确认后派单',
+    next: '按影响面与SLA自动分发',
+  },
+  {
+    lane: 'MKT',
+    items: ['素材生成与分发', '社媒运营增强', '客服与本地化'],
+    now: '按模板/规则执行',
+    next: '按渠道ROI动态调度',
+  },
+];
+
 export function PlatformOpsCenter() {
   const { games, selectedGameId, strategies, agentBudgets, heartbeatLogs, triggerHeartbeat, feedbackLogs } = usePlatformMemory();
 
@@ -60,7 +75,7 @@ export function PlatformOpsCenter() {
                 运营中心
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">
-                目标对齐 · Agent 预算 · 心跳调度 · 审批分级 — 借鉴 Paperclip 的核心思路，让 GOBS 不只是工具集，而是有治理能力的运营系统。
+                主讲第2页：把“目标对齐、预算治理、心跳调度、审批分级、Action分发、学习闭环”放在同一操作台，展示系统如何 24h 持续运行并自我成长。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -69,6 +84,29 @@ export function PlatformOpsCenter() {
               <Link to="/platform/learning-lab" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">学习实验台</Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Boss demo cockpit */}
+      <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold text-[var(--color-text)]">运营中枢总览（老板主讲）</h2>
+          <span className="rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">
+            Now + Next
+          </span>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            ['数据洞察', 'Ingame + Out-of-game 双引擎，支持 channel/asset/tag 切片。'],
+            ['发行方案', 'Campaign proactive：主方案 + Sub方案，并给出风险与预算影响。'],
+            ['Action分发', 'Live Ops 与 MKT 双通道分发，执行后自动回传状态。'],
+            ['学习闭环', '结果回写记忆系统，策略调权并影响下一轮建议。'],
+          ].map(([title, desc]) => (
+            <div key={title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <div className="text-sm font-semibold text-[var(--color-text)]">{title}</div>
+              <p className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">{desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -214,6 +252,30 @@ export function PlatformOpsCenter() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Action dispatch */}
+      <section className="grid gap-6 xl:grid-cols-2">
+        {actionDispatchCards.map((card) => (
+          <div key={card.lane} className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
+            <h2 className="text-xl font-semibold text-[var(--color-text)]">{card.lane} Action 通道</h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {card.items.map((it) => (
+                <span key={it} className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)]">
+                  {it}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 rounded-xl bg-[var(--color-primary)]/8 px-4 py-3 text-sm text-[var(--color-text)]">
+              <span className="font-medium text-[var(--color-primary)]">Now：</span>
+              {card.now}
+            </div>
+            <div className="mt-2 rounded-xl bg-emerald-500/8 px-4 py-3 text-sm text-[var(--color-text)]">
+              <span className="font-medium text-emerald-400">Next：</span>
+              {card.next}
+            </div>
+          </div>
+        ))}
       </section>
 
       {/* Approval Gates */}

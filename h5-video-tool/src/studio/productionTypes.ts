@@ -113,6 +113,14 @@ export interface StructuredPromptMotion {
   mp_audio: string;
 }
 
+export interface ProductionShotVideoVersion {
+  id: string;
+  taskId: string;
+  createdAt: number;
+  videoUrl?: string;
+  videoPath?: string;
+}
+
 export interface ProductionShot {
   shotIndex: number;
   durationSec: number;
@@ -135,6 +143,12 @@ export interface ProductionShot {
   previewStillDataUrl?: string;
   /** 本镜分镜视频预览（data URL 或同域可播 URL） */
   previewVideoUrl?: string;
+  /** 服务端 output 相对路径（如 output/xxx.mp4），与 previewVideoUrl 二选一优先；刷新后仍可通过 /api/video/file 播放 */
+  previewVideoPath?: string;
+  /** 同镜头多次生成时的版本列表（按 createdAt 排序） */
+  previewVideoVersions?: ProductionShotVideoVersion[];
+  /** 当前保留/展示的视频版本 id */
+  selectedPreviewVideoVersionId?: string;
   /**
    * 仅当分镜视频模式为「全能参考 dreamina-multimodal」时有效：覆盖发给接口的 storyboardText。
    * 未设置时使用自动拼接（结构化叙事 + @图片 说明行）。

@@ -20,6 +20,8 @@ export interface DreaminaMultimodalItem {
   base64: string;
   mimeType: string;
   fileName?: string;
+  /** 仅图片使用：用于自动装配即梦 Prompt 的语义标记 */
+  semanticRole?: 'role' | 'scene';
 }
 
 interface CreateFlowState {

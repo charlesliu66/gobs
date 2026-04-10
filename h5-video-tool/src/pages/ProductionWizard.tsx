@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiPost } from '../api/client';
-import { klingVideoProxyUrl, type VideoGenerateResponse } from '../api/video';
+import {
+  type VideoGenerateResponse,
+  getVeoModels,
+  submitDreaminaAsync,
+  getDreaminaTaskStatus,
+} from '../api/video';
 import {
   emptyProductionProject,
   PRODUCTION_STORAGE_KEY,
@@ -16,6 +21,7 @@ import {
   type ScenePlanItem,
   type StoryBeat,
   type ProductionShot,
+  type ProductionShotVideoVersion,
   type ProductionDesignLayer,
   type PropSheet,
 } from '../studio/productionTypes';
@@ -62,8 +68,10 @@ import { saveProductionProject, loadProductionProject, listProductionProjects, u
 import { CharacterLibraryPanel } from '../components/CharacterLibraryPanel';
 import { type LibraryCharacter } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
+import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
 import { ScenePropImageModal } from '../components/production/ScenePropImageModal';
 import { ImageLightbox } from '../components/ImageLightbox';
+import { RunningStatus } from '../components/RunningStatus';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -123,6 +131,44 @@ function migrateProject(p: ProductionProject): ProductionProject {
   }
   if (next.characterAssets?.length) {
     next.characterAssets = next.characterAssets.map((ch) => ensureCharacterLookTree(ch));
+  }
+  if (next.shots?.length) {
+    next.shots = next.shots.map((shot) => {
+      const versions = Array.isArray((shot as ProductionShot).previewVideoVersions)
+        ? ((shot as ProductionShot).previewVideoVersions as ProductionShotVideoVersion[])
+            .filter((v) => !!(v?.videoPath?.trim() || v?.videoUrl?.trim()))
+            .map((v, idx) => ({
+              ...v,
+              id: v.id?.trim() || `legacy-${shot.shotIndex}-${idx}-${v.createdAt || Date.now()}`,
+              taskId: v.taskId?.trim() || `legacy-${shot.shotIndex}-${idx}`,
+              createdAt: Number(v.createdAt) || Date.now(),
+            }))
+            .sort((a, b) => b.createdAt - a.createdAt)
+        : [];
+      const fallbackPath = shot.previewVideoPath?.trim();
+      const fallbackUrl = shot.previewVideoUrl?.trim();
+      const needFallback = versions.length === 0 && !!(fallbackPath || fallbackUrl);
+      const normalized = needFallback
+        ? [
+            {
+              id: `legacy-${shot.shotIndex}-${Date.now()}`,
+              taskId: `legacy-${shot.shotIndex}`,
+              createdAt: Date.now(),
+              ...(fallbackPath ? { videoPath: fallbackPath } : {}),
+              ...(fallbackUrl ? { videoUrl: fallbackUrl } : {}),
+            } as ProductionShotVideoVersion,
+          ]
+        : versions;
+      const selectedId = shot.selectedPreviewVideoVersionId?.trim();
+      const selected = normalized.find((v) => v.id === selectedId) ?? normalized[0];
+      return {
+        ...shot,
+        previewVideoVersions: normalized,
+        selectedPreviewVideoVersionId: selected?.id,
+        ...(selected?.videoPath ? { previewVideoPath: selected.videoPath } : { previewVideoPath: undefined }),
+        ...(selected?.videoUrl ? { previewVideoUrl: selected.videoUrl } : { previewVideoUrl: undefined }),
+      } as ProductionShot;
+    });
   }
   return next;
 }
@@ -547,6 +593,31 @@ function updateVariantImage(
   return updateFlatAssetVariantImage(sheets as PropSheet[], sheetId, variantId, imageDataUrl);
 }
 
+/** 高级制片分镜视频：与 Studio 创作一致，走 submit + 轮询，避免长耗时阻塞单次 HTTP 导致分镜页拿不到地址 */
+const PROD_DREAMINA_POLL_MS = 3000;
+/** 即梦高峰期可能 >2h，前端轮询上限放宽到约 2.5h */
+const PROD_DREAMINA_MAX_POLLS = 3000;
+
+async function pollDreaminaUntilDone(submitId: string): Promise<{
+  videoUrl: string;
+  videoPath?: string;
+  taskId: string;
+}> {
+  for (let i = 0; i < PROD_DREAMINA_MAX_POLLS; i++) {
+    const s = await getDreaminaTaskStatus(submitId);
+    if (s.status === 'failed') {
+      throw new Error(s.failReason || '即梦任务失败');
+    }
+    if (s.status === 'completed' && s.videoUrl) {
+      return { videoUrl: s.videoUrl, videoPath: s.videoPath, taskId: s.taskId };
+    }
+    await new Promise((r) => setTimeout(r, PROD_DREAMINA_POLL_MS));
+  }
+  throw new Error(
+    '即梦生成等待超时（约 2.5 小时）。若即梦客户端已显示成功，请到「生成视频 → 历史内容」查看是否已写入，或稍后重试。',
+  );
+}
+
 export function ProductionWizard() {
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
@@ -610,6 +681,7 @@ export function ProductionWizard() {
   });
   const [showProjectList, setShowProjectList] = useState(false);
   const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
+  const [loadingProjectTitle, setLoadingProjectTitle] = useState<string | null>(null);
   const [showLibraryImport, setShowLibraryImport] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -650,7 +722,11 @@ export function ProductionWizard() {
   }, []);
 
   /** 加载指定服务端项目 */
-  const handleLoadServerProject = useCallback(async (id: string) => {
+  const handleLoadServerProject = useCallback(async (id: string, title?: string) => {
+    setErr(null);
+    setShowProjectList(false);
+    setLoadingProjectTitle(title?.trim() || null);
+    setIsServerBootstrapping(true);
     try {
       const raw = await loadProductionProject(id);
       if (raw && typeof raw === 'object' && 'project' in raw) {
@@ -669,19 +745,30 @@ export function ProductionWizard() {
         url.searchParams.set('projectId', id);
         window.history.replaceState(null, '', url.toString());
         setCanAutoPersist(true);
-        setShowProjectList(false);
       }
     } catch (e) {
       console.warn('[production] 加载项目失败', e);
       setErr('加载项目失败，请重试');
+      setShowProjectList(true);
+    } finally {
+      setIsServerBootstrapping(false);
+      setLoadingProjectTitle(null);
     }
   }, []);
 
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
   const [shotMediaBusy, setShotMediaBusy] = useState<'frame' | 'video' | null>(null);
+  /** 与 GET /api/video/models 一致：启用时「生成分镜视频」走 submit + 轮询，成片后写入本镜预览 */
+  const [dreaminaAsync, setDreaminaAsync] = useState(false);
 
   const ar = project.meta.aspectRatio ?? '16:9';
+
+  useEffect(() => {
+    void getVeoModels()
+      .then((r) => setDreaminaAsync(!!r.dreaminaAsync))
+      .catch(() => {});
+  }, []);
 
   const handleStartPortraitGenerate = useCallback((jobKey: string, req: GenerateCharacterPortraitRequest) => {
     setPortraitJobs((prev) => ({ ...prev, [jobKey]: { status: 'generating' } }));
@@ -775,6 +862,7 @@ export function ProductionWizard() {
             prompt: t.prompt,
             aspectRatio: ar,
             shotIndex: 0,
+            singleFrameOnly: true,
             ...(g ? { globalStyleReferenceFrame: g } : {}),
           }),
           new Promise<never>((_, reject) =>
@@ -1100,6 +1188,7 @@ export function ProductionWizard() {
           prompt,
           aspectRatio: ar,
           shotIndex: 0,
+          singleFrameOnly: true,
           ...(g ? { globalStyleReferenceFrame: g } : {}),
         });
         const img = res.firstFrame;
@@ -1239,6 +1328,7 @@ export function ProductionWizard() {
         prompt: fullPrompt,
         aspectRatio: kind === 'scene' ? '16:9' : '1:1',
         shotIndex: 0,
+        singleFrameOnly: true,
         ...(g ? { globalStyleReferenceFrame: g } : {}),
       });
       setScenePropPreview(res.firstFrame);
@@ -1529,6 +1619,7 @@ export function ProductionWizard() {
         prompt,
         aspectRatio: ar,
         shotIndex: 0,
+        singleFrameOnly: true,
         ...(project.meta.styleRefImageDataUrl?.trim()
           ? { globalStyleReferenceFrame: project.meta.styleRefImageDataUrl }
           : {}),
@@ -1554,9 +1645,48 @@ export function ProductionWizard() {
     if (!s) return;
     setShotMediaBusy('video');
     setErr(null);
+
+    const persistShotVideo = (url: string, taskId: string, videoPath: string | undefined) => {
+      const vp = videoPath?.trim();
+      const versionId = `${taskId || `production-shot-${s.shotIndex}`}-${Date.now()}`;
+      const version: ProductionShotVideoVersion = {
+        id: versionId,
+        taskId: taskId || `production-shot-${s.shotIndex}`,
+        createdAt: Date.now(),
+        ...(vp ? { videoPath: vp } : {}),
+        ...(url?.trim() ? { videoUrl: url } : {}),
+      };
+      setProject((p) => {
+        const shots = [...p.shots];
+        const cur = shots[selectedShotIdx];
+        if (!cur) return p;
+        const prev = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
+        const dedup = prev.filter((x) => x.id !== version.id && x.taskId !== version.taskId);
+        const nextVersions = [version, ...dedup].sort((a, b) => b.createdAt - a.createdAt);
+        shots[selectedShotIdx] = {
+          ...cur,
+          previewVideoVersions: nextVersions,
+          selectedPreviewVideoVersionId: version.id,
+          previewVideoUrl: version.videoUrl,
+          previewVideoPath: version.videoPath,
+        } as ProductionShot;
+        return { ...p, shots, assembled: null };
+      });
+      const line = buildProductionShotVideoStoryboardText(s);
+      const title = (project.meta.title || '未命名').trim();
+      saveVideoToHistory({
+        taskId: taskId || `production-shot-${s.shotIndex}-${Date.now()}`,
+        videoPath: videoPath ?? '',
+        prompt: `[高级制片·${title}·镜${s.shotIndex}] ${line}`.slice(0, 12000),
+        ...(videoPath?.trim() ? {} : { videoUrl: url }),
+      });
+      toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
+    };
+
     try {
       const pref = project.meta.shotVideoDreaminaModel?.trim();
       const mv = project.meta.dreaminaModelVersion?.trim();
+      const dur = Math.min(60, Math.max(4, Math.round(s.durationSec || 6)));
 
       if (pref === 'dreamina-multimodal') {
         const pack = await buildShotMultimodalRefPackAsync(
@@ -1579,17 +1709,33 @@ export function ProductionWizard() {
         }
         const autoPrompt = pack.defaultVideoPrompt;
         const storyboardText = (s.videoStoryboardOverride?.trim() || autoPrompt).trim();
+
+        if (dreaminaAsync) {
+          const { submitId } = await submitDreaminaAsync({
+            storyboardText,
+            materials: [],
+            duration: dur,
+            aspectRatio: ar,
+            model: 'dreamina-multimodal',
+            multimodalImages: pack.multimodalImages,
+            ...(mv ? { dreaminaModelVersion: mv } : {}),
+          });
+          const polled = await pollDreaminaUntilDone(submitId);
+          persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
+          return;
+        }
+
         const res = await apiPost<VideoGenerateResponse>('/api/video/generate', {
           storyboardText,
           materials: [],
-          duration: Math.min(60, Math.max(4, Math.round(s.durationSec || 6))),
+          duration: dur,
           aspectRatio: ar,
           model: 'dreamina-multimodal',
           multimodalImages: pack.multimodalImages,
           ...(mv ? { dreaminaModelVersion: mv } : {}),
         });
         const url = res.videoUrl;
-        if (url) patchShot(selectedShotIdx, { previewVideoUrl: url });
+        if (url) persistShotVideo(url, res.taskId, res.videoPath);
         else setErr('视频生成未返回地址');
         return;
       }
@@ -1611,10 +1757,28 @@ export function ProductionWizard() {
         setErr('即梦图生视频需要本镜分镜静帧：请先「生成分镜图」，或在下拉里改选「即梦·文生视频」。');
         return;
       }
+
+      if (dreaminaAsync) {
+        const { submitId } = await submitDreaminaAsync({
+          storyboardText,
+          materials: [],
+          duration: dur,
+          aspectRatio: ar,
+          model,
+          ...(mv ? { dreaminaModelVersion: mv } : {}),
+          ...(hasStill && model === 'dreamina-image2video'
+            ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
+            : {}),
+        });
+        const polled = await pollDreaminaUntilDone(submitId);
+        persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
+        return;
+      }
+
       const res = await apiPost<VideoGenerateResponse>('/api/video/generate', {
         storyboardText,
         materials: [],
-        duration: Math.min(60, Math.max(4, Math.round(s.durationSec || 6))),
+        duration: dur,
         aspectRatio: ar,
         model,
         ...(mv ? { dreaminaModelVersion: mv } : {}),
@@ -1623,7 +1787,7 @@ export function ProductionWizard() {
           : {}),
       });
       const url = res.videoUrl;
-      if (url) patchShot(selectedShotIdx, { previewVideoUrl: url });
+      if (url) persistShotVideo(url, res.taskId, res.videoPath);
       else setErr('视频生成未返回地址');
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频生成失败');
@@ -1632,6 +1796,7 @@ export function ProductionWizard() {
     }
   }, [
     project.shots,
+    project.meta.title,
     project.characterAssets,
     project.sceneAssets,
     project.propAssets,
@@ -1640,6 +1805,7 @@ export function ProductionWizard() {
     ar,
     selectedShotIdx,
     patchShot,
+    dreaminaAsync,
   ]);
 
   const story = project.story;
@@ -1666,6 +1832,50 @@ export function ProductionWizard() {
   }, [shot, chSheets, scSheets, propSheets]);
 
   const shotBlob = useMemo(() => (shot ? buildShotBlobText(shot) : ''), [shot]);
+  const shotVideoVersions = useMemo(() => {
+    if (!shot) return [] as ProductionShotVideoVersion[];
+    const list = Array.isArray(shot.previewVideoVersions) ? shot.previewVideoVersions : [];
+    return [...list].sort((a, b) => b.createdAt - a.createdAt);
+  }, [shot]);
+  const selectedShotVideoVersion = useMemo(() => {
+    if (!shot) return null;
+    const selectedId = shot.selectedPreviewVideoVersionId?.trim();
+    return shotVideoVersions.find((v) => v.id === selectedId) ?? shotVideoVersions[0] ?? null;
+  }, [shot, shotVideoVersions]);
+  const shotPreviewPlaySrc = useMemo(
+    () =>
+      selectedShotVideoVersion
+        ? resolveProductionShotPreviewVideoSrc({
+            previewVideoPath: selectedShotVideoVersion.videoPath,
+            previewVideoUrl: selectedShotVideoVersion.videoUrl,
+          })
+        : shot
+          ? resolveProductionShotPreviewVideoSrc(shot)
+          : '',
+    [shot, selectedShotVideoVersion],
+  );
+  const selectShotVideoVersion = useCallback((versionId: string) => {
+    patchShot(selectedShotIdx, { selectedPreviewVideoVersionId: versionId });
+  }, [patchShot, selectedShotIdx]);
+  const keepOnlyShotVideoVersion = useCallback((versionId: string) => {
+    setProject((p) => {
+      const shots = [...p.shots];
+      const cur = shots[selectedShotIdx];
+      if (!cur) return p;
+      const list = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
+      const keep = list.find((v) => v.id === versionId);
+      if (!keep) return p;
+      shots[selectedShotIdx] = {
+        ...cur,
+        previewVideoVersions: [keep],
+        selectedPreviewVideoVersionId: keep.id,
+        previewVideoPath: keep.videoPath,
+        previewVideoUrl: keep.videoUrl,
+      } as ProductionShot;
+      return { ...p, shots, assembled: null };
+    });
+    toast.success('已保留当前版本，其余版本已移除');
+  }, [selectedShotIdx]);
 
   const multimodalAutoPrompt = multimodalRefPack?.defaultVideoPrompt ?? '';
 
@@ -1691,7 +1901,7 @@ export function ProductionWizard() {
           ? '角色与场景将用于分镜引用，建议补全后再继续'
           : step === 3
             ? '检查分镜与 @ 引用后可导出 Prompt'
-            : '可复制 Seedance 块或前往 Studio 多镜创作';
+            : '分镜整合与 Seedance 导出；成片可在「生成视频 → 历史内容」查看';
 
   if (isServerBootstrapping) {
     return (
@@ -1699,7 +1909,11 @@ export function ProductionWizard() {
         <div className="gobs-card rounded-2xl px-7 py-6 text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
           <p className="text-sm font-medium text-[var(--color-text)]">项目加载中…</p>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">正在同步云端项目数据，请稍候</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            {loadingProjectTitle
+              ? `正在加载「${loadingProjectTitle}」，请稍候`
+              : '正在同步云端项目数据，请稍候'}
+          </p>
         </div>
       </div>
     );
@@ -2164,6 +2378,13 @@ export function ProductionWizard() {
                     <span className="text-[11px] text-[var(--color-text-muted)]">
                       成功 {batchAssetGen.success} / 失败 {batchAssetGen.failed}
                     </span>
+                  ) : null}
+                  {batchAssetGen !== null ? (
+                    <RunningStatus
+                      active={true}
+                      label={`正在补全缺图 ${batchAssetGen.current}/${batchAssetGen.total}`}
+                      stallAfterSec={30}
+                    />
                   ) : null}
                   {batchAssetGen !== null ? (
                     <button
@@ -3176,9 +3397,18 @@ export function ProductionWizard() {
                       onClick={() => void handleGenerateShotVideo()}
                       className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] disabled:opacity-50"
                     >
-                      {shotMediaBusy === 'video' ? '视频生成中…' : '生成分镜视频'}
+                      {shotMediaBusy === 'video'
+                        ? dreaminaAsync
+                          ? '即梦排队/生成中（完成后自动填入预览）…'
+                          : '视频生成中…'
+                        : '生成分镜视频'}
                     </button>
                   </div>
+                  {dreaminaAsync ? (
+                    <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
+                      已启用即梦异步：提交后轮询直至成片，右侧「本镜预览」会显示视频（与 Studio 创作一致）。
+                    </p>
+                  ) : null}
                   <div className="mt-3 grid gap-3 text-sm sm:grid-cols-[100px_1fr]">
                     <div className="text-xs text-[var(--color-text-muted)]">参考</div>
                     <div className="flex gap-2">
@@ -3401,8 +3631,14 @@ export function ProductionWizard() {
               <aside className="w-full shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 lg:w-72">
                 <div className="text-xs font-medium text-[var(--color-text)]">本镜预览</div>
                 <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
-                  分镜图由 Imagen 生成；分镜视频走平台视频接口（依赖后端配置）。预览保存在本地草稿。
+                  分镜图由 Imagen 生成；分镜视频走即梦等接口。生成中会显示状态，完成后可直接在下方播放。
                 </p>
+                {shotMediaBusy === 'frame' ? (
+                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/20 px-2.5 py-2 text-[11px] text-cyan-100/90">
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
+                    <span>分镜静帧生成中…</span>
+                  </div>
+                ) : null}
                 {shot.previewStillDataUrl ? (
                   <div className="mt-3">
                     <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜静帧</div>
@@ -3416,21 +3652,81 @@ export function ProductionWizard() {
                 ) : (
                   <p className="mt-3 text-[11px] text-[var(--color-text-muted)]">暂无分镜图，点击「生成分镜图」。</p>
                 )}
-                {shot.previewVideoUrl ? (
-                  <div className="mt-3">
-                    <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜视频</div>
+                <div className="mt-3">
+                  <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜视频</div>
+                  {shotMediaBusy === 'video' ? (
+                    <div className="mt-1.5 overflow-hidden rounded-xl border border-amber-500/35 bg-[linear-gradient(145deg,rgba(120,80,20,0.22),rgba(20,20,28,0.95))] shadow-inner">
+                      <div className="flex items-center gap-2 border-b border-amber-500/20 px-3 py-2">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+                        </span>
+                        <span className="text-[11px] font-semibold tracking-wide text-amber-100">正在生成中</span>
+                      </div>
+                      <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 px-4 py-8">
+                        <div
+                          className="h-11 w-11 animate-spin rounded-full border-2 border-white/15 border-t-amber-400"
+                          aria-hidden
+                        />
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-white">视频生成中</p>
+                          <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
+                            {dreaminaAsync
+                              ? '已提交至即梦，排队与渲染完成后将自动出现在此处，请勿关闭本页'
+                              : '渲染完成后将自动出现在此处'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : shotPreviewPlaySrc ? (
                     <video
-                      src={
-                        /^https?:\/\//i.test(shot.previewVideoUrl)
-                          ? klingVideoProxyUrl(shot.previewVideoUrl)
-                          : shot.previewVideoUrl
-                      }
+                      src={shotPreviewPlaySrc}
                       controls
                       playsInline
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)]"
+                      className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-black"
                     />
-                  </div>
-                ) : null}
+                  ) : (
+                    <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">暂无成片，点击左侧「生成分镜视频」。</p>
+                  )}
+                  {shotVideoVersions.length > 0 ? (
+                    <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                      <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
+                        <span>版本记录（{shotVideoVersions.length}）</span>
+                        {selectedShotVideoVersion ? (
+                          <button
+                            type="button"
+                            onClick={() => keepOnlyShotVideoVersion(selectedShotVideoVersion.id)}
+                            className="rounded border border-[var(--color-border)] px-1.5 py-0.5 hover:bg-[var(--color-surface-hover)]"
+                          >
+                            仅保留当前
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {shotVideoVersions.map((v, idx) => {
+                          const active = selectedShotVideoVersion?.id === v.id;
+                          const ts = new Date(v.createdAt || Date.now()).toLocaleString('zh-CN');
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => selectShotVideoVersion(v.id)}
+                              className={`flex w-full items-center justify-between rounded border px-2 py-1 text-left text-[10px] ${
+                                active
+                                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                                  : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                              }`}
+                            >
+                              <span>V{shotVideoVersions.length - idx}</span>
+                              <span>{v.videoPath ? '云端文件' : '临时地址'}</span>
+                              <span className="truncate pl-2">{ts}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </aside>
             </div>
 
@@ -3448,7 +3744,7 @@ export function ProductionWizard() {
                         : 'border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]'
                     }`}
                   >
-                    <div className="aspect-video w-full overflow-hidden rounded bg-[var(--color-surface-hover)]">
+                    <div className="relative aspect-video w-full overflow-hidden rounded bg-[var(--color-surface-hover)]">
                       {s.previewStillDataUrl ? (
                         <img src={s.previewStillDataUrl} alt="" className="h-full w-full object-cover" />
                       ) : scSheets.find((sc) => sc.sceneRef === s.sceneRef)?.variants[0]?.imageDataUrl ? (
@@ -3457,6 +3753,18 @@ export function ProductionWizard() {
                           alt=""
                           className="h-full w-full object-cover"
                         />
+                      ) : null}
+                      {selectedShotIdx === idx && shotMediaBusy === 'video' ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/65 backdrop-blur-[1px]">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-amber-400" />
+                          <span className="px-1 text-[8px] font-medium text-amber-100">生成中</span>
+                        </div>
+                      ) : null}
+                      {selectedShotIdx === idx && shotMediaBusy === 'frame' ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-cyan-400" />
+                          <span className="px-1 text-[8px] font-medium text-cyan-100">静帧中</span>
+                        </div>
                       ) : null}
                     </div>
                     <div className="mt-1 truncate px-1 text-[10px] text-[var(--color-text)]">
@@ -3479,6 +3787,73 @@ export function ProductionWizard() {
 
         {/* Step 4 导出 */}
         {step === 4 && (
+          <div className="space-y-6">
+          <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
+            <h2 className="text-sm font-semibold">分镜整合</h2>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              汇总全部分镜的静帧与已生成视频（在分镜步骤逐镜生成后会同步出现在此）。成片会自动保存到「生成视频 → 历史内容」。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+              >
+                返回分镜表编辑 / 生成
+              </button>
+              <Link
+                to="/studio?tab=gallery"
+                className="inline-flex items-center rounded-lg bg-[var(--color-primary)]/15 px-4 py-2 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25"
+              >
+                打开历史内容
+              </Link>
+            </div>
+            {project.shots.length === 0 ? (
+              <p className="text-xs text-[var(--color-text-muted)]">暂无分镜数据。</p>
+            ) : (
+              <div className="grid max-h-[min(70vh,520px)] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+                {project.shots.map((sh, idx) => {
+                  const scImg = scSheets.find((sc) => sc.sceneRef === sh.sceneRef)?.variants[0]?.imageDataUrl;
+                  const thumb = sh.previewStillDataUrl || scImg;
+                  const storyLine = buildProductionShotVideoStoryboardText(sh);
+                  const vSrc = resolveProductionShotPreviewVideoSrc(sh);
+                  return (
+                    <div
+                      key={`${sh.shotIndex}-${idx}`}
+                      className="flex flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+                    >
+                      <div className="relative aspect-video w-full bg-black/80">
+                        {thumb ? (
+                          <img src={thumb} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-[var(--color-text-muted)]">
+                            无静帧
+                          </div>
+                        )}
+                        <span className="absolute left-1 top-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+                          镜{sh.shotIndex}
+                        </span>
+                      </div>
+                      {vSrc ? (
+                        <div className="border-t border-[var(--color-border)] p-1">
+                          <video src={vSrc} controls playsInline className="h-20 w-full object-contain" />
+                        </div>
+                      ) : (
+                        <p className="border-t border-[var(--color-border)] px-2 py-2 text-[10px] text-[var(--color-text-muted)]">
+                          尚未生成分镜视频
+                        </p>
+                      )}
+                      <p className="line-clamp-2 px-2 pb-2 text-[10px] text-[var(--color-text-muted)]">
+                        {storyLine.slice(0, 120)}
+                        {storyLine.length > 120 ? '…' : ''}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
             <h2 className="text-sm font-semibold">Prompt 与一致性</h2>
             <p className="text-xs text-[var(--color-text-muted)]">
@@ -3523,12 +3898,18 @@ export function ProductionWizard() {
                     </div>
                   ))}
                 </div>
-                <Link to="/studio" className="inline-block text-sm text-[var(--color-primary)] hover:underline">
-                  去 Studio 创作 →
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/studio" className="inline-block text-sm text-[var(--color-primary)] hover:underline">
+                    去 Studio 创作 →
+                  </Link>
+                  <Link to="/studio?tab=gallery" className="inline-block text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:underline">
+                    历史内容
+                  </Link>
+                </div>
               </div>
             )}
           </section>
+          </div>
         )}
 
         {step === 1 && !story && (
@@ -3590,7 +3971,7 @@ export function ProductionWizard() {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => void handleLoadServerProject(p.id)}
+                    onClick={() => void handleLoadServerProject(p.id, p.title)}
                     className="w-full flex items-center justify-between p-3 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-hover)] transition-colors text-left"
                   >
                     <div>

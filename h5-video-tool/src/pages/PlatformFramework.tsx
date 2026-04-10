@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlatformMemory, type PlatformGame } from '../context/PlatformMemoryContext';
 
+const DEMO_MODE_KEY = 'gobs_demo_mode';
+
 const channelMetrics = [
   { channel: 'TikTok 官号', views: '128.4万', completion: '23.8%', cpm: 'US$3.7', status: '正常偏优' },
   { channel: 'YouTube Shorts', views: '46.2万', completion: '18.1%', cpm: 'US$4.9', status: '可优化' },
@@ -22,6 +24,41 @@ const brainBlocks = [
   { title: '外部环境知识库', desc: '竞品、KOL、平台 benchmark、评论舆情、热点事件。', status: '先接假数据，后续可接 API' },
 ];
 
+const futurePipeline = [
+  {
+    title: '先绑定游戏',
+    now: '已支持游戏绑定/切换，后续数据与策略都挂在当前游戏上下文。',
+    next: '接入项目主数据与权限体系，自动继承地区、阶段、预算口径。',
+  },
+  {
+    title: '数据洞察（双引擎）',
+    now: '已展示 Ingame + Out-of-game 的骨架看板与素材表现。',
+    next: '接入真实数据源与 crawl，支持按 channel / asset / tag 切片。',
+  },
+  {
+    title: 'Campaign Proactive',
+    now: '已产出 Action 建议与风险分级，支持策略权重联动。',
+    next: '自动生成主方案 + Sub 方案，并给出置信度与预算影响。',
+  },
+  {
+    title: '传到 Action',
+    now: '已建立建议到执行的桥梁，可进入学习实验台模拟。',
+    next: '按 Live Ops / MKT 双通道自动分发，支持审批门与SLA。',
+  },
+  {
+    title: '学习飞轮',
+    now: '已形成反馈回写与策略调权闭环。',
+    next: '24h 心跳自治运行，跨渠道自优化并输出下一轮计划。',
+  },
+];
+
+const outOfGameSlices = [
+  { group: '官方/非官方', items: ['官方账号表现', '民间传播热度', '竞品关联内容'] },
+  { group: '按渠道', items: ['TikTok', 'YouTube Shorts', 'Meta', 'KOL 社区'] },
+  { group: '按素材', items: ['角色向', '卖点向', '剧情向', '活动向'] },
+  { group: '按标签', items: ['题材标签', '情绪标签', '受众标签', '风险标签'] },
+];
+
 function SectionTitle({ title, desc, action }: { title: string; desc?: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -40,6 +77,15 @@ export function PlatformFramework() {
   const [newGameName, setNewGameName] = useState('');
   const [newGameGenre, setNewGameGenre] = useState('SLG');
   const [newGameStage, setNewGameStage] = useState<PlatformGame['stage']>('首发期');
+  const [demoTab, setDemoTab] = useState<'roadmap' | 'feature-detail'>('roadmap');
+
+  const demoMode = useMemo(() => {
+    try {
+      return localStorage.getItem(DEMO_MODE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }, []);
 
   const selectedGame = useMemo(
     () => games.find((game) => game.id === selectedGameId) ?? games[0],
@@ -65,23 +111,23 @@ export function PlatformFramework() {
               GOBS Platform Framework
             </div>
             <h1 className="max-w-4xl text-3xl font-semibold leading-tight text-white sm:text-5xl">
-              游戏绑定 → 资料沉淀 → 数据看板 → 洞察 → Action
+              从“工具集合”升级为“自治发行系统”
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-white/72 sm:text-base">
-              不动已完成的功能。用户登录后进入平台总览，绑定/切换游戏、上传资料生成"大脑"、看内外部数据、接收洞察和 Action 建议。三个页面共享同一份状态。
+              主讲路径：先绑游戏 → 数据洞察（Ingame + Out-of-game）→ Campaign proactive → 传到 Action → 学习飞轮。现在先证明“已能跑”，再展示“24h 自成长”。
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button type="button" onClick={() => document.getElementById('bind-game')?.scrollIntoView({ behavior: 'smooth' })} className="rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--color-primary)]/25 transition hover:-translate-y-0.5 hover:bg-[var(--color-primary-hover)]">
                 从游戏绑定开始
               </button>
               <Link to="/platform/memory" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
-                去看记忆系统
+                记忆系统（备份页）
               </Link>
               <Link to="/platform/learning-lab" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
-                去跑学习闭环 Demo
+                学习试验台（备份页）
               </Link>
               <Link to="/platform/ops" className="rounded-xl border border-emerald-400/20 bg-emerald-400/8 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/14 hover:text-emerald-200">
-                运营中心（Paperclip 借鉴）
+                运营中心（主讲第2页）
               </Link>
               <Link to="/studio" className="rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
                 去旧工作台
@@ -90,9 +136,9 @@ export function PlatformFramework() {
           </div>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             {[
-              ['已保留现有模块', 'QuickFilm / Studio / 素材库 / 分发 / TikTok Matrix'],
-              ['本次先补的模块', '平台首页、游戏绑定、知识库生成、数据看板、洞察Action'],
-              ['下一步可接后端', '真实登录态、文件上传、项目/游戏API、外部数据源'],
+              ['Now（可运行）', '游戏绑定、数据看板、洞察建议、学习调权、运营治理'],
+              ['Next（可扩展）', 'Ingame/Outgame真实数据、自动方案编排、Action自动分发'],
+              ['North Star', '24小时心跳运行 + 可解释决策 + 自我成长飞轮'],
             ].map(([title, desc]) => (
               <div key={title} className="rounded-2xl border border-white/10 bg-white/6 p-4 backdrop-blur-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">{title}</div>
@@ -103,6 +149,72 @@ export function PlatformFramework() {
         </div>
       </section>
 
+      {demoMode && (
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDemoTab('roadmap')}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                demoTab === 'roadmap'
+                  ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/25'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              平台链路
+            </button>
+            <button
+              type="button"
+              onClick={() => setDemoTab('feature-detail')}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                demoTab === 'feature-detail'
+                  ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/25'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              功能细节
+            </button>
+          </div>
+        </section>
+      )}
+
+      {demoTab === 'feature-detail' ? (
+        <section className="space-y-4">
+          <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
+            <h2 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">核心功能实现逻辑（演示版）</h2>
+            <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+              面向汇报场景：聚焦能力闭环、效率提升与可扩展性。
+            </p>
+          </section>
+          <section className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
+              <div className="mb-2 inline-flex rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-300">视频生成</div>
+              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                <li>统一入口调度 Veo / 可灵 / 即梦。</li>
+                <li>支持文生、图生、多模态与异步任务。</li>
+                <li>成片自动入库，直接进入历史与分发。</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
+              <div className="mb-2 inline-flex rounded-full bg-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-300">高级制片</div>
+              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                <li>三层链路：故事弧 → 服化道 → 分镜表。</li>
+                <li>结构化提示词保障镜头连续与画风统一。</li>
+                <li>项目与素材可持久化，便于协作复用。</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
+              <div className="mb-2 inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">视频剪辑</div>
+              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                <li>音频能量 + 视觉识别自动提取高光。</li>
+                <li>Agent 直接改写时间轴，进度可视化。</li>
+                <li>自动配乐与导出，缩短交付周期。</li>
+              </ul>
+            </div>
+          </section>
+        </section>
+      ) : (
+        <>
       {/* Summary cards */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -117,6 +229,32 @@ export function PlatformFramework() {
             <div className="mt-2 text-xs text-[var(--color-text-subtle)]">{item.sub}</div>
           </div>
         ))}
+      </section>
+
+      {/* Main storyline */}
+      <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
+        <SectionTitle
+          title="老板主讲链路（Now + Next）"
+          desc="用一张链路图讲清楚“今天能跑什么、明天会进化什么”。"
+        />
+        <div className="mt-6 grid gap-4 xl:grid-cols-5">
+          {futurePipeline.map((node, idx) => (
+            <div key={node.title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-base font-semibold text-[var(--color-text)]">{node.title}</div>
+                <span className="text-xs text-[var(--color-text-subtle)]">#{idx + 1}</span>
+              </div>
+              <div className="mt-3 rounded-xl bg-[var(--color-primary)]/8 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--color-primary)]">Now</div>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text)]">{node.now}</p>
+              </div>
+              <div className="mt-2 rounded-xl bg-emerald-500/8 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-400">Next</div>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text)]">{node.next}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Bind game */}
@@ -228,6 +366,20 @@ export function PlatformFramework() {
       {/* Data Dashboard */}
       <section id="data-dashboard" className="space-y-6">
         <SectionTitle title="数据看板骨架" desc="一部分看游戏内/官号/投放数据，一部分看外部渠道和素材表现。" />
+        <div className="grid gap-4 xl:grid-cols-4">
+          {outOfGameSlices.map((slice) => (
+            <div key={slice.group} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+              <div className="text-sm font-semibold text-[var(--color-text)]">{slice.group}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {slice.items.map((it) => (
+                  <span key={it} className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)]">
+                    {it}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
         <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
           <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -360,6 +512,8 @@ export function PlatformFramework() {
             ))}
           </div>
         </section>
+      )}
+        </>
       )}
     </div>
   );

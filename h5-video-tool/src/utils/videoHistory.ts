@@ -1,3 +1,5 @@
+import { klingVideoProxyUrl } from '../api/video';
+
 /**
  * 生成视频历史 - localStorage 持久化
  * 仅存元数据（taskId、videoPath、prompt、createdAt），视频通过 API 获取
@@ -120,4 +122,17 @@ export function getRecentPromptForVideo(taskId?: string | null): string {
 export function getVideoFileUrl(videoPath: string): string {
   const base = import.meta.env.VITE_API_BASE_URL || '';
   return `${base}/api/video/file?path=${encodeURIComponent(videoPath)}`;
+}
+
+/** 高级制片分镜预览：优先服务端落盘路径，刷新后仍可播放 */
+export function resolveProductionShotPreviewVideoSrc(shot: {
+  previewVideoPath?: string;
+  previewVideoUrl?: string;
+}): string {
+  const p = shot.previewVideoPath?.trim();
+  if (p) return getVideoFileUrl(p);
+  const u = shot.previewVideoUrl?.trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return klingVideoProxyUrl(u);
+  return u;
 }

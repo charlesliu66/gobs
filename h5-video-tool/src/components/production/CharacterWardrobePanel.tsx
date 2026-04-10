@@ -6,6 +6,7 @@ import { generateFrames, standardizeCharacterImage } from '../../api/storyboard'
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
 import { fetchAssets, getAssetImage } from '../../api/assets';
 import type { Asset } from '../../api/assets';
+import { RunningStatus } from '../RunningStatus';
 
 // 前端生成简单 id
 function genId(): string {
@@ -132,7 +133,13 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     setErr(null);
     try {
       const prompt = `${styleRef}\n角色：${sheet.name}${sheet.isProtagonist ? '（主角）' : ''}。全身正面，中性表情，标准站姿，白色简洁背景，电影感，高清，无文字。`;
-      const res = await generateFrames({ prompt, aspectRatio, shotIndex: 0, ...(styleRefImage ? { globalStyleReferenceFrame: styleRefImage } : {}) });
+      const res = await generateFrames({
+        prompt,
+        aspectRatio,
+        shotIndex: 0,
+        singleFrameOnly: true,
+        ...(styleRefImage ? { globalStyleReferenceFrame: styleRefImage } : {}),
+      });
       onUpdate(buildSheetWithBaseImage(res.firstFrame));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '生成失败');
@@ -182,6 +189,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
         prompt,
         aspectRatio,
         shotIndex: 0,
+        singleFrameOnly: true,
         globalStyleReferenceFrame: sheet.baseImageDataUrl,
       });
       onUpdate({
@@ -257,6 +265,11 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             >
               从素材库选择
             </button>
+            <RunningStatus
+              active={genningBase || standardizing}
+              label={genningBase ? '正在生成基础形象' : '正在处理参考图'}
+              stallAfterSec={25}
+            />
           </div>
         </div>
         {sheet.baseImageDataUrl ? (
@@ -438,6 +451,11 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
                     ★
                   </button>
                 </div>
+                <RunningStatus
+                  active={genningId === state.id}
+                  label={`正在生成状态：${state.label}`}
+                  stallAfterSec={25}
+                />
               </div>
             ))}
           </div>
@@ -453,7 +471,9 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
               <button type="button" onClick={() => setShowAssetPicker(false)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-lg">✕</button>
             </div>
             {loadingAssets ? (
-              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">加载中…</div>
+              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">
+                <RunningStatus active={true} label="正在加载素材库" stallAfterSec={15} className="mx-auto" />
+              </div>
             ) : assetList.length === 0 ? (
               <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">素材库中没有角色类型的素材</div>
             ) : (
