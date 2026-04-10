@@ -24,6 +24,8 @@ import characterImageRouter from './routes/characterImage.js';
 import quickfilmRouter, { draftsRouter } from './routes/quickfilm.js';
 import assetsRouter from './routes/assets.js';
 import gobsAuthRouter from './routes/gobsAuth.js';
+import riskSentimentRouter from './routes/riskSentiment.js';
+import { geelarkRouter } from './routes/geelark.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -67,6 +69,8 @@ app.use('/api/character', characterImageRouter);
 app.use('/api/quickfilm', quickfilmRouter);
 app.use('/api/quickfilm/drafts', draftsRouter);
 app.use('/api/assets', assetsRouter);
+app.use('/api/risk-sentiment', riskSentimentRouter);
+app.use('/api/geelark', geelarkRouter);
 app.use((err, _req, res, _next) => {
     console.error('[API 未捕获异常]', err);
     res.status(500).json({ success: false, error: err instanceof Error ? err.message : '服务器内部错误' });

@@ -75,7 +75,9 @@ function buildContinuationPrompts(sceneText, phase, useGlobalBaseline) {
 storyboardRouter.post('/frames', async (req, res) => {
     const { prompt, aspectRatio = '16:9', shotIndex = 0, previousLastFrame, styleReferenceFrame, 
     /** 高级制片立项上传的全片画风参考；优先于 styleReferenceFrame 作为 STYLE_REF */
-    globalStyleReferenceFrame, } = req.body;
+    globalStyleReferenceFrame, 
+    /** true=仅生成一张（用于资产卡快速出图），减少等待 */
+    singleFrameOnly = false, } = req.body;
     const text = prompt?.trim();
     if (!text) {
         res.status(400).json({ error: '请提供 prompt（镜头描述）' });
@@ -89,15 +91,39 @@ storyboardRouter.post('/frames', async (req, res) => {
         if (idx <= 0) {
             const { first: firstPrompt, last: lastPrompt } = buildFramePrompts(text, !!globalB64);
             const styleOpts = globalB64 ? { styleReferenceBase64: globalB64 } : {};
+            if (singleFrameOnly) {
+                const firstRes = await generateImageWithPython({
+                    prompt: firstPrompt,
+                    aspectRatio: ar,
+                    // 高级制片资产卡快速模式：宁可快速失败，也不要卡住几分钟
+                    maxAttempts: 1,
+                    timeoutMs: 55_000,
+                    ...styleOpts,
+                });
+                const first = `data:image/png;base64,${firstRes.imageBase64}`;
+                res.json({
+                    mode: 'first_shot',
+                    firstFrame: first,
+                    // 兼容旧前端结构：单帧模式下复用 firstFrame
+                    lastFrame: first,
+                    imagenModelFirst: firstRes.model ?? null,
+                    imagenModelLast: firstRes.model ?? null,
+                });
+                return;
+            }
             const [firstRes, lastRes] = await Promise.all([
                 generateImageWithPython({
                     prompt: firstPrompt,
                     aspectRatio: ar,
+                    maxAttempts: 1,
+                    timeoutMs: 60_000,
                     ...styleOpts,
                 }),
                 generateImageWithPython({
                     prompt: lastPrompt,
                     aspectRatio: ar,
+                    maxAttempts: 1,
+                    timeoutMs: 60_000,
                     ...styleOpts,
                 }),
             ]);
@@ -133,11 +159,15 @@ storyboardRouter.post('/frames', async (req, res) => {
                 prompt: middlePrompt,
                 aspectRatio: ar,
                 styleReferenceBase64: styleB64,
+                maxAttempts: 1,
+                timeoutMs: 60_000,
             }),
             generateImageWithPython({
                 prompt: lastPrompt,
                 aspectRatio: ar,
                 styleReferenceBase64: styleB64,
+                maxAttempts: 1,
+                timeoutMs: 60_000,
             }),
         ]);
         res.json({
@@ -200,6 +230,8 @@ storyboardRouter.post('/portrait', async (req, res) => {
         const out = await generateImageWithPython({
             prompt: finalPrompt,
             aspectRatio: ar,
+            maxAttempts: 1,
+            timeoutMs: 60_000,
             ...(refB64 ? { referenceImageBase64: refB64 } : {}),
             ...(styleB64ForPython ? { styleReferenceBase64: styleB64ForPython } : {}),
             ...(keyOverride ? { apiKeyOverride: keyOverride } : {}),
@@ -229,6 +261,8 @@ storyboardRouter.post('/images', async (req, res) => {
             const { imageBase64, model } = await generateImageWithPython({
                 prompt: shot.prompt,
                 aspectRatio: aspectRatio ?? '16:9',
+                maxAttempts: 1,
+                timeoutMs: 60_000,
             });
             results.push({
                 index: shot.index,

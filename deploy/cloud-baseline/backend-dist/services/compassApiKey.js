@@ -26,16 +26,33 @@ export function resolveCompassApiKeyForVeoModel(model) {
     throw new Error('COMPASS_API_KEY 未配置，请在 .env 中设置');
 }
 /**
- * 分镜图（Imagen）等：优先 COMPASS_API_KEY2（常与 VEO3 同钥），未配置则回退 COMPASS_API_KEY。
+ * 分镜图（Imagen）等：默认优先 COMPASS_API_KEY（key1），未配置则回退 COMPASS_API_KEY2（key2）。
  */
 export function resolveCompassApiKeyPreferKey2() {
     const key1 = process.env.COMPASS_API_KEY?.trim() ?? '';
     const key2 = process.env.COMPASS_API_KEY2?.trim() ?? '';
-    if (key2)
-        return key2;
     if (key1)
         return key1;
+    if (key2)
+        return key2;
     throw new Error('COMPASS_API_KEY2 或 COMPASS_API_KEY 未配置（LLM/分镜图需至少一把 Compass Key）');
+}
+/**
+ * 分镜图（Imagen）等：按优先级返回可用 Key 列表（去重）。
+ * 默认顺序：KEY1 -> KEY2。
+ */
+export function resolveCompassApiKeyCandidatesPreferKey2() {
+    const key1 = process.env.COMPASS_API_KEY?.trim() ?? '';
+    const key2 = process.env.COMPASS_API_KEY2?.trim() ?? '';
+    const out = [];
+    if (key1)
+        out.push(key1);
+    if (key2 && key2 !== key1)
+        out.push(key2);
+    if (out.length === 0) {
+        throw new Error('COMPASS_API_KEY2 或 COMPASS_API_KEY 未配置（LLM/分镜图需至少一把 Compass Key）');
+    }
+    return out;
 }
 /**
  * Gemini 文本（一键 Prompt / 文案）：优先 COMPASS_API_KEY（多为全量 Gemini 权限），

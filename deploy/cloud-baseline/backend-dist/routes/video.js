@@ -14,6 +14,7 @@ import { generateVideoWithPython } from '../services/veoPython.js';
 import { createKlingVideoTaskOnly, fetchIngarenaVideoListPage, generateKlingVideo, isIngarenaKlingBaseUrl, isKlingModel, queryIngarenaKlingTask, } from '../services/klingVideo.js';
 import { findRefCacheFile, isResolvableSocialVideoPageUrl, prepareSocialVideoUrlForKling, resolveSocialPageToDirectVideoUrl, } from '../services/tiktokResolveVideoUrl.js';
 import { generateDreaminaMultimodalVideo, generateDreaminaVideo, getDreaminaModelIds, isDreaminaEnabled, isDreaminaModel, isDreaminaMultimodalModel, pollDreaminaTask, submitDreaminaMultimodalVideo, submitDreaminaVideo, } from '../services/dreaminaVideo.js';
+import { composeDreaminaPrompt } from '../services/dreaminaPromptComposer.js';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 export const videoRouter = Router();
 const OUTPUT_DIR = getDefaultVideoOutputDir();
@@ -248,6 +249,59 @@ videoRouter.get('/file', async (req, res) => {
         res.status(404).json({ error: '文件不存在' });
     }
 });
+/**
+ * GET /api/video/output-recent — 扫描 data/output 下近期视频（即梦 CLI 等落盘成片），供前端「历史内容」拉取。
+ * Query: limit (默认 50), dreaminaOnly=1 时仅路径/文件名含 dreamina 的条目。
+ */
+videoRouter.get('/output-recent', async (req, res) => {
+    const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+    const onlyDreamina = String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
+    const apiRoot = getApiDataDir();
+    const outputDir = getDefaultVideoOutputDir();
+    const items = [];
+    async function walk(dir, depth) {
+        if (depth > 10)
+            return;
+        let entries;
+        try {
+            entries = await fs.readdir(dir, { withFileTypes: true });
+        }
+        catch {
+            return;
+        }
+        for (const ent of entries) {
+            const abs = path.join(dir, ent.name);
+            if (ent.isDirectory()) {
+                await walk(abs, depth + 1);
+                continue;
+            }
+            const ext = path.extname(ent.name).toLowerCase();
+            if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext))
+                continue;
+            const rel = path.relative(apiRoot, abs).replace(/\\/g, '/');
+            if (!rel.startsWith('output/'))
+                continue;
+            const lower = rel.toLowerCase();
+            if (onlyDreamina && !lower.includes('dreamina'))
+                continue;
+            try {
+                const st = await fs.stat(abs);
+                items.push({ path: rel, mtimeMs: st.mtimeMs, size: st.size });
+            }
+            catch {
+                /* ignore missing */
+            }
+        }
+    }
+    try {
+        await walk(outputDir, 0);
+    }
+    catch (err) {
+        console.error('[video/output-recent]', err);
+    }
+    items.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    res.json({ items: items.slice(0, limit) });
+});
 /** 与单图参考：body 无图时从 Drive 素材取首张图（与 POST /generate 行为一致） */
 async function resolveFirstDriveImageIfMissing(imageBase64, imageMimeType, driveToken, materials) {
     if (imageBase64?.trim())
@@ -374,7 +428,7 @@ videoRouter.post('/dreamina/submit', async (req, res) => {
         res.status(400).json({ error: '即梦未启用或未安装 dreamina-cli-skill' });
         return;
     }
-    const { storyboardText, materials, driveToken, duration, aspectRatio, model, imageBase64: bodyImageBase64, imageMimeType: bodyImageMimeType, multimodalImages, multimodalVideos, multimodalAudios, dreaminaModelVersion, } = req.body;
+    const { storyboardText, materials, driveToken, duration, aspectRatio, model, imageBase64: bodyImageBase64, imageMimeType: bodyImageMimeType, multimodalImages, multimodalVideos, multimodalAudios, dreaminaModelVersion, autoComposePrompt, dreaminaPromptHints, } = req.body;
     if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
         res.status(400).json({ error: '请提供 storyboardText（分镜文本）' });
         return;
@@ -391,11 +445,21 @@ videoRouter.post('/dreamina/submit', async (req, res) => {
             const imgs = Array.isArray(multimodalImages) ? multimodalImages : [];
             const vids = Array.isArray(multimodalVideos) ? multimodalVideos : [];
             const auds = Array.isArray(multimodalAudios) ? multimodalAudios : [];
+            const basePrompt = storyboardText.trim();
+            const resolvedPrompt = autoComposePrompt === false
+                ? basePrompt
+                : await composeDreaminaPrompt({
+                    rawPrompt: basePrompt,
+                    imageCount: imgs.length,
+                    videoCount: vids.length,
+                    audioCount: auds.length,
+                    hints: dreaminaPromptHints,
+                });
             const mvAsync = typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
                 ? dreaminaModelVersion.trim()
                 : undefined;
             const { submitId, taskId } = await submitDreaminaMultimodalVideo({
-                prompt: storyboardText.trim(),
+                prompt: resolvedPrompt,
                 aspectRatio: aspectRatio ?? '16:9',
                 duration: duration != null ? duration : undefined,
                 images: imgs.filter((x) => x && typeof x.base64 === 'string'),
@@ -403,7 +467,7 @@ videoRouter.post('/dreamina/submit', async (req, res) => {
                 audios: auds.filter((x) => x && typeof x.base64 === 'string'),
                 modelVersion: mvAsync,
             });
-            res.json({ submitId, taskId, status: 'pending' });
+            res.json({ submitId, taskId, status: 'pending', resolvedPrompt });
             return;
         }
         let imageBase64 = bodyImageBase64;
@@ -503,7 +567,7 @@ videoRouter.get('/dreamina/task/:submitId', async (req, res) => {
     }
 });
 videoRouter.post('/generate', async (req, res) => {
-    const { storyboardText, materials, driveToken, duration, aspectRatio, model, resolution, imageBase64: bodyImageBase64, imageMimeType: bodyImageMimeType, referenceImages, referenceVideoUrl, referenceVideoReferType, referenceVideoKeepSound, dreaminaModelVersion, } = req.body;
+    const { storyboardText, materials, driveToken, duration, aspectRatio, model, resolution, imageBase64: bodyImageBase64, imageMimeType: bodyImageMimeType, referenceImages, referenceVideoUrl, referenceVideoReferType, referenceVideoKeepSound, dreaminaModelVersion, autoComposePrompt, dreaminaPromptHints, } = req.body;
     if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
         res.status(400).json({ error: '请提供 storyboardText（分镜文本）' });
         return;
@@ -514,11 +578,21 @@ videoRouter.post('/generate', async (req, res) => {
             const imgs = Array.isArray(req.body.multimodalImages) ? req.body.multimodalImages : [];
             const vids = Array.isArray(req.body.multimodalVideos) ? req.body.multimodalVideos : [];
             const auds = Array.isArray(req.body.multimodalAudios) ? req.body.multimodalAudios : [];
+            const basePrompt = storyboardText.trim();
+            const resolvedPrompt = autoComposePrompt === false
+                ? basePrompt
+                : await composeDreaminaPrompt({
+                    rawPrompt: basePrompt,
+                    imageCount: imgs.length,
+                    videoCount: vids.length,
+                    audioCount: auds.length,
+                    hints: dreaminaPromptHints,
+                });
             const mv = typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
                 ? dreaminaModelVersion.trim()
                 : undefined;
             const { videoUrl, taskId } = await generateDreaminaMultimodalVideo({
-                prompt: storyboardText.trim(),
+                prompt: resolvedPrompt,
                 aspectRatio: aspectRatio ?? '16:9',
                 duration: duration != null ? duration : undefined,
                 images: imgs.filter((x) => x && typeof x.base64 === 'string'),
@@ -545,7 +619,7 @@ videoRouter.post('/generate', async (req, res) => {
             catch (e) {
                 console.warn('[video/generate dreamina-multimodal] 保存到 output/ 失败', e);
             }
-            res.json({ taskId, status: 'completed', videoUrl, videoPath });
+            res.json({ taskId, status: 'completed', videoUrl, videoPath, resolvedPrompt });
         }
         catch (err) {
             console.error('[video/generate dreamina-multimodal]', err);

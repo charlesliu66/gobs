@@ -9,7 +9,7 @@ import { getUploadsPath } from '../config/apiDataDir.js';
 const router = Router();
 const UPLOAD_DIR = getUploadsPath('editor');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-const UPLOAD_MAX_MB = Math.min(4096, Math.max(64, Number.parseInt(process.env.EDITOR_UPLOAD_MAX_MB || '500', 10) || 500));
+const UPLOAD_MAX_MB = Math.min(4096, Math.max(64, Number.parseInt(process.env.EDITOR_UPLOAD_MAX_MB || '2048', 10) || 2048));
 const UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024;
 const assetsById = new Map();
 const REGISTRY_FILE = path.join(UPLOAD_DIR, '_assets_registry.json');

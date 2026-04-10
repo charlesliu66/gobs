@@ -1,40 +1,38 @@
-/**
- * GeeLark 相关 API：TT 账号列表、发布视频、任务详情（运行报告）
- */
 import { Router } from 'express';
-import { listAccounts, publishVideo, getTaskDetail, getTaskHistory, } from '../services/geelark.js';
+import { getTaskDetail, getTaskHistory, listAccounts, publishVideo } from '../services/geelark.js';
 export const geelarkRouter = Router();
-/** GET /api/geelark/accounts - 获取可发布的 TT 账号列表（从账号映射表读取） */
-geelarkRouter.get('/accounts', (_req, res) => {
+/**
+ * 兼容前端 /api/geelark/accounts。
+ * 账号来源：config/geelark-accounts.json
+ */
+geelarkRouter.get('/accounts', async (_req, res) => {
     try {
-        const accounts = listAccounts();
-        res.json({ accounts });
+        res.json({ accounts: listAccounts() });
     }
     catch (err) {
         console.error('[geelark/accounts]', err);
-        const msg = err instanceof Error ? err.message : '获取账号列表失败';
-        res.status(500).json({ error: msg });
+        res.status(500).json({ error: err instanceof Error ? err.message : '获取账号列表失败' });
     }
 });
-/** POST /api/geelark/publish - 推送视频到指定账号
- * videoUrl: base64 data URL 或 HTTP URL
- * videoPath: 服务器本地路径（如 output/xxx.mp4），可避免 base64 传输，内网 OSS 403 时建议使用
+/**
+ * 先恢复路由存在，避免前端直接 404。
+ * 该接口若需完整发布链路，可后续接入 GeeLark task/add。
  */
 geelarkRouter.post('/publish', async (req, res) => {
     const { videoUrl, videoPath, accountIds, caption, hashtags, markAI, needShareLink } = req.body;
-    const videoInput = typeof videoPath === 'string' ? videoPath : videoUrl;
-    if (!videoInput || typeof videoInput !== 'string') {
+    const input = typeof videoPath === 'string' ? videoPath : videoUrl;
+    if (!input || typeof input !== 'string') {
         res.status(400).json({ error: '请提供 videoUrl 或 videoPath' });
         return;
     }
-    const ids = Array.isArray(accountIds) ? accountIds.filter((id) => typeof id === 'string') : [];
+    const ids = Array.isArray(accountIds) ? accountIds.filter((x) => typeof x === 'string' && x.trim()) : [];
     if (ids.length === 0) {
         res.status(400).json({ error: '请选择至少一个目标账号' });
         return;
     }
     try {
         const result = await publishVideo({
-            videoUrl: videoInput,
+            videoUrl: input,
             accountIds: ids,
             caption: typeof caption === 'string' ? caption : undefined,
             hashtags: typeof hashtags === 'string' ? hashtags : undefined,
@@ -45,38 +43,30 @@ geelarkRouter.post('/publish', async (req, res) => {
     }
     catch (err) {
         console.error('[geelark/publish]', err);
-        const msg = err instanceof Error ? err.message : '发布失败';
-        res.status(500).json({ error: msg });
+        res.status(500).json({ error: err instanceof Error ? err.message : '发布失败' });
     }
 });
-/** GET /api/geelark/task/:id - 获取任务详情（运行报告） */
 geelarkRouter.get('/task/:id', async (req, res) => {
-    const { id } = req.params;
+    const id = String(req.params.id || '').trim();
     if (!id) {
         res.status(400).json({ error: '请提供任务 ID' });
         return;
     }
     try {
-        const detail = await getTaskDetail(id);
-        res.json(detail);
+        res.json(await getTaskDetail(id));
     }
     catch (err) {
         console.error('[geelark/task]', err);
-        const msg = err instanceof Error ? err.message : '获取任务详情失败';
-        res.status(500).json({ error: msg });
+        res.status(500).json({ error: err instanceof Error ? err.message : '获取任务详情失败' });
     }
 });
-/** GET /api/geelark/tasks - 获取最近任务列表 */
 geelarkRouter.get('/tasks', async (req, res) => {
-    const size = Math.min(parseInt(req.query.size, 10) || 20, 100);
+    const size = Math.min(Number.parseInt(String(req.query.size ?? '20'), 10) || 20, 100);
     try {
-        const items = await getTaskHistory(size);
-        res.json({ items });
+        res.json({ items: await getTaskHistory(size) });
     }
     catch (err) {
         console.error('[geelark/tasks]', err);
-        const msg = err instanceof Error ? err.message : '获取任务列表失败';
-        res.status(500).json({ error: msg });
+        res.status(500).json({ error: err instanceof Error ? err.message : '获取任务列表失败' });
     }
 });
-export default geelarkRouter;

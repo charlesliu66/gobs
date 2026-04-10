@@ -3,6 +3,100 @@ import { sumCompassUsage } from './editorLlmUsage.js';
 import { buildUniformCandidateWindows, isCombatLikeIntent, parseTargetTimelineSec, prioritizeCenterWindows, } from './editorHighlightCandidates.js';
 import { getEditorAssetAbsolutePath } from '../routes/editorAssets.js';
 import { analyzeSingleAssetVideo, resolveEditorAnalysisMode, } from './video/editorVideoAnalysis.js';
+import { loadGameTaxonomy } from './video/gameTaxonomy.js';
+function normLabel(s) {
+    return s.trim();
+}
+function detectRoleIntent(userMessage) {
+    return /角色|镜头|出场|片段|主角|人物/.test(userMessage);
+}
+function resolveRequestedRoleStrict(userMessage, availableRoles) {
+    const msg = userMessage.trim();
+    if (!msg || availableRoles.length === 0)
+        return {};
+    const exact = availableRoles.find((r) => msg.includes(r));
+    if (exact)
+        return { requestedRole: exact };
+    if (!detectRoleIntent(msg))
+        return {};
+    // 未命中精确角色时，仅给出“可能是这些角色吗”的建议，不做自动同义词映射。
+    const suggest = availableRoles
+        .map((r) => {
+        const overlap = [...new Set(r.split(''))].filter((ch) => msg.includes(ch)).length;
+        const contains = r.includes(msg) || msg.includes(r) ? 3 : 0;
+        return { role: r, score: overlap + contains };
+    })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map((x) => x.role)
+        .filter(Boolean);
+    if (suggest.length > 0) {
+        return { needConfirm: true, suggestRoles: suggest };
+    }
+    return {};
+}
+function isCombatActivityLabel(activity) {
+    if (!activity)
+        return false;
+    return /打架|战斗|对战|交火|团战|击杀|combat|fight|battle|pvp|boss/i.test(activity);
+}
+function intersectsRoleHints(roles, requestedRole, note) {
+    if (!requestedRole)
+        return true;
+    if (!roles || roles.length === 0) {
+        const n = (note || '').trim();
+        return n.includes(requestedRole);
+    }
+    const roleNorm = roles.map(normLabel);
+    return roleNorm.some((r) => r === requestedRole);
+}
+function mergeIntentWindows(assetId, windows) {
+    const sorted = [...windows].sort((a, b) => a.sourceStart - b.sourceStart);
+    const out = [];
+    let i = 0;
+    while (i < sorted.length) {
+        let s = sorted[i].sourceStart;
+        let e = sorted[i].sourceEnd;
+        let j = i + 1;
+        while (j < sorted.length && sorted[j].sourceStart <= e + 0.65) {
+            e = Math.max(e, sorted[j].sourceEnd);
+            j += 1;
+        }
+        out.push({
+            id: `intent_${assetId.slice(-8)}_${out.length}`,
+            assetId,
+            sourceStart: Math.round(s * 1000) / 1000,
+            sourceEnd: Math.round(e * 1000) / 1000,
+        });
+        i = j;
+    }
+    return out;
+}
+function buildIntentPriorityWindows(assetId, durationSec, requestedRole, scores) {
+    if (!scores.length)
+        return [];
+    const candidates = scores
+        .filter((s) => s.score >= 4.5)
+        .filter((s) => isCombatActivityLabel(s.activity))
+        .filter((s) => intersectsRoleHints(s.roles, requestedRole, s.note))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12);
+    if (!candidates.length)
+        return [];
+    const d = Math.max(0.2, durationSec);
+    const spans = candidates.map((s, idx) => {
+        const len = Math.min(7, Math.max(3.5, 2 + s.score * 0.45));
+        const start = Math.max(0, Math.min(d - 0.12, s.tSec - len * 0.33));
+        const end = Math.min(d, Math.max(start + 0.12, start + len));
+        return {
+            id: `intent_raw_${assetId.slice(-8)}_${idx}`,
+            assetId,
+            sourceStart: Math.round(start * 1000) / 1000,
+            sourceEnd: Math.round(end * 1000) / 1000,
+        };
+    });
+    return mergeIntentWindows(assetId, spans);
+}
 function extractJson(s) {
     const m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (m)
@@ -25,6 +119,7 @@ function buildSystemPrompt(ctx) {
 - 若 candidateWindows 来自「音频能量 + 抽帧多模态」混合管线，则已含启发式高光候选；**并非**人工逐帧审片。
 - 若请求中带有 visionFocus（缩窗），则多模态仅在约 1 分钟左右的子区间内抽帧，候选应优先落在该时间附近。
 - 若仅有均匀切段候选，你能用的是：文件名、素材时长、以及 **candidateWindows**。
+${ctx.requestedRole ? `- 用户指定角色：${ctx.requestedRole}。仅当画面角色标签与该名称完全一致时才优先。` : ''}
 
 ## 输出格式（仅 JSON，勿 markdown）
 {
@@ -58,6 +153,7 @@ function buildUserPayload(input, extra) {
         candidateWindows: extra.candidateWindows,
         targetTimelineSec: extra.targetTimelineSec,
         combatLikeIntent: extra.combatLike,
+        requestedRole: extra.requestedRole,
         analysisPipeline: extra.analysisMode,
         visionFocus: input.visionFocus,
     }, null, 2);
@@ -177,6 +273,13 @@ export async function runEditorAgentApply(input, options) {
     const analysisMode = resolveEditorAnalysisMode();
     const candidateWindows = [];
     const nAssets = Math.max(1, input.assets.length);
+    const taxonomy = loadGameTaxonomy();
+    const availableRoles = taxonomy.roles ?? [];
+    const roleResolve = resolveRequestedRoleStrict(input.userMessage, availableRoles);
+    const requestedRole = roleResolve.requestedRole;
+    if (roleResolve.needConfirm) {
+        throw new Error(`未找到与参考角色目录完全一致的命名。你要找的角色是不是：${(roleResolve.suggestRoles ?? []).join(' / ')}？请在指令里使用完全一致的角色名。`);
+    }
     for (let i = 0; i < input.assets.length; i++) {
         const a = input.assets[i];
         const pctStart = 5 + Math.round((i / nAssets) * 40);
@@ -193,6 +296,13 @@ export async function runEditorAgentApply(input, options) {
             try {
                 const r = await analyzeSingleAssetVideo(abs, a.id, d, analysisMode, input.userMessage, targetTimelineSec, usageSink, input.visionFocus);
                 wins = r.windows;
+                // 针对“盗贼战斗高光”等意图：优先注入视觉识别出的战斗主体窗，避免只靠能量/中段启发式。
+                if (combatLike && r.visionDetail?.scores?.length) {
+                    const intentWins = buildIntentPriorityWindows(a.id, d, requestedRole, r.visionDetail.scores);
+                    if (intentWins.length) {
+                        wins = [...intentWins, ...wins];
+                    }
+                }
             }
             catch (e) {
                 console.warn('[editor agent] analyzeSingleAssetVideo', a.id, e);
@@ -218,12 +328,14 @@ export async function runEditorAgentApply(input, options) {
         targetTimelineSec,
         combatLike,
         hasCandidates: candidateWindows.length > 0,
+        requestedRole,
     });
     const userText = buildUserPayload(input, {
         candidateWindows,
         targetTimelineSec,
         combatLike,
         analysisMode,
+        requestedRole,
     });
     report({
         stage: 'llm',

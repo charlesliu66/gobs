@@ -22,6 +22,21 @@ export function jwtAuthMiddleware(req, res, next) {
         next();
         return;
     }
+    // 高级制片图片回显：<img src> 无法带 Bearer，放行只读图片接口
+    if (req.method === 'GET' && req.path === '/api/production/image') {
+        next();
+        return;
+    }
+    // 兼容部分代理转发后前缀被剥离的情况
+    if (req.method === 'GET' && req.path === '/image') {
+        next();
+        return;
+    }
+    // 风控大师封面代理：<img src> 无法附带 Authorization
+    if (req.method === 'GET' && req.path === '/api/risk-sentiment/cover-proxy') {
+        next();
+        return;
+    }
     /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
     if (req.path === '/api/prompt/templates') {
         return next();

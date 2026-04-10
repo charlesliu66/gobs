@@ -11,12 +11,44 @@ import { Router } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
+import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 export const productionPersistRouter = Router();
-const OUTPUT_BASE = process.env.VIDEO_OUTPUT_DIR
-    ? path.resolve(process.env.VIDEO_OUTPUT_DIR)
-    : path.resolve(process.cwd(), 'output');
+const OUTPUT_BASE = getDefaultVideoOutputDir();
 const IMG_DIR = path.join(OUTPUT_BASE, 'production', 'images');
 const PROJ_DIR = path.join(OUTPUT_BASE, 'production', 'projects');
+function resolveReadableImagePath(rawPath) {
+    const cleaned = rawPath.trim().replace(/\\/g, '/');
+    if (!cleaned)
+        return null;
+    const allowedDirs = [
+        path.resolve(getApiDataDir(), 'output', 'production', 'images'),
+        path.resolve(process.cwd(), 'output', 'production', 'images'),
+        path.resolve(getDefaultVideoOutputDir(), 'production', 'images'),
+    ];
+    const inAllowedDir = (p) => allowedDirs.some((base) => p === base || p.startsWith(base + path.sep));
+    // 1) 绝对路径（历史数据可能直接存了绝对路径）
+    if (path.isAbsolute(cleaned)) {
+        const abs = path.resolve(cleaned);
+        return inAllowedDir(abs) ? abs : null;
+    }
+    // 2) 标准相对路径：output/production/images/xxx
+    const normalized = path.normalize(cleaned);
+    if (normalized.startsWith('output/production/images/') || normalized.startsWith('output\\production\\images\\')) {
+        const abs = path.resolve(getApiDataDir(), normalized);
+        return inAllowedDir(abs) ? abs : null;
+    }
+    // 3) 旧相对路径：production/images/xxx
+    if (normalized.startsWith('production/images/') || normalized.startsWith('production\\images\\')) {
+        const abs = path.resolve(getApiDataDir(), 'output', normalized);
+        return inAllowedDir(abs) ? abs : null;
+    }
+    // 4) 仅文件名：默认落在 output/production/images
+    if (!normalized.includes('/') && !normalized.includes('\\') && !normalized.includes('..')) {
+        const abs = path.resolve(getApiDataDir(), 'output', 'production', 'images', normalized);
+        return inAllowedDir(abs) ? abs : null;
+    }
+    return null;
+}
 async function ensureDirs() {
     await fs.mkdir(IMG_DIR, { recursive: true });
     await fs.mkdir(PROJ_DIR, { recursive: true });
@@ -67,13 +99,11 @@ productionPersistRouter.get('/image', async (req, res) => {
         res.status(400).json({ error: '请提供 path 参数' });
         return;
     }
-    // 安全检查：只允许读 output/production/images/ 目录
-    const normalized = path.normalize(rawPath);
-    if (!normalized.startsWith('output/production/images/') && !normalized.startsWith('output\\production\\images\\')) {
+    const absPath = resolveReadableImagePath(rawPath);
+    if (!absPath) {
         res.status(403).json({ error: '无权访问该路径' });
         return;
     }
-    const absPath = path.resolve(process.cwd(), normalized);
     try {
         await fs.access(absPath);
         const ext = path.extname(absPath).toLowerCase();
