@@ -25,6 +25,7 @@ import quickfilmRouter, { draftsRouter } from './routes/quickfilm.js';
 import assetsRouter from './routes/assets.js';
 import gobsAuthRouter from './routes/gobsAuth.js';
 import riskSentimentRouter from './routes/riskSentiment.js';
+import { geelarkRouter } from './routes/geelark.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/quickfilm', quickfilmRouter);
 app.use('/api/quickfilm/drafts', draftsRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/risk-sentiment', riskSentimentRouter);
+app.use('/api/geelark', geelarkRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);

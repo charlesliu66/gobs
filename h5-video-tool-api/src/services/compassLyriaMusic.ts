@@ -33,6 +33,14 @@ function decodePrediction(pred: unknown): Buffer | null {
   return Buffer.from(b64, 'base64');
 }
 
+function normalizeLyriaErrorMessage(message: string): string {
+  const msg = message || '';
+  if (/RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests|429/i.test(msg)) {
+    return 'Lyria 模型限流或配额不足（429/RESOURCE_EXHAUSTED），请稍后重试或检查账号配额。';
+  }
+  return msg;
+}
+
 /**
  * 调用 Lyria，返回每段 WAV 二进制（每段约 32.8 秒）。
  */
@@ -90,11 +98,11 @@ export async function generateLyriaInstrumentalWavs(
           ? String((data as { message?: unknown }).message)
           : '') ||
         `HTTP ${status}`;
-      throw new Error(errMsg || 'Lyria 请求失败');
+      throw new Error(normalizeLyriaErrorMessage(errMsg || 'Lyria 请求失败'));
     }
 
     const errMsg = data.error?.message;
-    if (errMsg) throw new Error(errMsg);
+    if (errMsg) throw new Error(normalizeLyriaErrorMessage(errMsg));
 
     const preds = data.predictions;
     if (!Array.isArray(preds) || preds.length === 0) {
@@ -114,7 +122,7 @@ export async function generateLyriaInstrumentalWavs(
         (e.response?.data as { error?: { message?: string }; message?: string })?.error?.message ||
         (e.response?.data as { message?: string })?.message ||
         (typeof e.response?.data === 'string' ? e.response.data : e.message);
-      throw new Error(typeof msg === 'string' && msg ? msg : 'Lyria 请求失败');
+      throw new Error(normalizeLyriaErrorMessage(typeof msg === 'string' && msg ? msg : 'Lyria 请求失败'));
     }
     throw e;
   }

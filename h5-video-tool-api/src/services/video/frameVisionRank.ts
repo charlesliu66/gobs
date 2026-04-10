@@ -109,9 +109,18 @@ async function scoreBatch(
 ): Promise<VisionFrameScore[]> {
   const tax = loadGameTaxonomy();
   const taxBlock = formatTaxonomyForPrompt(tax);
+  const rogueIntent = /盗贼|潜行者|刺客|rogue|thief|assassin/i.test(userIntent);
+  const combatIntent = /战斗|打斗|高光|击杀|对决|激战|combat|fight|battle|boss|pvp/i.test(userIntent);
+  const intentRule = rogueIntent || combatIntent
+    ? `\n额外打分约束（按用户意图）：
+- 当前意图偏向「${[rogueIntent ? '盗贼主体' : '', combatIntent ? '战斗高光' : ''].filter(Boolean).join(' + ')}」。
+- 若画面明确是战斗/交火/击杀瞬间，应提高 score（通常 >=7）。
+- 若画面主体明显不是目标（如非盗贼、非战斗、静态 UI/菜单），应降低 score（通常 <=4）。`
+    : '';
   const intro = `用户剪辑意图：${userIntent || '高光/精彩镜头'}
 
 ${taxBlock}
+${intentRule}
 
 以下 ${batch.length} 张图按时间顺序对应时间戳（秒）：${batch.map((b) => b.tSec.toFixed(2)).join(', ')}
 请输出 **仅一个** JSON 数组，每项字段：

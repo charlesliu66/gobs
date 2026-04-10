@@ -38,11 +38,81 @@ import {
   submitDreaminaMultimodalVideo,
   submitDreaminaVideo,
 } from '../services/dreaminaVideo.js';
+import { composeDreaminaPrompt, type DreaminaPromptHints } from '../services/dreaminaPromptComposer.js';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 
 export const videoRouter = Router();
 
 const OUTPUT_DIR = getDefaultVideoOutputDir();
+
+/** data: 视频（MIME 含连字符等也需匹配）；https 则拉取字节 */
+function bufferFromDataVideoUrl(raw: string): Buffer | null {
+  const m = String(raw).trim().match(/^data:video\/[^;]+;base64,(.*)$/s);
+  if (!m?.[1]) return null;
+  try {
+    const b = Buffer.from(m[1], 'base64');
+    return b.length ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+async function bufferFromVideoUrlPayload(videoUrl: string): Promise<Buffer | null> {
+  const t = String(videoUrl).trim();
+  if (!t) return null;
+  const dataBuf = bufferFromDataVideoUrl(t);
+  if (dataBuf) return dataBuf;
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      const r = await axios.get(t, {
+        responseType: 'arraybuffer',
+        timeout: 300_000,
+        maxContentLength: 512 * 1024 * 1024,
+        validateStatus: (s) => s >= 200 && s < 300,
+      });
+      const buf = Buffer.from(r.data as ArrayBuffer);
+      return buf.length ? buf : null;
+    } catch (e) {
+      console.warn('[video] 拉取 https 成片失败', e);
+      return null;
+    }
+  }
+  return null;
+}
+
+/** 供 GET /api/video/file 使用：优先相对 API_DATA_DIR 的 output/... */
+function clientVideoPathFromSavePath(savePath: string): string {
+  const abs = path.resolve(savePath);
+  const apiRoot = path.resolve(getApiDataDir());
+  const outRoot = path.resolve(OUTPUT_DIR);
+  if (abs === outRoot || abs.startsWith(outRoot + path.sep)) {
+    const rel = path.relative(apiRoot, abs);
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      return rel.replace(/\\/g, '/');
+    }
+  }
+  return abs.replace(/\\/g, '/');
+}
+
+/** 将即梦/Veo 返回的 videoUrl 落盘到 OUTPUT_DIR，失败返回 undefined（前端将仅靠超大 data: 时历史可能被截断） */
+async function persistVideoUrlToOutput(videoUrl: string, filenameSlug: string): Promise<string | undefined> {
+  const buf = await bufferFromVideoUrlPayload(videoUrl);
+  if (!buf?.length) {
+    console.warn('[video] 成片字节为空或无法解析 videoUrl（需 data:video/*;base64 或可访问的 https）');
+    return undefined;
+  }
+  try {
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });
+    const safe = filenameSlug.replace(/[^\w.\-\u4e00-\u9fff]+/g, '_').slice(0, 120) || 'video';
+    const filename = `${safe}_${Date.now()}.mp4`;
+    const savePath = path.join(OUTPUT_DIR, filename);
+    await fs.writeFile(savePath, buf);
+    return clientVideoPathFromSavePath(savePath);
+  } catch (e) {
+    console.warn('[video] 保存到 output/ 失败', e);
+    return undefined;
+  }
+}
 
 /**
  * Omni `video_url` 须为服务端可直接拉取的视频资源。社交「分享页」会导致拉取失败，ingarena 常报 DatabaseError。
@@ -284,6 +354,56 @@ videoRouter.get('/file', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/video/output-recent — 扫描 data/output 下近期视频（即梦 CLI 等落盘成片），供前端「历史内容」拉取。
+ * Query: limit (默认 50), dreaminaOnly=1 时仅路径/文件名含 dreamina 的条目。
+ */
+videoRouter.get('/output-recent', async (req: Request, res: Response) => {
+  const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+  const onlyDreamina =
+    String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
+  const apiRoot = getApiDataDir();
+  const outputDir = getDefaultVideoOutputDir();
+  const items: { path: string; mtimeMs: number; size: number }[] = [];
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > 10) return;
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      const abs = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        await walk(abs, depth + 1);
+        continue;
+      }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) continue;
+      const rel = path.relative(apiRoot, abs).replace(/\\/g, '/');
+      if (!rel.startsWith('output/')) continue;
+      const lower = rel.toLowerCase();
+      if (onlyDreamina && !lower.includes('dreamina')) continue;
+      try {
+        const st = await fs.stat(abs);
+        items.push({ path: rel, mtimeMs: st.mtimeMs, size: st.size });
+      } catch {
+        /* ignore missing */
+      }
+    }
+  }
+
+  try {
+    await walk(outputDir, 0);
+  } catch (err) {
+    console.error('[video/output-recent]', err);
+  }
+  items.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  res.json({ items: items.slice(0, limit) });
+});
+
 /** 与单图参考：body 无图时从 Drive 素材取首张图（与 POST /generate 行为一致） */
 async function resolveFirstDriveImageIfMissing(
   imageBase64: string | undefined,
@@ -462,6 +582,8 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
     multimodalVideos,
     multimodalAudios,
     dreaminaModelVersion,
+    autoComposePrompt,
+    dreaminaPromptHints,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -475,6 +597,8 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
     multimodalVideos?: { base64: string; mimeType?: string }[];
     multimodalAudios?: { base64: string; mimeType?: string }[];
     dreaminaModelVersion?: string;
+    autoComposePrompt?: boolean;
+    dreaminaPromptHints?: DreaminaPromptHints;
   };
 
   if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
@@ -495,12 +619,23 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
       const imgs = Array.isArray(multimodalImages) ? multimodalImages : [];
       const vids = Array.isArray(multimodalVideos) ? multimodalVideos : [];
       const auds = Array.isArray(multimodalAudios) ? multimodalAudios : [];
+      const basePrompt = storyboardText.trim();
+      const resolvedPrompt =
+        autoComposePrompt === false
+          ? basePrompt
+          : await composeDreaminaPrompt({
+              rawPrompt: basePrompt,
+              imageCount: imgs.length,
+              videoCount: vids.length,
+              audioCount: auds.length,
+              hints: dreaminaPromptHints,
+            });
       const mvAsync =
         typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
           ? dreaminaModelVersion.trim()
           : undefined;
       const { submitId, taskId } = await submitDreaminaMultimodalVideo({
-        prompt: storyboardText.trim(),
+        prompt: resolvedPrompt,
         aspectRatio: aspectRatio ?? '16:9',
         duration: duration != null ? duration : undefined,
         images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
@@ -508,7 +643,7 @@ videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
         audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         modelVersion: mvAsync,
       });
-      res.json({ submitId, taskId, status: 'pending' as const });
+      res.json({ submitId, taskId, status: 'pending' as const, resolvedPrompt });
       return;
     }
 
@@ -581,21 +716,8 @@ videoRouter.get('/dreamina/task/:submitId', async (req: Request, res: Response) 
     }
 
     const videoUrl = polled.videoUrl;
-    let videoPath: string | undefined;
-    if (videoUrl) {
-      try {
-        await fs.mkdir(OUTPUT_DIR, { recursive: true });
-        const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
-        const filename = `${slug}_${Date.now()}.mp4`;
-        const savePath = path.join(OUTPUT_DIR, filename);
-        const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
-        await fs.writeFile(savePath, buf);
-        const rel = path.relative(process.cwd(), savePath);
-        videoPath = rel.startsWith('..') ? savePath : rel.replace(/\\/g, '/');
-      } catch (e) {
-        console.warn('[video/dreamina/task] 保存到 output/ 失败', e);
-      }
-    }
+    const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
+    const videoPath = videoUrl ? await persistVideoUrlToOutput(videoUrl, slug) : undefined;
 
     res.json({
       taskId,
@@ -629,6 +751,8 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
     referenceVideoReferType,
     referenceVideoKeepSound,
     dreaminaModelVersion,
+    autoComposePrompt,
+    dreaminaPromptHints,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -651,6 +775,8 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
     multimodalImages?: { base64: string; mimeType?: string }[];
     multimodalVideos?: { base64: string; mimeType?: string }[];
     multimodalAudios?: { base64: string; mimeType?: string }[];
+    autoComposePrompt?: boolean;
+    dreaminaPromptHints?: DreaminaPromptHints;
   };
 
   if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
@@ -664,12 +790,23 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
       const imgs = Array.isArray(req.body.multimodalImages) ? req.body.multimodalImages : [];
       const vids = Array.isArray(req.body.multimodalVideos) ? req.body.multimodalVideos : [];
       const auds = Array.isArray(req.body.multimodalAudios) ? req.body.multimodalAudios : [];
+      const basePrompt = storyboardText.trim();
+      const resolvedPrompt =
+        autoComposePrompt === false
+          ? basePrompt
+          : await composeDreaminaPrompt({
+              rawPrompt: basePrompt,
+              imageCount: imgs.length,
+              videoCount: vids.length,
+              audioCount: auds.length,
+              hints: dreaminaPromptHints,
+            });
       const mv =
         typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
           ? dreaminaModelVersion.trim()
           : undefined;
       const { videoUrl, taskId } = await generateDreaminaMultimodalVideo({
-        prompt: storyboardText.trim(),
+        prompt: resolvedPrompt,
         aspectRatio: aspectRatio ?? '16:9',
         duration: duration != null ? duration : undefined,
         images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
@@ -677,25 +814,15 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
         audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
         modelVersion: mv,
       });
-      let videoPath: string | undefined;
-      try {
-        await fs.mkdir(OUTPUT_DIR, { recursive: true });
-        const slug = storyboardText
+      const slug =
+        storyboardText
           .trim()
           .slice(0, 30)
           .replace(/[^\p{L}\p{N}\u4e00-\u9fff\w\s-]/gu, '')
           .replace(/\s+/g, '_')
           .trim() || 'video';
-        const filename = `${slug}_${Date.now()}.mp4`;
-        const savePath = path.join(OUTPUT_DIR, filename);
-        const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
-        await fs.writeFile(savePath, buf);
-        const rel = path.relative(process.cwd(), savePath);
-        videoPath = rel.startsWith('..') ? savePath : rel.replace(/\\/g, '/');
-      } catch (e) {
-        console.warn('[video/generate dreamina-multimodal] 保存到 output/ 失败', e);
-      }
-      res.json({ taskId, status: 'completed' as const, videoUrl, videoPath });
+      const videoPath = await persistVideoUrlToOutput(videoUrl, slug);
+      res.json({ taskId, status: 'completed' as const, videoUrl, videoPath, resolvedPrompt });
     } catch (err) {
       console.error('[video/generate dreamina-multimodal]', err);
       const msg = err instanceof Error ? err.message : '全能参考视频生成失败';
@@ -790,24 +917,14 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
           });
 
     /** 保存到 output/ 并返回 videoPath，供 GeeLark 推送时用本地路径避免 base64 传输问题 */
-    let videoPath: string | undefined;
-    try {
-      await fs.mkdir(OUTPUT_DIR, { recursive: true });
-      const slug = storyboardText
+    const slug =
+      storyboardText
         .trim()
         .slice(0, 30)
         .replace(/[^\p{L}\p{N}\u4e00-\u9fff\w\s-]/gu, '')
         .replace(/\s+/g, '_')
         .trim() || 'video';
-      const filename = `${slug}_${Date.now()}.mp4`;
-      const savePath = path.join(OUTPUT_DIR, filename);
-      const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
-      await fs.writeFile(savePath, buf);
-      const rel = path.relative(process.cwd(), savePath);
-      videoPath = rel.startsWith('..') ? savePath : rel.replace(/\\/g, '/');
-    } catch (e) {
-      console.warn('[video/generate] 保存到 output/ 失败，仍返回 videoUrl', e);
-    }
+    const videoPath = await persistVideoUrlToOutput(videoUrl, slug);
 
     res.json({
       taskId,

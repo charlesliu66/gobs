@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { resolveCompassApiKeyPreferKey2 } from './compassApiKey.js';
+import { resolveCompassApiKeyCandidatesPreferKey2 } from './compassApiKey.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_SCRIPT = path.resolve(__dirname, '../../scripts/imagen_generate.py');
@@ -24,6 +24,10 @@ export interface ImagenPythonOptions {
   styleReferenceBase64?: string;
   /** 单次请求覆盖 Compass Key（如前端传入用户自有 Key） */
   apiKeyOverride?: string;
+  /** 单次调用最大重试次数（覆盖环境变量 IMAGEN_RETRY_ATTEMPTS） */
+  maxAttempts?: number;
+  /** 单次 Python 进程超时（毫秒）；超时会强制终止，避免卡住几分钟 */
+  timeoutMs?: number;
 }
 
 export interface ImagenPythonResult {
@@ -42,6 +46,7 @@ function getPythonCandidates(): string[] {
 function runImagenScript(
   pythonExe: string,
   env: NodeJS.ProcessEnv,
+  timeoutMs: number,
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     const proc = spawn(pythonExe, [PY_SCRIPT], {
@@ -51,11 +56,46 @@ function runImagenScript(
 
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+      reject(new Error(`Imagen 调用超时（>${Math.round(timeoutMs / 1000)}s）`));
+    }, timeoutMs);
     proc.stdout?.on('data', (d) => (stdout += d.toString()));
     proc.stderr?.on('data', (d) => (stderr += d.toString()));
-    proc.on('close', (code) => resolve({ stdout, stderr, code }));
-    proc.on('error', (e) => reject(e));
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ stdout, stderr, code });
+    });
+    proc.on('error', (e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(e);
+    });
   });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientImagenError(msg: string): boolean {
+  return /RemoteProtocolError|502 Bad Gateway|Connect Upstream Failed|Server disconnected without sending a response|ReadTimeout|timed out|ECONNRESET|EAI_AGAIN/i.test(
+    msg,
+  );
+}
+
+function isRateLimitOrQuotaError(msg: string): boolean {
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit|429|Too Many Requests/i.test(msg);
 }
 
 export async function generateImageWithPython(options: ImagenPythonOptions): Promise<ImagenPythonResult> {
@@ -63,11 +103,9 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
   const aspectRatio = options.aspectRatio ?? '16:9';
 
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const resolvedKey = options.apiKeyOverride?.trim()
-    ? options.apiKeyOverride.trim()
-    : resolveCompassApiKeyPreferKey2();
-  env.COMPASS_API_KEY = resolvedKey;
-  env.COMPASS_API_KEY2 = resolvedKey;
+  const keyCandidates = options.apiKeyOverride?.trim()
+    ? [options.apiKeyOverride.trim()]
+    : resolveCompassApiKeyCandidatesPreferKey2();
   // 避免继承 shell/其它任务遗留的 IMAGEN_MODEL，导致与 .env 中 COMPASS_IMAGEN_MODEL 不一致
   if (options.model) {
     env.IMAGEN_MODEL = options.model;
@@ -107,33 +145,82 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
   let lastError: unknown = null;
   let lastStderr = '';
   let lastCode: number | null = null;
+  const timeoutMs = Math.max(
+    10_000,
+    Math.min(
+      180_000,
+      Number.isFinite(options.timeoutMs as number)
+        ? Number(options.timeoutMs)
+        : Number.parseInt(process.env.IMAGEN_REQUEST_TIMEOUT_MS || '70000', 10) || 70_000,
+    ),
+  );
+  const maxAttempts = Math.max(
+    1,
+    Math.min(
+      4,
+      Number.isFinite(options.maxAttempts as number)
+        ? Number(options.maxAttempts)
+        : Number.parseInt(process.env.IMAGEN_RETRY_ATTEMPTS || '2', 10) || 2,
+    ),
+  );
 
   try {
-    for (const exe of cands) {
-      try {
-        const { stdout, stderr, code } = await runImagenScript(exe, env);
-        lastStderr = stderr;
-        lastCode = code;
-        if (code !== 0) {
-          continue;
+    for (let keyIndex = 0; keyIndex < keyCandidates.length; keyIndex++) {
+      const resolvedKey = keyCandidates[keyIndex]!;
+      env.COMPASS_API_KEY = resolvedKey;
+      env.COMPASS_API_KEY2 = resolvedKey;
+      lastError = null;
+      lastStderr = '';
+      lastCode = null;
+
+      for (const exe of cands) {
+        try {
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const { stdout, stderr, code } = await runImagenScript(exe, env, timeoutMs);
+            lastStderr = stderr;
+            lastCode = code;
+            if (code === 0) {
+              const out = JSON.parse(stdout.trim());
+              if (!out?.ok || !out.imageBase64) {
+                throw new Error(out?.error || '无图像输出');
+              }
+              return {
+                imageBase64: out.imageBase64,
+                model: typeof out.model === 'string' ? out.model : undefined,
+              };
+            }
+
+            // 短暂网络抖动：同一解释器重试（带退避）
+            if (isTransientImagenError(stderr) && attempt < maxAttempts) {
+              await sleep(700 * attempt);
+              continue;
+            }
+            break;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          // ENOENT 继续尝试下一个 python 可执行名
+          if (/ENOENT/i.test(msg)) {
+            lastError = e;
+            continue;
+          }
+          throw e;
         }
-        const out = JSON.parse(stdout.trim());
-        if (!out?.ok || !out.imageBase64) {
-          throw new Error(out?.error || '无图像输出');
-        }
-        return {
-          imageBase64: out.imageBase64,
-          model: typeof out.model === 'string' ? out.model : undefined,
-        };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        // ENOENT 继续尝试下一个 python 可执行名
-        if (/ENOENT/i.test(msg)) {
-          lastError = e;
-          continue;
-        }
-        throw e;
       }
+
+      // 当前 key 失败后：若是配额/限流，自动切换下一把 key 再试
+      const keyFailMsg = `${lastStderr || ''} ${lastError instanceof Error ? lastError.message : String(lastError ?? '')}`.trim();
+      const hasNextKey = keyIndex < keyCandidates.length - 1;
+      if (hasNextKey && isRateLimitOrQuotaError(keyFailMsg)) {
+        continue;
+      }
+      if (lastStderr || lastCode !== null) {
+        throw new Error(lastStderr || `Python 脚本退出码 ${lastCode}`);
+      }
+      if (lastError) {
+        throw new Error(lastError instanceof Error ? lastError.message : String(lastError));
+      }
+      throw new Error('生图失败：未获得有效输出');
     }
 
     if (lastStderr || lastCode !== null) {
