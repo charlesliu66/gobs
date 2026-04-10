@@ -1241,7 +1241,12 @@ export function RiskSentimentPage() {
                               const ix = list.findIndex((x) => x.id === t.id);
                               if (ix < 0) return prev;
                               list[ix] = { ...list[ix], selectedIndex: i, editedText: undefined };
-                              const ctp = { ...(prev.commentTasksByProfile ?? {}), [strategyProfile]: list };
+                              const ctp: Record<StrategyProfileKey, RiskCommentTask[]> = {
+                                balanced: prev.commentTasksByProfile?.balanced ?? prev.commentTasks ?? [],
+                                conservative: prev.commentTasksByProfile?.conservative ?? [],
+                                aggressive: prev.commentTasksByProfile?.aggressive ?? [],
+                              };
+                              ctp[strategyProfile] = list;
                               const next = { ...prev, commentTasksByProfile: ctp };
                               if (strategyProfile === 'balanced') next.commentTasks = list;
                               return next;
