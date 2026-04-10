@@ -72,7 +72,7 @@ export function Studio() {
   const TABS = [
     { id: 'create' as const, label: '创作' },
     { id: 'templates' as const, label: '模板市场' },
-    { id: 'gallery' as const, label: '历史内容' },
+    { id: 'gallery' as const, label: '我的成片（快捷）' },
   ];
 
   return (
@@ -120,6 +120,18 @@ export function Studio() {
         <StudioErrorBoundary>
           {activeTab === 'gallery' ? (
             <div className="max-w-6xl px-6">
+              <div className="mb-4 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-3">
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  这里展示近期成片；完整历史、批量任务与云端记录请前往历史中心。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/history')}
+                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                >
+                  查看全部历史
+                </button>
+              </div>
               <GalleryView />
             </div>
           ) : activeTab === 'templates' ? (

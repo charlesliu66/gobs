@@ -130,6 +130,11 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
               <span className="flex-1 text-sm text-[var(--color-text)] truncate">
                 {job.shotDescription || `分镜 ${job.shotIndex + 1}`}
               </span>
+              {job.source && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-subtle)]">
+                  {job.source === 'quickfilm' ? '一键成片' : '高级制片'}
+                </span>
+              )}
               {/* 状态 */}
               <span className={`text-[11px] font-medium ${STATUS_COLOR[job.status]}`}>
                 {STATUS_LABEL[job.status]}
@@ -186,7 +191,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                     </button>
                   )}
                   <span className="text-[9px] text-[var(--color-text-muted)] self-center ml-auto">
-                    提交于 {new Date(job.createdAt).toLocaleString('zh-CN')}
+                    项目 {job.projectId} · 提交于 {new Date(job.createdAt).toLocaleString('zh-CN')}
                   </span>
                 </div>
               </div>

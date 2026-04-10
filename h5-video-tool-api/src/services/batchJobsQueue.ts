@@ -18,6 +18,7 @@ export interface BatchJob {
   shotIndex: number;       // 分镜序号（0-based）
   shotDescription: string; // 分镜描述文案（展示用）
   model: string;           // 使用的模型（dreamina-text2video 等）
+  source?: 'production' | 'quickfilm';
   status: BatchJobStatus;
   createdAt: string;       // ISO8601
   updatedAt: string;

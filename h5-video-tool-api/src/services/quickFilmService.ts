@@ -34,6 +34,7 @@ export interface QuickFilmJob {
   protagonist: string;
   protagonistDesc: string;
   style: string;
+  projectId: string;
   // outputs
   storyArc?: StoryArcLayer;
   productionDesign?: ProductionDesignLayer;
@@ -54,6 +55,7 @@ export async function createJob(input: {
   protagonist: string;
   protagonistDesc: string;
   style: string;
+  projectId: string;
 }): Promise<string> {
   ensureJobDir();
   const jobId = nanoid();
@@ -73,6 +75,7 @@ export async function createJob(input: {
     protagonist: input.protagonist,
     protagonistDesc: input.protagonistDesc,
     style: input.style,
+    projectId: input.projectId,
   };
   fs.writeFileSync(getJobPath(jobId), JSON.stringify(job, null, 2), 'utf-8');
   return jobId;
