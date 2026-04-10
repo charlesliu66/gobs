@@ -5,6 +5,7 @@ export interface QuickFilmStartInput {
   protagonist: string;
   protagonistDesc?: string;
   style: string;
+  projectId: string;
   styleImageBase64?: string;
   assetFiles?: Array<{ name: string; base64: string }>;
 }
@@ -72,6 +73,7 @@ export interface JobStatus {
   error?: string;
   logline?: string;
   title?: string;
+  projectId?: string;
 }
 
 export async function startQuickFilm(input: QuickFilmStartInput): Promise<{ jobId: string }> {
@@ -127,4 +129,26 @@ export async function loadDraft(id: string): Promise<DraftData> {
 
 export async function deleteDraft(id: string): Promise<{ success: boolean }> {
   return apiDelete(`/api/quickfilm/drafts/${encodeURIComponent(id)}`);
+}
+
+export interface QuickFilmSessionData {
+  step: 2 | 3;
+  jobId: string;
+  projectId?: string;
+  logline?: string;
+  storyboard?: ShotWithAssets[];
+  assetFiles?: Array<{ name: string; base64: string }>;
+  updatedAt?: string;
+}
+
+export async function saveSession(data: QuickFilmSessionData): Promise<{ success: boolean }> {
+  return apiPost('/api/quickfilm/session', data);
+}
+
+export async function loadSession(): Promise<QuickFilmSessionData> {
+  return apiGet('/api/quickfilm/session');
+}
+
+export async function clearSession(): Promise<{ success: boolean }> {
+  return apiDelete('/api/quickfilm/session');
 }

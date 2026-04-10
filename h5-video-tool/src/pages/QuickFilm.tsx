@@ -1,8 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { startQuickFilm, getJobStatus, confirmStoryboard, saveDraft, listDrafts, loadDraft, deleteDraft } from '../api/quickfilm';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  startQuickFilm,
+  getJobStatus,
+  confirmStoryboard,
+  saveDraft,
+  listDrafts,
+  loadDraft,
+  deleteDraft,
+  saveSession,
+  loadSession,
+  clearSession,
+} from '../api/quickfilm';
 import type { ShotWithAssets, JobStep, DraftMeta } from '../api/quickfilm';
+import { createProject } from '../api/projectsStorage';
 import { toast } from '../components/Toast';
+import { RunningStatus } from '../components/RunningStatus';
 
 // ─── Step 1: 输入 ────────────────────────────────────────────────────────────
 
@@ -735,11 +748,13 @@ function Step3({
   storyboard,
   logline,
   assetFiles,
+  onSubmitted,
 }: {
   jobId: string;
   storyboard: ShotWithAssets[];
   logline?: string;
   assetFiles: Array<{ name: string; base64: string }>;
+  onSubmitted?: () => Promise<void> | void;
 }) {
   const navigate = useNavigate();
   const [shots, setShots] = useState<ShotWithAssets[]>(storyboard);
@@ -751,6 +766,7 @@ function Step3({
     setConfirming(true);
     try {
       const res = await confirmStoryboard(jobId, shots);
+      await onSubmitted?.();
       const queued = res.queued ?? shots.length;
       toast.success(`已提交 ${queued} 个生成任务，请到「历史 → 批量任务看板」查看进度`);
       setTimeout(() => navigate('/history', { state: { defaultTab: 'batch' } }), 1400);
@@ -825,6 +841,9 @@ function Step3({
           )}
         </button>
       </div>
+      <div className="fixed bottom-20 left-4 right-4 sm:left-60 sm:right-6 z-40">
+        <RunningStatus active={confirming} label="正在提交一键成片任务" stallAfterSec={20} />
+      </div>
     </div>
   );
 }
@@ -834,21 +853,87 @@ function Step3({
 type Step = 1 | 2 | 3;
 
 export function QuickFilm() {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>(1);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [storyboard, setStoryboard] = useState<ShotWithAssets[]>([]);
   const [logline, setLogline] = useState<string | undefined>();
   const [assetFiles, setAssetFiles] = useState<Array<{ name: string; base64: string }>>([]);
+  const [restoring, setRestoring] = useState(true);
+  const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const urlProjectId = searchParams.get('projectId')?.trim();
+    if (urlProjectId) setProjectId(urlProjectId);
+  }, [searchParams]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const session = await loadSession();
+        if (!alive) return;
+        if (!session?.jobId) return;
+        setJobId(session.jobId);
+        if (session.projectId) setProjectId(session.projectId);
+        setAssetFiles(session.assetFiles ?? []);
+        setLogline(session.logline);
+        if (session.step === 3 && Array.isArray(session.storyboard) && session.storyboard.length > 0) {
+          setStoryboard(session.storyboard);
+          setStep(3);
+        } else {
+          setStep(2);
+        }
+        toast.success('已恢复上次一键成片进度');
+      } catch {
+        // no session
+      } finally {
+        if (alive) setRestoring(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (restoring || !jobId || (step !== 2 && step !== 3)) return;
+    if (step === 3 && storyboard.length === 0) return;
+    if (sessionSaveTimer.current) clearTimeout(sessionSaveTimer.current);
+    sessionSaveTimer.current = setTimeout(() => {
+      void saveSession({
+        step: step as 2 | 3,
+        jobId,
+        projectId: projectId ?? undefined,
+        logline,
+        storyboard: step === 3 ? storyboard : undefined,
+        assetFiles,
+      }).catch(() => {
+        // ignore silent autosave failure
+      });
+    }, 1200);
+    return () => {
+      if (sessionSaveTimer.current) clearTimeout(sessionSaveTimer.current);
+    };
+  }, [step, jobId, projectId, logline, storyboard, assetFiles, restoring]);
 
   async function handleFormSubmit(form: Step1Form) {
     try {
       const style = form.style === '自定义' ? form.customStyle || '现代' : form.style;
       setAssetFiles(form.assetFiles);
+      await clearSession().catch(() => undefined);
+      let ensuredProjectId = projectId;
+      if (!ensuredProjectId) {
+        const titleSeed = form.story.trim().slice(0, 12);
+        const created = await createProject(titleSeed ? `${titleSeed}（一键成片）` : '一键成片项目');
+        ensuredProjectId = created.id;
+        setProjectId(created.id);
+      }
       const { jobId: id } = await startQuickFilm({
         story: form.story,
         protagonist: form.protagonist || '主角',
         protagonistDesc: form.protagonistDesc,
         style,
+        projectId: ensuredProjectId,
         styleImageBase64: form.styleImageBase64,
         assetFiles: form.assetFiles.length > 0 ? form.assetFiles : undefined,
       });
@@ -863,6 +948,21 @@ export function QuickFilm() {
     setStoryboard(sb);
     setLogline(ll);
     setStep(3);
+  }
+
+  async function handleSessionSubmitted() {
+    await clearSession().catch(() => undefined);
+  }
+
+  if (restoring) {
+    return (
+      <div className="min-h-screen bg-[var(--color-surface)] flex items-center justify-center">
+        <div className="text-center">
+          <span className="inline-block w-7 h-7 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+          <p className="mt-3 text-sm text-[var(--color-text-muted)]">正在恢复上次进度...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -897,7 +997,13 @@ export function QuickFilm() {
       {step === 1 && <Step1 onSubmit={handleFormSubmit} />}
       {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} />}
       {step === 3 && jobId && (
-        <Step3 jobId={jobId} storyboard={storyboard} logline={logline} assetFiles={assetFiles} />
+        <Step3
+          jobId={jobId}
+          storyboard={storyboard}
+          logline={logline}
+          assetFiles={assetFiles}
+          onSubmitted={handleSessionSubmitted}
+        />
       )}
     </div>
   );

@@ -8,6 +8,7 @@ export interface BatchJobDto {
   shotIndex: number;
   shotDescription: string;
   model: string;
+  source?: 'production' | 'quickfilm';
   status: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled';
   createdAt: string;
   updatedAt: string;

@@ -23,6 +23,7 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
     protagonist,
     protagonistDesc,
     style,
+    projectId,
     styleImageBase64,
     assetFiles,
   } = req.body as {
@@ -30,6 +31,7 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
     protagonist?: string;
     protagonistDesc?: string;
     style?: string;
+    projectId?: string;
     styleImageBase64?: string;
     assetFiles?: Array<{ name: string; base64: string }>;
   };
@@ -40,11 +42,18 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
     return;
   }
 
+  const projectIdStr = typeof projectId === 'string' ? projectId.trim() : '';
+  if (!projectIdStr || !isSafeId(projectIdStr)) {
+    res.status(400).json({ error: '请提供有效的 projectId' });
+    return;
+  }
+
   const jobId = await createJob({
     story: storyStr,
     protagonist: typeof protagonist === 'string' ? protagonist.trim() : '主角',
     protagonistDesc: typeof protagonistDesc === 'string' ? protagonistDesc.trim() : '',
     style: typeof style === 'string' ? style.trim() : '现代',
+    projectId: projectIdStr,
   });
 
   // 异步执行，不等待
@@ -80,6 +89,7 @@ quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
     error: job.error,
     logline: job.storyArc?.logline,
     title: job.story.slice(0, 30),
+    projectId: job.projectId,
   });
 });
 
@@ -123,7 +133,7 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
     'utf-8',
   );
 
-  const projectId = `quickfilm-${jobId}`;
+  const projectId = job.projectId || `quickfilm-${jobId}`;
   const now = new Date().toISOString();
   const shots = storyboard as Array<{
     shotIndex?: number;
@@ -173,6 +183,7 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
       submitId,
       taskId: taskId || `dreamina-${submitId}`,
       projectId,
+      source: 'quickfilm',
       shotIndex: shot.shotIndex ?? i,
       shotDescription: `${shot.subject ?? ''} ${shot.action ?? ''}`.trim() || `QuickFilm 分镜 ${i + 1}`,
       model,
@@ -312,3 +323,97 @@ draftsRouter.delete('/:id', async (req: Request, res: Response) => {
 });
 
 export { draftsRouter };
+
+// ─── Session routes (Step2/3 恢复) ───────────────────────────────────────────
+
+interface QuickFilmSessionBody {
+  step?: 2 | 3;
+  jobId?: string;
+  projectId?: string;
+  logline?: string;
+  storyboard?: unknown;
+  assetFiles?: Array<{ name?: string; base64?: string }>;
+}
+
+function getSessionsDir(username: string): string {
+  if (!isSafeId(username)) throw new Error('非法用户名');
+  return path.join(getApiDataDir(), 'quickfilm', 'sessions', username);
+}
+
+function getSessionPath(username: string): string {
+  return path.join(getSessionsDir(username), 'latest.json');
+}
+
+/**
+ * POST /api/quickfilm/session — 保存当前会话（Step2/3）
+ */
+quickfilmRouter.post('/session', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const body = req.body as QuickFilmSessionBody;
+  const step = body.step;
+  const jobId = typeof body.jobId === 'string' ? body.jobId.trim() : '';
+  const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
+  if ((step !== 2 && step !== 3) || !jobId || !isSafeId(jobId)) {
+    res.status(400).json({ error: '无效的会话参数' });
+    return;
+  }
+  if (projectId && !isSafeId(projectId)) {
+    res.status(400).json({ error: '无效的 projectId' });
+    return;
+  }
+
+  const assetFiles = Array.isArray(body.assetFiles)
+    ? body.assetFiles
+        .filter((f) => f && typeof f.name === 'string' && typeof f.base64 === 'string')
+        .map((f) => ({ name: f.name!.slice(0, 200), base64: f.base64! }))
+        .slice(0, 100)
+    : [];
+
+  const session = {
+    step,
+    jobId,
+    projectId: projectId || undefined,
+    logline: typeof body.logline === 'string' ? body.logline : undefined,
+    storyboard: Array.isArray(body.storyboard) ? body.storyboard : undefined,
+    assetFiles,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    const dir = getSessionsDir(username);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getSessionPath(username), JSON.stringify(session, null, 2), 'utf-8');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[quickfilm/session] save error', err);
+    res.status(500).json({ error: '保存会话失败' });
+  }
+});
+
+/**
+ * GET /api/quickfilm/session — 读取最近会话
+ */
+quickfilmRouter.get('/session', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  try {
+    const raw = fs.readFileSync(getSessionPath(username), 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    res.json(data);
+  } catch {
+    res.status(404).json({ error: '暂无可恢复会话' });
+  }
+});
+
+/**
+ * DELETE /api/quickfilm/session — 清空最近会话
+ */
+quickfilmRouter.delete('/session', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  try {
+    fs.unlinkSync(getSessionPath(username));
+    res.json({ success: true });
+  } catch {
+    res.status(404).json({ error: '暂无可清空会话' });
+  }
+});
+

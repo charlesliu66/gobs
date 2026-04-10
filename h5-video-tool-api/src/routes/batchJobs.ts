@@ -39,6 +39,7 @@ router.post('/', async (req, res) => {
       submitId: s.submitId,
       taskId: s.taskId ?? `dreamina-${s.submitId}`,
       projectId,
+      source: 'production',
       shotIndex: s.shotIndex,
       shotDescription: s.shotDescription ?? '',
       model: s.model ?? 'dreamina-multimodal',
