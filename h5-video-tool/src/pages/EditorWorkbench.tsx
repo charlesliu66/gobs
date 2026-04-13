@@ -56,6 +56,7 @@ import {
 } from '../editor/utils/formatAgentDeliverable';
 import { detectBgmIntent } from '../editor/utils/bgmIntent';
 import { formatTimelineTime } from '../editor/utils/formatTimelineTime';
+import { useSearchParams } from 'react-router-dom';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -142,7 +143,20 @@ export function EditorWorkbench() {
     activeVideoUrl,
     sourceTimeForPreview,
     seek,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    projectId,
+    projectName,
+    setProjectName,
+    saveState,
+    projectList,
+    openProject,
+    createNewProject,
+    removeProject,
   } = useTimelineState();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgmAudioRef = useRef<HTMLAudioElement>(null);
@@ -173,10 +187,44 @@ export function EditorWorkbench() {
   const [selectedVideoClipId, setSelectedVideoClipId] = useState<string | null>(null);
   const [selectedTextClipId, setSelectedTextClipId] = useState<string | null>(null);
   const [showTextPanel, setShowTextPanel] = useState(false);
+  const [openingProjectId, setOpeningProjectId] = useState<string>(searchParams.get('project') ?? '');
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
   }, []);
+
+  useEffect(() => {
+    const qp = searchParams.get('project');
+    if (!qp) return;
+    if (qp === projectId) return;
+    void (async () => {
+      try {
+        await openProject(qp);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : '加载剪辑项目失败');
+      }
+    })();
+  }, [searchParams, openProject, projectId]);
+
+  useEffect(() => {
+    setOpeningProjectId(projectId);
+  }, [projectId]);
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      const key = ev.key.toLowerCase();
+      if (key !== 'z') return;
+      ev.preventDefault();
+      if (ev.shiftKey) {
+        if (canRedo) redo();
+      } else if (canUndo) {
+        undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, canUndo, canRedo]);
 
   const syncAssetsFromLibrary = useCallback(
     (list: EditorAssetDto[]) => {
@@ -1064,6 +1112,84 @@ export function EditorWorkbench() {
         }
         topBarExtra={
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-2 py-1">
+              <input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="w-[140px] bg-transparent text-xs text-[var(--color-text)] outline-none"
+                placeholder="项目名"
+              />
+              <span className="text-[10px] text-[var(--color-text-muted)]">
+                {saveState === 'saving'
+                  ? '保存中...'
+                  : saveState === 'saved'
+                    ? '已保存'
+                    : saveState === 'error'
+                      ? '保存失败'
+                      : '未保存'}
+              </span>
+            </div>
+            <select
+              value={openingProjectId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setOpeningProjectId(id);
+                if (!id) return;
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('project', id);
+                  return next;
+                });
+              }}
+              className="max-w-[180px] rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+            >
+              <option value="">打开项目…</option>
+              {projectList.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                createNewProject();
+                setOpeningProjectId('');
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('project');
+                  return next;
+                });
+              }}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            >
+              新建
+            </button>
+            <button
+              type="button"
+              onClick={() => void removeProject(projectId)}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
+            >
+              删除
+            </button>
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
+              title="撤销 Ctrl+Z"
+            >
+              撤销
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
+              title="重做 Ctrl+Shift+Z"
+            >
+              重做
+            </button>
             <div className="flex items-center gap-1 border-r border-[var(--color-border)] pr-2 mr-1">
               <button
                 type="button"

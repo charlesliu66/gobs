@@ -1,0 +1,167 @@
+import type {
+  CharacterSheet,
+  ProductionShot,
+  ProductionShotVideoVersion,
+  SceneSheet,
+} from '../productionTypes';
+import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
+import { useProductionContext } from '../ProductionContext';
+import { StepStoryboardAssetsSidebar } from './StepStoryboardAssetsSidebar';
+import { StepStoryboardMainHeader } from './StepStoryboardMainHeader';
+import { StepStoryboardMultimodalRefPanel } from './StepStoryboardMultimodalRefPanel';
+import { StepStoryboardGenerateActions } from './StepStoryboardGenerateActions';
+import { StepStoryboardFieldsEditor } from './StepStoryboardFieldsEditor';
+import { StepStoryboardPreviewPanel } from './StepStoryboardPreviewPanel';
+import { StepStoryboardShotStrip } from './StepStoryboardShotStrip';
+
+type StorySceneCoverage = { hit: number; total: number; missingLabels: string[] } | null;
+type MultimodalRefPack = {
+  multimodalImages: Array<{ base64: string; mimeType?: string }>;
+  labels: string[];
+  narrativeWithInlineTags: string;
+};
+
+export function StepStoryboardWorkspace({
+  shot,
+  shots,
+  chSheets,
+  scSheets,
+  shotMediaBusy,
+  storySceneCoverage,
+  styleRefSummary,
+  shotVideoDreaminaModel,
+  dreaminaModelVersion,
+  dreaminaAsync,
+  hasProductionDesign,
+  multimodalRefPack,
+  multimodalAutoPrompt,
+  shotBlob,
+  shotPreviewPlaySrc,
+  shotVideoVersions,
+  selectedShotVideoVersion,
+  onSetShotVideoDreaminaModel,
+  onSetDreaminaModelVersion,
+  onGenerateShotFrame,
+  onGenerateShotVideo,
+  onKeepOnlyCurrentVersion,
+  onSelectVideoVersion,
+}: {
+  shot: ProductionShot;
+  shots: ProductionShot[];
+  chSheets: CharacterSheet[];
+  scSheets: SceneSheet[];
+  shotMediaBusy: 'frame' | 'video' | null;
+  storySceneCoverage: StorySceneCoverage;
+  styleRefSummary: string;
+  shotVideoDreaminaModel?: string;
+  dreaminaModelVersion?: string;
+  dreaminaAsync: boolean;
+  hasProductionDesign: boolean;
+  multimodalRefPack: MultimodalRefPack | null;
+  multimodalAutoPrompt: string;
+  shotBlob: string;
+  shotPreviewPlaySrc: string | null;
+  shotVideoVersions: ProductionShotVideoVersion[];
+  selectedShotVideoVersion: ProductionShotVideoVersion | null;
+  onSetShotVideoDreaminaModel: (next: string) => void;
+  onSetDreaminaModelVersion: (next: string) => void;
+  onGenerateShotFrame: () => void;
+  onGenerateShotVideo: () => void;
+  onKeepOnlyCurrentVersion: (id: string) => void;
+  onSelectVideoVersion: (id: string) => void;
+}) {
+  const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex min-h-[480px] flex-col gap-4 lg:flex-row">
+        <StepStoryboardAssetsSidebar
+          chSheets={chSheets}
+          scSheets={scSheets}
+          shot={shot}
+          onOpenLightbox={setLightboxSrc}
+          getAutoMatchStateId={(ch, s) =>
+            autoMatchCharacterStateBySheet(
+              ch,
+              [s.action, s.subject, s.emotion, s.notes].filter(Boolean).join(' '),
+            )
+          }
+          onChangeCharacterStateOverride={(characterId, stateId) => {
+            const newOverrides = { ...(shot.characterStateOverrides ?? {}), [characterId]: stateId };
+            if (!stateId) delete newOverrides[characterId];
+            patchShot(selectedShotIdx, { characterStateOverrides: newOverrides });
+          }}
+        />
+
+        <main className="min-w-0 flex-1 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+          <StepStoryboardMainHeader
+            styleRefSummary={styleRefSummary}
+            storySceneCoverage={storySceneCoverage}
+            shotIndex={shot.shotIndex}
+            shotRefTagsText={computeShotRefTags(shot, chSheets, scSheets).join(' ')}
+            shotVideoDreaminaModel={shotVideoDreaminaModel}
+            dreaminaModelVersion={dreaminaModelVersion}
+            onShotVideoDreaminaModelChange={onSetShotVideoDreaminaModel}
+            onDreaminaModelVersionChange={onSetDreaminaModelVersion}
+          />
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            {shotVideoDreaminaModel === 'dreamina-multimodal' && multimodalRefPack ? (
+              <StepStoryboardMultimodalRefPanel
+                shot={shot}
+                chSheets={chSheets}
+                scSheets={scSheets}
+                multimodalRefPack={multimodalRefPack}
+                multimodalAutoPrompt={multimodalAutoPrompt}
+                shotBlob={shotBlob}
+                onPatchShot={(patch) => patchShot(selectedShotIdx, patch)}
+                onOpenLightbox={setLightboxSrc}
+              />
+            ) : null}
+
+            <StepStoryboardGenerateActions
+              shotMediaBusy={shotMediaBusy}
+              dreaminaAsync={dreaminaAsync}
+              hasProductionDesign={hasProductionDesign}
+              onGenerateShotFrame={onGenerateShotFrame}
+              onGenerateShotVideo={onGenerateShotVideo}
+            />
+            <StepStoryboardFieldsEditor
+              shot={shot}
+              scSheets={scSheets}
+              onPatchShot={(patch) => patchShot(selectedShotIdx, patch)}
+              onOpenLightbox={setLightboxSrc}
+            />
+          </div>
+        </main>
+
+        <StepStoryboardPreviewPanel
+          shot={shot}
+          shotMediaBusy={shotMediaBusy}
+          dreaminaAsync={dreaminaAsync}
+          shotPreviewPlaySrc={shotPreviewPlaySrc}
+          shotVideoVersions={shotVideoVersions}
+          selectedShotVideoVersion={selectedShotVideoVersion}
+          onOpenLightbox={setLightboxSrc}
+          onKeepOnlyCurrentVersion={onKeepOnlyCurrentVersion}
+          onSelectVideoVersion={onSelectVideoVersion}
+        />
+      </div>
+
+      <StepStoryboardShotStrip
+        shots={shots}
+        scSheets={scSheets}
+        selectedShotIdx={selectedShotIdx}
+        shotMediaBusy={shotMediaBusy}
+        onSelectShot={setSelectedShotIdx}
+      />
+
+      <button
+        type="button"
+        onClick={() => setStep(4)}
+        className="self-start rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white"
+      >
+        进入导出
+      </button>
+    </div>
+  );
+}
+

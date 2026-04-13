@@ -1,6 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AspectRatioPreset, MediaAsset, TimelineProject, VideoClip } from '../types/timeline';
 import { computeDurationSec, emptyTimelineProject, normalizeTimelineProject } from '../types/timeline';
+import { useUndoRedo } from './useUndoRedo';
+import {
+  deleteEditorProject,
+  listEditorProjects,
+  loadEditorProject,
+  saveEditorProject,
+  type EditorProjectRecord,
+} from '../../api/editor';
 
 const ASPECT_STORAGE_KEY = 'h5-editor-aspect-ratio';
 
@@ -16,12 +24,20 @@ function loadStoredAspect(): AspectRatioPreset {
 
 export function useTimelineState() {
   const [aspectRatio, setAspectRatioState] = useState<AspectRatioPreset>(loadStoredAspect);
-  const [project, setProject] = useState<TimelineProject>(() =>
+  const undoRedo = useUndoRedo<TimelineProject>(
     normalizeTimelineProject(emptyTimelineProject(loadStoredAspect())),
   );
+  const project = undoRedo.state;
+  const setProject = undoRedo.setState;
   const [assets, setAssets] = useState<Record<string, MediaAsset>>({});
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [projectId, setProjectId] = useState<string>(project.id);
+  const [projectName, setProjectName] = useState<string>('未命名剪辑项目');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [projectList, setProjectList] = useState<Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>>>([]);
+  const suppressAutoSaveRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
 
   const setAspectRatio = useCallback((next: AspectRatioPreset) => {
     setAspectRatioState(next);
@@ -32,6 +48,99 @@ export function useTimelineState() {
     }
     setProject((p) => ({ ...p, aspectRatio: next }));
   }, []);
+
+  const refreshProjectList = useCallback(async () => {
+    try {
+      const out = await listEditorProjects();
+      setProjectList(out.projects ?? []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const openProject = useCallback(
+    async (id: string) => {
+      suppressAutoSaveRef.current = true;
+      try {
+        const rec = await loadEditorProject(id);
+        const normalized = normalizeTimelineProject(rec.project ?? emptyTimelineProject(rec.aspectRatio ?? '9:16'));
+        undoRedo.reset(normalized);
+        setAssets(rec.assets ?? {});
+        setAspectRatioState((rec.aspectRatio as AspectRatioPreset) || normalized.aspectRatio || '9:16');
+        setProjectId(rec.id);
+        setProjectName(rec.name || '未命名剪辑项目');
+        setCurrentTime(0);
+        setIsPlaying(false);
+        setSaveState('saved');
+      } finally {
+        setTimeout(() => {
+          suppressAutoSaveRef.current = false;
+        }, 0);
+      }
+    },
+    [undoRedo],
+  );
+
+  const createNewProject = useCallback(
+    (name?: string) => {
+      suppressAutoSaveRef.current = true;
+      const next = normalizeTimelineProject(emptyTimelineProject(aspectRatio));
+      undoRedo.reset(next);
+      setAssets({});
+      setProjectId(next.id);
+      setProjectName(name?.trim() || '未命名剪辑项目');
+      setCurrentTime(0);
+      setIsPlaying(false);
+      setSaveState('idle');
+      setTimeout(() => {
+        suppressAutoSaveRef.current = false;
+      }, 0);
+    },
+    [aspectRatio, undoRedo],
+  );
+
+  const removeProject = useCallback(
+    async (id: string) => {
+      await deleteEditorProject(id);
+      await refreshProjectList();
+      if (id === projectId) {
+        createNewProject();
+      }
+    },
+    [createNewProject, projectId, refreshProjectList],
+  );
+
+  useEffect(() => {
+    void refreshProjectList();
+  }, [refreshProjectList]);
+
+  useEffect(() => {
+    if (suppressAutoSaveRef.current) return;
+    if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+    setSaveState('saving');
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const rec = await saveEditorProject({
+            id: projectId,
+            name: projectName,
+            aspectRatio,
+            project,
+            assets,
+          });
+          setProjectId(rec.id);
+          setProjectName(rec.name || projectName);
+          setSaveState('saved');
+          await refreshProjectList();
+        } catch {
+          setSaveState('error');
+        }
+      })();
+    }, 3000);
+    return () => {
+      if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [project, assets, aspectRatio, projectId, projectName, refreshProjectList]);
 
   const durationSec = useMemo(() => {
     const d = computeDurationSec(project);
@@ -86,6 +195,11 @@ export function useTimelineState() {
     setAspectRatio,
     project,
     setProject,
+    undo: undoRedo.undo,
+    redo: undoRedo.redo,
+    canUndo: undoRedo.canUndo,
+    canRedo: undoRedo.canRedo,
+    resetProjectHistory: undoRedo.reset,
     assets,
     setAssets,
     currentTime,
@@ -97,5 +211,15 @@ export function useTimelineState() {
     activeVideoUrl,
     sourceTimeForPreview,
     seek,
+    projectId,
+    setProjectId,
+    projectName,
+    setProjectName,
+    saveState,
+    projectList,
+    refreshProjectList,
+    openProject,
+    createNewProject,
+    removeProject,
   };
 }

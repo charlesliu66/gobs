@@ -9,6 +9,7 @@ import { matchAssetsForShot } from './assetLibrary.js';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import type { ProductionShot, StoryArcLayer, ProductionDesignLayer } from './studioPipeline.js';
 import type { MatchedAssets } from './assetLibrary.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -42,12 +43,12 @@ export interface QuickFilmJob {
   batchJobId?: string;
 }
 
-function getJobPath(jobId: string): string {
-  return path.join(getApiDataDir(), 'quickfilm', `${jobId}.json`);
+function getJobPath(jobId: string, username?: string): string {
+  return path.join(getApiDataDir(), 'quickfilm', sanitizeUsername(username), `${jobId}.json`);
 }
 
-function ensureJobDir(): void {
-  fs.mkdirSync(path.join(getApiDataDir(), 'quickfilm'), { recursive: true });
+function ensureJobDir(username?: string): void {
+  fs.mkdirSync(path.join(getApiDataDir(), 'quickfilm', sanitizeUsername(username)), { recursive: true });
 }
 
 export async function createJob(input: {
@@ -56,8 +57,9 @@ export async function createJob(input: {
   protagonistDesc: string;
   style: string;
   projectId: string;
+  username?: string;
 }): Promise<string> {
-  ensureJobDir();
+  ensureJobDir(input.username);
   const jobId = nanoid();
   const job: QuickFilmJob = {
     id: jobId,
@@ -77,12 +79,12 @@ export async function createJob(input: {
     style: input.style,
     projectId: input.projectId,
   };
-  fs.writeFileSync(getJobPath(jobId), JSON.stringify(job, null, 2), 'utf-8');
+  fs.writeFileSync(getJobPath(jobId, input.username), JSON.stringify(job, null, 2), 'utf-8');
   return jobId;
 }
 
-export function loadJob(jobId: string): QuickFilmJob | null {
-  const p = getJobPath(jobId);
+export function loadJob(jobId: string, username?: string): QuickFilmJob | null {
+  const p = getJobPath(jobId, username);
   if (!fs.existsSync(p)) return null;
   try {
     return JSON.parse(fs.readFileSync(p, 'utf-8')) as QuickFilmJob;
@@ -91,12 +93,12 @@ export function loadJob(jobId: string): QuickFilmJob | null {
   }
 }
 
-function saveJob(job: QuickFilmJob): void {
-  ensureJobDir();
-  fs.writeFileSync(getJobPath(job.id), JSON.stringify(job, null, 2), 'utf-8');
+export function saveJob(job: QuickFilmJob, username?: string): void {
+  ensureJobDir(username);
+  fs.writeFileSync(getJobPath(job.id, username), JSON.stringify(job, null, 2), 'utf-8');
 }
 
-function updateStep(job: QuickFilmJob, stepName: string, done: boolean, error?: string): void {
+function updateStep(job: QuickFilmJob, stepName: string, done: boolean, username?: string, error?: string): void {
   const step = job.steps.find((s) => s.name === stepName);
   if (step) {
     step.done = done;
@@ -104,20 +106,21 @@ function updateStep(job: QuickFilmJob, stepName: string, done: boolean, error?: 
   }
   const doneCount = job.steps.filter((s) => s.done).length;
   job.progress = Math.round((doneCount / job.steps.length) * 100);
-  saveJob(job);
+  saveJob(job, username);
 }
 
 /** 异步执行 QuickFilm 流水线（fire-and-forget） */
 export function runJobAsync(jobId: string, extras?: {
   styleImageBase64?: string;
   assetFiles?: Array<{ name: string; base64: string }>;
+  username?: string;
 }): void {
   void (async () => {
-    const job = loadJob(jobId);
+    const job = loadJob(jobId, extras?.username);
     if (!job) return;
 
     job.status = 'running';
-    saveJob(job);
+    saveJob(job, extras?.username);
 
     try {
       // Step 1: 生成故事结构
@@ -131,12 +134,12 @@ export function runJobAsync(jobId: string, extras?: {
         structureTemplate: 'three_act',
       });
       job.storyArc = storyArc;
-      updateStep(job, '分析故事结构', true);
+      updateStep(job, '分析故事结构', true, extras?.username);
 
       // Step 2: 生成服化道
       const productionDesign = await generateProductionDesign(storyArc);
       job.productionDesign = productionDesign;
-      updateStep(job, '生成角色设定', true);
+      updateStep(job, '生成角色设定', true, extras?.username);
 
       // Step 3: 生成分镜
       const shots = await generateStoryboardTable({
@@ -145,7 +148,7 @@ export function runJobAsync(jobId: string, extras?: {
         maxTotalDurationSec: 60,
         extraNotes: extras?.styleImageBase64 ? '使用了风格参考图，请保持画面风格统一' : undefined,
       });
-      updateStep(job, '生成分镜脚本', true);
+      updateStep(job, '生成分镜脚本', true, extras?.username);
 
       // Step 4: 匹配素材
       const shotsWithAssets: ShotWithAssets[] = [];
@@ -158,13 +161,13 @@ export function runJobAsync(jobId: string, extras?: {
         }
       }
       job.storyboard = shotsWithAssets;
-      updateStep(job, '匹配素材库', true);
+      updateStep(job, '匹配素材库', true, extras?.username);
 
       // Step 5: 完成
-      updateStep(job, '准备视频生成', true);
+      updateStep(job, '准备视频生成', true, extras?.username);
       job.status = 'done';
       job.progress = 100;
-      saveJob(job);
+      saveJob(job, extras?.username);
     } catch (err) {
       job.status = 'error';
       job.error = err instanceof Error ? err.message : '未知错误';
@@ -173,7 +176,7 @@ export function runJobAsync(jobId: string, extras?: {
       if (failedStep) {
         failedStep.error = job.error;
       }
-      saveJob(job);
+      saveJob(job, extras?.username);
       console.error('[quickFilmService] job failed:', jobId, err);
     }
   })();

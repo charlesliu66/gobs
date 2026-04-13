@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from './client';
-import type { AspectRatioPreset, TimelineProject } from '../editor/types/timeline';
+import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../editor/types/timeline';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -84,6 +84,48 @@ export async function uploadEditorAsset(file: File): Promise<{ asset: EditorAsse
     throw new Error((err as { error?: string }).error || res.statusText);
   }
   return res.json() as Promise<{ asset: EditorAssetDto }>;
+}
+
+export interface EditorProjectRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  aspectRatio: AspectRatioPreset;
+  project: TimelineProject;
+  assets: Record<string, MediaAsset>;
+}
+
+export async function listEditorProjects(): Promise<{ projects: Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>> }> {
+  return apiGet('/api/editor/projects');
+}
+
+export async function loadEditorProject(id: string): Promise<EditorProjectRecord> {
+  const out = await apiGet<{ success: boolean; data: EditorProjectRecord }>(`/api/editor/projects/${encodeURIComponent(id)}`);
+  return out.data;
+}
+
+export async function saveEditorProject(input: {
+  id?: string;
+  name?: string;
+  aspectRatio: AspectRatioPreset;
+  project: TimelineProject;
+  assets: Record<string, MediaAsset>;
+}): Promise<EditorProjectRecord> {
+  const out = await apiPost<{ success: boolean; data: EditorProjectRecord }>('/api/editor/projects', input);
+  return out.data;
+}
+
+export async function deleteEditorProject(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
 }
 
 export interface EditorExportStartResponse {

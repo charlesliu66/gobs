@@ -5,29 +5,21 @@
  * 支持分镜图流程：直接传 imageBase64（来自 Imagen 分镜图）
  */
 import { Router, Request, Response } from 'express';
-import axios from 'axios';
 import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { generateVideoWithPython } from '../services/veoPython.js';
 import {
-  createKlingVideoTaskOnly,
-  fetchIngarenaVideoListPage,
   generateKlingVideo,
   isIngarenaKlingBaseUrl,
   isKlingModel,
-  queryIngarenaKlingTask,
   type KlingRefImage,
   type KlingRefVideo,
 } from '../services/klingVideo.js';
 import {
-  findRefCacheFile,
-  isResolvableSocialVideoPageUrl,
-  prepareSocialVideoUrlForKling,
-  resolveSocialPageToDirectVideoUrl,
-} from '../services/tiktokResolveVideoUrl.js';
-import {
+  checkDreaminaAuth,
   generateDreaminaMultimodalVideo,
   generateDreaminaVideo,
   getDreaminaModelIds,
@@ -40,150 +32,98 @@ import {
 } from '../services/dreaminaVideo.js';
 import { composeDreaminaPrompt, type DreaminaPromptHints } from '../services/dreaminaPromptComposer.js';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
+import { persistVideoUrlToOutput } from '../services/videoUtils.js';
+import dreaminaRouter from './videoDreamina.js';
+import klingRouter from './videoKling.js';
+import {
+  fetchDriveImageAsBase64,
+  referenceVideoFromBodyAsync,
+  resolveFirstDriveImageIfMissing,
+} from '../services/videoReferenceUtils.js';
 
 export const videoRouter = Router();
 
 const OUTPUT_DIR = getDefaultVideoOutputDir();
+const MULTISHOT_JOBS_ROOT = path.join(getApiDataDir(), 'multishot-jobs');
 
-/** data: 视频（MIME 含连字符等也需匹配）；https 则拉取字节 */
-function bufferFromDataVideoUrl(raw: string): Buffer | null {
-  const m = String(raw).trim().match(/^data:video\/[^;]+;base64,(.*)$/s);
-  if (!m?.[1]) return null;
+type MultishotJobStatus = 'pending' | 'running' | 'done' | 'error';
+type MultishotShotStatus = 'pending' | 'running' | 'done' | 'error';
+
+interface MultishotJobShot {
+  index: number;
+  status: MultishotShotStatus;
+  promptSnippet: string;
+  durationSeconds: number;
+  videoPath?: string;
+  error?: string;
+}
+
+interface MultishotJobRecord {
+  jobId: string;
+  username: string;
+  status: MultishotJobStatus;
+  aspectRatio: string;
+  model?: string;
+  shots: MultishotJobShot[];
+  finalVideoPath?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function getMultishotJobDir(username: string, jobId: string): string {
+  return path.join(MULTISHOT_JOBS_ROOT, sanitizeUsername(username), jobId);
+}
+
+function getMultishotJobFile(username: string, jobId: string): string {
+  return path.join(getMultishotJobDir(username, jobId), 'job.json');
+}
+
+function toApiRelativePath(absPath: string): string {
+  return path.relative(getApiDataDir(), absPath).replace(/\\/g, '/');
+}
+
+async function writeMultishotJob(job: MultishotJobRecord): Promise<void> {
+  const file = getMultishotJobFile(job.username, job.jobId);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(
+    file,
+    JSON.stringify({ ...job, updatedAt: new Date().toISOString() }, null, 2),
+    'utf-8',
+  );
+}
+
+async function readMultishotJob(username: string, jobId: string): Promise<MultishotJobRecord | null> {
+  const file = getMultishotJobFile(username, jobId);
   try {
-    const b = Buffer.from(m[1], 'base64');
-    return b.length ? b : null;
+    const raw = await fs.readFile(file, 'utf-8');
+    const parsed = JSON.parse(raw) as MultishotJobRecord;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-async function bufferFromVideoUrlPayload(videoUrl: string): Promise<Buffer | null> {
-  const t = String(videoUrl).trim();
-  if (!t) return null;
-  const dataBuf = bufferFromDataVideoUrl(t);
-  if (dataBuf) return dataBuf;
-  if (/^https?:\/\//i.test(t)) {
-    try {
-      const r = await axios.get(t, {
-        responseType: 'arraybuffer',
-        timeout: 300_000,
-        maxContentLength: 512 * 1024 * 1024,
-        validateStatus: (s) => s >= 200 && s < 300,
-      });
-      const buf = Buffer.from(r.data as ArrayBuffer);
-      return buf.length ? buf : null;
-    } catch (e) {
-      console.warn('[video] 拉取 https 成片失败', e);
-      return null;
-    }
-  }
-  return null;
+async function patchMultishotJob(
+  username: string,
+  jobId: string,
+  patch: (job: MultishotJobRecord) => MultishotJobRecord,
+): Promise<MultishotJobRecord | null> {
+  const current = await readMultishotJob(username, jobId);
+  if (!current) return null;
+  const next = patch(current);
+  await writeMultishotJob(next);
+  return next;
 }
 
-/** 供 GET /api/video/file 使用：优先相对 API_DATA_DIR 的 output/... */
-function clientVideoPathFromSavePath(savePath: string): string {
-  const abs = path.resolve(savePath);
-  const apiRoot = path.resolve(getApiDataDir());
-  const outRoot = path.resolve(OUTPUT_DIR);
-  if (abs === outRoot || abs.startsWith(outRoot + path.sep)) {
-    const rel = path.relative(apiRoot, abs);
-    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
-      return rel.replace(/\\/g, '/');
-    }
-  }
-  return abs.replace(/\\/g, '/');
-}
-
-/** 将即梦/Veo 返回的 videoUrl 落盘到 OUTPUT_DIR，失败返回 undefined（前端将仅靠超大 data: 时历史可能被截断） */
-async function persistVideoUrlToOutput(videoUrl: string, filenameSlug: string): Promise<string | undefined> {
-  const buf = await bufferFromVideoUrlPayload(videoUrl);
-  if (!buf?.length) {
-    console.warn('[video] 成片字节为空或无法解析 videoUrl（需 data:video/*;base64 或可访问的 https）');
-    return undefined;
-  }
-  try {
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-    const safe = filenameSlug.replace(/[^\w.\-\u4e00-\u9fff]+/g, '_').slice(0, 120) || 'video';
-    const filename = `${safe}_${Date.now()}.mp4`;
-    const savePath = path.join(OUTPUT_DIR, filename);
-    await fs.writeFile(savePath, buf);
-    return clientVideoPathFromSavePath(savePath);
-  } catch (e) {
-    console.warn('[video] 保存到 output/ 失败', e);
-    return undefined;
-  }
-}
-
-/**
- * Omni `video_url` 须为服务端可直接拉取的视频资源。社交「分享页」会导致拉取失败，ingarena 常报 DatabaseError。
- * 设 KLING_ALLOW_SOCIAL_VIDEO_URL=1 可跳过此校验（仅调试用，仍可能失败）。
- */
-function assertOmniReferenceVideoUrlIsLikelyDirect(urlStr: string): void {
-  if (process.env.KLING_ALLOW_SOCIAL_VIDEO_URL === '1') return;
-  let host: string;
-  try {
-    host = new URL(urlStr).hostname.toLowerCase();
-  } catch {
-    throw new Error('参考视频地址不是合法 URL');
-  }
-  const socialPageHosts = [
-    'tiktok.com',
-    'www.tiktok.com',
-    'vm.tiktok.com',
-    'vt.tiktok.com',
-    'douyin.com',
-    'www.douyin.com',
-    'iesdouyin.com',
-    'instagram.com',
-    'www.instagram.com',
-    'x.com',
-    'twitter.com',
-    'facebook.com',
-    'www.facebook.com',
-  ];
-  const isSocial = socialPageHosts.some((h) => host === h || host.endsWith(`.${h}`));
-  if (isSocial) {
-    throw new Error(
-      '参考视频不能填 TikTok/抖音/YouTube 等分享页链接。请使用公网可访问的 MP4 等直链（先下载再传到对象存储/CDN），或清空参考视频仅依赖图片+文案。',
-    );
-  }
-}
-
-/**
- * 从请求体解析单条参考视频（Omni video_list）。
- * TikTok/抖音：yt-dlp 下载到 output/kling-ref-cache，再拼 API_PUBLIC_BASE_URL 供可灵拉取（避免 CDN 直链 DatabaseError）。
- * KLING_ALLOW_SOCIAL_VIDEO_URL=1：仍用 -g 直链（仅调试，可灵侧常失败）。
- */
-async function referenceVideoFromBodyAsync(body: {
-  referenceVideoUrl?: string;
-  referenceVideoReferType?: 'feature' | 'base';
-  referenceVideoKeepSound?: 'yes' | 'no';
-}): Promise<KlingRefVideo[] | undefined> {
-  const raw = body.referenceVideoUrl?.trim();
-  if (!raw) return undefined;
-  let url = raw;
-  if (!/^https?:\/\//i.test(url)) {
-    if (/^\/\//.test(url)) url = `https:${url}`;
-    else throw new Error('参考视频地址需为 http(s) 开头');
-  }
-
-  if (isResolvableSocialVideoPageUrl(url)) {
-    if (process.env.KLING_ALLOW_SOCIAL_VIDEO_URL === '1') {
-      url = await resolveSocialPageToDirectVideoUrl(url);
-    } else {
-      url = await prepareSocialVideoUrlForKling(url);
-    }
-  } else {
-    assertOmniReferenceVideoUrlIsLikelyDirect(url);
-  }
-
-  return [
-    {
-      videoUrl: url,
-      referType: body.referenceVideoReferType === 'base' ? 'base' : 'feature',
-      keepOriginalSound: body.referenceVideoKeepSound === 'yes' ? 'yes' : 'no',
-    },
-  ];
+async function ensureDreaminaAuthOrRespond(res: Response): Promise<boolean> {
+  const status = await checkDreaminaAuth();
+  if (status.loggedIn) return true;
+  res.status(400).json({
+    error: status.error || '即梦 CLI 未登录，请在服务器执行 dreamina login',
+  });
+  return false;
 }
 
 /** 默认仅展示 veo-2.0 模型（多数环境无需组织策略审批）
@@ -234,116 +174,31 @@ videoRouter.get('/models', (_req: Request, res: Response) => {
   });
 });
 
-/** GET /api/video/kling/task/:taskId — 查询 ingarena video-list 中任务状态（供 H5 轮询） */
-/** GET /api/video/kling/recent-list — 与 clipai.ingarena.net 视频列表同源（同一 API Key） */
-videoRouter.get('/kling/recent-list', async (req: Request, res: Response) => {
-  if (!process.env.KLING_API_KEY?.trim() || !isIngarenaKlingBaseUrl()) {
-    res.json({ items: [], klingAvailable: false });
-    return;
-  }
-  try {
-    const page = Math.min(10, Math.max(1, parseInt(String(req.query.page), 10) || 1));
-    const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize), 10) || 20));
-    const items = await fetchIngarenaVideoListPage({ page, pageSize });
-    res.json({ items, klingAvailable: true });
-  } catch (err) {
-    console.error('[video/kling/recent-list]', err);
-    const msg = err instanceof Error ? err.message : '拉取可灵列表失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
-videoRouter.get('/kling/task/:taskId', async (req: Request, res: Response) => {
-  if (!process.env.KLING_API_KEY?.trim() || !isIngarenaKlingBaseUrl()) {
-    res.status(400).json({ error: '当前未配置 ingarena 可灵（KLING_API_BASE_URL 需为 clipai.ingarena.net 等）' });
-    return;
-  }
-  const raw = req.params.taskId;
-  if (!raw?.trim()) {
-    res.status(400).json({ error: '缺少 taskId' });
-    return;
-  }
-  try {
-    const r = await queryIngarenaKlingTask(decodeURIComponent(raw));
-    res.json(r);
-  } catch (err) {
-    console.error('[video/kling/task]', err);
-    const msg = err instanceof Error ? err.message : '查询失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
-/**
- * GET /api/video/kling/video-proxy?url=
- * 同域代理 MP4，避免浏览器对 CDN 直链的跨域限制导致 <video> 无法播放。
- */
-videoRouter.get('/kling/video-proxy', async (req: Request, res: Response) => {
-  const u = req.query.url as string | undefined;
-  if (!u || typeof u !== 'string' || !/^https?:\/\//i.test(u)) {
-    res.status(400).json({ error: '请提供合法 http(s) url' });
-    return;
-  }
-  try {
-    const r = await axios.get(u, {
-      responseType: 'stream',
-      timeout: 300000,
-      validateStatus: (s) => s < 500,
-    });
-    if (r.status >= 400) {
-      res.status(r.status).json({ error: '上游拉取失败' });
-      return;
-    }
-    const ct = r.headers['content-type'];
-    if (ct) res.setHeader('Content-Type', ct);
-    res.setHeader('Content-Disposition', 'inline');
-    r.data.pipe(res);
-  } catch (err) {
-    console.error('[video/kling/video-proxy]', err);
-    const msg = err instanceof Error ? err.message : '代理失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
-/**
- * GET /api/video/kling/ref-cache/:cacheId
- * 可灵 Omni 拉取参考视频：由 prepareSocialVideoUrlForKling 写入的临时文件（UUID 文件名）。
- * 须与 API_PUBLIC_BASE_URL 指向本服务同一实例，且公网可达。
- */
-videoRouter.get('/kling/ref-cache/:cacheId', async (req: Request, res: Response) => {
-  const cacheId = typeof req.params.cacheId === 'string' ? req.params.cacheId.trim() : '';
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cacheId)) {
-    res.status(400).json({ error: '无效的 cacheId' });
-    return;
-  }
-  try {
-    const abs = await findRefCacheFile(cacheId);
-    if (!abs) {
-      res.status(404).json({ error: '参考视频不存在或已过期（默认约 30 分钟后清理）' });
-      return;
-    }
-    const ext = path.extname(abs).toLowerCase();
-    const mime =
-      ext === '.webm' ? 'video/webm' : ext === '.mov' ? 'video/quicktime' : ext === '.mkv' ? 'video/x-matroska' : 'video/mp4';
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(path.resolve(abs));
-  } catch (err) {
-    console.error('[video/kling/ref-cache]', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : '读取缓存失败' });
-  }
-});
+videoRouter.use('/dreamina', dreaminaRouter);
+videoRouter.use('/', klingRouter);
 
 /** GET /api/video/file?path=output/xxx.mp4 - 提供已生成视频文件访问，供历史记录预览 */
 videoRouter.get('/file', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const rawPath = req.query.path as string | undefined;
   if (!rawPath || typeof rawPath !== 'string') {
     res.status(400).json({ error: '请提供 path 参数' });
     return;
   }
   const outputDir = getDefaultVideoOutputDir();
+  const multishotUserDir = path.join(MULTISHOT_JOBS_ROOT, username);
   const fullPath = path.resolve(getApiDataDir(), path.normalize(rawPath));
-  if (!fullPath.startsWith(outputDir + path.sep) && fullPath !== outputDir) {
-    res.status(400).json({ error: 'path 必须在 output 目录下' });
+  const userOutputDir = path.join(outputDir, username);
+  const inOutputRoot = fullPath === outputDir || fullPath.startsWith(outputDir + path.sep);
+  const inMultishotRoot = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
+  if (!inOutputRoot && !inMultishotRoot) {
+    res.status(400).json({ error: 'path 必须在允许的视频目录下' });
+    return;
+  }
+  const inUserOutputDir = fullPath === userOutputDir || fullPath.startsWith(userOutputDir + path.sep);
+  const inUserMultishotDir = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
+  if (!inUserOutputDir && !inUserMultishotDir) {
+    res.status(403).json({ error: '无权访问该视频' });
     return;
   }
   try {
@@ -359,11 +214,12 @@ videoRouter.get('/file', async (req: Request, res: Response) => {
  * Query: limit (默认 50), dreaminaOnly=1 时仅路径/文件名含 dreamina 的条目。
  */
 videoRouter.get('/output-recent', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
   const onlyDreamina =
     String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
   const apiRoot = getApiDataDir();
-  const outputDir = getDefaultVideoOutputDir();
+  const outputDir = path.join(getDefaultVideoOutputDir(), username);
   const items: { path: string; mtimeMs: number; size: number }[] = [];
 
   async function walk(dir: string, depth: number): Promise<void> {
@@ -402,337 +258,6 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   }
   items.sort((a, b) => b.mtimeMs - a.mtimeMs);
   res.json({ items: items.slice(0, limit) });
-});
-
-/** 与单图参考：body 无图时从 Drive 素材取首张图（与 POST /generate 行为一致） */
-async function resolveFirstDriveImageIfMissing(
-  imageBase64: string | undefined,
-  imageMimeType: string | undefined,
-  driveToken: string | undefined,
-  materials: { id: string; name: string; mimeType?: string }[] | undefined,
-): Promise<{ imageBase64?: string; imageMimeType?: string }> {
-  if (imageBase64?.trim()) return { imageBase64, imageMimeType };
-  if (!driveToken || !materials?.length) return { imageBase64, imageMimeType };
-  const firstImage = materials.find((x) => x.mimeType?.startsWith('image/'));
-  if (!firstImage) return { imageBase64, imageMimeType };
-  const img = await fetchDriveImageAsBase64(firstImage.id, firstImage.mimeType, driveToken);
-  if (!img) return { imageBase64, imageMimeType };
-  return { imageBase64: img.base64, imageMimeType: img.mimeType };
-}
-
-/** 从 Drive 获取首张图片的 base64（用于 Veo 参考图） */
-async function fetchDriveImageAsBase64(
-  fileId: string,
-  mimeType: string | undefined,
-  driveToken: string
-): Promise<{ base64: string; mimeType: string } | null> {
-  const headers = { Authorization: `Bearer ${driveToken}` };
-  const opts = { responseType: 'arraybuffer' as const, timeout: 15000 };
-  try {
-    const { data, status } = await axios.get<ArrayBuffer>(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,
-      {
-        params: { alt: 'media', supportsAllDrives: true },
-        ...opts,
-        headers,
-        validateStatus: (s) => s < 500,
-      }
-    );
-    if (status >= 400) return null;
-    const mime = mimeType?.startsWith('image/') ? mimeType : 'image/png';
-    const base64 = Buffer.from(data).toString('base64');
-    return { base64, mimeType: mime };
-  } catch {
-    return null;
-  }
-}
-
-/** POST /api/video/generate-kling-async — 仅创建可灵任务（ingarena），不轮询；H5 用 GET /kling/task/:id 轮询 */
-videoRouter.post('/generate-kling-async', async (req: Request, res: Response) => {
-  if (!process.env.KLING_API_KEY?.trim() || !isIngarenaKlingBaseUrl()) {
-    res.status(400).json({
-      error:
-        '仅 ingarena 可灵网关支持异步创建，请设置 KLING_API_BASE_URL（如 https://clipai.ingarena.net）',
-    });
-    return;
-  }
-
-  const {
-    storyboardText,
-    materials,
-    driveToken,
-    duration,
-    aspectRatio,
-    model,
-    imageBase64: bodyImageBase64,
-    imageMimeType: bodyImageMimeType,
-    referenceImages,
-    referenceVideoUrl,
-    referenceVideoReferType,
-    referenceVideoKeepSound,
-  } = req.body as {
-    storyboardText?: string;
-    materials?: { id: string; name: string; mimeType?: string }[];
-    driveToken?: string;
-    duration?: number;
-    aspectRatio?: string;
-    model?: string;
-    imageBase64?: string;
-    imageMimeType?: string;
-    referenceImages?: { base64: string; mimeType?: string; type?: 'first_frame' | 'end_frame' }[];
-    /** Omni 参考视频公网直链（与 image_list 可同时传） */
-    referenceVideoUrl?: string;
-    referenceVideoReferType?: 'feature' | 'base';
-    referenceVideoKeepSound?: 'yes' | 'no';
-  };
-
-  if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
-    res.status(400).json({ error: '请提供 storyboardText（分镜文本）' });
-    return;
-  }
-
-  const m = model?.trim();
-  if (!isKlingModel(m)) {
-    res.status(400).json({ error: '异步接口仅支持可灵模型' });
-    return;
-  }
-
-  try {
-    let videoList: KlingRefVideo[] | undefined;
-    try {
-      videoList = await referenceVideoFromBodyAsync({
-        referenceVideoUrl,
-        referenceVideoReferType,
-        referenceVideoKeepSound,
-      });
-    } catch (e) {
-      res.status(400).json({ error: e instanceof Error ? e.message : '参考视频参数无效' });
-      return;
-    }
-
-    let imageBase64: string | undefined = bodyImageBase64;
-    let imageMimeType: string | undefined = bodyImageMimeType;
-    const maxKlingRef = Math.min(20, Math.max(1, parseInt(process.env.KLING_MAX_REF_IMAGES || '7', 10) || 7));
-
-    let klingImageList: KlingRefImage[] | undefined;
-    if (Array.isArray(referenceImages) && referenceImages.length > 0) {
-      klingImageList = referenceImages.slice(0, maxKlingRef).map((r) => ({
-        imageBase64: r.base64,
-        imageMimeType: r.mimeType,
-        type: r.type,
-      }));
-    } else if (bodyImageBase64) {
-      klingImageList = [{ imageBase64: bodyImageBase64, imageMimeType: bodyImageMimeType }];
-    } else if (driveToken && materials?.length) {
-      const imgs = materials.filter((x) => x.mimeType?.startsWith('image/'));
-      const list: KlingRefImage[] = [];
-      for (const mat of imgs.slice(0, maxKlingRef)) {
-        const img = await fetchDriveImageAsBase64(mat.id, mat.mimeType, driveToken);
-        if (img) list.push({ imageBase64: img.base64, imageMimeType: img.mimeType });
-      }
-      if (list.length) klingImageList = list;
-    }
-    if (!klingImageList?.length && driveToken && materials?.length) {
-      const firstImage = materials.find((x) => x.mimeType?.startsWith('image/'));
-      if (firstImage) {
-        const img = await fetchDriveImageAsBase64(firstImage.id, firstImage.mimeType, driveToken);
-        if (img) {
-          klingImageList = [{ imageBase64: img.base64, imageMimeType: img.mimeType }];
-        }
-      }
-    }
-
-    const taskId = await createKlingVideoTaskOnly({
-      prompt: storyboardText.trim(),
-      aspectRatio: aspectRatio ?? '16:9',
-      duration: duration != null ? duration : undefined,
-      model: m,
-      imageList: klingImageList,
-      imageBase64: klingImageList?.length ? undefined : imageBase64,
-      imageMimeType: klingImageList?.length ? undefined : imageMimeType,
-      videoList,
-    });
-
-    res.json({ taskId, status: 'pending' as const });
-  } catch (err) {
-    console.error('[video/generate-kling-async]', err);
-    const msg = err instanceof Error ? err.message : '创建可灵任务失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
-/**
- * POST /api/video/dreamina/submit — 仅提交即梦任务，立即返回 submitId；H5 轮询 GET /dreamina/task/:submitId
- */
-videoRouter.post('/dreamina/submit', async (req: Request, res: Response) => {
-  if (!isDreaminaEnabled()) {
-    res.status(400).json({ error: '即梦未启用或未安装 dreamina-cli-skill' });
-    return;
-  }
-  const {
-    storyboardText,
-    materials,
-    driveToken,
-    duration,
-    aspectRatio,
-    model,
-    imageBase64: bodyImageBase64,
-    imageMimeType: bodyImageMimeType,
-    multimodalImages,
-    multimodalVideos,
-    multimodalAudios,
-    dreaminaModelVersion,
-    autoComposePrompt,
-    dreaminaPromptHints,
-  } = req.body as {
-    storyboardText?: string;
-    materials?: { id: string; name: string; mimeType?: string }[];
-    driveToken?: string;
-    duration?: number;
-    aspectRatio?: string;
-    model?: string;
-    imageBase64?: string;
-    imageMimeType?: string;
-    multimodalImages?: { base64: string; mimeType?: string }[];
-    multimodalVideos?: { base64: string; mimeType?: string }[];
-    multimodalAudios?: { base64: string; mimeType?: string }[];
-    dreaminaModelVersion?: string;
-    autoComposePrompt?: boolean;
-    dreaminaPromptHints?: DreaminaPromptHints;
-  };
-
-  if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
-    res.status(400).json({ error: '请提供 storyboardText（分镜文本）' });
-    return;
-  }
-
-  const modelTrim = model?.trim();
-  if (!isDreaminaModel(modelTrim)) {
-    res
-      .status(400)
-      .json({ error: '仅支持即梦模型（dreamina-multimodal / dreamina-text2video / dreamina-image2video）' });
-    return;
-  }
-
-  try {
-    if (isDreaminaMultimodalModel(modelTrim)) {
-      const imgs = Array.isArray(multimodalImages) ? multimodalImages : [];
-      const vids = Array.isArray(multimodalVideos) ? multimodalVideos : [];
-      const auds = Array.isArray(multimodalAudios) ? multimodalAudios : [];
-      const basePrompt = storyboardText.trim();
-      const resolvedPrompt =
-        autoComposePrompt === false
-          ? basePrompt
-          : await composeDreaminaPrompt({
-              rawPrompt: basePrompt,
-              imageCount: imgs.length,
-              videoCount: vids.length,
-              audioCount: auds.length,
-              hints: dreaminaPromptHints,
-            });
-      const mvAsync =
-        typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
-          ? dreaminaModelVersion.trim()
-          : undefined;
-      const { submitId, taskId } = await submitDreaminaMultimodalVideo({
-        prompt: resolvedPrompt,
-        aspectRatio: aspectRatio ?? '16:9',
-        duration: duration != null ? duration : undefined,
-        images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        videos: vids.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        modelVersion: mvAsync,
-      });
-      res.json({ submitId, taskId, status: 'pending' as const, resolvedPrompt });
-      return;
-    }
-
-    let imageBase64: string | undefined = bodyImageBase64;
-    let imageMimeType: string | undefined = bodyImageMimeType;
-    const r = await resolveFirstDriveImageIfMissing(imageBase64, imageMimeType, driveToken, materials);
-    imageBase64 = r.imageBase64;
-    imageMimeType = r.imageMimeType;
-
-    const mvSubmit =
-      typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
-        ? dreaminaModelVersion.trim()
-        : undefined;
-    const { submitId, taskId } = await submitDreaminaVideo({
-      prompt: storyboardText.trim(),
-      aspectRatio: aspectRatio ?? '16:9',
-      duration: duration != null ? duration : undefined,
-      model: modelTrim!,
-      imageBase64,
-      imageMimeType,
-      modelVersion: mvSubmit,
-    });
-    res.json({ submitId, taskId, status: 'pending' as const });
-  } catch (err) {
-    console.error('[video/dreamina/submit]', err);
-    const msg = err instanceof Error ? err.message : '即梦提交失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
-/** GET /api/video/dreamina/task/:submitId — 排队/成片；成功时返回 videoUrl、videoPath */
-videoRouter.get('/dreamina/task/:submitId', async (req: Request, res: Response) => {
-  if (!isDreaminaEnabled()) {
-    res.status(400).json({ error: '即梦未启用' });
-    return;
-  }
-  const raw = req.params.submitId?.trim();
-  if (!raw) {
-    res.status(400).json({ error: '缺少 submitId' });
-    return;
-  }
-  try {
-    const decoded = decodeURIComponent(raw);
-    const polled = await pollDreaminaTask(decoded);
-    const taskId = `dreamina-${polled.submitId}`;
-
-    if (polled.phase === 'failed') {
-      res.json({
-        taskId,
-        submitId: polled.submitId,
-        status: 'failed' as const,
-        phase: polled.phase,
-        genStatus: polled.genStatus,
-        queueInfo: polled.queueInfo,
-        failReason: polled.failReason,
-      });
-      return;
-    }
-
-    if (polled.phase === 'querying') {
-      res.json({
-        taskId,
-        submitId: polled.submitId,
-        status: 'pending' as const,
-        phase: polled.phase,
-        genStatus: polled.genStatus,
-        queueInfo: polled.queueInfo,
-      });
-      return;
-    }
-
-    const videoUrl = polled.videoUrl;
-    const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
-    const videoPath = videoUrl ? await persistVideoUrlToOutput(videoUrl, slug) : undefined;
-
-    res.json({
-      taskId,
-      submitId: polled.submitId,
-      status: 'completed' as const,
-      phase: polled.phase,
-      genStatus: polled.genStatus,
-      videoUrl,
-      videoPath,
-    });
-  } catch (err) {
-    console.error('[video/dreamina/task]', err);
-    const msg = err instanceof Error ? err.message : '查询失败';
-    res.status(500).json({ error: msg });
-  }
 });
 
 videoRouter.post('/generate', async (req: Request, res: Response) => {
@@ -785,6 +310,11 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
   }
 
   const modelTrim = model?.trim();
+  if (isDreaminaModel(modelTrim)) {
+    if (!(await ensureDreaminaAuthOrRespond(res))) {
+      return;
+    }
+  }
   if (isDreaminaMultimodalModel(modelTrim)) {
     try {
       const imgs = Array.isArray(req.body.multimodalImages) ? req.body.multimodalImages : [];
@@ -821,7 +351,7 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
           .replace(/[^\p{L}\p{N}\u4e00-\u9fff\w\s-]/gu, '')
           .replace(/\s+/g, '_')
           .trim() || 'video';
-      const videoPath = await persistVideoUrlToOutput(videoUrl, slug);
+      const videoPath = await persistVideoUrlToOutput(videoUrl, slug, req.user?.username);
       res.json({ taskId, status: 'completed' as const, videoUrl, videoPath, resolvedPrompt });
     } catch (err) {
       console.error('[video/generate dreamina-multimodal]', err);
@@ -924,7 +454,7 @@ videoRouter.post('/generate', async (req: Request, res: Response) => {
         .replace(/[^\p{L}\p{N}\u4e00-\u9fff\w\s-]/gu, '')
         .replace(/\s+/g, '_')
         .trim() || 'video';
-    const videoPath = await persistVideoUrlToOutput(videoUrl, slug);
+    const videoPath = await persistVideoUrlToOutput(videoUrl, slug, req.user?.username);
 
     res.json({
       taskId,
@@ -959,25 +489,22 @@ async function concatVideos(videoPaths: string[], outputPath: string): Promise<v
   });
 }
 
-videoRouter.post('/generate-multishot', async (req: Request, res: Response) => {
-  const { shots, aspectRatio = '16:9', outputPath: customOutputPath, materials, driveToken, model: bodyModel } = req.body as {
-    shots?: { index: number; durationSeconds: number; prompt: string; imageBase64?: string }[];
-    aspectRatio?: string;
-    outputPath?: string;
-    materials?: { id: string; name: string; mimeType?: string }[];
-    driveToken?: string;
-    /** 与单段生成一致：选可灵则每镜走可灵 */
-    model?: string;
-  };
-  const multishotModel = typeof bodyModel === 'string' ? bodyModel.trim() : '';
-
-  if (!shots?.length || !Array.isArray(shots)) {
-    res.status(400).json({ error: '请提供 shots 数组（每项含 durationSeconds、prompt）' });
-    return;
-  }
-
+async function runMultishotJob(args: {
+  username: string;
+  jobId: string;
+  shots: { index: number; durationSeconds: number; prompt: string; imageBase64?: string }[];
+  aspectRatio: string;
+  materials?: { id: string; name: string; mimeType?: string }[];
+  driveToken?: string;
+  model?: string;
+}) {
+  const { username, jobId, shots, aspectRatio, materials, driveToken } = args;
+  const multishotModel = args.model?.trim() || '';
+  const jobDir = getMultishotJobDir(username, jobId);
   try {
-    // 获取用户选中的素材作为参考图：第 1 张 = 主体设定图，用于每个镜头的视频生成
+    await patchMultishotJob(username, jobId, (job) => ({ ...job, status: 'running', error: undefined }));
+    await fs.mkdir(jobDir, { recursive: true });
+
     let materialsRefBase64: string | undefined;
     let materialsRefMime: string | undefined;
     if (driveToken && materials?.length) {
@@ -991,27 +518,18 @@ videoRouter.post('/generate-multishot', async (req: Request, res: Response) => {
       }
     }
 
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-    const tmpDir = path.join(os.tmpdir(), `multishot_${Date.now()}`);
-    await fs.mkdir(tmpDir, { recursive: true });
-
-    const videoPaths: string[] = [];
+    const doneAbsPaths: string[] = [];
     for (let i = 0; i < shots.length; i++) {
       const shot = shots[i];
-      // 优先用该镜头自带的 imageBase64（来自 生成首尾帧），否则用用户选的第 1 张素材
-      const refBase64 = shot.imageBase64?.replace(/^data:image\/\w+;base64,/, '') || materialsRefBase64;
-      const shotDur = Math.max(4, Math.min(8, shot.durationSeconds || 5));
-      const { videoUrl } = isDreaminaModel(multishotModel)
-        ? await generateDreaminaVideo({
-            prompt: shot.prompt.trim(),
-            aspectRatio: aspectRatio ?? '16:9',
-            duration: shotDur,
-            model: multishotModel,
-            imageBase64: refBase64,
-            imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
-          })
-        : isKlingModel(multishotModel)
-          ? await generateKlingVideo({
+      await patchMultishotJob(username, jobId, (job) => ({
+        ...job,
+        shots: job.shots.map((s) => (s.index === i ? { ...s, status: 'running', error: undefined } : s)),
+      }));
+      try {
+        const refBase64 = shot.imageBase64?.replace(/^data:image\/\w+;base64,/, '') || materialsRefBase64;
+        const shotDur = Math.max(4, Math.min(8, shot.durationSeconds || 5));
+        const { videoUrl } = isDreaminaModel(multishotModel)
+          ? await generateDreaminaVideo({
               prompt: shot.prompt.trim(),
               aspectRatio: aspectRatio ?? '16:9',
               duration: shotDur,
@@ -1019,40 +537,154 @@ videoRouter.post('/generate-multishot', async (req: Request, res: Response) => {
               imageBase64: refBase64,
               imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
             })
-          : await generateVideoWithPython({
-              prompt: shot.prompt.trim(),
-              aspectRatio: aspectRatio ?? '16:9',
-              duration: shotDur,
-              model: multishotModel || undefined,
-              imageBase64: refBase64,
-              imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
-            });
-      const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
-      const p = path.join(tmpDir, `shot_${i}.mp4`);
-      await fs.writeFile(p, buf);
-      videoPaths.push(p);
+          : isKlingModel(multishotModel)
+            ? await generateKlingVideo({
+                prompt: shot.prompt.trim(),
+                aspectRatio: aspectRatio ?? '16:9',
+                duration: shotDur,
+                model: multishotModel,
+                imageBase64: refBase64,
+                imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
+              })
+            : await generateVideoWithPython({
+                prompt: shot.prompt.trim(),
+                aspectRatio: aspectRatio ?? '16:9',
+                duration: shotDur,
+                model: multishotModel || undefined,
+                imageBase64: refBase64,
+                imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
+              });
+        const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
+        const absPath = path.join(jobDir, `shot_${i}.mp4`);
+        await fs.writeFile(absPath, buf);
+        doneAbsPaths.push(absPath);
+        const relPath = toApiRelativePath(absPath);
+        await patchMultishotJob(username, jobId, (job) => ({
+          ...job,
+          shots: job.shots.map((s) =>
+            s.index === i ? { ...s, status: 'done', videoPath: relPath, error: undefined } : s,
+          ),
+        }));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '该镜头生成失败';
+        await patchMultishotJob(username, jobId, (job) => ({
+          ...job,
+          shots: job.shots.map((s) => (s.index === i ? { ...s, status: 'error', error: msg } : s)),
+        }));
+      }
     }
 
-    const outDir = customOutputPath ? path.resolve(customOutputPath) : OUTPUT_DIR;
-    await fs.mkdir(outDir, { recursive: true });
-    const finalPath = path.join(outDir, `多镜头_${Date.now()}.mp4`);
-    await concatVideos(videoPaths, finalPath);
+    if (!doneAbsPaths.length) {
+      await patchMultishotJob(username, jobId, (job) => ({
+        ...job,
+        status: 'error',
+        error: '所有镜头均生成失败',
+      }));
+      return;
+    }
 
-    for (const p of videoPaths) await fs.unlink(p).catch(() => {});
-    await fs.rmdir(tmpDir).catch(() => {});
+    const finalAbsPath = path.join(jobDir, `final_${Date.now()}.mp4`);
+    await concatVideos(doneAbsPaths, finalAbsPath);
+    const finalRelPath = toApiRelativePath(finalAbsPath);
+    await patchMultishotJob(username, jobId, (job) => ({
+      ...job,
+      status: 'done',
+      finalVideoPath: finalRelPath,
+      error: undefined,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '多镜头任务执行失败';
+    console.error('[video/multishot-job-runner]', err);
+    await patchMultishotJob(username, jobId, (job) => ({
+      ...job,
+      status: 'error',
+      error: msg,
+    }));
+  }
+}
 
-    const buf = await fs.readFile(finalPath);
-    const videoUrl = `data:video/mp4;base64,${buf.toString('base64')}`;
-    res.json({
-      status: 'completed',
-      videoUrl,
-      outputPath: finalPath,
+videoRouter.post('/generate-multishot', async (req: Request, res: Response) => {
+  const { shots, aspectRatio = '16:9', materials, driveToken, model: bodyModel } = req.body as {
+    shots?: { index: number; durationSeconds: number; prompt: string; imageBase64?: string }[];
+    aspectRatio?: string;
+    materials?: { id: string; name: string; mimeType?: string }[];
+    driveToken?: string;
+    model?: string;
+  };
+  if (!shots?.length || !Array.isArray(shots)) {
+    res.status(400).json({ error: '请提供 shots 数组（每项含 durationSeconds、prompt）' });
+    return;
+  }
+  const username = sanitizeUsername(req.user?.username);
+  const jobId = `ms_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+  const initial: MultishotJobRecord = {
+    jobId,
+    username,
+    status: 'pending',
+    aspectRatio: aspectRatio ?? '16:9',
+    model: typeof bodyModel === 'string' ? bodyModel.trim() : undefined,
+    shots: shots.map((s, i) => ({
+      index: i,
+      status: 'pending',
+      durationSeconds: Math.max(4, Math.min(8, s.durationSeconds || 5)),
+      promptSnippet: s.prompt.trim().slice(0, 120),
+    })),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await writeMultishotJob(initial);
+    res.json({ jobId, status: 'pending' as const });
+    setImmediate(() => {
+      void runMultishotJob({
+        username,
+        jobId,
+        shots,
+        aspectRatio: aspectRatio ?? '16:9',
+        materials,
+        driveToken,
+        model: typeof bodyModel === 'string' ? bodyModel : undefined,
+      });
     });
   } catch (err) {
     console.error('[video/generate-multishot]', err);
-    const msg = err instanceof Error ? err.message : '多镜头视频生成失败';
+    const msg = err instanceof Error ? err.message : '多镜头任务创建失败';
     res.status(500).json({ error: msg });
   }
+});
+
+videoRouter.get('/multishot-job/:jobId', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const jobId = String(req.params.jobId || '').trim();
+  if (!jobId) {
+    res.status(400).json({ error: '缺少 jobId' });
+    return;
+  }
+  const job = await readMultishotJob(username, jobId);
+  if (!job) {
+    res.status(404).json({ error: '任务不存在' });
+    return;
+  }
+  const done = job.shots.filter((s) => s.status === 'done').length;
+  const failed = job.shots.filter((s) => s.status === 'error').length;
+  const running = job.shots.filter((s) => s.status === 'running').length;
+  res.json({
+    jobId: job.jobId,
+    status: job.status,
+    shots: job.shots,
+    finalVideoPath: job.finalVideoPath,
+    error: job.error,
+    progress: {
+      total: job.shots.length,
+      done,
+      failed,
+      running,
+      pending: Math.max(0, job.shots.length - done - failed - running),
+    },
+    updatedAt: job.updatedAt,
+  });
 });
 
 export default videoRouter;

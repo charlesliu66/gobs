@@ -2,7 +2,7 @@
  * QuickFilm API 路由
  */
 import { Router, Request, Response } from 'express';
-import { createJob, loadJob, runJobAsync } from '../services/quickFilmService.js';
+import { createJob, loadJob, runJobAsync, saveJob } from '../services/quickFilmService.js';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
@@ -10,6 +10,7 @@ import { randomBytes } from 'crypto';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { addJob, type BatchJob } from '../services/batchJobsQueue.js';
 import { isDreaminaEnabled, submitDreaminaVideo } from '../services/dreaminaVideo.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const quickfilmRouter = Router();
 
@@ -18,6 +19,7 @@ const quickfilmRouter = Router();
  * Body: { story, protagonist, protagonistDesc?, style, styleImageBase64?, assetFiles? }
  */
 quickfilmRouter.post('/start', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const {
     story,
     protagonist,
@@ -54,12 +56,14 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
     protagonistDesc: typeof protagonistDesc === 'string' ? protagonistDesc.trim() : '',
     style: typeof style === 'string' ? style.trim() : '现代',
     projectId: projectIdStr,
+    username,
   });
 
   // 异步执行，不等待
   runJobAsync(jobId, {
     styleImageBase64: typeof styleImageBase64 === 'string' ? styleImageBase64 : undefined,
     assetFiles: Array.isArray(assetFiles) ? assetFiles : undefined,
+    username,
   });
 
   res.json({ jobId });
@@ -69,13 +73,14 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
  * GET /api/quickfilm/:jobId/status
  */
 quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const { jobId } = req.params;
   if (!jobId) {
     res.status(400).json({ error: '缺少 jobId' });
     return;
   }
 
-  const job = loadJob(jobId);
+  const job = loadJob(jobId, username);
   if (!job) {
     res.status(404).json({ error: '任务不存在' });
     return;
@@ -98,6 +103,7 @@ quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
  * Body: { storyboard } — 用户确认/修改后的分镜
  */
 quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const { jobId } = req.params;
   const { storyboard } = req.body as { storyboard?: unknown };
 
@@ -106,7 +112,7 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
     return;
   }
 
-  const job = loadJob(jobId);
+  const job = loadJob(jobId, username);
   if (!job) {
     res.status(404).json({ error: '任务不存在' });
     return;
@@ -127,11 +133,7 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
   const batchJobId = nanoid();
   job.batchJobId = batchJobId;
 
-  fs.writeFileSync(
-    path.join(getApiDataDir(), 'quickfilm', `${jobId}.json`),
-    JSON.stringify(job, null, 2),
-    'utf-8',
-  );
+  saveJob(job, username);
 
   const projectId = job.projectId || `quickfilm-${jobId}`;
   const now = new Date().toISOString();

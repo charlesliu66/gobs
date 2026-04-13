@@ -9,26 +9,32 @@
  */
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
-import fsSync from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export const productionPersistRouter = Router();
 
 const OUTPUT_BASE = getDefaultVideoOutputDir();
 
-const IMG_DIR = path.join(OUTPUT_BASE, 'production', 'images');
-const PROJ_DIR = path.join(OUTPUT_BASE, 'production', 'projects');
+function getProductionImgDir(username: string): string {
+  return path.join(OUTPUT_BASE, 'production', 'images', sanitizeUsername(username));
+}
 
-function resolveReadableImagePath(rawPath: string): string | null {
+function getProductionProjDir(username: string): string {
+  return path.join(OUTPUT_BASE, 'production', 'projects', sanitizeUsername(username));
+}
+
+function resolveReadableImagePath(rawPath: string, username: string): string | null {
+  const safeUser = sanitizeUsername(username);
   const cleaned = rawPath.trim().replace(/\\/g, '/');
   if (!cleaned) return null;
 
   const allowedDirs = [
-    path.resolve(getApiDataDir(), 'output', 'production', 'images'),
-    path.resolve(process.cwd(), 'output', 'production', 'images'),
-    path.resolve(getDefaultVideoOutputDir(), 'production', 'images'),
+    path.resolve(getApiDataDir(), 'output', 'production', 'images', safeUser),
+    path.resolve(process.cwd(), 'output', 'production', 'images', safeUser),
+    path.resolve(getDefaultVideoOutputDir(), 'production', 'images', safeUser),
   ];
 
   const inAllowedDir = (p: string) =>
@@ -42,29 +48,29 @@ function resolveReadableImagePath(rawPath: string): string | null {
 
   // 2) 标准相对路径：output/production/images/xxx
   const normalized = path.normalize(cleaned);
-  if (normalized.startsWith('output/production/images/') || normalized.startsWith('output\\production\\images\\')) {
+  if (normalized.startsWith(`output/production/images/${safeUser}/`) || normalized.startsWith(`output\\production\\images\\${safeUser}\\`)) {
     const abs = path.resolve(getApiDataDir(), normalized);
     return inAllowedDir(abs) ? abs : null;
   }
 
   // 3) 旧相对路径：production/images/xxx
-  if (normalized.startsWith('production/images/') || normalized.startsWith('production\\images\\')) {
+  if (normalized.startsWith(`production/images/${safeUser}/`) || normalized.startsWith(`production\\images\\${safeUser}\\`)) {
     const abs = path.resolve(getApiDataDir(), 'output', normalized);
     return inAllowedDir(abs) ? abs : null;
   }
 
   // 4) 仅文件名：默认落在 output/production/images
   if (!normalized.includes('/') && !normalized.includes('\\') && !normalized.includes('..')) {
-    const abs = path.resolve(getApiDataDir(), 'output', 'production', 'images', normalized);
+    const abs = path.resolve(getApiDataDir(), 'output', 'production', 'images', safeUser, normalized);
     return inAllowedDir(abs) ? abs : null;
   }
 
   return null;
 }
 
-async function ensureDirs() {
-  await fs.mkdir(IMG_DIR, { recursive: true });
-  await fs.mkdir(PROJ_DIR, { recursive: true });
+async function ensureDirs(username: string) {
+  await fs.mkdir(getProductionImgDir(username), { recursive: true });
+  await fs.mkdir(getProductionProjDir(username), { recursive: true });
 }
 
 // ── 上传图片 ──────────────────────────────────────────────────────────────────
@@ -75,6 +81,7 @@ async function ensureDirs() {
  * Returns: { path: string, url: string }
  */
 productionPersistRouter.post('/upload-image', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const { base64, mimeType, label } = req.body as {
     base64?: string;
     mimeType?: string;
@@ -100,11 +107,11 @@ productionPersistRouter.post('/upload-image', async (req: Request, res: Response
   const filename = `${slug}_${Date.now()}.${ext}`;
 
   try {
-    await ensureDirs();
-    const absPath = path.join(IMG_DIR, filename);
+    await ensureDirs(username);
+    const absPath = path.join(getProductionImgDir(username), filename);
     await fs.writeFile(absPath, Buffer.from(raw, 'base64'));
 
-    const relPath = `output/production/images/${filename}`;
+    const relPath = `output/production/images/${username}/${filename}`;
     const url = `/api/production/image?path=${encodeURIComponent(relPath)}`;
 
     res.json({ path: relPath, url, filename });
@@ -120,13 +127,14 @@ productionPersistRouter.post('/upload-image', async (req: Request, res: Response
  * GET /api/production/image?path=output/production/images/xxx.png
  */
 productionPersistRouter.get('/image', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const rawPath = req.query.path as string | undefined;
   if (!rawPath) {
     res.status(400).json({ error: '请提供 path 参数' });
     return;
   }
 
-  const absPath = resolveReadableImagePath(rawPath);
+  const absPath = resolveReadableImagePath(rawPath, username);
   if (!absPath) {
     res.status(403).json({ error: '无权访问该路径' });
     return;
@@ -161,6 +169,7 @@ interface ProjectMeta {
  * Returns: { id: string, updatedAt: string }
  */
 productionPersistRouter.post('/project/save', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const body = req.body as Record<string, unknown>;
   const projectData = body.project as Record<string, unknown> | undefined;
 
@@ -170,7 +179,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
   }
 
   try {
-    await ensureDirs();
+    await ensureDirs(username);
 
     // 用现有 id 或生成新 id
     const id: string = (typeof body.id === 'string' && body.id.trim())
@@ -186,7 +195,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       updatedAt,
     };
 
-    const filePath = path.join(PROJ_DIR, `${id}.json`);
+    const filePath = path.join(getProductionProjDir(username), `${id}.json`);
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
 
     res.json({ id, updatedAt, title });
@@ -200,13 +209,14 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
  * GET /api/production/project/load?id=xxx
  */
 productionPersistRouter.get('/project/load', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const id = req.query.id as string | undefined;
   if (!id || !/^[\w-]+$/.test(id)) {
     res.status(400).json({ error: '无效的项目 id' });
     return;
   }
 
-  const filePath = path.join(PROJ_DIR, `${id}.json`);
+  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     res.json(JSON.parse(raw));
@@ -219,16 +229,18 @@ productionPersistRouter.get('/project/load', async (req: Request, res: Response)
  * GET /api/production/project/list
  * Returns: { projects: ProjectMeta[] }
  */
-productionPersistRouter.get('/project/list', async (_req: Request, res: Response) => {
+productionPersistRouter.get('/project/list', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   try {
-    await ensureDirs();
-    const files = await fs.readdir(PROJ_DIR);
+    await ensureDirs(username);
+    const userProjDir = getProductionProjDir(username);
+    const files = await fs.readdir(userProjDir);
     const jsonFiles = files.filter((f) => f.endsWith('.json')).sort().reverse();
 
     const metas: ProjectMeta[] = [];
     for (const f of jsonFiles.slice(0, 50)) {
       try {
-        const raw = await fs.readFile(path.join(PROJ_DIR, f), 'utf-8');
+        const raw = await fs.readFile(path.join(userProjDir, f), 'utf-8');
         const data = JSON.parse(raw) as Record<string, unknown>;
         const proj = data.project as Record<string, unknown> | undefined;
         const meta = proj?.meta as Record<string, unknown> | undefined;
@@ -253,13 +265,14 @@ productionPersistRouter.get('/project/list', async (_req: Request, res: Response
  * DELETE /api/production/project?id=xxx
  */
 productionPersistRouter.delete('/project', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
   const id = req.query.id as string | undefined;
   if (!id || !/^[\w-]+$/.test(id)) {
     res.status(400).json({ error: '无效的项目 id' });
     return;
   }
 
-  const filePath = path.join(PROJ_DIR, `${id}.json`);
+  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
   try {
     await fs.unlink(filePath);
     res.json({ ok: true });

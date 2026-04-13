@@ -6,11 +6,13 @@ import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { decodeMultipartFilename } from '../utils/multipartFilename.js';
 import { getUploadsPath } from '../config/apiDataDir.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
+import { getRequestAccount } from '../services/requestContext.js';
 
 const router = Router();
 
-const UPLOAD_DIR = getUploadsPath('editor');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const UPLOAD_ROOT = getUploadsPath('editor');
+fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
 
 const UPLOAD_MAX_MB = Math.min(
   4096,
@@ -27,20 +29,47 @@ export interface StoredEditorAsset {
   createdAt: string;
 }
 
-const assetsById = new Map<string, StoredEditorAsset>();
+type UserAssetStore = {
+  loaded: boolean;
+  assetsById: Map<string, StoredEditorAsset>;
+};
 
-const REGISTRY_FILE = path.join(UPLOAD_DIR, '_assets_registry.json');
+const stores = new Map<string, UserAssetStore>();
 
-function loadAssetsRegistry(): void {
+function getStore(username: string): UserAssetStore {
+  const key = sanitizeUsername(username);
+  const exists = stores.get(key);
+  if (exists) return exists;
+  const created: UserAssetStore = { loaded: false, assetsById: new Map<string, StoredEditorAsset>() };
+  stores.set(key, created);
+  return created;
+}
+
+function getUserUploadDir(username: string): string {
+  return path.join(UPLOAD_ROOT, sanitizeUsername(username));
+}
+
+function getRegistryFile(username: string): string {
+  return path.join(getUserUploadDir(username), '_assets_registry.json');
+}
+
+function loadAssetsRegistry(username: string): void {
+  const safeUser = sanitizeUsername(username);
+  const store = getStore(safeUser);
+  if (store.loaded) return;
+  store.loaded = true;
+  const userDir = getUserUploadDir(safeUser);
+  fs.mkdirSync(userDir, { recursive: true });
   try {
-    if (!fs.existsSync(REGISTRY_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8')) as unknown;
+    const registryFile = getRegistryFile(safeUser);
+    if (!fs.existsSync(registryFile)) return;
+    const raw = JSON.parse(fs.readFileSync(registryFile, 'utf8')) as unknown;
     if (!Array.isArray(raw)) return;
     for (const row of raw) {
       if (!row || typeof row !== 'object') continue;
       const r = row as StoredEditorAsset;
-      if (typeof r.id === 'string' && r.filename && fs.existsSync(path.join(UPLOAD_DIR, r.filename))) {
-        assetsById.set(r.id, r);
+      if (typeof r.id === 'string' && r.filename && fs.existsSync(path.join(userDir, r.filename))) {
+        store.assetsById.set(r.id, r);
       }
     }
   } catch {
@@ -48,29 +77,41 @@ function loadAssetsRegistry(): void {
   }
 }
 
-function saveAssetsRegistry(): void {
+function saveAssetsRegistry(username: string): void {
+  const safeUser = sanitizeUsername(username);
+  const store = getStore(safeUser);
   try {
-    const list = [...assetsById.values()];
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(list, null, 2), 'utf8');
+    const userDir = getUserUploadDir(safeUser);
+    fs.mkdirSync(userDir, { recursive: true });
+    const list = [...store.assetsById.values()];
+    fs.writeFileSync(getRegistryFile(safeUser), JSON.stringify(list, null, 2), 'utf8');
   } catch {
     /* ignore */
   }
 }
 
-loadAssetsRegistry();
+function resolveUsername(req?: Request): string {
+  return sanitizeUsername(req?.user?.username ?? getRequestAccount());
+}
 
 /** 供抽帧/音频分析等读取磁盘上的源文件（仅已上传素材） */
-export function getEditorAssetAbsolutePath(id: string): string | null {
-  const meta = assetsById.get(id);
+export function getEditorAssetAbsolutePath(id: string, username?: string): string | null {
+  const safeUser = sanitizeUsername(username ?? getRequestAccount());
+  loadAssetsRegistry(safeUser);
+  const store = getStore(safeUser);
+  const meta = store.assetsById.get(id);
   if (!meta) return null;
-  const abs = path.join(UPLOAD_DIR, meta.filename);
+  const abs = path.join(getUserUploadDir(safeUser), meta.filename);
   if (!fs.existsSync(abs)) return null;
   return abs;
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, UPLOAD_DIR);
+  destination: (req, _file, cb) => {
+    const user = resolveUsername(req as Request);
+    const dir = getUserUploadDir(user);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
   filename: (_req, file, cb) => {
     const id = randomUUID();
@@ -105,6 +146,9 @@ function resolveOriginalName(req: Request, multerOriginal: string): string {
 /** POST multipart：字段 file；可选 originalName（浏览器端 UTF-8 真名，避免 multer 乱码） */
 router.post('/assets/upload', (req, res) => {
   upload.single('file')(req, res, (err: unknown) => {
+    const username = resolveUsername(req as Request);
+    loadAssetsRegistry(username);
+    const store = getStore(username);
     if (err) {
       if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
         res.status(413).json({
@@ -136,8 +180,8 @@ router.post('/assets/upload', (req, res) => {
       size: f.size,
       createdAt: new Date().toISOString(),
     };
-    assetsById.set(id, rec);
-    saveAssetsRegistry();
+    store.assetsById.set(id, rec);
+    saveAssetsRegistry(username);
     const base = `/api/editor/assets/files/${id}`;
     res.json({
       asset: {
@@ -160,17 +204,20 @@ router.get('/upload-config', (_req, res) => {
 
 /** DELETE 删除已上传素材（磁盘文件 + 注册表） */
 router.delete('/assets/:id', async (req, res) => {
+  const username = resolveUsername(req as Request);
+  loadAssetsRegistry(username);
+  const store = getStore(username);
   const id = req.params.id;
   if (!id || id.includes('..') || id.includes('/') || id.includes('\\')) {
     res.status(400).json({ error: '无效的素材 id' });
     return;
   }
-  const meta = assetsById.get(id);
+  const meta = store.assetsById.get(id);
   if (!meta) {
     res.status(404).json({ error: '素材不存在' });
     return;
   }
-  const abs = path.join(UPLOAD_DIR, meta.filename);
+  const abs = path.join(getUserUploadDir(username), meta.filename);
   try {
     await fsp.unlink(abs).catch((e: NodeJS.ErrnoException) => {
       if (e.code !== 'ENOENT') throw e;
@@ -180,14 +227,17 @@ router.delete('/assets/:id', async (req, res) => {
     res.status(500).json({ error: '删除文件失败' });
     return;
   }
-  assetsById.delete(id);
-  saveAssetsRegistry();
+  store.assetsById.delete(id);
+  saveAssetsRegistry(username);
   res.json({ ok: true });
 });
 
 /** GET 列表 */
-router.get('/assets', (_req, res) => {
-  const list = [...assetsById.values()].map((a) => ({
+router.get('/assets', (req, res) => {
+  const username = resolveUsername(req as Request);
+  loadAssetsRegistry(username);
+  const store = getStore(username);
+  const list = [...store.assetsById.values()].map((a) => ({
     id: a.id,
     url: `/api/editor/assets/files/${a.id}`,
     kind: 'video' as const,
@@ -202,13 +252,16 @@ router.get('/assets', (_req, res) => {
 
 /** GET 文件流（预览 / 导出用） */
 router.get('/assets/files/:id', (req, res) => {
+  const username = resolveUsername(req as Request);
+  loadAssetsRegistry(username);
+  const store = getStore(username);
   const id = req.params.id;
-  const meta = assetsById.get(id);
+  const meta = store.assetsById.get(id);
   if (!meta) {
     res.status(404).json({ error: '素材不存在' });
     return;
   }
-  const abs = path.join(UPLOAD_DIR, meta.filename);
+  const abs = path.join(getUserUploadDir(username), meta.filename);
   if (!fs.existsSync(abs)) {
     res.status(404).json({ error: '文件已丢失' });
     return;

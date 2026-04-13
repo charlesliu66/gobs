@@ -28,7 +28,7 @@ router.post('/analyze/video', async (req, res) => {
     res.status(400).json({ error: '请提供 assetId' });
     return;
   }
-  const abs = getEditorAssetAbsolutePath(assetId);
+  const abs = getEditorAssetAbsolutePath(assetId, req.user?.username);
   if (!abs) {
     res.status(404).json({ error: '素材不存在或未在本机上传会话中' });
     return;

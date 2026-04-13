@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { useMaterials } from '../context/MaterialsContext';
 import { useVideoGenerate } from '../hooks/useVideoGenerate';
+import { useVideoGeneration } from '../hooks/useVideoGeneration';
 import { useNavigate } from 'react-router-dom';
 import { saveVideoToHistory } from '../utils/videoHistory';
+import { getVideoFileUrl } from '../utils/videoHistory';
 import { filterPlaceholders } from './ShortDramaMaterialPicker';
 import {
+  checkDreaminaAuthStatus,
   getVeoModels,
-  generateKlingAsync,
+  getMultishotJobStatus,
   getKlingTaskStatus,
   submitDreaminaAsync,
   getDreaminaTaskStatus,
@@ -19,6 +22,7 @@ import {
   type KlingPollPhase,
   type KlingVideoListRow,
   type DreaminaTaskPollResponse,
+  type MultishotJobStatusResponse,
 } from '../api/video';
 import { submitBatchJobs } from '../api/batchJobs';
 import { KlingJobCard } from './KlingJobCard';
@@ -30,6 +34,7 @@ import { RunningStatus } from './RunningStatus';
 const KLING_POLL_MS = 30_000;
 /** 即梦排队可能较长，略降低请求频率 */
 const DREAMINA_POLL_MS = 10_000;
+const MULTISHOT_JOB_STORAGE_KEY = 'gobs_multishot_job_id';
 
 type KlingJob = {
   id: string;
@@ -52,6 +57,11 @@ type DreaminaJob = {
   promptSnippet?: string;
 };
 
+type MultishotJobView = Pick<
+  MultishotJobStatusResponse,
+  'jobId' | 'status' | 'shots' | 'finalVideoPath' | 'error' | 'progress'
+>;
+
 export function StepVideo() {
   const {
     prompt,
@@ -71,7 +81,13 @@ export function StepVideo() {
   } = useCreateFlow();
   const selectedOrder = filterPlaceholders(rawSelectedOrder);
   const { accessToken } = useMaterials();
-  const { generate, generateMultishot, loading, error, clearError, setError, useMock } = useVideoGenerate();
+  const { generateMultishot, loading, error, clearError, setError, useMock } = useVideoGenerate();
+  const singleVideoGen = useVideoGeneration({
+    onError: (msg) => setError(msg),
+  });
+  const queuedVideoGen = useVideoGeneration({
+    onError: (msg) => setError(msg),
+  });
   const navigate = useNavigate();
   const [showNoFramesModal, setShowNoFramesModal] = useState(false);
 
@@ -79,13 +95,15 @@ export function StepVideo() {
   const [dreaminaAsync, setDreaminaAsync] = useState(false);
   const [klingJobs, setKlingJobs] = useState<KlingJob[]>([]);
   const [dreaminaJobs, setDreaminaJobs] = useState<DreaminaJob[]>([]);
-  const [klingSubmitting, setKlingSubmitting] = useState(false);
-  const [dreaminaSubmitting, setDreaminaSubmitting] = useState(false);
+  const [submittingProvider, setSubmittingProvider] = useState<'kling' | 'dreamina' | null>(null);
 
   // 夜间批量提交状态
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ submitted: number; total: number } | null>(null);
   const [batchDone, setBatchDone] = useState(false);
+  const [multishotJob, setMultishotJob] = useState<MultishotJobView | null>(null);
+  const [multishotSubmitting, setMultishotSubmitting] = useState(false);
+  const doneMultishotJobRef = useRef<string | null>(null);
 
   const klingJobsRef = useRef(klingJobs);
   klingJobsRef.current = klingJobs;
@@ -93,6 +111,21 @@ export function StepVideo() {
   dreaminaJobsRef.current = dreaminaJobs;
   const promptRef = useRef(prompt);
   promptRef.current = prompt;
+
+  useEffect(() => {
+    try {
+      const cachedJobId = localStorage.getItem(MULTISHOT_JOB_STORAGE_KEY)?.trim();
+      if (cachedJobId) {
+        setMultishotJob({
+          jobId: cachedJobId,
+          status: 'pending',
+          shots: [],
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     getVeoModels()
@@ -219,6 +252,70 @@ export function StepVideo() {
     return () => clearInterval(id);
   }, [dreaminaJobs.length]);
 
+  useEffect(() => {
+    if (!multishotJob?.jobId) return;
+    if (!(multishotJob.status === 'pending' || multishotJob.status === 'running')) return;
+
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const st = await getMultishotJobStatus(multishotJob.jobId);
+        if (stopped) return;
+        setMultishotJob({
+          jobId: st.jobId,
+          status: st.status,
+          shots: st.shots,
+          finalVideoPath: st.finalVideoPath,
+          error: st.error,
+          progress: st.progress,
+        });
+      } catch (e) {
+        if (!stopped) setError(e instanceof Error ? e.message : '多镜头任务查询失败');
+      }
+    };
+
+    void tick();
+    const id = setInterval(() => {
+      void tick();
+    }, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [multishotJob?.jobId, multishotJob?.status, setError]);
+
+  useEffect(() => {
+    try {
+      if (!multishotJob?.jobId) {
+        localStorage.removeItem(MULTISHOT_JOB_STORAGE_KEY);
+        return;
+      }
+      if (multishotJob.status === 'pending' || multishotJob.status === 'running') {
+        localStorage.setItem(MULTISHOT_JOB_STORAGE_KEY, multishotJob.jobId);
+      } else {
+        localStorage.removeItem(MULTISHOT_JOB_STORAGE_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, [multishotJob?.jobId, multishotJob?.status]);
+
+  useEffect(() => {
+    if (!multishotJob || multishotJob.status !== 'done' || !multishotJob.finalVideoPath) return;
+    if (doneMultishotJobRef.current === multishotJob.jobId) return;
+    doneMultishotJobRef.current = multishotJob.jobId;
+    const taskId = `multishot-${multishotJob.jobId}`;
+    const playbackUrl = getVideoFileUrl(multishotJob.finalVideoPath);
+    setVideoResult(playbackUrl, taskId, multishotJob.finalVideoPath);
+    saveVideoToHistory({
+      taskId,
+      videoPath: multishotJob.finalVideoPath,
+      prompt: shots.map((s) => s.prompt).join('\n---\n'),
+    });
+    clearError();
+    navigate(`/result?taskId=${taskId}`);
+  }, [multishotJob, shots, setVideoResult, clearError, navigate]);
+
   const hasMissingFrames =
     multiShotEnabled &&
     shots.length > 0 &&
@@ -240,6 +337,18 @@ export function StepVideo() {
   /** 🌙 夜间批量提交：遍历所有分镜，逐个调用 submitDreaminaAsync，收集 submitId 后存入后端队列 */
   const handleBatchNight = async () => {
     if (shots.length === 0) return;
+    if (isDreaminaModelId(videoModel) && !useMock) {
+      try {
+        const auth = await checkDreaminaAuthStatus();
+        if (!auth.loggedIn) {
+          setError(auth.error || '即梦服务登录已过期，请联系管理员在服务器重新登录');
+          return;
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '即梦登录态检测失败');
+        return;
+      }
+    }
     setBatchSubmitting(true);
     setBatchDone(false);
     setBatchProgress({ submitted: 0, total: shots.length });
@@ -294,11 +403,27 @@ export function StepVideo() {
 
   const doGenerate = async () => {
     setShowNoFramesModal(false);
+    if (isDreaminaModelId(videoModel) && !useMock) {
+      try {
+        const auth = await checkDreaminaAuthStatus();
+        if (!auth.loggedIn) {
+          setError(auth.error || '即梦服务登录已过期，请联系管理员在服务器重新登录');
+          return;
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '即梦登录态检测失败');
+        return;
+      }
+    }
     if (multiShotEnabled && shots.length > 0 && isDreaminaMultimodalModelId(videoModel)) {
       setError('全能参考（即梦 multimodal）暂不支持多镜头拼接，请关闭多镜头后再试。');
       return;
     }
     if (multiShotEnabled && shots.length > 0) {
+      if (!useMock) {
+        setMultishotSubmitting(true);
+        setMultishotJob(null);
+      }
       const res = await generateMultishot({
         shots: shots.map((s, i) => ({
           durationSeconds: s.duration,
@@ -310,11 +435,36 @@ export function StepVideo() {
         driveToken: accessToken ?? undefined,
         model: videoModel || undefined,
       });
+      setMultishotSubmitting(false);
+      if (res?.status === 'pending' && res.jobId) {
+        setMultishotJob({
+          jobId: res.jobId,
+          status: 'pending',
+          shots: shots.map((s, i) => ({
+            index: i,
+            status: 'pending',
+            promptSnippet: s.prompt.trim().slice(0, 120),
+            durationSeconds: s.duration,
+          })),
+          progress: {
+            total: shots.length,
+            done: 0,
+            failed: 0,
+            running: 0,
+            pending: shots.length,
+          },
+        });
+        return;
+      }
       if (res?.videoUrl) {
         const taskId = `multishot-${Date.now()}`;
         setVideoResult(res.videoUrl, taskId, res.outputPath);
         if (res.outputPath) {
-          saveVideoToHistory({ taskId, videoPath: res.outputPath, prompt: shots.map((s) => s.prompt).join('\n---\n') });
+          saveVideoToHistory({
+            taskId,
+            videoPath: res.outputPath,
+            prompt: shots.map((s) => s.prompt).join('\n---\n'),
+          });
         }
         clearError();
         navigate(`/result?taskId=${taskId}`);
@@ -324,10 +474,10 @@ export function StepVideo() {
         !useMock && dreaminaAsync && isDreaminaModelId(videoModel) && !multiShotEnabled;
 
       if (useDreaminaSubmit) {
-        setDreaminaSubmitting(true);
+        setSubmittingProvider('dreamina');
         clearError();
         try {
-          const { submitId, taskId } = await submitDreaminaAsync({
+          const queued = await queuedVideoGen.submitQueued('dreamina', {
             storyboardText: prompt.trim(),
             materials: selectedOrder.map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType })),
             driveToken: accessToken ?? undefined,
@@ -350,20 +500,20 @@ export function StepVideo() {
                 }
               : {}),
           });
+          const submitId = queued?.submitId;
+          if (!submitId || !queued?.taskId) return;
           setDreaminaJobs((prev) => [
             ...prev,
             {
               id: crypto.randomUUID(),
               submitId,
-              taskId,
+              taskId: queued.taskId,
               status: 'pending',
               promptSnippet: prompt.trim().slice(0, 80),
             },
           ]);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : '即梦提交失败');
         } finally {
-          setDreaminaSubmitting(false);
+          setSubmittingProvider(null);
         }
         return;
       }
@@ -372,11 +522,11 @@ export function StepVideo() {
         !useMock && klingAsync && isKlingModelId(videoModel) && !multiShotEnabled;
 
       if (useKlingAsyncPath) {
-        setKlingSubmitting(true);
+        setSubmittingProvider('kling');
         clearError();
         try {
           const refUrl = viralDanceReferenceVideoUrl?.trim();
-          const { taskId } = await generateKlingAsync({
+          const queued = await queuedVideoGen.submitQueued('kling', {
             storyboardText: prompt.trim(),
             materials: selectedOrder.map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType })),
             driveToken: accessToken ?? undefined,
@@ -387,16 +537,15 @@ export function StepVideo() {
               ? { referenceVideoUrl: refUrl, referenceVideoReferType: 'feature' as const, referenceVideoKeepSound: 'no' as const }
               : {}),
           });
-          setKlingJobs((prev) => [...prev, { id: crypto.randomUUID(), taskId, phase: 'pending' }]);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : '创建可灵任务失败');
+          if (!queued?.taskId) return;
+          setKlingJobs((prev) => [...prev, { id: crypto.randomUUID(), taskId: queued.taskId, phase: 'pending' }]);
         } finally {
-          setKlingSubmitting(false);
+          setSubmittingProvider(null);
         }
         return;
       }
 
-      const res = await generate({
+      const res = await singleVideoGen.generateSync({
         storyboardText: prompt.trim(),
         materials: selectedOrder.map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType })),
         driveToken: accessToken ?? undefined,
@@ -433,7 +582,12 @@ export function StepVideo() {
     }
   };
 
-  const busy = loading || klingSubmitting || dreaminaSubmitting;
+  const busy =
+    loading ||
+    multishotSubmitting ||
+    queuedVideoGen.state.status === 'submitting' ||
+    singleVideoGen.state.status === 'submitting' ||
+    singleVideoGen.state.status === 'polling';
   const multimodalReady =
     !isDreaminaMultimodalModelId(videoModel) ||
     useMock ||
@@ -464,16 +618,24 @@ export function StepVideo() {
               : isDreaminaMultimodalModelId(videoModel)
                 ? '正在生成（全能参考，即梦可能需数分钟）…'
                 : '正在生成视频，预计 1–2 分钟…'
-            : klingSubmitting
+            : multishotSubmitting
+              ? '正在创建多镜头任务…'
+            : submittingProvider === 'kling'
               ? templateId === 'viral-dance' && viralDanceReferenceVideoUrl?.trim()
                 ? '正在解析参考视频并提交可灵…（TikTok 首次可能需 30–120 秒）'
                 : '正在提交可灵任务…'
-              : dreaminaSubmitting
+              : submittingProvider === 'dreamina'
                 ? '正在提交即梦任务…'
                 : '开始生成'}
         </button>
         <RunningStatus
-          active={loading || klingSubmitting || dreaminaSubmitting}
+          active={
+            loading ||
+            multishotSubmitting ||
+            queuedVideoGen.state.status === 'submitting' ||
+            multishotJob?.status === 'pending' ||
+            multishotJob?.status === 'running'
+          }
           label={loading ? '正在生成视频' : '正在提交视频任务'}
           stallAfterSec={30}
         />
@@ -532,6 +694,65 @@ export function StepVideo() {
               label="正在批量提交分镜任务"
               stallAfterSec={25}
             />
+          </div>
+        )}
+
+        {multishotJob && (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-[var(--color-text)]">多镜头任务进度</p>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {multishotJob.progress
+                  ? `${multishotJob.progress.done}/${multishotJob.progress.total} 完成`
+                  : `任务 ${multishotJob.jobId}`}
+              </span>
+            </div>
+            {multishotJob.progress && (
+              <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-300"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        ((multishotJob.progress.done + multishotJob.progress.failed) /
+                          Math.max(1, multishotJob.progress.total)) *
+                          100,
+                      ),
+                    )}%`,
+                  }}
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              {multishotJob.shots.map((shot) => (
+                <div
+                  key={shot.index}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-[var(--color-border)]/80 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--color-text)]">镜头 {shot.index + 1}</p>
+                    <p className="truncate text-[11px] text-[var(--color-text-muted)]">{shot.promptSnippet || '-'}</p>
+                  </div>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    {shot.status === 'pending'
+                      ? '排队中'
+                      : shot.status === 'running'
+                        ? '生成中'
+                        : shot.status === 'done'
+                          ? '完成'
+                          : '失败'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {multishotJob.status === 'error' && (
+              <p className="text-xs text-[var(--color-error)]">{multishotJob.error || '多镜头任务失败'}</p>
+            )}
+            {multishotJob.status === 'done' && multishotJob.finalVideoPath && (
+              <p className="text-xs text-green-400">已完成拼接，正在跳转成片页...</p>
+            )}
           </div>
         )}
 

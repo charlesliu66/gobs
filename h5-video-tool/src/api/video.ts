@@ -92,6 +92,10 @@ export interface VideoGenerateResponse {
   estimatedTime?: number;
 }
 
+export async function generateVideo(req: VideoGenerateRequest): Promise<VideoGenerateResponse> {
+  return apiPost<VideoGenerateResponse>('/api/video/generate', req);
+}
+
 /** 多镜头生成请求 */
 export interface MultishotGenerateRequest {
   shots: { durationSeconds: number; prompt: string; imageBase64?: string }[];
@@ -104,9 +108,33 @@ export interface MultishotGenerateRequest {
 }
 
 export interface MultishotGenerateResponse {
-  status: 'completed';
-  videoUrl: string;
+  status: 'pending' | 'completed';
+  jobId?: string;
+  videoUrl?: string;
   outputPath?: string;
+}
+
+export interface MultishotJobStatusResponse {
+  jobId: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  shots: Array<{
+    index: number;
+    status: 'pending' | 'running' | 'done' | 'error';
+    promptSnippet: string;
+    durationSeconds: number;
+    videoPath?: string;
+    error?: string;
+  }>;
+  finalVideoPath?: string;
+  error?: string;
+  progress?: {
+    total: number;
+    done: number;
+    failed: number;
+    running: number;
+    pending: number;
+  };
+  updatedAt?: string;
 }
 
 /** ingarena：仅创建可灵任务，由前端轮询 GET /api/video/kling/task/:id */
@@ -182,6 +210,16 @@ export async function submitDreaminaAsync(
   return apiPost('/api/video/dreamina/submit', req);
 }
 
+export interface DreaminaAuthStatus {
+  loggedIn: boolean;
+  username?: string;
+  error?: string;
+}
+
+export async function checkDreaminaAuthStatus(): Promise<DreaminaAuthStatus> {
+  return apiGet<DreaminaAuthStatus>('/api/video/dreamina/auth-status');
+}
+
 export interface DreaminaTaskPollResponse {
   taskId: string;
   submitId: string;
@@ -238,4 +276,8 @@ export async function generateMultishot(req: MultishotGenerateRequest): Promise<
   if (req.driveToken) body.driveToken = req.driveToken;
   if (req.model) body.model = req.model;
   return apiPost<MultishotGenerateResponse>('/api/video/generate-multishot', body);
+}
+
+export async function getMultishotJobStatus(jobId: string): Promise<MultishotJobStatusResponse> {
+  return apiGet<MultishotJobStatusResponse>(`/api/video/multishot-job/${encodeURIComponent(jobId)}`);
 }

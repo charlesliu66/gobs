@@ -220,7 +220,7 @@ function parseWrapperStdout(stdout: string): WrapperJson {
   return JSON.parse(jsonText) as WrapperJson;
 }
 
-async function runWrapper(script: string, args: string[]): Promise<WrapperJson> {
+async function runWrapper(script: string, args: string[], timeoutMs = 0): Promise<WrapperJson> {
   const scriptsDir = getDreaminaScriptsDir();
   const scriptPath = path.join(scriptsDir, script);
   if (!fsSync.existsSync(scriptPath)) {
@@ -234,15 +234,37 @@ async function runWrapper(script: string, args: string[]): Promise<WrapperJson> 
     (resolve, reject) => {
       const chunksOut: Buffer[] = [];
       const chunksErr: Buffer[] = [];
+      let settled = false;
       const proc = spawn(py, fullArgs, {
         cwd: scriptsDir,
         env: augmentDreaminaSpawnEnv(),
         windowsHide: true,
       });
+      const timer =
+        timeoutMs > 0
+          ? setTimeout(() => {
+              if (settled) return;
+              settled = true;
+              try {
+                proc.kill('SIGKILL');
+              } catch {
+                // ignore
+              }
+              reject(new Error(`即梦状态检测超时（>${Math.round(timeoutMs / 1000)}s）`));
+            }, timeoutMs)
+          : null;
       proc.stdout?.on('data', (d) => chunksOut.push(d as Buffer));
       proc.stderr?.on('data', (d) => chunksErr.push(d as Buffer));
-      proc.on('error', reject);
+      proc.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
       proc.on('close', (c) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
         resolve({
           stdout: Buffer.concat(chunksOut).toString('utf8'),
           stderr: Buffer.concat(chunksErr).toString('utf8'),
@@ -260,6 +282,31 @@ async function runWrapper(script: string, args: string[]): Promise<WrapperJson> 
     throw new Error(
       `即梦输出无法解析为 JSON。stdout=${stdout.slice(0, 500)} stderr=${stderr.slice(0, 300)}`,
     );
+  }
+}
+
+export async function checkDreaminaAuth(): Promise<{
+  loggedIn: boolean;
+  username?: string;
+  error?: string;
+}> {
+  if (!isDreaminaEnabled()) {
+    return { loggedIn: false, error: '即梦服务未启用' };
+  }
+  try {
+    const wrap = await runWrapper('user_credit.py', [], 5000);
+    if (!wrap.ok) {
+      return {
+        loggedIn: false,
+        error: dreaminaFailureMessage(wrap.error || '即梦 CLI 未登录，请在服务器执行 dreamina login'),
+      };
+    }
+    const data = wrap.data as Record<string, unknown> | undefined;
+    const username = String(data?.username ?? data?.user_name ?? data?.name ?? '').trim();
+    return { loggedIn: true, username: username || undefined };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '即梦登录态检测失败';
+    return { loggedIn: false, error: dreaminaFailureMessage(msg) };
   }
 }
 

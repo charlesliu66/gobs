@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { EditorExportRequestBody } from '../editor/timelineSchema.js';
 import { runFfmpegExport } from '../services/ffmpegExport.js';
 import { getApiDataDir, getUploadsPath } from '../config/apiDataDir.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
 
@@ -32,12 +33,14 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
 /** 把 assetId 映射到本地文件路径（多路查找） */
 function resolveAssetPaths(
   tracks: EditorExportRequestBody['project']['tracks'],
+  username: string,
 ): Record<string, string> {
+  const safeUser = sanitizeUsername(username);
   // 素材可能在多个目录
   const searchDirs = [
-    getUploadsPath('editor'),           // 剪辑上传目录
-    path.join(getApiDataDir(), 'output', 'production', 'images'), // 高级制片图片
-    path.join(getApiDataDir(), 'output'), // 通用输出目录
+    path.join(getUploadsPath('editor'), safeUser), // 剪辑上传目录
+    path.join(getApiDataDir(), 'output', 'production', 'images', safeUser), // 高级制片图片
+    path.join(getApiDataDir(), 'output', safeUser), // 通用输出目录
   ];
 
   const map: Record<string, string> = {};
@@ -81,6 +84,7 @@ function resolveAssetPaths(
 
 /** POST /api/editor/export — 提交导出任务（异步） */
 router.post('/export', (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
   if (!validateTimelineBody(req.body)) {
     res.status(400).json({ error: 'Invalid body' });
     return;
@@ -109,12 +113,12 @@ router.post('/export', (req, res) => {
 
     try {
       // 输出目录
-      const outDir = path.join(getApiDataDir(), 'exports');
+      const outDir = path.join(getApiDataDir(), 'exports', username);
       await fs.promises.mkdir(outDir, { recursive: true });
       const outputPath = path.join(outDir, `${jobId}.${format}`);
 
       // 资产路径映射
-      const assets = resolveAssetPaths(project.tracks);
+      const assets = resolveAssetPaths(project.tracks, username);
       const effectiveAspect = aspectRatio ?? project.aspectRatio;
 
       await runFfmpegExport({
@@ -166,8 +170,9 @@ router.get('/export/:jobId', (req, res) => {
 
 /** GET /api/editor/export/download/:filename — 下载导出文件 */
 router.get('/export/download/:filename', (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
   const filename = path.basename(req.params.filename); // 防路径穿越
-  const filePath = path.join(getApiDataDir(), 'exports', filename);
+  const filePath = path.join(getApiDataDir(), 'exports', username, filename);
   if (!fs.existsSync(filePath)) {
     res.status(404).json({ error: 'File not found' });
     return;
