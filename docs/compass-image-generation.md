@@ -20,7 +20,7 @@ client = genai.Client(
     api_key='<COMPASS_API_KEY>',
     http_options=HttpOptions(
         api_version='v1',
-        base_url='https://compass.llm.shopee.io/compass-api/v1',
+        base_url='http://compass.llm.shopee.io/compass-api/v1',
     )
 )
 
@@ -47,7 +47,7 @@ client = genai.Client(
     api_key='<COMPASS_API_KEY>',
     http_options=HttpOptions(
         api_version="v1",
-        base_url='https://compass.llm.shopee.io/compass-api/v1'
+        base_url='http://compass.llm.shopee.io/compass-api/v1'
     )
 )
 

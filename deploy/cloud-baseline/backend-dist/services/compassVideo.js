@@ -9,7 +9,7 @@
  */
 import axios from 'axios';
 import { resolveCompassApiKeyForVeoModel } from './compassApiKey.js';
-const BASE_URL = process.env.COMPASS_API_URL?.trim() || 'https://compass.llm.shopee.io/compass-api/v1';
+const BASE_URL = process.env.COMPASS_API_URL?.trim() || 'http://compass.llm.shopee.io/compass-api/v1';
 /** Veo 模型：veo-2.0-generate-001 | veo-3.0-generate-001 | veo-3.1-generate-001 等 */
 const DEFAULT_MODEL = process.env.COMPASS_VIDEO_MODEL?.trim() || 'veo-2.0-generate-001';
 function createClient(veoModel) {

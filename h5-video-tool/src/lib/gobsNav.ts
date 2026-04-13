@@ -19,6 +19,7 @@ export function navTargetToFeature(to: string): GobsFeatureCode | null {
     '/tiktok-matrix': 'tiktok_matrix',
     '/history': 'history',
     '/settings/accounts': 'admin_accounts',
+    '/settings/usage': 'admin_accounts',
   };
   return map[path] ?? null;
 }
@@ -39,6 +40,7 @@ export function pathToRequiredFeature(pathname: string, search: string): GobsFea
     '/tiktok-matrix': 'tiktok_matrix',
     '/history': 'history',
     '/settings/accounts': 'admin_accounts',
+    '/settings/usage': 'admin_accounts',
   };
   return map[pathname] ?? null;
 }

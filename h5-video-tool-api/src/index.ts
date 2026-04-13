@@ -25,8 +25,10 @@ import quickfilmRouter, { draftsRouter } from './routes/quickfilm.js';
 import assetsRouter from './routes/assets.js';
 import gobsAuthRouter from './routes/gobsAuth.js';
 import riskSentimentRouter from './routes/riskSentiment.js';
+import adminUsageRouter from './routes/adminUsage.js';
 import { geelarkRouter } from './routes/geelark.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
+import { runWithRequestContext } from './services/requestContext.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,6 +50,9 @@ app.use((req, res, next) => {
 
 // JWT 鉴权中间件（/api/auth/login、/api/health、/api/gobs-auth/* 豁免）
 app.use(jwtAuthMiddleware);
+app.use((req, _res, next) => {
+  runWithRequestContext({ account: req.user?.username }, () => next());
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'h5-video-tool-api' });
@@ -76,6 +81,7 @@ app.use('/api/quickfilm/drafts', draftsRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/risk-sentiment', riskSentimentRouter);
 app.use('/api/geelark', geelarkRouter);
+app.use('/api/admin', adminUsageRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);

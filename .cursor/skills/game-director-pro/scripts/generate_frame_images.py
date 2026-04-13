@@ -54,7 +54,7 @@ def _get_config():
         return {
             "provider": "compass",
             "api_key": compass_key,
-            "api_url": os.environ.get("COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1").strip(),
+            "api_url": os.environ.get("COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1").strip(),
             "model": os.environ.get("COMPASS_IMAGEN_MODEL", "imagen-4.0-generate-preview-06-06").strip(),
         }
     # 火山 Ark 生图
@@ -117,7 +117,7 @@ def _call_compass_imagen(prompt: str, config: dict, width: int = DEFAULT_WIDTH, 
     except ImportError:
         raise RuntimeError("Compass Imagen 需要 pip install google-genai")
     api_key = config["api_key"]
-    base_url = config.get("api_url", "https://compass.llm.shopee.io/compass-api/v1")
+    base_url = config.get("api_url", "http://compass.llm.shopee.io/compass-api/v1")
     model = config.get("model", "imagen-4.0-generate-preview-06-06")
     ar = "9:16" if height > width else ("16:9" if width > height else "1:1")
     client = genai.Client(

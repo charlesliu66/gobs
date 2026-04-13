@@ -8,6 +8,16 @@ import { generateImageWithPython } from '../services/imagenPython.js';
 
 export const storyboardRouter = Router();
 
+function getStoryboardTimeoutMs(): number {
+  const raw = Number.parseInt(process.env.STORYBOARD_IMAGE_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.max(30_000, Math.min(240_000, raw));
+  }
+  return 120_000;
+}
+
+const STORYBOARD_IMAGE_TIMEOUT_MS = getStoryboardTimeoutMs();
+
 /** 从 data URL 或纯 base64 取出 raw base64 */
 function dataUrlToRawBase64(dataUrlOrB64: string): string {
   const s = dataUrlOrB64.trim();
@@ -121,9 +131,7 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
         const firstRes = await generateImageWithPython({
           prompt: firstPrompt,
           aspectRatio: ar,
-          // 高级制片资产卡快速模式：宁可快速失败，也不要卡住几分钟
-          maxAttempts: 1,
-          timeoutMs: 55_000,
+          timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
           ...styleOpts,
         });
         const first = `data:image/png;base64,${firstRes.imageBase64}`;
@@ -141,15 +149,13 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
         generateImageWithPython({
           prompt: firstPrompt,
           aspectRatio: ar,
-          maxAttempts: 1,
-          timeoutMs: 60_000,
+          timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
           ...styleOpts,
         }),
         generateImageWithPython({
           prompt: lastPrompt,
           aspectRatio: ar,
-          maxAttempts: 1,
-          timeoutMs: 60_000,
+          timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
           ...styleOpts,
         }),
       ]);
@@ -190,15 +196,13 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
         prompt: middlePrompt,
         aspectRatio: ar,
         styleReferenceBase64: styleB64,
-        maxAttempts: 1,
-        timeoutMs: 60_000,
+        timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       }),
       generateImageWithPython({
         prompt: lastPrompt,
         aspectRatio: ar,
         styleReferenceBase64: styleB64,
-        maxAttempts: 1,
-        timeoutMs: 60_000,
+        timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       }),
     ]);
 
@@ -277,8 +281,7 @@ storyboardRouter.post('/portrait', async (req: Request, res: Response) => {
     const out = await generateImageWithPython({
       prompt: finalPrompt,
       aspectRatio: ar,
-      maxAttempts: 1,
-      timeoutMs: 60_000,
+      timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       ...(refB64 ? { referenceImageBase64: refB64 } : {}),
       ...(styleB64ForPython ? { styleReferenceBase64: styleB64ForPython } : {}),
       ...(keyOverride ? { apiKeyOverride: keyOverride } : {}),
@@ -322,8 +325,7 @@ storyboardRouter.post('/images', async (req: Request, res: Response) => {
       const { imageBase64, model } = await generateImageWithPython({
         prompt: shot.prompt,
         aspectRatio: aspectRatio ?? '16:9',
-        maxAttempts: 1,
-        timeoutMs: 60_000,
+        timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       });
       results.push({
         index: shot.index,

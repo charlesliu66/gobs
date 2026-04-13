@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const BASE =
-  process.env.COMPASS_API_URL?.trim() || 'https://compass.llm.shopee.io/compass-api/v1';
+  process.env.COMPASS_API_URL?.trim() || 'http://compass.llm.shopee.io/compass-api/v1';
 
 function mask(k: string): string {
   if (k.length <= 12) return '***';

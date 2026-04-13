@@ -369,19 +369,36 @@ export function Layout() {
           </label>
         </div>
         {user && (
-          <NavLink
-            to="/settings/accounts"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border border-transparent'
-              }`
-            }
-          >
-            <SettingsIcon />
-            账号设置
-          </NavLink>
+          <>
+            <NavLink
+              to="/settings/accounts"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  isActive
+                    ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border border-transparent'
+                }`
+              }
+            >
+              <SettingsIcon />
+              账号设置
+            </NavLink>
+            {String(user.username || '').trim().toLowerCase() === 'admin' && (
+              <NavLink
+                to="/settings/usage"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    isActive
+                      ? 'bg-[var(--color-primary)]/14 text-[var(--color-primary-hover)] border border-[var(--color-primary)]/35'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] border border-transparent'
+                  }`
+                }
+              >
+                <SettingsIcon />
+                Key 调用监控
+              </NavLink>
+            )}
+          </>
         )}
         <button
           type="button"

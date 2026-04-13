@@ -15,7 +15,7 @@
 | 变量名 | 必填 | 说明 |
 |--------|------|------|
 | `COMPASS_API_KEY` | 是 | 与 h5-video-tool-api/.env 中的 COMPASS_API_KEY 一致 |
-| `COMPASS_API_URL` | 否 | 默认 `https://compass.llm.shopee.io/compass-api/v1` |
+| `COMPASS_API_URL` | 否 | 默认 `http://compass.llm.shopee.io/compass-api/v1` |
 | `FRAME_IMAGE_PROVIDER` | 否 | 设 `compass` 或留空，优先使用 Compass Imagen |
 
 脚本会从 `h5-video-tool-api/.env` 或 skill 目录 `.env` 自动加载。

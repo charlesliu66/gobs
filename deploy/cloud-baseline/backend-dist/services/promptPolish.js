@@ -80,7 +80,7 @@ ${VEO_BASE_RULES}
 
 输出格式：分镜（时间码 + 景别 + 运镜），searchKeywords 中英双语，folderHints 可选。
 {"polishedPrompt":"...","searchKeywords":["..."],"folderHints":["Scenario","Character"]}`;
-const DEFAULT_COMPASS_API_URL = 'https://compass.llm.shopee.io/compass-api/v1';
+const DEFAULT_COMPASS_API_URL = 'http://compass.llm.shopee.io/compass-api/v1';
 /** Compass 上多数项目已开通；3.x Pro 常需单独白名单，勿作默认 */
 const DEFAULT_COMPASS_GEMINI_MODEL = 'gemini-2.5-flash';
 function getCompassLlmConfig() {

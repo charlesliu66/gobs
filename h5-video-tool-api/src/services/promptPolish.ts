@@ -10,6 +10,7 @@ import axios, { isAxiosError } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { getTemplate } from '../config/prompt-templates/index.js';
 import { resolveCompassApiKeyForGeminiChat } from './compassApiKey.js';
+import { recordKeyUsage } from './keyUsageStats.js';
 
 /** VEO 通用规则（Subject + Action 结构，单场景、具体描述） */
 const VEO_BASE_RULES = `
@@ -103,7 +104,7 @@ export interface PolishResult {
   characters?: string[];
 }
 
-const DEFAULT_COMPASS_API_URL = 'https://compass.llm.shopee.io/compass-api/v1';
+const DEFAULT_COMPASS_API_URL = 'http://compass.llm.shopee.io/compass-api/v1';
 /** Compass 上多数项目已开通；3.x Pro 常需单独白名单，勿作默认 */
 const DEFAULT_COMPASS_GEMINI_MODEL = 'gemini-2.5-flash';
 
@@ -167,6 +168,12 @@ async function postCompassChatCompletions(
           usage ? JSON.stringify(usage) : '(response 无 usage 字段，可能为网关未透传)',
         );
       }
+      await recordKeyUsage({
+        success: true,
+        promptTokens: usage?.prompt_tokens,
+        completionTokens: usage?.completion_tokens,
+        totalTokens: usage?.total_tokens,
+      });
       return { text: rawText, usage };
     } catch (e) {
       const isLast = attempt === maxAttempts;
@@ -177,6 +184,7 @@ async function postCompassChatCompletions(
           (typeof e.response?.data === 'string' ? e.response.data : e.message) ||
           msg;
         const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        await recordKeyUsage({ success: false });
         if (!isLast && transient) {
           console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
           await new Promise((r) => setTimeout(r, attempt * 1000));
@@ -185,11 +193,14 @@ async function postCompassChatCompletions(
       } else if (e instanceof Error) {
         msg = e.message || msg;
         const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        await recordKeyUsage({ success: false });
         if (!isLast && transient) {
           console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
           await new Promise((r) => setTimeout(r, attempt * 1000));
           continue;
         }
+      } else {
+        await recordKeyUsage({ success: false });
       }
       throw new Error(typeof msg === 'string' && msg ? msg : 'Compass Gemini 请求失败');
     }

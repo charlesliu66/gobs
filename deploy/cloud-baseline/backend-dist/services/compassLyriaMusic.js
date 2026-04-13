@@ -6,7 +6,7 @@
  */
 import axios, { isAxiosError } from 'axios';
 import { resolveCompassApiKeyForGeminiChat } from './compassApiKey.js';
-const BASE_URL = process.env.COMPASS_API_URL?.trim() || 'https://compass.llm.shopee.io/compass-api/v1';
+const BASE_URL = process.env.COMPASS_API_URL?.trim() || 'http://compass.llm.shopee.io/compass-api/v1';
 const DEFAULT_MODEL = process.env.COMPASS_LYRIA_MODEL?.trim() || 'lyria-002';
 function predictPath(modelId) {
     return `v1/projects/shopee-llm-gemini/locations/us-central1/publishers/google/models/${modelId}:predict`;

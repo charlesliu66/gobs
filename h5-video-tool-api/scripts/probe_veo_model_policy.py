@@ -32,7 +32,7 @@ def probe(model: str) -> None:
     root = Path(__file__).resolve().parent.parent
     load_dotenv(root / ".env")
     base = os.environ.get(
-        "COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1"
+        "COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1"
     ).strip()
     api_key = resolve_key(model)
     if not api_key:

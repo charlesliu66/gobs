@@ -9,6 +9,7 @@ import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { resolveCompassApiKeyCandidatesPreferKey2 } from './compassApiKey.js';
+import { recordKeyUsage } from './keyUsageStats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_SCRIPT = path.resolve(__dirname, '../../scripts/imagen_generate.py');
@@ -35,6 +36,9 @@ export interface ImagenPythonResult {
   /** 实际调用成功的模型 id（由 imagen_generate.py 返回） */
   model?: string;
 }
+
+// 进程内全局串行：所有 Imagen 请求按队列线性执行，避免并发放大失败率。
+let imagenQueueTail: Promise<void> = Promise.resolve();
 
 function getPythonCandidates(): string[] {
   const env = process.env.PYTHON_EXE?.trim();
@@ -98,7 +102,32 @@ function isRateLimitOrQuotaError(msg: string): boolean {
   return /RESOURCE_EXHAUSTED|quota|rate.?limit|429|Too Many Requests/i.test(msg);
 }
 
+function isModelUnavailableError(msg: string): boolean {
+  return /404|not found|does not have access|403|permission|no permission/i.test(msg);
+}
+
+function getModelCandidates(optionsModel?: string): string[] {
+  const forced = optionsModel?.trim();
+  if (forced) return [forced];
+  const raw =
+    process.env.COMPASS_IMAGEN_MODEL_CANDIDATES?.trim() ||
+    process.env.COMPASS_IMAGEN_MODEL?.trim() ||
+    'gemini-3.1-flash-image-preview,gemini-3-pro-image-preview';
+  const out = raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return out.length ? [...new Set(out)] : ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'];
+}
+
 export async function generateImageWithPython(options: ImagenPythonOptions): Promise<ImagenPythonResult> {
+  const previous = imagenQueueTail.catch(() => {});
+  let releaseQueue!: () => void;
+  imagenQueueTail = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+  await previous;
+
   const prompt = options.prompt.trim();
   const aspectRatio = options.aspectRatio ?? '16:9';
 
@@ -106,12 +135,7 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
   const keyCandidates = options.apiKeyOverride?.trim()
     ? [options.apiKeyOverride.trim()]
     : resolveCompassApiKeyCandidatesPreferKey2();
-  // 避免继承 shell/其它任务遗留的 IMAGEN_MODEL，导致与 .env 中 COMPASS_IMAGEN_MODEL 不一致
-  if (options.model) {
-    env.IMAGEN_MODEL = options.model;
-  } else {
-    delete env.IMAGEN_MODEL;
-  }
+  const modelCandidates = getModelCandidates(options.model);
   // 首尾帧/纯文生图必须不带参考图；若环境里残留 COMPASS_REF_IMAGE_B64，Python 会走 edit_image，画面会被垫图绑架
   // 大 base64 通过临时文件传递，避免 E2BIG 错误
   const tempFiles: string[] = [];
@@ -176,22 +200,32 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
       for (const exe of cands) {
         try {
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const { stdout, stderr, code } = await runImagenScript(exe, env, timeoutMs);
-            lastStderr = stderr;
-            lastCode = code;
-            if (code === 0) {
-              const out = JSON.parse(stdout.trim());
-              if (!out?.ok || !out.imageBase64) {
-                throw new Error(out?.error || '无图像输出');
+            for (const model of modelCandidates) {
+              env.IMAGEN_MODEL = model;
+              env.COMPASS_IMAGEN_STRICT_MODEL = '1';
+              const { stdout, stderr, code } = await runImagenScript(exe, env, timeoutMs);
+              lastStderr = stderr;
+              lastCode = code;
+              await recordKeyUsage({ success: code === 0 });
+              if (code === 0) {
+                const out = JSON.parse(stdout.trim());
+                if (!out?.ok || !out.imageBase64) {
+                  throw new Error(out?.error || '无图像输出');
+                }
+                return {
+                  imageBase64: out.imageBase64,
+                  model: typeof out.model === 'string' ? out.model : model,
+                };
               }
-              return {
-                imageBase64: out.imageBase64,
-                model: typeof out.model === 'string' ? out.model : undefined,
-              };
+              const modelErr = stderr || `Python 脚本退出码 ${code}`;
+              if (isModelUnavailableError(modelErr) || isRateLimitOrQuotaError(modelErr) || isTransientImagenError(modelErr)) {
+                continue;
+              }
+              // 非可降级错误：直接结束本轮，交给外层逻辑处理
+              break;
             }
-
             // 短暂网络抖动：同一解释器重试（带退避）
-            if (isTransientImagenError(stderr) && attempt < maxAttempts) {
+            if (isTransientImagenError(lastStderr) && attempt < maxAttempts) {
               await sleep(700 * attempt);
               continue;
             }
@@ -199,6 +233,7 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
+          await recordKeyUsage({ success: false });
           // ENOENT 继续尝试下一个 python 可执行名
           if (/ENOENT/i.test(msg)) {
             lastError = e;
@@ -232,9 +267,12 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
         '请在服务端安装 python3，或在后端 .env 中设置 PYTHON_EXE=/usr/bin/python3 后重启 gobs-api。',
     );
   } finally {
+    delete env.IMAGEN_MODEL;
+    delete env.COMPASS_IMAGEN_STRICT_MODEL;
     // 清理临时文件
     for (const f of tempFiles) {
       fs.unlink(f).catch(() => {});
     }
+    releaseQueue();
   }
 }

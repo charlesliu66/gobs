@@ -10,7 +10,7 @@ import time
 import json
 
 # 从环境变量读取（Node 会为 VEO3 注入已解析的 COMPASS_API_KEY；CLI 直连时按模型在 KEY / KEY2 间选择）
-BASE_URL = os.environ.get("COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1").strip()
+BASE_URL = os.environ.get("COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1").strip()
 REF_IMAGE_B64 = os.environ.get("COMPASS_REF_IMAGE_B64", "").strip()
 REF_IMAGE_MIME = os.environ.get("COMPASS_REF_IMAGE_MIME", "image/png").strip() or "image/png"
 DEFAULT_MODEL = os.environ.get("COMPASS_VIDEO_MODEL", "veo-2.0-generate-001").strip() or "veo-2.0-generate-001"

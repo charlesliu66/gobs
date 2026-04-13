@@ -846,8 +846,8 @@ export function ProductionWizard() {
     });
     const g = project.meta.styleRefImageDataUrl?.trim();
 
-    // 并发控制：最多同时 2 个任务
-    const CONCURRENCY = 2;
+    // 并发控制：线性执行，避免并发放大生图失败率
+    const CONCURRENCY = 1;
     let completedCount = 0;
     let successCount = 0;
     let failedCount = 0;
@@ -856,7 +856,7 @@ export function ProductionWizard() {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
       try {
-        const timeoutMs = 90_000;
+        const timeoutMs = 180_000;
         const res = await Promise.race([
           generateFrames({
             prompt: t.prompt,

@@ -82,7 +82,7 @@ def main() -> None:
         sys.exit(1)
 
     base_url = os.environ.get(
-        "COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1"
+        "COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1"
     ).strip()
 
     dur = max(4, min(8, int(args.duration)))

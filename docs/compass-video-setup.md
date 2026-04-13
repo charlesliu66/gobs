@@ -19,7 +19,7 @@ pip install google-genai
 
 ```env
 # Compass 视频生成
-COMPASS_API_URL=https://compass.llm.shopee.io/compass-api/v1
+COMPASS_API_URL=http://compass.llm.shopee.io/compass-api/v1
 COMPASS_API_KEY=你的Compass_API_Key
 ```
 

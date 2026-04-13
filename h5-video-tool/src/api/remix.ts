@@ -41,3 +41,36 @@ export async function pollRemixUntilDone(taskId: string, maxMs = 180000): Promis
   }
   throw new Error('处理超时，请稍后在服务器 output/remix 目录查看是否已生成');
 }
+
+export interface AovDslPlan {
+  game: 'aov';
+  durationSec: number;
+  aspectRatio: '9:16' | '16:9';
+  structure: Array<'hook' | 'buildup' | 'climax' | 'outro'>;
+  style: string[];
+  mustEvents: string[];
+  preferredMode?: string;
+  fallbackApplied: boolean;
+}
+
+export interface AovPlanResponse {
+  game: 'aov';
+  rulesetVersion: string;
+  plan: AovDslPlan;
+  trace: string[];
+  warnings: string[];
+}
+
+export async function planAovRemix(userMessage: string, forceAov = false): Promise<AovPlanResponse> {
+  return apiPost('/api/remix/aov/plan', { userMessage, forceAov });
+}
+
+export async function getAovRuleset(): Promise<{
+  ruleset: {
+    version: string;
+    publishedAt: string;
+    note?: string;
+  };
+}> {
+  return apiGet('/api/remix/aov/rules');
+}

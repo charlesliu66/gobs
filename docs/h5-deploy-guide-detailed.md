@@ -36,7 +36,7 @@
 | 密钥 | 获取方式 | 用途 |
 |------|----------|------|
 | `COMPASS_API_KEY` | 你们内部的 Compass API（与视频/生图共用） | 一键 Prompt、发布文案、视频生成等 |
-| `COMPASS_API_URL` | 同上 | Compass 代理根地址，默认 `https://compass.llm.shopee.io/compass-api/v1` |
+| `COMPASS_API_URL` | 同上 | Compass 代理根地址，默认 `http://compass.llm.shopee.io/compass-api/v1` |
 | `GOOGLE_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/) 创建 OAuth 客户端 | Drive 登录 |
 | `GOOGLE_CLIENT_SECRET` | 同上，创建时一起给出 | Drive 登录 |
 
@@ -222,7 +222,7 @@ nano .env
 ```
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=你的密钥
-COMPASS_API_URL=https://compass.llm.shopee.io/compass-api/v1
+COMPASS_API_URL=http://compass.llm.shopee.io/compass-api/v1
 COMPASS_API_KEY=你的Compass密钥
 PORT=3001
 ```

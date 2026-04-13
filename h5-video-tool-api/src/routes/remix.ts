@@ -6,6 +6,15 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import { runRemix, runMergeRemix, type SubtitleCue } from '../services/remixService.js';
 import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import {
+  buildAovBenchmarkTemplate,
+  getActiveAovRuleset,
+  listAovRulesetVersions,
+  publishAovRuleset,
+  rollbackAovRuleset,
+  type AovRuleset,
+} from '../services/aovRulesetService.js';
+import { buildAovDslPlan, looksLikeAovRequest } from '../services/aovDslPlanner.js';
 
 export const remixRouter = Router();
 
@@ -100,6 +109,116 @@ remixRouter.post('/', async (req: Request, res: Response) => {
       task.updatedAt = Date.now();
     }
   })();
+});
+
+/**
+ * GET /api/remix/aov/rules
+ * 返回当前启用的 AOV 规则包
+ */
+remixRouter.get('/aov/rules', async (_req: Request, res: Response) => {
+  try {
+    const ruleset = await getActiveAovRuleset();
+    res.json({ ruleset });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '读取规则失败' });
+  }
+});
+
+/** GET /api/remix/aov/rules/versions - 查询版本与当前激活版本 */
+remixRouter.get('/aov/rules/versions', async (_req: Request, res: Response) => {
+  try {
+    const versions = await listAovRulesetVersions();
+    res.json(versions);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '读取版本失败' });
+  }
+});
+
+/**
+ * POST /api/remix/aov/rules/publish
+ * body: { ruleset: Omit<AovRuleset, "game"|"publishedAt">, note?: string }
+ */
+remixRouter.post('/aov/rules/publish', async (req: Request, res: Response) => {
+  const { ruleset, note } = req.body as { ruleset?: Partial<AovRuleset>; note?: string };
+  if (!ruleset || typeof ruleset !== 'object') {
+    res.status(400).json({ error: '请提供 ruleset' });
+    return;
+  }
+  if (!ruleset.version || typeof ruleset.version !== 'string') {
+    res.status(400).json({ error: 'ruleset.version 必填' });
+    return;
+  }
+  if (!Array.isArray(ruleset.modes) || !ruleset.taxonomy || !ruleset.policy) {
+    res.status(400).json({ error: 'ruleset 缺少 modes/taxonomy/policy' });
+    return;
+  }
+  try {
+    const saved = await publishAovRuleset(
+      {
+        version: ruleset.version,
+        note: ruleset.note,
+        modes: ruleset.modes,
+        taxonomy: ruleset.taxonomy,
+        policy: ruleset.policy,
+      },
+      note,
+    );
+    res.json({ ok: true, ruleset: saved });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : '发布失败' });
+  }
+});
+
+/** POST /api/remix/aov/rules/rollback body: { version: string } */
+remixRouter.post('/aov/rules/rollback', async (req: Request, res: Response) => {
+  const version = typeof (req.body as { version?: string }).version === 'string'
+    ? String((req.body as { version: string }).version).trim()
+    : '';
+  if (!version) {
+    res.status(400).json({ error: '请提供 version' });
+    return;
+  }
+  try {
+    const ruleset = await rollbackAovRuleset(version);
+    res.json({ ok: true, ruleset });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : '回滚失败' });
+  }
+});
+
+/**
+ * POST /api/remix/aov/plan
+ * body: { userMessage: string, forceAov?: boolean }
+ */
+remixRouter.post('/aov/plan', async (req: Request, res: Response) => {
+  const { userMessage, forceAov } = req.body as { userMessage?: string; forceAov?: boolean };
+  const msg = typeof userMessage === 'string' ? userMessage.trim() : '';
+  if (!msg) {
+    res.status(400).json({ error: '请提供 userMessage' });
+    return;
+  }
+  if (!forceAov && !looksLikeAovRequest(msg)) {
+    res.status(400).json({ error: '当前请求未命中 AOV 项目（可传 forceAov=true 强制规划）' });
+    return;
+  }
+  try {
+    const ruleset = await getActiveAovRuleset();
+    const result = buildAovDslPlan(msg, ruleset);
+    res.json({
+      game: 'aov',
+      rulesetVersion: ruleset.version,
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'AOV 规划失败' });
+  }
+});
+
+/** GET /api/remix/aov/benchmark-template?count=50 */
+remixRouter.get('/aov/benchmark-template', (req: Request, res: Response) => {
+  const countRaw = Number(req.query.count ?? 50);
+  const samples = buildAovBenchmarkTemplate(Number.isFinite(countRaw) ? countRaw : 50);
+  res.json({ game: 'aov', samples, note: '用于建立事件识别真值集（must-fix）' });
 });
 
 /** GET /api/remix/:taskId/file - 下载成品视频（需在 /:taskId 之前定义） */

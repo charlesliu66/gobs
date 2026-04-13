@@ -17,7 +17,7 @@ API_KEY = (
     os.environ.get("COMPASS_API_KEY2", "").strip()
     or os.environ.get("COMPASS_API_KEY", "").strip()
 )
-BASE_URL = os.environ.get("COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1").strip()
+BASE_URL = os.environ.get("COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1").strip()
 # 优先用 COMPASS_IMAGEN_MODEL；未设置时按下列顺序尝试（仅 Gemini 3.x 图像模型，见 ai.google.dev 文档）
 DEFAULT_MODEL = os.environ.get("COMPASS_IMAGEN_MODEL", "").strip()
 # 默认提速：先 Gemini 3.1 Flash Image，失败再 Gemini 3 Pro Image（均为官方 preview id）
@@ -229,7 +229,11 @@ def main():
     )
 
     model = os.environ.get("IMAGEN_MODEL", "").strip() or DEFAULT_MODEL
-    models_to_try = [model] + [m for m in FALLBACK_MODELS if m != model] if model else FALLBACK_MODELS
+    strict_model = os.environ.get("COMPASS_IMAGEN_STRICT_MODEL", "").strip().lower() in ("1", "true", "yes")
+    if strict_model and model:
+        models_to_try = [model]
+    else:
+        models_to_try = [model] + [m for m in FALLBACK_MODELS if m != model] if model else FALLBACK_MODELS
 
     config_kw = {}
     if aspect_ratio:

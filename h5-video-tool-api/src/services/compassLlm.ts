@@ -13,7 +13,7 @@ function resolveCompassApiKeyForGeminiChat(): string {
   throw new Error('COMPASS_API_KEY 或 COMPASS_API_KEY2 未配置（Gemini 文本需至少一把 Compass Key）');
 }
 
-const DEFAULT_COMPASS_API_URL = 'https://compass.llm.shopee.io/compass-api/v1';
+const DEFAULT_COMPASS_API_URL = 'http://compass.llm.shopee.io/compass-api/v1';
 const DEFAULT_COMPASS_GEMINI_MODEL = 'gemini-2.5-flash';
 
 function getCompassLlmConfig() {

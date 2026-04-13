@@ -16,6 +16,8 @@ import {
 } from './video/editorVideoAnalysis.js';
 import type { VisionFrameScore } from './video/frameVisionRank.js';
 import { loadGameTaxonomy } from './video/gameTaxonomy.js';
+import { buildAovDslPlan, looksLikeAovRequest } from './aovDslPlanner.js';
+import { getActiveAovRuleset } from './aovRulesetService.js';
 
 export interface EditorAgentAssetContext {
   id: string;
@@ -362,9 +364,32 @@ export async function runEditorAgentApply(
     usageRecords.push({ stage, usage });
   };
 
-  const combatLike = isCombatLikeIntent(input.userMessage);
-  const parsedTarget = parseTargetTimelineSec(input.userMessage);
-  const targetTimelineSec = parsedTarget ?? 30;
+  let effectiveUserMessage = input.userMessage;
+  const combatLike = isCombatLikeIntent(effectiveUserMessage);
+  const parsedTarget = parseTargetTimelineSec(effectiveUserMessage);
+  let targetTimelineSec = parsedTarget ?? 30;
+
+  if (looksLikeAovRequest(effectiveUserMessage)) {
+    try {
+      const rules = await getActiveAovRuleset();
+      const aov = buildAovDslPlan(effectiveUserMessage, rules);
+      targetTimelineSec = aov.plan.durationSec;
+      effectiveUserMessage = `${effectiveUserMessage}
+
+[AOV DSL 约束]
+- durationSec=${aov.plan.durationSec}
+- aspectRatio=${aov.plan.aspectRatio}
+- structure=${aov.plan.structure.join('>')}
+- mustEvents=${aov.plan.mustEvents.join(',')}
+- style=${aov.plan.style.join(',')}
+- rulesetVersion=${rules.version}`;
+      if (aov.warnings.length > 0) {
+        effectiveUserMessage += `\n- warnings=${aov.warnings.join(' | ')}`;
+      }
+    } catch (e) {
+      console.warn('[editor agent] aov plan fallback', e);
+    }
+  }
 
   report({
     stage: 'prepare',
@@ -407,7 +432,7 @@ export async function runEditorAgentApply(
           a.id,
           d,
           analysisMode,
-          input.userMessage,
+          effectiveUserMessage,
           targetTimelineSec,
           usageSink,
           input.visionFocus,
@@ -455,7 +480,7 @@ export async function runEditorAgentApply(
   });
 
   const userText = buildUserPayload(
-    input,
+    { ...input, userMessage: effectiveUserMessage },
     {
       candidateWindows,
       targetTimelineSec,

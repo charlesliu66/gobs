@@ -37,7 +37,7 @@ except ImportError:
     pass
 
 API_KEY = os.environ.get("COMPASS_API_KEY", "").strip()
-BASE_URL = os.environ.get("COMPASS_API_URL", "https://compass.llm.shopee.io/compass-api/v1").strip()
+BASE_URL = os.environ.get("COMPASS_API_URL", "http://compass.llm.shopee.io/compass-api/v1").strip()
 DEFAULT_MODEL = os.environ.get("COMPASS_VIDEO_MODEL", "veo-2.0-generate-001").strip()
 DEFAULT_DURATION = 5
 VEO_DURATION_RANGE = (4, 8)  # Veo 支持 4-8 秒
