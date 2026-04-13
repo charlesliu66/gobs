@@ -11,12 +11,9 @@ import {
   type StructureTemplate,
   type CharacterSheet,
   type SceneSheet,
-  type AssetVariant,
-  type CharacterLookNode,
   type StoryArcLayer,
   type ProductionShot,
   type ProductionShotVideoVersion,
-  type ProductionDesignLayer,
   type PropSheet,
 } from '../studio/productionTypes';
 import {
@@ -28,7 +25,6 @@ import {
   type StoredWizard,
 } from '../studio/productionWizardStorage';
 import {
-  addCharacterLookBranch,
   buildCharacterSheetsFromStory,
   buildSceneSheetsFromStory,
   mergeSceneSheetsFromL2,
@@ -42,10 +38,10 @@ import {
   buildProductionShotVideoStoryboardText,
   buildShotBlobText,
   ensureCharacterLookTree,
-  flattenLookTreeToVariants,
   getCharacterActiveNode,
-  setCharacterLookNodeImage,
 } from '../studio/productionAssets';
+import { buildProductionShotFramePrompt, updateVariantImage } from '../studio/productionWizardHelpers';
+import { useProductionStep2Handlers } from '../studio/useProductionStep2Handlers';
 import {
   postStoryArc,
   postProductionDesign,
@@ -60,7 +56,6 @@ import {
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
 import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
-import { type LibraryCharacter } from '../api/characterLibrary';
 import { toast } from '../components/Toast';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
 import { ImageLightbox } from '../components/ImageLightbox';
@@ -98,66 +93,6 @@ interface BatchAssetGenState {
   success: number;
   failed: number;
   startedAt: number;
-}
-
-function buildProductionShotFramePrompt(
-  shot: ProductionShot,
-  styleRef: string,
-  productionDesign: ProductionDesignLayer | null,
-  opts?: { lockGlobalStyle?: boolean },
-): string {
-  const setRow = productionDesign?.sets.find((s) => s.sceneId === shot.sceneRef);
-  const parts = [
-    styleRef.trim(),
-    opts?.lockGlobalStyle
-      ? '【全片画风】必须与立项时上传的画风参考图及风格摘要一致；各镜仅允许叙事与构图变化，禁止切换为无关影调、时代或媒介。'
-      : '',
-    `景别：${shot.shotScale}，运镜：${shot.cameraMove}，镜头：${shot.lensFeel}`,
-    `主体：${shot.subject}`,
-    `动作：${shot.action}`,
-    shot.structuredStill.sp_environment
-      ? `环境：${shot.structuredStill.sp_environment}`
-      : setRow?.description
-        ? `环境：${setRow.description}`
-        : '',
-    `光线：${shot.lighting}；构图：${shot.composition}`,
-    '电影感分镜静帧，高清，无文字水印。',
-  ];
-  return parts.filter(Boolean).join('\n');
-}
-
-function updateFlatAssetVariantImage<T extends { id: string; variants: AssetVariant[] }>(
-  sheets: T[],
-  sheetId: string,
-  variantId: string,
-  imageDataUrl: string,
-): T[] {
-  return sheets.map((sh) => {
-    if (sh.id !== sheetId) return sh;
-    return {
-      ...sh,
-      variants: sh.variants.map((v) => (v.id === variantId ? { ...v, imageDataUrl } : v)),
-    };
-  });
-}
-
-function updateVariantImage(
-  sheets: CharacterSheet[] | SceneSheet[] | PropSheet[],
-  sheetId: string,
-  variantId: string,
-  imageDataUrl: string,
-  kind: 'char' | 'scene' | 'prop',
-): CharacterSheet[] | SceneSheet[] | PropSheet[] {
-  if (kind === 'char') {
-    return sheets.map((sh) => {
-      if (sh.id !== sheetId) return sh as CharacterSheet;
-      return setCharacterLookNodeImage(ensureCharacterLookTree(sh as CharacterSheet), variantId, imageDataUrl);
-    }) as CharacterSheet[];
-  }
-  if (kind === 'scene') {
-    return updateFlatAssetVariantImage(sheets as SceneSheet[], sheetId, variantId, imageDataUrl);
-  }
-  return updateFlatAssetVariantImage(sheets as PropSheet[], sheetId, variantId, imageDataUrl);
 }
 
 export function ProductionWizard() {
@@ -723,278 +658,38 @@ export function ProductionWizard() {
     }
   }, [project.story, project.productionDesign, maxTotalDurationSec]);
 
-  const runGenerateFrame = useCallback(
-    async (prompt: string, sheetId: string, variantId: string, kind: 'char' | 'scene' | 'prop') => {
-      setGenKey(`${kind}:${sheetId}:${variantId}`);
-      setErr(null);
-      try {
-        const g = project.meta.styleRefImageDataUrl?.trim();
-        const res = await generateFrames({
-          prompt,
-          aspectRatio: ar,
-          shotIndex: 0,
-          singleFrameOnly: true,
-          ...(g ? { globalStyleReferenceFrame: g } : {}),
-        });
-        const img = res.firstFrame;
-        // 立即显示 base64，后台上传到服务端替换为持久 URL
-        const applyImg = (url: string) => {
-          setProject((p) => {
-            if (kind === 'char') {
-              const sheets = p.characterAssets ?? [];
-              return {
-                ...p,
-                characterAssets: updateVariantImage(sheets, sheetId, variantId, url, 'char') as CharacterSheet[],
-              };
-            }
-            if (kind === 'scene') {
-              const sheets = p.sceneAssets ?? [];
-              return {
-                ...p,
-                sceneAssets: updateVariantImage(sheets, sheetId, variantId, url, 'scene') as SceneSheet[],
-              };
-            }
-            const sheets = p.propAssets ?? [];
-            return {
-              ...p,
-              propAssets: updateVariantImage(sheets, sheetId, variantId, url, 'prop') as PropSheet[],
-            };
-          });
-        };
-        applyImg(img);
-        if (img.startsWith('data:')) {
-          const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
-          uploadProductionImage(img, mime, `${kind}-${sheetId}`).then(({ url }) => applyImg(url)).catch(() => {});
-        }
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : '生图失败');
-      } finally {
-        setGenKey(null);
-      }
-    },
-    [ar, project.meta.styleRefImageDataUrl],
-  );
-
-  const handleUploadVariant = useCallback(
-    (file: File | null, sheetId: string, variantId: string, kind: 'char' | 'scene' | 'prop') => {
-      if (!file || !file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setProject((p) => {
-          if (kind === 'char') {
-            const sheets = p.characterAssets ?? [];
-            return {
-              ...p,
-              characterAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'char') as CharacterSheet[],
-            };
-          }
-          if (kind === 'scene') {
-            const sheets = p.sceneAssets ?? [];
-            return {
-              ...p,
-              sceneAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'scene') as SceneSheet[],
-            };
-          }
-          const sheets = p.propAssets ?? [];
-          return {
-            ...p,
-            propAssets: updateVariantImage(sheets, sheetId, variantId, dataUrl, 'prop') as PropSheet[],
-          };
-        });
-      };
-      reader.readAsDataURL(file);
-    },
-    [],
-  );
-
-  const addCharacterVariant = useCallback((sheetId: string) => {
-    setProject((p) => {
-      const sheets = [...(p.characterAssets ?? [])];
-      const i = sheets.findIndex((s) => s.id === sheetId);
-      if (i < 0) return p;
-      const sh = ensureCharacterLookTree(sheets[i]!);
-      const root = sh.lookTree!.find((n) => n.parentId === null) ?? sh.lookTree![0];
-      if (!root) return p;
-      const siblings = sh.lookTree!.filter((n) => n.parentId === root.id);
-      const newId = `look-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const node: CharacterLookNode = {
-        id: newId,
-        parentId: root.id,
-        label: `状态 ${siblings.length + 1}`,
-      };
-      const lookTree = [...sh.lookTree!, node];
-      sheets[i] = {
-        ...sh,
-        lookTree,
-        variants: flattenLookTreeToVariants(lookTree),
-        activeLookId: newId,
-      };
-      return { ...p, characterAssets: sheets };
-    });
-  }, []);
-
-  const addSceneVariant = useCallback((sheetId: string) => {
-    setProject((p) => {
-      const sheets = [...(p.sceneAssets ?? [])];
-      const i = sheets.findIndex((s) => s.id === sheetId);
-      if (i < 0) return p;
-      const sh = sheets[i];
-      const n = sh.variants.length + 1;
-      const v: AssetVariant = { id: `sv-${sheetId}-${Date.now()}`, label: `变体 ${n}` };
-      sheets[i] = { ...sh, variants: [...sh.variants, v] };
-      return { ...p, sceneAssets: sheets };
-    });
-  }, []);
-
-  const addPropVariant = useCallback((sheetId: string) => {
-    setProject((p) => {
-      const sheets = [...(p.propAssets ?? [])];
-      const i = sheets.findIndex((s) => s.id === sheetId);
-      if (i < 0) return p;
-      const sh = sheets[i]!;
-      const n = sh.variants.length + 1;
-      const v: AssetVariant = { id: `pv-${sheetId}-${Date.now()}`, label: `变体 ${n}` };
-      sheets[i] = { ...sh, variants: [...sh.variants, v] };
-      return { ...p, propAssets: sheets };
-    });
-  }, []);
-
-  const handleScenePropGenerate = useCallback(async (extraPrompt: string) => {
-    if (!scenePropModal) return;
-    const { kind, basePrompt } = scenePropModal;
-    const fullPrompt = extraPrompt.trim() ? `${basePrompt}\n\n${extraPrompt.trim()}` : basePrompt;
-    setScenePropGenBusy(true);
-    setScenePropError(null);
-    setScenePropPreview(null);
-    try {
-      const g = project.meta.styleRefImageDataUrl?.trim();
-      const res = await generateFrames({
-        prompt: fullPrompt,
-        aspectRatio: kind === 'scene' ? '16:9' : '1:1',
-        shotIndex: 0,
-        singleFrameOnly: true,
-        ...(g ? { globalStyleReferenceFrame: g } : {}),
-      });
-      setScenePropPreview(res.firstFrame);
-    } catch (e) {
-      setScenePropError(e instanceof Error ? e.message : '生图失败');
-    } finally {
-      setScenePropGenBusy(false);
-    }
-  }, [scenePropModal, project.meta.styleRefImageDataUrl]);
-
-  const handleScenePropConfirm = useCallback(() => {
-    if (!scenePropModal || !scenePropPreview) return;
-    const { kind, sheetId, variantId } = scenePropModal;
-    const applyImg = (url: string) => {
-      setProject((p) => {
-        if (kind === 'scene') {
-          const sheets = p.sceneAssets ?? [];
-          return { ...p, sceneAssets: updateVariantImage(sheets, sheetId, variantId, url, 'scene') as SceneSheet[] };
-        }
-        const sheets = p.propAssets ?? [];
-        return { ...p, propAssets: updateVariantImage(sheets, sheetId, variantId, url, 'prop') as PropSheet[] };
-      });
-    };
-    applyImg(scenePropPreview);
-    if (scenePropPreview.startsWith('data:')) {
-      const mime = scenePropPreview.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
-      uploadProductionImage(scenePropPreview, mime, `${kind}-${sheetId}`).then(({ url }) => applyImg(url)).catch(() => {});
-    }
-    setScenePropModal(null);
-    setScenePropPreview(null);
-  }, [scenePropModal, scenePropPreview]);
-
-  const handleScenePropReset = useCallback(() => {
-    if (!scenePropModal) return;
-    const { kind, sheetId, variantId } = scenePropModal;
-    setProject((p) => {
-      if (kind === 'scene') {
-        return { ...p, sceneAssets: updateVariantImage(p.sceneAssets ?? [], sheetId, variantId, '', 'scene') as SceneSheet[] };
-      }
-      return { ...p, propAssets: updateVariantImage(p.propAssets ?? [], sheetId, variantId, '', 'prop') as PropSheet[] };
-    });
-    setScenePropPreview(null);
-    setScenePropModal(null);
-  }, [scenePropModal]);
-
-  const addManualCharacter = useCallback(() => {
-    const name = window.prompt('角色名称');
-    if (!name?.trim()) return;
-    setProject((p) => {
-      const sheets = [...(p.characterAssets ?? [])];
-      const id = `ch-manual-${Date.now()}`;
-      const rootId = `${id}-v0`;
-      sheets.push({
-        id,
-        name: name.trim(),
-        isProtagonist: false,
-        variants: [{ id: rootId, label: '默认形象' }],
-        lookTree: [{ id: rootId, parentId: null, label: '默认形象' }],
-        activeLookId: rootId,
-      });
-      return { ...p, characterAssets: sheets };
-    });
-  }, []);
-
-  const handleImportFromLibrary = useCallback((libChar: LibraryCharacter) => {
-    const normalize = (v: string) => v.trim().toLowerCase();
-    setProject((p) => {
-      const list = [...(p.characterAssets ?? [])];
-      const existingIdx = list.findIndex((c) => normalize(c.name) === normalize(libChar.name));
-      if (existingIdx >= 0) {
-        const existing = list[existingIdx]!;
-        const ensured = ensureCharacterLookTree(existing);
-        const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
-        const merged = root && libChar.baseImageDataUrl
-          ? setCharacterLookNodeImage(ensured, root.id, libChar.baseImageDataUrl)
-          : ensured;
-        list[existingIdx] = {
-          ...merged,
-          baseImageDataUrl: libChar.baseImageDataUrl,
-          baseConfirmed: libChar.baseConfirmed ?? true,
-          // 保留项目中的主角标识，避免导入后出现多个主角
-          isProtagonist: existing.isProtagonist,
-          states: libChar.states?.map((s) => ({
-            id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            label: s.label,
-            imageDataUrl: s.imageDataUrl,
-            statePrompt: s.statePrompt ?? '',
-            notes: s.notes ?? '',
-          })) ?? existing.states,
-        };
-        return { ...p, characterAssets: list };
-      }
-
-      const id = `ch-lib-${Date.now()}`;
-      const rootId = `${id}-v0`;
-      const hasProtagonist = list.some((c) => c.isProtagonist);
-      const newChar: CharacterSheet = {
-        id,
-        name: libChar.name,
-        isProtagonist: hasProtagonist ? false : (libChar.isProtagonist ?? false),
-        variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-        lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-        activeLookId: rootId,
-        baseImageDataUrl: libChar.baseImageDataUrl,
-        baseConfirmed: libChar.baseConfirmed ?? false,
-        states: libChar.states?.map((s) => ({
-          id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          label: s.label,
-          imageDataUrl: s.imageDataUrl,
-          statePrompt: s.statePrompt ?? '',
-          notes: s.notes ?? '',
-        })) ?? [],
-      };
-      return {
-        ...p,
-        characterAssets: [...list, newChar],
-      };
-    });
-    setShowLibraryImport(false);
-    toast.success(`已应用角色形象「${libChar.name}」`);
-  }, []);
+  const {
+    runGenerateFrame,
+    handleUploadVariant,
+    addCharacterVariant,
+    addSceneVariant,
+    addPropVariant,
+    handleScenePropGenerate,
+    handleScenePropConfirm,
+    handleScenePropReset,
+    addManualCharacter,
+    handleImportFromLibrary,
+    handleTreeSheetChange,
+    handleRemoveCharacterVariant,
+    handlePortraitSheetUpdate,
+    handleConfirmPortrait,
+  } = useProductionStep2Handlers({
+    ar,
+    styleRefImageDataUrl: project.meta.styleRefImageDataUrl,
+    scenePropModal,
+    scenePropPreview,
+    portraitEdit,
+    setProject,
+    setErr,
+    setGenKey,
+    setScenePropGenBusy,
+    setScenePropError,
+    setScenePropPreview,
+    setScenePropModal,
+    setShowLibraryImport,
+    setPortraitJobs,
+    setPortraitEdit,
+  });
 
   const handleFile = useCallback((file: File | null) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -1571,14 +1266,7 @@ export function ProductionWizard() {
             treeFocusCharacterId={treeFocusCharacterId}
             onTreeFocusChange={setTreeFocusCharacterId}
             portraitJobs={portraitJobs}
-            onTreeSheetChange={(next) => {
-              setProject((p) => ({
-                ...p,
-                characterAssets: (p.characterAssets ?? []).map((c) =>
-                  c.id === next.id ? next : c,
-                ),
-              }));
-            }}
+            onTreeSheetChange={handleTreeSheetChange}
             onUploadCharacterVariant={(file, sheetId, variantId) =>
               handleUploadVariant(file, sheetId, variantId, 'char')
             }
@@ -1595,21 +1283,7 @@ export function ProductionWizard() {
             onGenerateCharacterFrame={(prompt, sheetId, variantId) => {
               void runGenerateFrame(prompt, sheetId, variantId, 'char');
             }}
-            onRemoveCharacterVariant={(sheetId, variantId) => {
-              setProject((p) => {
-                const sheets = [...(p.characterAssets ?? [])];
-                const idx = sheets.findIndex((s) => s.id === sheetId);
-                if (idx < 0) return p;
-                const sh = ensureCharacterLookTree(sheets[idx]!);
-                const newLookTree = (sh.lookTree ?? []).filter((n) => n.id !== variantId);
-                sheets[idx] = {
-                  ...sh,
-                  lookTree: newLookTree,
-                  variants: flattenLookTreeToVariants(newLookTree),
-                };
-                return { ...p, characterAssets: sheets };
-              });
-            }}
+            onRemoveCharacterVariant={handleRemoveCharacterVariant}
             onAddCharacterVariant={addCharacterVariant}
             onGenerateSceneFrame={(prompt, sheetId, variantId) => {
               void runGenerateFrame(prompt, sheetId, variantId, 'scene');
@@ -1626,57 +1300,8 @@ export function ProductionWizard() {
             productionAspectRatio={project.meta.aspectRatio ?? '16:9'}
             portraitJobByKey={(key) => portraitJobs[key]}
             onStartPortraitGenerate={handleStartPortraitGenerate}
-            onPortraitSheetUpdate={(updated) => {
-              setProject((p) => ({
-                ...p,
-                characterAssets: (p.characterAssets ?? []).map((c) => c.id === updated.id ? updated : c),
-              }));
-            }}
-            onConfirmPortrait={(imageDataUrl) => {
-              if (!portraitEdit) return;
-              const { sheet, intent } = portraitEdit;
-              const key = getPortraitJobKey(sheet.id, intent);
-              setPortraitJobs((prev) => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-              });
-
-              const applyImage = (url: string) => {
-                setProject((p) => {
-                  const list = p.characterAssets ?? [];
-                  if (intent.mode === 'replace') {
-                    const next = setCharacterLookNodeImage(
-                      ensureCharacterLookTree(sheet),
-                      intent.nodeId,
-                      url,
-                    );
-                    return {
-                      ...p,
-                      characterAssets: list.map((c) => (c.id === next.id ? next : c)),
-                    };
-                  }
-                  const s0 = ensureCharacterLookTree(sheet);
-                  const children = (s0.lookTree ?? []).filter((n) => n.parentId === intent.parentNodeId);
-                  const label = `变体 ${children.length + 1}`;
-                  const next = addCharacterLookBranch(s0, intent.parentNodeId, label, url);
-                  return {
-                    ...p,
-                    characterAssets: list.map((c) => (c.id === next.id ? next : c)),
-                  };
-                });
-              };
-
-              applyImage(imageDataUrl);
-              setPortraitEdit(null);
-
-              if (imageDataUrl.startsWith('data:')) {
-                const mime = imageDataUrl.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
-                uploadProductionImage(imageDataUrl, mime, sheet.name)
-                  .then(({ url }) => applyImage(url))
-                  .catch((e) => console.warn('[portrait upload]', e));
-              }
-            }}
+            onPortraitSheetUpdate={handlePortraitSheetUpdate}
+            onConfirmPortrait={handleConfirmPortrait}
             onGenerateScenePropImage={handleScenePropGenerate}
             onConfirmScenePropImage={handleScenePropConfirm}
             onResetScenePropImage={handleScenePropReset}

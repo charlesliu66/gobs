@@ -1,65 +1,78 @@
 import { useCallback, useMemo, useState } from 'react';
 
 type Setter<T> = T | ((prev: T) => T);
+type HistoryState<T> = {
+  past: T[];
+  present: T;
+  future: T[];
+};
 
 export function useUndoRedo<T>(initial: T, maxHistory = 50) {
-  const [past, setPast] = useState<T[]>([]);
-  const [present, setPresent] = useState<T>(initial);
-  const [future, setFuture] = useState<T[]>([]);
+  const [history, setHistory] = useState<HistoryState<T>>({
+    past: [],
+    present: initial,
+    future: [],
+  });
 
   const setState = useCallback((next: Setter<T>) => {
-    setPresent((current) => {
-      const resolved = typeof next === 'function' ? (next as (prev: T) => T)(current) : next;
-      if (Object.is(resolved, current)) return current;
-      setPast((p) => {
-        const appended = [...p, current];
-        return appended.length > maxHistory ? appended.slice(appended.length - maxHistory) : appended;
-      });
-      setFuture([]);
-      return resolved;
+    setHistory((current) => {
+      const resolved = typeof next === 'function' ? (next as (prev: T) => T)(current.present) : next;
+      if (Object.is(resolved, current.present)) return current;
+      const appended = [...current.past, current.present];
+      const past = appended.length > maxHistory ? appended.slice(appended.length - maxHistory) : appended;
+      return {
+        past,
+        present: resolved,
+        future: [],
+      };
     });
   }, [maxHistory]);
 
   const undo = useCallback(() => {
-    setPast((p) => {
-      if (p.length === 0) return p;
-      const prev = p[p.length - 1]!;
-      setFuture((f) => [present, ...f]);
-      setPresent(prev);
-      return p.slice(0, -1);
+    setHistory((current) => {
+      if (current.past.length === 0) return current;
+      const prev = current.past[current.past.length - 1]!;
+      return {
+        past: current.past.slice(0, -1),
+        present: prev,
+        future: [current.present, ...current.future],
+      };
     });
-  }, [present]);
+  }, []);
 
   const redo = useCallback(() => {
-    setFuture((f) => {
-      if (f.length === 0) return f;
-      const next = f[0]!;
-      setPast((p) => {
-        const appended = [...p, present];
-        return appended.length > maxHistory ? appended.slice(appended.length - maxHistory) : appended;
-      });
-      setPresent(next);
-      return f.slice(1);
+    setHistory((current) => {
+      if (current.future.length === 0) return current;
+      const next = current.future[0]!;
+      const appended = [...current.past, current.present];
+      const past = appended.length > maxHistory ? appended.slice(appended.length - maxHistory) : appended;
+      return {
+        past,
+        present: next,
+        future: current.future.slice(1),
+      };
     });
-  }, [present, maxHistory]);
+  }, [maxHistory]);
 
   const reset = useCallback((next: T) => {
-    setPast([]);
-    setFuture([]);
-    setPresent(next);
+    setHistory({
+      past: [],
+      present: next,
+      future: [],
+    });
   }, []);
 
   return useMemo(
     () => ({
-      state: present,
+      state: history.present,
       setState,
       undo,
       redo,
-      canUndo: past.length > 0,
-      canRedo: future.length > 0,
+      canUndo: history.past.length > 0,
+      canRedo: history.future.length > 0,
       reset,
     }),
-    [present, setState, undo, redo, past.length, future.length, reset],
+    [history, setState, undo, redo, reset],
   );
 }
 
