@@ -63,7 +63,7 @@ export async function generateVideoWithPython(options: VeoPythonOptions): Promis
   }
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('python', [PY_SCRIPT, prompt, aspectRatio], {
+    const proc = spawn(process.env.PYTHON_EXE || 'python3', [PY_SCRIPT, prompt, aspectRatio], {
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

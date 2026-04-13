@@ -127,8 +127,15 @@ productionPersistRouter.post('/upload-image', async (req: Request, res: Response
  * GET /api/production/image?path=output/production/images/xxx.png
  */
 productionPersistRouter.get('/image', async (req: Request, res: Response) => {
-  const username = sanitizeUsername(req.user?.username);
   const rawPath = req.query.path as string | undefined;
+  // Auth is bypassed for <img src> usage (browser img tags can't send Bearer tokens).
+  // Extract username from the path when req.user is unavailable.
+  let rawUsername = req.user?.username;
+  if (!rawUsername) {
+    const m = String(rawPath || '').match(/^output[/\\]production[/\\]images[/\\]([^/\\]+)[/\\]/);
+    rawUsername = m?.[1] ?? '';
+  }
+  const username = sanitizeUsername(rawUsername);
   if (!rawPath) {
     res.status(400).json({ error: '请提供 path 参数' });
     return;

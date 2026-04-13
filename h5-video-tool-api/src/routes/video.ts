@@ -475,7 +475,7 @@ async function concatVideos(videoPaths: string[], outputPath: string): Promise<v
   const listContent = videoPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
   await fs.writeFile(listPath, listContent, 'utf-8');
   return new Promise((resolve, reject) => {
-    const proc = spawn('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outputPath], {
+    const proc = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outputPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stderr = '';
