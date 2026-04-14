@@ -14,6 +14,28 @@ import { resolveFirstDriveImageIfMissing } from '../services/videoReferenceUtils
 
 const dreaminaRouter = Router();
 
+// ---------------------------------------------------------------------------
+// Global Dreamina concurrency slot
+// Dreamina allows only 1 concurrent generation task per account (ret=1310).
+// All incoming submissions (any user/session) wait here before calling the CLI.
+// The slot is released when the task poll returns a terminal state (done/failed),
+// or after DREAMINA_SLOT_TIMEOUT_MS as a safety net (frontend disconnect, etc.).
+// ---------------------------------------------------------------------------
+const DREAMINA_SLOT_TIMEOUT_MS = 3 * 60_000; // 3 min — max Dreamina generation time
+let dreaminaSlotEnd: Promise<void> = Promise.resolve();
+const activeSlotReleases = new Map<string, () => void>(); // submitId → releaseSlot fn
+
+function acquireDreaminaSlot(): { waitForSlot: Promise<void>; release: () => void } {
+  let release!: () => void;
+  const prev = dreaminaSlotEnd;
+  dreaminaSlotEnd = new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, DREAMINA_SLOT_TIMEOUT_MS);
+    release = () => { clearTimeout(timer); resolve(); };
+  });
+  return { waitForSlot: prev, release };
+}
+
+
 async function ensureDreaminaAuthOrRespond(res: Response): Promise<boolean> {
   const status = await checkDreaminaAuth();
   if (status.loggedIn) return true;
@@ -104,6 +126,11 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
         typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
           ? dreaminaModelVersion.trim()
           : undefined;
+      // Acquire the global Dreamina slot — blocks until any previous task is done.
+      // This prevents ExceedConcurrencyLimit (ret=1310) from concurrent users.
+      const { waitForSlot, release: releaseSlot } = acquireDreaminaSlot();
+      await waitForSlot;
+
       // TOS upload is occasionally flaky (one of N images fails to upload).
       // Retry up to 2 times when the error looks like a transient upload failure.
       const MAX_MM_RETRIES = 2;
@@ -125,7 +152,10 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
         } catch (mmErr) {
           mmLastErr = mmErr instanceof Error ? mmErr : new Error(String(mmErr));
           const isTransientUpload = /upload phase.*no file upload|upload resource.*upload image/i.test(mmLastErr.message);
-          if (!isTransientUpload || attempt >= MAX_MM_RETRIES) throw mmLastErr;
+          if (!isTransientUpload || attempt >= MAX_MM_RETRIES) {
+            releaseSlot(); // failed to submit — free the slot immediately
+            throw mmLastErr;
+          }
           console.warn(
             `[video/dreamina/submit] TOS upload transient failure (attempt ${attempt + 1}/${MAX_MM_RETRIES + 1}), retrying in 2s…`,
             mmLastErr.message,
@@ -133,8 +163,11 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
           await new Promise<void>((resolve) => setTimeout(resolve, 2000));
         }
       }
-      if (!mmResult) throw mmLastErr ?? new Error('multimodal submit failed');
+      if (!mmResult) { releaseSlot(); throw mmLastErr ?? new Error('multimodal submit failed'); }
       const { submitId, taskId } = mmResult;
+      // Register the release fn — the GET /task endpoint will call it when done/failed.
+      // A 3-min safety-net timer is already baked into acquireDreaminaSlot().
+      activeSlotReleases.set(submitId, releaseSlot);
       res.json({ submitId, taskId, status: 'pending' as const, resolvedPrompt });
       return;
     }
@@ -149,16 +182,28 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
         ? dreaminaModelVersion.trim()
         : undefined;
-    const { submitId, taskId } = await submitDreaminaVideo({
-      prompt: storyboardText.trim(),
-      aspectRatio: aspectRatio ?? '16:9',
-      duration: duration != null ? duration : undefined,
-      model: modelTrim!,
-      imageBase64,
-      imageMimeType,
-      modelVersion: mvSubmit,
-    });
-    res.json({ submitId, taskId, status: 'pending' as const });
+    // Non-multimodal Dreamina (text2video / image2video) also shares the same account slot.
+    const { waitForSlot: waitNonMm, release: releaseNonMm } = acquireDreaminaSlot();
+    await waitNonMm;
+
+    let nonMmSubmitId: string | undefined;
+    try {
+      const { submitId, taskId } = await submitDreaminaVideo({
+        prompt: storyboardText.trim(),
+        aspectRatio: aspectRatio ?? '16:9',
+        duration: duration != null ? duration : undefined,
+        model: modelTrim!,
+        imageBase64,
+        imageMimeType,
+        modelVersion: mvSubmit,
+      });
+      nonMmSubmitId = submitId;
+      activeSlotReleases.set(submitId, releaseNonMm);
+      res.json({ submitId, taskId, status: 'pending' as const });
+    } catch (submitErr) {
+      releaseNonMm();
+      throw submitErr;
+    }
   } catch (err) {
     console.error('[video/dreamina/submit]', err);
     const msg = err instanceof Error ? err.message : '即梦提交失败';
@@ -183,6 +228,10 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
     const taskId = `dreamina-${polled.submitId}`;
 
     if (polled.phase === 'failed') {
+      // Task is terminal — release the global concurrency slot.
+      const rel = activeSlotReleases.get(polled.submitId);
+      rel?.();
+      activeSlotReleases.delete(polled.submitId);
       res.json({
         taskId,
         submitId: polled.submitId,
@@ -196,6 +245,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
     }
 
     if (polled.phase === 'querying') {
+      // Still running — keep the slot held.
       res.json({
         taskId,
         submitId: polled.submitId,
@@ -206,6 +256,11 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
       });
       return;
     }
+
+    // Task completed — release the slot before downloading the video.
+    const rel = activeSlotReleases.get(polled.submitId);
+    rel?.();
+    activeSlotReleases.delete(polled.submitId);
 
     const videoUrl = polled.videoUrl;
     const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
