@@ -104,15 +104,37 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
         typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
           ? dreaminaModelVersion.trim()
           : undefined;
-      const { submitId, taskId } = await submitDreaminaMultimodalVideo({
-        prompt: resolvedPrompt,
-        aspectRatio: aspectRatio ?? '16:9',
-        duration: duration != null ? duration : undefined,
-        images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        videos: vids.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
-        modelVersion: mvAsync,
-      });
+      // TOS upload is occasionally flaky (one of N images fails to upload).
+      // Retry up to 2 times when the error looks like a transient upload failure.
+      const MAX_MM_RETRIES = 2;
+      let mmResult: { submitId: string; taskId: string } | null = null;
+      let mmLastErr: Error | null = null;
+      for (let attempt = 0; attempt <= MAX_MM_RETRIES; attempt++) {
+        try {
+          mmResult = await submitDreaminaMultimodalVideo({
+            prompt: resolvedPrompt,
+            aspectRatio: aspectRatio ?? '16:9',
+            duration: duration != null ? duration : undefined,
+            images: imgs.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
+            videos: vids.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
+            audios: auds.filter((x: { base64?: string }) => x && typeof x.base64 === 'string'),
+            modelVersion: mvAsync,
+          });
+          mmLastErr = null;
+          break;
+        } catch (mmErr) {
+          mmLastErr = mmErr instanceof Error ? mmErr : new Error(String(mmErr));
+          const isTransientUpload = /upload phase.*no file upload|upload resource.*upload image/i.test(mmLastErr.message);
+          if (!isTransientUpload || attempt >= MAX_MM_RETRIES) throw mmLastErr;
+          console.warn(
+            `[video/dreamina/submit] TOS upload transient failure (attempt ${attempt + 1}/${MAX_MM_RETRIES + 1}), retrying in 2s…`,
+            mmLastErr.message,
+          );
+          await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+      if (!mmResult) throw mmLastErr ?? new Error('multimodal submit failed');
+      const { submitId, taskId } = mmResult;
       res.json({ submitId, taskId, status: 'pending' as const, resolvedPrompt });
       return;
     }
