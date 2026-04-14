@@ -17,6 +17,7 @@ import { Result } from './pages/Result';
 import { EditorWorkbench } from './pages/EditorWorkbench';
 import { QuickFilm } from './pages/QuickFilm';
 import { AssetLibrary } from './pages/AssetLibrary';
+import { AssetLibraryPage } from './pages/AssetLibraryPage';
 import { RiskMasterPanel } from './pages/RiskSentimentEmbed';
 import { SettingsAccounts } from './pages/SettingsAccounts';
 import { SettingsUsageMonitor } from './pages/SettingsUsageMonitor';
@@ -57,7 +58,8 @@ function App() {
                   <Route path="/result" element={<Result />} />
                   <Route path="/editor" element={<EditorWorkbench />} />
                   <Route path="/quickfilm" element={<QuickFilm />} />
-                  <Route path="/asset-library" element={<AssetLibrary />} />
+                  <Route path="/asset-library" element={<AssetLibraryPage />} />
+                  <Route path="/asset-library/legacy" element={<AssetLibrary />} />
                   <Route path="/platform" element={<PlatformFramework />} />
                   <Route path="/platform/bind" element={<PlatformFramework />} />
                   <Route path="/platform/brain" element={<PlatformFramework />} />
