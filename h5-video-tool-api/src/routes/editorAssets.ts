@@ -94,6 +94,33 @@ function resolveUsername(req?: Request): string {
   return sanitizeUsername(req?.user?.username ?? getRequestAccount());
 }
 
+/**
+ * GET /assets/files/:id is auth-bypassed so <video> tags can play without Bearer.
+ * In that case req.user is undefined → resolveUsername returns '_default', which
+ * won't find files uploaded by 'admin'. Fall back to scanning all user dirs.
+ */
+function findAssetAcrossUsers(id: string, hint: string): { meta: StoredEditorAsset; username: string } | null {
+  // Try the hinted user first (fast path when auth is present)
+  loadAssetsRegistry(hint);
+  const hintMeta = getStore(hint).assetsById.get(id);
+  if (hintMeta) return { meta: hintMeta, username: hint };
+
+  // Scan all user directories (only needed when auth is bypassed)
+  try {
+    const userDirs = fs
+      .readdirSync(UPLOAD_ROOT, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && d.name !== 'chunks')
+      .map((d) => d.name);
+    for (const uname of userDirs) {
+      if (uname === hint) continue;
+      loadAssetsRegistry(uname);
+      const meta = getStore(uname).assetsById.get(id);
+      if (meta) return { meta, username: uname };
+    }
+  } catch { /* scan failed, fall through to 404 */ }
+  return null;
+}
+
 /** 供抽帧/音频分析等读取磁盘上的源文件（仅已上传素材） */
 export function getEditorAssetAbsolutePath(id: string, username?: string): string | null {
   const safeUser = sanitizeUsername(username ?? getRequestAccount());
@@ -255,15 +282,14 @@ router.get('/assets', (req, res) => {
 
 /** GET 文件流（预览 / 导出用） */
 router.get('/assets/files/:id', (req, res) => {
-  const username = resolveUsername(req as Request);
-  loadAssetsRegistry(username);
-  const store = getStore(username);
   const id = req.params.id;
-  const meta = store.assetsById.get(id);
-  if (!meta) {
+  const hint = resolveUsername(req as Request);
+  const found = findAssetAcrossUsers(id, hint);
+  if (!found) {
     res.status(404).json({ error: '素材不存在' });
     return;
   }
+  const { meta, username } = found;
   const abs = path.join(getUserUploadDir(username), meta.filename);
   if (!fs.existsSync(abs)) {
     res.status(404).json({ error: '文件已丢失' });
