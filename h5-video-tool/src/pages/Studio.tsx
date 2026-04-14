@@ -3,7 +3,6 @@ import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-do
 import { TabGenerate } from './TabGenerate';
 import { TemplatePicker } from '../components/TemplatePicker';
 import { TemplateMarket } from '../components/TemplateMarket';
-import { GalleryView } from '../components/GalleryView';
 import { StudioErrorBoundary } from '../components/ErrorFallback';
 import { useCreateFlow } from '../context/CreateFlowContext';
 
@@ -22,18 +21,18 @@ export function Studio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as string | null;
 
-  // 主 tab：create | templates | gallery
-  const [activeTab, setActiveTab] = useState<'create' | 'templates' | 'gallery'>(
-    tabFromUrl === 'templates' ? 'templates' : tabFromUrl === 'gallery' ? 'gallery' : 'create',
+  // 主 tab：create | templates
+  const [activeTab, setActiveTab] = useState<'create' | 'templates'>(
+    tabFromUrl === 'templates' ? 'templates' : 'create',
   );
 
   // URL 变化时同步
   useEffect(() => {
-    const t = tabFromUrl === 'templates' ? 'templates' : tabFromUrl === 'gallery' ? 'gallery' : 'create';
+    const t = tabFromUrl === 'templates' ? 'templates' : 'create';
     setActiveTab(t);
   }, [tabFromUrl]);
 
-  const switchTab = (tab: 'create' | 'templates' | 'gallery') => {
+  const switchTab = (tab: 'create' | 'templates') => {
     setActiveTab(tab);
     if (tab === 'create') setSearchParams({});
     else setSearchParams({ tab });
@@ -72,7 +71,6 @@ export function Studio() {
   const TABS = [
     { id: 'create' as const, label: '创作' },
     { id: 'templates' as const, label: '模板市场' },
-    { id: 'gallery' as const, label: '我的成片（快捷）' },
   ];
 
   return (
@@ -118,23 +116,7 @@ export function Studio() {
       {/* 内容区 */}
       <div className="pt-6">
         <StudioErrorBoundary>
-          {activeTab === 'gallery' ? (
-            <div className="max-w-6xl px-6">
-              <div className="mb-4 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-3">
-                <p className="text-xs text-[var(--color-text-muted)]">
-                  这里展示近期成片；完整历史、批量任务与云端记录请前往历史中心。
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/history')}
-                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                >
-                  查看全部历史
-                </button>
-              </div>
-              <GalleryView />
-            </div>
-          ) : activeTab === 'templates' ? (
+          {activeTab === 'templates' ? (
             <div className="max-w-6xl px-6">
               <TemplateMarket onUseTemplate={handleUseTemplate} />
             </div>
