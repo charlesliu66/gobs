@@ -243,6 +243,9 @@ export function ProductionWizard() {
   const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
   // Per-shot cancel tokens (ref so mutations don't trigger re-render)
   const shotCancelMap = useRef<Record<string, { cancelled: boolean }>>({});
+  // Dreamina allows only 1 concurrent generation (ExceedConcurrencyLimit / ret=1310)
+  // Serialize all shot-video submissions through this promise chain.
+  const dreaminaQueueRef = useRef<Promise<void>>(Promise.resolve());
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
       setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
@@ -1040,6 +1043,19 @@ export function ProductionWizard() {
     shotCancelMap.current[shotId] = cancelToken;
     setErr(null);
 
+    // Queue: wait for any in-flight Dreamina task to finish before submitting.
+    // Use an object so TypeScript's control-flow analysis can't narrow the ref to never.
+    const queueSlot = { resolve: (() => { /* replaced below */ }) as () => void };
+    const prevQueue = dreaminaQueueRef.current;
+    dreaminaQueueRef.current = new Promise<void>((resolve) => { queueSlot.resolve = resolve; });
+    await prevQueue;
+    if (cancelToken.cancelled) {
+      queueSlot.resolve();
+      clearShotBusy(shotId);
+      delete shotCancelMap.current[shotId];
+      return;
+    }
+
     const persistShotVideo = (url: string, taskId: string, videoPath: string | undefined) => {
       const vp = videoPath?.trim();
       const versionId = `${taskId || `production-shot-${s.shotIndex}`}-${Date.now()}`;
@@ -1188,6 +1204,7 @@ export function ProductionWizard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频生成失败');
     } finally {
+      queueSlot.resolve(); // release the Dreamina queue so the next shot can submit
       clearShotBusy(shotId);
       delete shotCancelMap.current[shotId];
     }
