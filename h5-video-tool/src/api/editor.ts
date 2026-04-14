@@ -58,10 +58,62 @@ export async function getEditorUploadConfig(): Promise<{ maxMb: number; maxBytes
   return res.json() as Promise<{ maxMb: number; maxBytes: number }>;
 }
 
-export async function uploadEditorAsset(file: File): Promise<{ asset: EditorAssetDto }> {
+export async function uploadEditorAsset(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ asset: EditorAssetDto }> {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('originalName', file.name);
+
+  // 若提供进度回调，改用 XHR 以获取 upload progress 事件
+  if (onProgress) {
+    const token = localStorage.getItem('gobs_token');
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE}/api/editor/assets/upload`);
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.timeout = 600_000; // 10 分钟
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 401) {
+          localStorage.removeItem('gobs_token');
+          localStorage.removeItem('gobs_user');
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          reject(new Error('登录已过期，请重新登录'));
+          return;
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          let errMsg = xhr.statusText;
+          try {
+            const body = JSON.parse(xhr.responseText) as { error?: string };
+            if (body.error) errMsg = body.error;
+          } catch { /* ignore */ }
+          reject(new Error(errMsg));
+          return;
+        }
+        try {
+          resolve(JSON.parse(xhr.responseText) as { asset: EditorAssetDto });
+        } catch {
+          reject(new Error('响应解析失败'));
+        }
+      });
+      xhr.addEventListener('error', () => {
+        reject(new Error('上传请求未到达 API（网络中断/CORS/网关限制）。若上传大文件，请检查 Nginx 的 client_max_body_size 是否已放宽。'));
+      });
+      xhr.addEventListener('timeout', () => {
+        reject(new Error('上传超时（>10分钟），请检查网络或文件大小'));
+      });
+      xhr.send(fd);
+    });
+  }
+
   let res: Response;
   try {
     res = await fetch(`${BASE}/api/editor/assets/upload`, {

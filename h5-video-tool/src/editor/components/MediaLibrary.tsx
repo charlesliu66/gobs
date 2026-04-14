@@ -160,6 +160,7 @@ export function MediaLibrary({
   const [items, setItems] = useState<EditorAssetDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [maxUploadMb, setMaxUploadMb] = useState(EDITOR_UPLOAD_MAX_MB_FALLBACK);
@@ -210,13 +211,15 @@ export function MediaLibrary({
     }
     setUploading(true);
     setError(null);
+    setUploadProgress(0);
     try {
-      const { asset } = await uploadEditorAsset(file);
+      const { asset } = await uploadEditorAsset(file, (pct) => setUploadProgress(pct));
       setItems((prev) => [asset, ...prev.filter((x) => x.id !== asset.id)]);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -317,7 +320,11 @@ export function MediaLibrary({
             disabled={uploading}
             className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {uploading ? '上传中…' : '上传视频'}
+            {uploading
+              ? uploadProgress !== null && uploadProgress < 100
+                ? `上传中 ${uploadProgress}%…`
+                : '处理中…'
+              : '上传视频'}
           </button>
           <button
             type="button"

@@ -93,6 +93,7 @@ interface BatchAssetGenState {
   success: number;
   failed: number;
   startedAt: number;
+  currentLabel?: string;
 }
 
 export function ProductionWizard() {
@@ -323,6 +324,7 @@ export function ProductionWizard() {
       success: 0,
       failed: 0,
       startedAt: Date.now(),
+      currentLabel: '',
     });
     const g = project.meta.styleRefImageDataUrl?.trim();
 
@@ -335,6 +337,7 @@ export function ProductionWizard() {
     const runTask = async (t: Task) => {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
+      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${t.kind === 'char' ? '角色' : t.kind === 'scene' ? '场景' : '道具'} ${t.sheetId}` } : null);
       try {
         const timeoutMs = 180_000;
         const res = await Promise.race([

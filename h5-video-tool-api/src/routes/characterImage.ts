@@ -67,11 +67,21 @@ router.post('/standardize-image', async (req: Request, res: Response) => {
 
     res.json({ success: true, imageDataUrl: imageDataUrlResult });
   } catch (err) {
-    console.error('[character/standardize-image]', err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : '图像生成失败',
-    });
+    const msg = err instanceof Error ? err.message : '图像生成失败';
+    console.error('[character/standardize-image]', msg);
+
+    let userMessage = msg;
+    if (/RESOURCE_EXHAUSTED|429|quota/i.test(msg)) {
+      userMessage = '生图配额已耗尽，请稍后重试或联系管理员更换 API Key';
+    } else if (/404|not found|does not have access/i.test(msg)) {
+      userMessage = '当前生图模型不可用，请在 .env 中更换 COMPASS_IMAGEN_MODEL 后重启 API';
+    } else if (/ENOENT|python/i.test(msg)) {
+      userMessage = '服务器 Python 环境异常，请检查 python3 和 google-genai 包是否安装';
+    } else if (/超时|timeout/i.test(msg)) {
+      userMessage = '生图请求超时，请重试';
+    }
+
+    res.status(500).json({ success: false, error: userMessage });
   }
 });
 

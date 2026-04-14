@@ -65,7 +65,7 @@ export function StepDesignWorkspace({
   characterCount: number;
   sceneCount: number;
   propCount: number;
-  batchAssetGen: { current: number; total: number; success: number; failed: number; startedAt: number } | null;
+  batchAssetGen: { current: number; total: number; success: number; failed: number; startedAt: number; currentLabel?: string } | null;
   onGenerateMissingAssets: () => void;
   onCancelBatch: () => void;
   onAddManualCharacter: () => void;

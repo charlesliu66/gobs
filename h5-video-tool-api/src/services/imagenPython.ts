@@ -247,6 +247,9 @@ export async function generateImageWithPython(options: ImagenPythonOptions): Pro
       const keyFailMsg = `${lastStderr || ''} ${lastError instanceof Error ? lastError.message : String(lastError ?? '')}`.trim();
       const hasNextKey = keyIndex < keyCandidates.length - 1;
       if (hasNextKey && isRateLimitOrQuotaError(keyFailMsg)) {
+        // 若所有 key 共享同一个 Compass 项目配额，切换 key 不会立即解决 429
+        // 短暂等待后再试，避免连续失败叠加延迟
+        await sleep(2000);
         continue;
       }
       if (lastStderr || lastCode !== null) {

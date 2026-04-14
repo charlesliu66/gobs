@@ -27,7 +27,7 @@ export function StepDesignHeader({
   characterCount: number;
   sceneCount: number;
   propCount: number;
-  batchAssetGen: { current: number; total: number; success: number; failed: number } | null;
+  batchAssetGen: { current: number; total: number; success: number; failed: number; currentLabel?: string } | null;
   onGenerateMissingAssets: () => void | Promise<void>;
   onCancelBatch: () => void;
   onAddManualCharacter: () => void;
@@ -102,6 +102,7 @@ export function StepDesignHeader({
             {batchAssetGen !== null ? (
               <span className="text-[11px] text-[var(--color-text-muted)]">
                 成功 {batchAssetGen.success} / 失败 {batchAssetGen.failed}
+                {batchAssetGen.currentLabel ? `：${batchAssetGen.currentLabel}` : ''}
               </span>
             ) : null}
             {batchAssetGen !== null ? (

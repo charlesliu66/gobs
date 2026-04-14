@@ -9,7 +9,7 @@ import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { addJob, type BatchJob } from '../services/batchJobsQueue.js';
-import { isDreaminaEnabled, submitDreaminaVideo } from '../services/dreaminaVideo.js';
+import { isDreaminaEnabled, submitDreaminaVideo, checkDreaminaAuth } from '../services/dreaminaVideo.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const quickfilmRouter = Router();
@@ -125,6 +125,15 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
 
   if (!isDreaminaEnabled()) {
     res.status(400).json({ error: '即梦未启用，无法执行一键成片。请先配置 dreamina-cli 并重启 API。' });
+    return;
+  }
+
+  // 检查即梦 CLI 登录态
+  const authCheck = await checkDreaminaAuth();
+  if (!authCheck.loggedIn) {
+    res.status(400).json({
+      error: `即梦 CLI 未登录：${authCheck.error || '请在服务器执行 dreamina login'}`,
+    });
     return;
   }
 
