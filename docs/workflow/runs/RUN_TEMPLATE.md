@@ -27,3 +27,11 @@ Optional:
 - `test-evidence/`
 
 Use contracts under `docs/workflow/contracts/` to keep outputs structured.
+
+## SESSION-ANCHOR（必备，新增）
+
+每个 run 目录还需要包含：
+
+- `SESSION-ANCHOR.md` — 从 `SESSION-ANCHOR-template.md` 复制并填写
+
+此文件是 AI 每轮开始时的第一个读取目标，用于防止目标漂移和无关文件占据 context。
