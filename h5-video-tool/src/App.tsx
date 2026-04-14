@@ -10,7 +10,6 @@ import { Home } from './pages/Home';
 import { Studio } from './pages/Studio';
 import { ProductionWizard } from './pages/ProductionWizard';
 import { ProjectList } from './pages/ProjectList';
-import { TabMaterials } from './pages/TabMaterials';
 import { History } from './pages/History';
 import { TabDistribute } from './pages/TabDistribute';
 import { Result } from './pages/Result';
@@ -18,6 +17,7 @@ import { EditorWorkbench } from './pages/EditorWorkbench';
 import { QuickFilm } from './pages/QuickFilm';
 import { AssetLibrary } from './pages/AssetLibrary';
 import { AssetLibraryPage } from './pages/AssetLibraryPage';
+import { Gallery } from './pages/Gallery';
 import { RiskMasterPanel } from './pages/RiskSentimentEmbed';
 import { SettingsAccounts } from './pages/SettingsAccounts';
 import { SettingsUsageMonitor } from './pages/SettingsUsageMonitor';
@@ -52,7 +52,7 @@ function App() {
                   <Route path="/studio" element={<Studio />} />
                   <Route path="/studio/production" element={<ProductionWizard />} />
                   <Route path="/projects" element={<ProjectList />} />
-                  <Route path="/materials" element={<TabMaterials />} />
+                  <Route path="/materials" element={<Navigate to="/asset-library" replace />} />
                   <Route path="/history" element={<History />} />
                   <Route path="/distribute" element={<TabDistribute />} />
                   <Route path="/result" element={<Result />} />
@@ -60,6 +60,7 @@ function App() {
                   <Route path="/quickfilm" element={<QuickFilm />} />
                   <Route path="/asset-library" element={<AssetLibraryPage />} />
                   <Route path="/asset-library/legacy" element={<AssetLibrary />} />
+                  <Route path="/gallery" element={<Gallery />} />
                   <Route path="/platform" element={<PlatformFramework />} />
                   <Route path="/platform/bind" element={<PlatformFramework />} />
                   <Route path="/platform/brain" element={<PlatformFramework />} />
