@@ -1,7 +1,7 @@
 # BUGFIX-2026-04-14 — 五项体验 Bug 修复指南
 
 > 本文档供 Cursor 直接执行。逐项修复 → 验证 → 勾选。
-> 云服务器 IP: 49.235.61.68 / User: ubuntu / 后端: ~/gobs/backend / PM2: gobs-api
+> 云服务器 IP: 43.134.186.196 / User: ubuntu / 后端: ~/gobs/backend / PM2: gobs-api
 
 ---
 
@@ -17,7 +17,7 @@
 
 SSH 到服务器执行：
 ```bash
-ssh ubuntu@49.235.61.68
+ssh ubuntu@43.134.186.196
 
 # 1. 确认 dreamina 脚本目录实际位置
 find /home/ubuntu -path "*/dreamina-cli-skill/scripts" -type d 2>/dev/null
@@ -189,7 +189,7 @@ function isFatalImagenError(msg: string): boolean {
 ### 排查（SSH 到服务器）
 
 ```bash
-ssh ubuntu@49.235.61.68
+ssh ubuntu@43.134.186.196
 
 # 1. 查最近的生图错误日志
 pm2 logs gobs-api --lines 500 | grep -i "imagen\|character.*image\|standardize\|RESOURCE_EXHAUSTED\|429\|404\|not found\|ENOENT" | tail -30
@@ -295,7 +295,7 @@ pip3 install --upgrade google-genai
 SSH 到服务器：
 
 ```bash
-ssh ubuntu@49.235.61.68
+ssh ubuntu@43.134.186.196
 
 # 1. 找到 Nginx 配置文件
 sudo grep -rl "proxy_pass.*3001" /etc/nginx/
@@ -352,7 +352,7 @@ sudo systemctl reload nginx
 - [ ] `sudo nginx -t` 通过
 - [ ] `sudo systemctl reload nginx` 成功
 - [ ] 在高级制片中点击"生成分镜表"，成功返回分镜数据（可能需要 30-60 秒，但不再 504）
-- [ ] `curl -v http://49.235.61.68/api/health` 返回 200
+- [ ] `curl -v http://43.134.186.196/api/health` 返回 200
 
 ---
 
@@ -416,7 +416,7 @@ const uploadFile = async (file: File, onProgress?: (pct: number) => void) => {
 ### 第一步：服务器配置（无需代码修改）
 
 ```bash
-ssh ubuntu@49.235.61.68
+ssh ubuntu@43.134.186.196
 
 # 1. 修改 .env（Bug 1）
 cd ~/gobs/backend
