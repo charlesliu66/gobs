@@ -139,6 +139,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
     const videoClips = ((vTrack?.clips ?? []) as VideoClip[]).sort(
       (a, b) => a.timelineStart - b.timelineStart,
     );
+    const totalDur = project.durationSec ?? 0;
 
     const segmentPaths: string[] = [];
     for (let i = 0; i < videoClips.length; i++) {
@@ -210,18 +211,24 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
 
     const sourceVol = (project.mix?.sourceAudio ?? 1);
     const bgmVol    = (project.mix?.bgm ?? 0.4);
+    const fadeOut   = project.mix?.bgmFadeOut ?? 2;
+    const fadeIn    = project.mix?.bgmFadeIn  ?? 1;
 
     let mixedPath = concatPath;
     if (bgmSrc && fs.existsSync(bgmSrc)) {
       mixedPath = path.join(tmpDir, 'mixed.mp4');
       const bgmSs = bgmClip?.sourceStart ?? 0;
+      // Build BGM audio chain with optional fade-in/out
+      let bgmChain = `volume=${bgmVol}`;
+      if (fadeIn > 0) bgmChain += `,afade=t=in:st=0:d=${fadeIn}`;
+      if (fadeOut > 0 && totalDur > fadeOut) bgmChain += `,afade=t=out:st=${(totalDur - fadeOut).toFixed(3)}:d=${fadeOut}`;
       await runFfmpeg([
         '-y',
         '-i', concatPath,
         '-ss', String(bgmSs),
         '-i', bgmSrc,
         '-filter_complex',
-        `[0:a]volume=${sourceVol}[a0];[1:a]volume=${bgmVol}[a1];[a0][a1]amix=inputs=2:duration=first:normalize=0[aout]`,
+        `[0:a]volume=${sourceVol}[a0];[1:a]${bgmChain}[a1];[a0][a1]amix=inputs=2:duration=first:normalize=0[aout]`,
         '-map', '0:v',
         '-map', '[aout]',
         '-c:v', 'copy',

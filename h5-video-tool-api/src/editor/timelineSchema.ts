@@ -82,6 +82,10 @@ export interface Track {
 export interface TimelineMix {
   sourceAudio: number;
   bgm: number;
+  /** BGM 淡出时长（秒），默认 2；0 = 无淡出 */
+  bgmFadeOut?: number;
+  /** BGM 淡入时长（秒），默认 1；0 = 无淡入 */
+  bgmFadeIn?: number;
 }
 
 export interface SubtitleCue {

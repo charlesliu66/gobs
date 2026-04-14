@@ -103,6 +103,10 @@ export interface TimelineMix {
   sourceAudio: number;
   /** BGM 总音量 */
   bgm: number;
+  /** BGM 淡出时长（秒），默认 2；0 = 无淡出 */
+  bgmFadeOut?: number;
+  /** BGM 淡入时长（秒），默认 1；0 = 无淡入 */
+  bgmFadeIn?: number;
 }
 
 /** 成片字幕（时间轴秒，与导出时间线一致） */

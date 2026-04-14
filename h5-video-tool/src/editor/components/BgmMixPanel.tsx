@@ -229,6 +229,35 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
           当前时间轴：{totalSec > 0 ? `${Math.round(totalSec)}s` : '空'}
           {totalSec > 0 && ` · 需 ${Math.max(1, Math.ceil(totalSec / LYRIA_CLIP_SEC))} 段 Lyria 配乐`}
         </p>
+
+        {/* BGM 淡出时长 */}
+        <div>
+          <p className="text-[10px] text-[var(--color-text-muted)] mb-1.5">BGM 淡出时长（导出生效）</p>
+          <div className="flex gap-1.5">
+            {([0, 1, 2, 3] as const).map((s) => {
+              const cur = project.mix?.bgmFadeOut ?? 2;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    setProject((p) => ({
+                      ...p,
+                      mix: { sourceAudio: p.mix?.sourceAudio ?? 1, bgm: p.mix?.bgm ?? 0.4, ...p.mix, bgmFadeOut: s },
+                    }))
+                  }
+                  className={`flex-1 rounded py-1 text-[10px] border transition-colors ${
+                    cur === s
+                      ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/30'
+                  }`}
+                >
+                  {s === 0 ? '无' : `${s}s`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="flex-shrink-0 border-t border-[var(--color-border)] px-3 py-2 space-y-2">
