@@ -12,6 +12,44 @@ import { EDITOR_UPLOAD_MAX_MB_FALLBACK } from '../../config/editorUpload';
 import { listAssets, buildAssetFileUrl } from '../../api/assetLibraryApi';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
 
+/** 悬停 300ms 后自动播放的视频缩略图 */
+function HoverVideoThumb({ src, className }: { src: string; className?: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleEnter = () => {
+    timerRef.current = setTimeout(() => {
+      videoRef.current?.play().catch(() => { /* autoplay may be blocked */ });
+    }, 300);
+  };
+
+  const handleLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const v = videoRef.current;
+    if (v) { v.pause(); v.currentTime = 0; }
+  };
+
+  return (
+    <div
+      className="relative aspect-video w-full bg-black"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        className={className ?? 'h-full w-full object-cover'}
+        muted
+        playsInline
+        loop
+        preload="metadata"
+      />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+      </div>
+    </div>
+  );
+}
+
 /** TASK-D: 项目资产库 tab — 展示用户资产中台的素材 */
 function ProjectAssetLibrary({
   onAddToTimeline,
@@ -107,13 +145,7 @@ function ProjectAssetLibrary({
               className="overflow-hidden rounded-lg ring-1 ring-[var(--color-border)] bg-[var(--color-surface-elevated)]"
             >
               <div className="relative aspect-video w-full bg-black">
-                <video
-                  src={fileUrl}
-                  className="h-full w-full object-cover"
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
+                <HoverVideoThumb src={fileUrl} />
               </div>
               <div className="p-2">
                 <p
@@ -382,15 +414,7 @@ export function MediaLibrary({
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="relative aspect-video w-full bg-black">
-                      <video
-                        src={a.url}
-                        className="h-full w-full object-cover"
-                        muted
-                        playsInline
-                        preload="metadata"
-                      />
-                    </div>
+                    <HoverVideoThumb src={a.url} />
                     <div className="p-2">
                       <p
                         className="truncate text-[11px] font-medium text-[var(--color-text)]"
