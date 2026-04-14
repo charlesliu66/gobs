@@ -7,6 +7,134 @@ import {
   type EditorAssetDto,
 } from '../../api/editor';
 import { EDITOR_UPLOAD_MAX_MB_FALLBACK } from '../../config/editorUpload';
+import { listAssets, buildAssetFileUrl } from '../../api/assetLibraryApi';
+import type { LibraryAsset } from '../../api/assetLibraryApi';
+
+/** TASK-D: 项目资产库 tab — 展示用户资产中台的素材 */
+function ProjectAssetLibrary({
+  onAddToTimeline,
+}: {
+  onAddToTimeline: (asset: EditorAssetDto) => void;
+}) {
+  const [assets, setAssets] = useState<LibraryAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await listAssets({ pageSize: '50' });
+      setAssets(result.assets as LibraryAsset[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const handleAdd = useCallback(
+    (asset: LibraryAsset) => {
+      const mime = asset.mimetype ?? asset.mime_type ?? '';
+      if (!mime.startsWith('video/')) return; // 仅支持视频
+      const url = asset.file_url ?? buildAssetFileUrl(asset.id);
+      const editorAsset: EditorAssetDto = {
+        id: `lib-${asset.id}`,
+        url,
+        kind: 'video',
+        originalName: asset.filename,
+        durationSec: asset.duration ?? 10,
+      };
+      onAddToTimeline(editorAsset);
+    },
+    [onAddToTimeline],
+  );
+
+  if (loading) {
+    return <p className="px-3 py-4 text-[10px] text-[var(--color-text-muted)]">加载中…</p>;
+  }
+  if (error) {
+    return (
+      <div className="px-3 py-4">
+        <p className="text-[11px] text-red-500 mb-2">{error}</p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="text-[11px] text-[var(--color-primary)] underline"
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+  if (assets.length === 0) {
+    return (
+      <div className="px-3 py-4 text-center">
+        <p className="text-[10px] text-[var(--color-text-muted)] mb-2">资产库为空</p>
+        <p className="text-[10px] text-[var(--color-text-muted)]">请前往「素材中台」导入视频素材</p>
+      </div>
+    );
+  }
+
+  // 仅展示视频类资产
+  const videoAssets = assets.filter((a) => {
+    const m = a.mimetype ?? a.mime_type ?? '';
+    return m.startsWith('video/');
+  });
+
+  return (
+    <div className="flex flex-col gap-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
+        <p className="text-[10px] text-[var(--color-text-muted)]">共 {videoAssets.length} 个视频素材</p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        >
+          刷新
+        </button>
+      </div>
+      <ul className="space-y-2 p-2">
+        {videoAssets.map((asset) => {
+          const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
+          return (
+            <li
+              key={asset.id}
+              className="overflow-hidden rounded-lg ring-1 ring-[var(--color-border)] bg-[var(--color-surface-elevated)]"
+            >
+              <div className="relative aspect-video w-full bg-black">
+                <video
+                  src={fileUrl}
+                  className="h-full w-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              </div>
+              <div className="p-2">
+                <p
+                  className="truncate text-[11px] font-medium text-[var(--color-text)] mb-1"
+                  title={asset.filename}
+                >
+                  {asset.filename}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleAdd(asset)}
+                  className="w-full rounded-md bg-[var(--color-primary)]/15 py-1.5 text-[11px] font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25"
+                >
+                  加入时间轴
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 interface MediaLibraryProps {
   onLoadDemo: () => void;
@@ -36,6 +164,8 @@ export function MediaLibrary({
   const [error, setError] = useState<string | null>(null);
   const [maxUploadMb, setMaxUploadMb] = useState(EDITOR_UPLOAD_MAX_MB_FALLBACK);
   const [maxUploadBytes, setMaxUploadBytes] = useState(EDITOR_UPLOAD_MAX_MB_FALLBACK * 1024 * 1024);
+  /** TASK-D: tab 切换 */
+  const [activeTab, setActiveTab] = useState<'upload' | 'asset-library'>('upload');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -117,10 +247,45 @@ export function MediaLibrary({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {/* TASK-D: Tab 切换栏 */}
+      <div className="flex-shrink-0 border-b border-[var(--color-border)] px-3 pt-2">
+        <h2 className="text-sm font-semibold text-[var(--color-text)] mb-2">素材</h2>
+        <div className="flex gap-0.5 mb-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('upload')}
+            className={`flex-1 py-1.5 text-[11px] font-medium rounded-t-lg transition-colors ${
+              activeTab === 'upload'
+                ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            上传素材
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('asset-library')}
+            className={`flex-1 py-1.5 text-[11px] font-medium rounded-t-lg transition-colors ${
+              activeTab === 'asset-library'
+                ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            项目资产库
+          </button>
+        </div>
+      </div>
+
+      {/* TASK-D: 项目资产库 tab */}
+      {activeTab === 'asset-library' ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ProjectAssetLibrary onAddToTimeline={onAddToTimeline} />
+        </div>
+      ) : (
+      <>
       <div className="flex-shrink-0 border-b border-[var(--color-border)] px-3 py-2">
-        <h2 className="text-sm font-semibold text-[var(--color-text)]">素材</h2>
         <p className="text-[10px] text-[var(--color-text-muted)]">
-          上：视频素材；下：配乐生成（与右侧时间轴等高）。单文件最大约 {maxUploadMb} MB。
+          单文件最大约 {maxUploadMb} MB。
         </p>
         <p className="mt-1 text-[10px] font-medium text-[var(--color-primary)]">
           已选 {selectedAssetIds.length} 条
@@ -251,6 +416,8 @@ export function MediaLibrary({
           </ul>
         </div>
       </div>
+    </>
+    )}
     </div>
   );
 }

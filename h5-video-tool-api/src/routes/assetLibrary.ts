@@ -2,11 +2,13 @@
  * TASK-A: 资产中台路由
  * 前缀: /api/asset-library
  * 全部需要 JWT 鉴权（由全局 jwtAuthMiddleware 保障）
+ * TASK-D: 新增 GET /assets/:id/file 和 GET /assets/:id/highlights
  */
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import os from 'os';
+import jwt from 'jsonwebtoken';
 import db from '../db/assetDb.js';
 import {
   createImportJob,
@@ -18,6 +20,7 @@ import {
   searchAssets,
   getFacets,
 } from '../services/assetSearchService.js';
+import { getHighlightCandidates } from '../services/assetHighlightService.js';
 
 const router = Router();
 
@@ -116,7 +119,96 @@ router.get('/assets', (req: Request, res: Response) => {
   }
 
   const result = listAssets({ username, page, pageSize, filters });
-  res.json(result);
+  // TASK-D: 追加 file_url 字段，便于前端直接构造访问 URL
+  const token = req.headers.authorization?.slice(7) ?? '';
+  const itemsWithUrl = result.items.map((item) => ({
+    ...item,
+    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+  }));
+  res.json({ ...result, items: itemsWithUrl });
+});
+
+// ── GET /assets/:id/file ───────────────────────────────────────────────────────
+// TASK-D: 提供资产文件直接访问（支持 ?token= query 认证，供 img/video 标签使用）
+
+router.get('/assets/:id/file', (req: Request, res: Response) => {
+  // 支持从 query param 获取 token（img/video 标签无法携带 Authorization header）
+  let username = req.user?.username;
+  if (!username) {
+    const queryToken = req.query.token as string | undefined;
+    if (queryToken) {
+      const secret = process.env.JWT_SECRET || 'gobs-secret-change-in-production';
+      try {
+        const payload = jwt.verify(queryToken, secret) as { username: string };
+        username = payload.username;
+      } catch {
+        res.status(401).json({ error: 'token 无效或已过期' });
+        return;
+      }
+    } else {
+      res.status(401).json({ error: '未鉴权' });
+      return;
+    }
+  }
+
+  const { id: assetId } = req.params;
+  const asset = db.prepare(
+    `SELECT id, username, filepath, mimetype, filename FROM assets WHERE id = @id`
+  ).get({ id: assetId }) as { id: string; username: string; filepath: string; mimetype: string; filename: string } | undefined;
+
+  if (!asset) {
+    res.status(404).json({ error: '资产不存在' });
+    return;
+  }
+  if (asset.username !== username) {
+    res.status(403).json({ error: '无权访问他人资产' });
+    return;
+  }
+  if (!fs.existsSync(asset.filepath)) {
+    res.status(404).json({ error: '文件不存在' });
+    return;
+  }
+
+  res.setHeader('Content-Type', asset.mimetype || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.filename)}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  const stream = fs.createReadStream(asset.filepath);
+  stream.pipe(res);
+  stream.on('error', () => {
+    if (!res.headersSent) res.status(500).json({ error: '文件读取失败' });
+  });
+});
+
+// ── GET /assets/:id/highlights ─────────────────────────────────────────────────
+// TASK-D: 视频素材高光候选时间点
+
+router.get('/assets/:id/highlights', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id: assetId } = req.params;
+
+  // 验证资产归属
+  const asset = db.prepare(`SELECT id, username FROM assets WHERE id = @id`).get({ id: assetId }) as
+    | { id: string; username: string }
+    | undefined;
+
+  if (!asset) {
+    res.status(404).json({ error: '资产不存在' });
+    return;
+  }
+  if (asset.username !== username) {
+    res.status(403).json({ error: '无权访问他人资产' });
+    return;
+  }
+
+  // 异步执行，不阻塞事件循环
+  getHighlightCandidates(assetId)
+    .then((highlights) => res.json({ highlights }))
+    .catch((err) => {
+      console.error('[highlights] error:', err);
+      res.json({ highlights: [] });
+    });
 });
 
 // ── PATCH /assets/:id/tags ─────────────────────────────────────────────────────
@@ -268,7 +360,13 @@ router.get('/search', (req: Request, res: Response) => {
   }
 
   const result = searchAssets({ username, q, page, pageSize, filters });
-  res.json(result);
+  // TASK-D: 追加 file_url 字段
+  const token = req.headers.authorization?.slice(7) ?? '';
+  const itemsWithUrl = result.items.map((item) => ({
+    ...item,
+    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+  }));
+  res.json({ ...result, items: itemsWithUrl });
 });
 
 // ── GET /facets ────────────────────────────────────────────────────────────────

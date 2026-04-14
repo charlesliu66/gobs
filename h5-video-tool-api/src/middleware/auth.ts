@@ -45,6 +45,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // TASK-D: 资产库文件访问（支持 ?token= 认证，路由内部自行验证 token）
+  if (req.method === 'GET' && /^\/api\/asset-library\/assets\/[^/]+\/file/.test(req.path)) {
+    next();
+    return;
+  }
   // 高级制片图片回显：<img src> 无法带 Bearer，放行只读图片接口
   if (req.method === 'GET' && req.path === '/api/production/image') {
     next();

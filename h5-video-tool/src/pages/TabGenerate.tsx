@@ -21,6 +21,8 @@ import { ShortDramaMaterialPicker } from '../components/ShortDramaMaterialPicker
 import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
+import { AssetPicker } from '../components/AssetPicker';
+import type { LibraryAsset } from '../api/assetLibraryApi';
 
 function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
   const { summary, scriptContent } = r;
@@ -144,6 +146,9 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [dramaExpandLoading, setDramaExpandLoading] = useState(false);
   const [dramaExpandError, setDramaExpandError] = useState<string | null>(null);
   const [dramaExpanded, setDramaExpanded] = useState<ShortDramaExpandResult | null>(null);
+  /** TASK-D: 资产选择器状态 */
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [assetPickerMode, setAssetPickerMode] = useState<'image' | 'video'>('image');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -376,6 +381,59 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const handleStartGenerate = useCallback(() => {
     setShowGenerationFlow(true);
   }, []);
+
+  /** TASK-D: 从资产库选中素材后处理 */
+  const handleAssetPickerSelect = useCallback(
+    async (assets: LibraryAsset[]) => {
+      if (assets.length === 0) return;
+      const asset = assets[0];
+      const mime = asset.mimetype ?? asset.mime_type ?? '';
+      const fileUrl = asset.file_url ?? '';
+
+      if (mime.startsWith('video/') || assetPickerMode === 'video') {
+        // 视频参考：直接设置 URL（用于 viralDanceReferenceVideoUrl）
+        setViralDanceReferenceVideoUrl(fileUrl);
+      } else {
+        // 图片参考：fetch → base64 → dreaminaMultimodalItems
+        try {
+          const resp = await fetch(fileUrl);
+          const blob = await resp.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1] ?? dataUrl;
+            const mimeType = blob.type || 'image/jpeg';
+            setDreaminaMultimodalItems((prev) => {
+              // 多选：追加；单选：替换第一个位置
+              if (assets.length > 1) {
+                const next = assets.map((a, i) => ({
+                  id: `asset-${a.id}-${i}`,
+                  kind: 'image' as const,
+                  base64,
+                  mimeType,
+                  fileName: a.filename,
+                }));
+                return next;
+              }
+              const next = [...prev];
+              next[0] = {
+                id: `asset-${asset.id}`,
+                kind: 'image' as const,
+                base64,
+                mimeType,
+                fileName: asset.filename,
+              };
+              return next;
+            });
+          };
+          reader.readAsDataURL(blob);
+        } catch {
+          // 静默失败
+        }
+      }
+    },
+    [assetPickerMode, setViralDanceReferenceVideoUrl, setDreaminaMultimodalItems],
+  );
 
   const maxDuration = currentTemplate?.duration ?? videoDuration;
   const totalShotsDuration = shots.reduce((s, shot) => s + shot.duration, 0);
@@ -858,6 +916,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 {showDriveManualBrowse ? '收起手动选择' : '手动从 Drive 选择'}
               </button>
             )}
+            {/* TASK-D: 从资产库选参考图 */}
+            <button
+              type="button"
+              onClick={() => { setAssetPickerMode('image'); setAssetPickerOpen(true); }}
+              className="px-5 py-2.5 border border-[var(--color-primary)]/50 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
+            >
+              从资产库选参考图
+            </button>
           </>
         )}
         <button
@@ -1064,6 +1130,15 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             setSaveModalOpen(false);
             onBrowseTemplates?.();
           }}
+        />
+      )}
+
+      {/* TASK-D: 资产库选择器弹窗 */}
+      {assetPickerOpen && (
+        <AssetPicker
+          filterType={assetPickerMode}
+          onSelect={(assets) => void handleAssetPickerSelect(assets)}
+          onClose={() => setAssetPickerOpen(false)}
         />
       )}
     </div>

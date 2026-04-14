@@ -1,6 +1,7 @@
 /**
  * TASK-C: 资产中台前端 API 封装
  * 对接后端 /api/asset-library/* (TASK-A 实现)
+ * TASK-D: 新增 getAssetHighlights
  */
 import { apiGet, apiPost } from './client';
 
@@ -25,6 +26,14 @@ export interface LibraryAsset {
   created_at: string;
   updated_at: string;
   tags: AssetTag[];
+  /** TASK-D: 服务端文件访问 URL（含 token 认证），由后端追加 */
+  file_url?: string;
+  /** 原始字段别名（后端返回 mimetype，TASK-D 统一前端接口） */
+  mimetype?: string;
+  /** 文件大小（filesize 别名） */
+  filesize?: number;
+  /** 视频时长（秒） */
+  duration?: number | null;
 }
 
 export interface ListAssetsResult {
@@ -129,4 +138,27 @@ export async function searchAssets(params: SearchParams): Promise<ListAssetsResu
 
 export async function getFacets(): Promise<FacetsResult> {
   return apiGet<FacetsResult>(`${BASE}/facets`);
+}
+
+// ── TASK-D: 高光候选 ──────────────────────────────────────────────────────────
+
+export interface HighlightCandidate {
+  startSec: number;
+  endSec: number;
+  score: number;
+  reason: string;
+}
+
+export async function getAssetHighlights(assetId: string): Promise<HighlightCandidate[]> {
+  const res = await apiGet<{ highlights: HighlightCandidate[] }>(
+    `${BASE}/assets/${encodeURIComponent(assetId)}/highlights`
+  );
+  return res.highlights ?? [];
+}
+
+// ── TASK-D: 构造带 token 的文件 URL ──────────────────────────────────────────
+
+export function buildAssetFileUrl(assetId: string): string {
+  const token = localStorage.getItem('gobs_token') ?? '';
+  return `/api/asset-library/assets/${encodeURIComponent(assetId)}/file?token=${encodeURIComponent(token)}`;
 }

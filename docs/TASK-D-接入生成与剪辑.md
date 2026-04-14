@@ -14,6 +14,13 @@
 - 视频素材返回高光候选片段（先规则版：按音量峰值 + 画面变化率）
 
 ## 验收标准
-- [ ] 用户无需重复上传素材即可在生成流程中使用
-- [ ] 剪辑器可直接消费资产库素材（拖拽落片）
-- [ ] 视频素材有高光候选时间点提示
+- [x] 用户无需重复上传素材即可在生成流程中使用（AC-D1: TabGenerate "从资产库选参考图" 按钮）
+- [x] 剪辑器可直接消费资产库素材（AC-D2: Editor MediaLibrary "项目资产库" tab）
+- [x] 视频素材有高光候选时间点提示（AC-D3: GET /api/asset-library/assets/:id/highlights）
+- [x] npm run build 零错误（AC-D4: 前后端均通过）
+
+## 完成时间
+2026-04-14
+
+## Run 目录
+docs/workflow/runs/2026-04-14-asset-lib-task-d/
