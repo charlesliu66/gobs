@@ -28,6 +28,7 @@ export function StepStoryboardWorkspace({
   scSheets,
   shotMediaBusy,
   shotBusyMap,
+  shotQueuedMap,
   storySceneCoverage,
   styleRefSummary,
   shotVideoDreaminaModel,
@@ -55,6 +56,7 @@ export function StepStoryboardWorkspace({
   scSheets: SceneSheet[];
   shotMediaBusy: 'frame' | 'video' | null;
   shotBusyMap: Record<string, 'frame' | 'video'>;
+  shotQueuedMap?: Record<string, boolean>;
   storySceneCoverage: StorySceneCoverage;
   styleRefSummary: string;
   shotVideoDreaminaModel?: string;
@@ -139,6 +141,7 @@ export function StepStoryboardWorkspace({
               shotMediaBusy={shotMediaBusy}
               dreaminaAsync={dreaminaAsync}
               hasProductionDesign={hasProductionDesign}
+              isQueued={shotQueuedMap?.[String(shot?.shotIndex ?? '')] ?? false}
               onGenerateShotFrame={onGenerateShotFrame}
               onGenerateShotVideo={onGenerateShotVideo}
             />
@@ -169,6 +172,7 @@ export function StepStoryboardWorkspace({
         scSheets={scSheets}
         selectedShotIdx={selectedShotIdx}
         shotBusyMap={shotBusyMap}
+        shotQueuedMap={shotQueuedMap}
         onSelectShot={setSelectedShotIdx}
       />
 

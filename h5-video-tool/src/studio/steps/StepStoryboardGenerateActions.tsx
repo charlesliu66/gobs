@@ -2,15 +2,27 @@ export function StepStoryboardGenerateActions({
   shotMediaBusy,
   dreaminaAsync,
   hasProductionDesign,
+  isQueued,
   onGenerateShotFrame,
   onGenerateShotVideo,
 }: {
   shotMediaBusy: 'frame' | 'video' | null;
   dreaminaAsync: boolean;
   hasProductionDesign: boolean;
+  isQueued?: boolean;
   onGenerateShotFrame: () => void;
   onGenerateShotVideo: () => void;
 }) {
+  const videoButtonDisabled = shotMediaBusy === 'video' || isQueued;
+
+  function videoButtonLabel() {
+    if (isQueued) return '排队等待中…';
+    if (shotMediaBusy === 'video') {
+      return dreaminaAsync ? '即梦提交/生成中（完成后自动填入预览）…' : '视频生成中…';
+    }
+    return '生成分镜视频';
+  }
+
   return (
     <>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -24,20 +36,20 @@ export function StepStoryboardGenerateActions({
         </button>
         <button
           type="button"
-          disabled={shotMediaBusy === 'video'}
+          disabled={videoButtonDisabled}
           onClick={onGenerateShotVideo}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] disabled:opacity-50"
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+            isQueued
+              ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300'
+              : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]'
+          }`}
         >
-          {shotMediaBusy === 'video'
-            ? dreaminaAsync
-              ? '即梦排队/生成中（完成后自动填入预览）…'
-              : '视频生成中…'
-            : '生成分镜视频'}
+          {videoButtonLabel()}
         </button>
       </div>
       {dreaminaAsync ? (
         <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
-          已启用即梦异步：提交后轮询直至成片，右侧「本镜预览」会显示视频（与 Studio 创作一致）。
+          已启用即梦异步：各分镜依次提交后并发轮询，成片后自动填入预览。
         </p>
       ) : null}
     </>

@@ -242,10 +242,12 @@ export function ProductionWizard() {
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
   const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
+  // Tracks shots waiting in the submission queue (before their turn to submit to Dreamina)
+  const [shotQueuedMap, setShotQueuedMap] = useState<Record<string, boolean>>({});
   // Per-shot cancel tokens (ref so mutations don't trigger re-render)
   const shotCancelMap = useRef<Record<string, { cancelled: boolean }>>({});
-  // Dreamina allows only 1 concurrent generation (ExceedConcurrencyLimit / ret=1310)
-  // Serialize all shot-video submissions through this promise chain.
+  // Serialize Dreamina submissions: each shot waits for the previous shot's submit_id to be
+  // received before it sends its own request (not until polling completes — that runs concurrently).
   const dreaminaQueueRef = useRef<Promise<void>>(Promise.resolve());
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
@@ -1135,12 +1137,16 @@ export function ProductionWizard() {
     shotCancelMap.current[shotId] = cancelToken;
     setErr(null);
 
-    // Queue: wait for any in-flight Dreamina task to finish before submitting.
+    // Queue: wait for any in-flight Dreamina task to finish submitting before we submit.
     // Use an object so TypeScript's control-flow analysis can't narrow the ref to never.
     const queueSlot = { resolve: (() => { /* replaced below */ }) as () => void };
     const prevQueue = dreaminaQueueRef.current;
     dreaminaQueueRef.current = new Promise<void>((resolve) => { queueSlot.resolve = resolve; });
+    // Mark as queued while waiting for the previous slot
+    setShotQueuedMap((prev) => ({ ...prev, [shotId]: true }));
     await prevQueue;
+    // Once it's our turn, we're actively submitting — no longer in the queue
+    setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
     if (cancelToken.cancelled) {
       queueSlot.resolve();
       clearShotBusy(shotId);
@@ -1152,9 +1158,14 @@ export function ProductionWizard() {
       saveShotVideo(selectedShotIdx, url, taskId, videoPath);
     };
 
-    // Callback fired right after Dreamina task is submitted — saves submitId so a
-    // page refresh during polling doesn't permanently lose the in-progress task.
+    // Track whether we already released the queue slot (via onShotSubmitted).
+    // This prevents a double-release in the finally block.
+    let hasSubmitted = false;
+
+    // Callback fired right after Dreamina task is submitted — saves submitId AND immediately
+    // releases the queue so the next shot can submit concurrently while this one polls.
     const onShotSubmitted = (submitId: string) => {
+      hasSubmitted = true;
       setProject((p) => {
         const shots = [...p.shots];
         const cur = shots[selectedShotIdx];
@@ -1162,6 +1173,8 @@ export function ProductionWizard() {
         shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: submitId };
         return { ...p, shots };
       });
+      // Release the queue slot immediately — next shot no longer needs to wait
+      queueSlot.resolve();
     };
 
     try {
@@ -1275,8 +1288,11 @@ export function ProductionWizard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频生成失败');
     } finally {
-      queueSlot.resolve(); // release the Dreamina queue so the next shot can submit
+      // For the sync path or if submission failed before onShotSubmitted fired,
+      // release the queue here. The async path releases it inside onShotSubmitted.
+      if (!hasSubmitted) queueSlot.resolve();
       clearShotBusy(shotId);
+      setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
       delete shotCancelMap.current[shotId];
     }
   }, [
@@ -1296,6 +1312,7 @@ export function ProductionWizard() {
     clearShotBusy,
     saveShotVideo,
     setProject,
+    setShotQueuedMap,
   ]);
 
   const story = project.story;
@@ -1563,6 +1580,7 @@ export function ProductionWizard() {
             scSheets={scSheets}
             shotMediaBusy={shotBusyMap[String(shot?.shotIndex ?? '')] ?? null}
             shotBusyMap={shotBusyMap}
+            shotQueuedMap={shotQueuedMap}
             storySceneCoverage={storySceneCoverage}
             styleRefSummary={project.meta.styleRefSummary}
             shotVideoDreaminaModel={project.meta.shotVideoDreaminaModel}
