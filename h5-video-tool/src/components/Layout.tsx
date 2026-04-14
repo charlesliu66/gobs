@@ -6,50 +6,6 @@ type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
 const DEMO_MODE_KEY = 'gobs_demo_mode';
 
-function PlatformIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-      <path d="M10 7h4" />
-      <path d="M17 10v4" />
-      <path d="M7 10v4" />
-      <path d="M7 14h7" />
-    </svg>
-  );
-}
-
-function MemoryIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2a7 7 0 0 0-7 7v6a3 3 0 0 0 3 3h1l2 3 2-3h1a3 3 0 0 0 3-3V9a7 7 0 0 0-7-7z" />
-      <path d="M9 10h6" />
-      <path d="M9 14h4" />
-    </svg>
-  );
-}
-
-function OpsIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-    </svg>
-  );
-}
-
-function LearningIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v18" />
-      <path d="M5 8l7-5 7 5" />
-      <path d="M19 16l-7 5-7-5" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
 function getStoredUser(): { username: string; displayName: string } | null {
   try {
     const raw = localStorage.getItem('gobs_user');
@@ -63,15 +19,6 @@ function getStoredDemoMode(): boolean {
   } catch {
     return false;
   }
-}
-
-function HomeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
 }
 
 function ProjectsIcon() {
@@ -138,27 +85,6 @@ function AssetLibraryIcon() {
   );
 }
 
-function MaterialsIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-      <line x1="12" y1="11" x2="12" y2="17" />
-      <line x1="9" y1="14" x2="15" y2="14" />
-    </svg>
-  );
-}
-
-function TemplateIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
-}
-
 function HistoryIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -194,27 +120,34 @@ function SettingsIcon() {
   );
 }
 
+function GalleryIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+
 const NAV_GROUPS: NavItemDef[][] = [
+  // 创作
   [
-    { to: '/', label: '首页', icon: HomeIcon },
-    { to: '/platform', label: '平台框架', icon: PlatformIcon, highlight: true },
-    { to: '/platform/memory', label: '记忆系统', icon: MemoryIcon },
-    { to: '/platform/learning-lab', label: '学习实验台', icon: LearningIcon },
-    { to: '/platform/ops', label: '运营中心', icon: OpsIcon },
     { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon },
-    { to: '/projects', label: '我的项目', icon: ProjectsIcon },
-    { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
     { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
+    { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
+  ],
+  // 后期 & 素材
+  [
     { to: '/editor', label: '视频剪辑', icon: EditorIcon },
-  ],
-  [
+    { to: '/gallery', label: '我的成片', icon: GalleryIcon },
     { to: '/asset-library', label: '素材库', icon: AssetLibraryIcon },
-    { to: '/materials', label: '素材管理', icon: MaterialsIcon },
-    { to: '/studio?tab=templates', label: '模板市场', icon: TemplateIcon },
-    { to: '/distribute', label: '视频分发', icon: DistributeIcon },
   ],
+  // 分发 & 工具
   [
+    { to: '/distribute', label: '视频分发', icon: DistributeIcon },
     { to: '/tiktok-matrix', label: '风控大师', icon: MatrixIcon },
+    { to: '/projects', label: '我的项目', icon: ProjectsIcon },
     { to: '/history', label: '历史记录', icon: HistoryIcon },
   ],
 ];
