@@ -102,6 +102,12 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
   const done = jobs.filter((j) => j.status === 'done').length;
   const total = jobs.length;
 
+  // Summary counts for the per-status bar
+  const queuingCount = jobs.filter((j) => j.status === 'queuing' || j.status === 'pending').length;
+  const processingCount = jobs.filter((j) => j.status === 'processing').length;
+  const doneCount = done;
+  const failedCount = jobs.filter((j) => j.status === 'failed').length;
+
   return (
     <div className="flex flex-col gap-3">
       {/* 汇总栏 */}
@@ -124,6 +130,17 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
           style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
         />
       </div>
+
+      {/* 状态汇总细条 */}
+      {jobs.length > 0 && (
+        <div className="flex gap-3 px-3 py-2 text-[10px] text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
+          <span>总 {total}</span>
+          {queuingCount > 0 && <span className="text-yellow-400">排队 {queuingCount}</span>}
+          {processingCount > 0 && <span className="text-blue-400">生成中 {processingCount}</span>}
+          {doneCount > 0 && <span className="text-green-400">完成 {doneCount}</span>}
+          {failedCount > 0 && <span className="text-red-400">失败 {failedCount}</span>}
+        </div>
+      )}
 
       {/* 任务列表 */}
       <div className="flex flex-col gap-2">
@@ -154,11 +171,13 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                 {STATUS_LABEL[job.status]}
               </span>
               {/* 队列位置 */}
-              {job.queueInfo?.queue_idx != null && (
-                <span className="text-[10px] text-[var(--color-text-muted)]">
-                  队列 #{job.queueInfo.queue_idx}
-                </span>
-              )}
+              {(job.status === 'queuing' || job.status === 'pending') &&
+                job.queueInfo?.queue_idx != null && (
+                  <span className="text-[10px] text-yellow-400">
+                    排队中 #{job.queueInfo.queue_idx + 1}
+                    {job.queueInfo.queue_length != null ? `/${job.queueInfo.queue_length}` : ''}
+                  </span>
+                )}
               {/* 展开箭头 */}
               <span className="text-[var(--color-text-muted)] text-xs">
                 {expandedId === job.id ? '▲' : '▼'}
@@ -194,6 +213,16 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                     >
                       ⬇ 导入到时间轴
                     </button>
+                  )}
+                  {job.status === 'done' && job.videoUrl && (
+                    <a
+                      href={job.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[var(--color-primary)] hover:underline self-center"
+                    >
+                      下载视频
+                    </a>
                   )}
                   {(job.status === 'pending' || job.status === 'queuing') && (
                     <button

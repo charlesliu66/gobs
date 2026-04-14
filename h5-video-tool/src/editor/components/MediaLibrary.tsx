@@ -4,6 +4,7 @@ import {
   getEditorUploadConfig,
   listEditorAssets,
   uploadEditorAsset,
+  uploadEditorAssetChunked,
   type EditorAssetDto,
 } from '../../api/editor';
 import { toast } from '../../components/Toast';
@@ -214,7 +215,11 @@ export function MediaLibrary({
     setError(null);
     setUploadProgress(0);
     try {
-      const { asset } = await uploadEditorAsset(file, (pct) => setUploadProgress(pct));
+      const uploadFn =
+        file.size > 20 * 1024 * 1024
+          ? uploadEditorAssetChunked(file, (pct) => setUploadProgress(pct))
+          : uploadEditorAsset(file, (pct) => setUploadProgress(pct));
+      const { asset } = await uploadFn;
       setItems((prev) => [asset, ...prev.filter((x) => x.id !== asset.id)]);
       toast.success(`已上传 ${file.name}（${(file.size / 1024 / 1024).toFixed(1)} MB）`);
     } catch (err) {

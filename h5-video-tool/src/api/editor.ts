@@ -357,6 +357,68 @@ export async function chatEditorAgent(userMessage: string): Promise<{ reply: str
   return apiPost<{ reply: string }>('/api/editor/agent/chat', { userMessage });
 }
 
+// ---------------------------------------------------------------------------
+// 分片上传（Chunked Upload）— 适用于 >20MB 的大文件
+// ---------------------------------------------------------------------------
+
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
+
+async function uploadChunk(
+  uploadId: string,
+  chunkIndex: number,
+  totalChunks: number,
+  chunk: Blob,
+): Promise<void> {
+  const fd = new FormData();
+  fd.append('uploadId', uploadId);
+  fd.append('chunkIndex', String(chunkIndex));
+  fd.append('totalChunks', String(totalChunks));
+  fd.append('chunk', chunk);
+  const token = localStorage.getItem('gobs_token');
+  const res = await fetch(`${BASE}/api/editor/assets/upload-chunk`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+}
+
+async function assembleChunks(uploadId: string, originalName: string): Promise<{ asset: EditorAssetDto }> {
+  const token = localStorage.getItem('gobs_token');
+  const res = await fetch(`${BASE}/api/editor/assets/upload-assemble`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ uploadId, originalName }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<{ asset: EditorAssetDto }>;
+}
+
+export async function uploadEditorAssetChunked(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ asset: EditorAssetDto }> {
+  const uploadId = crypto.randomUUID();
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+    await uploadChunk(uploadId, i, totalChunks, chunk);
+    onProgress?.(Math.round(((i + 1) / totalChunks) * 90)); // 0-90% for chunk phase
+  }
+  const result = await assembleChunks(uploadId, file.name);
+  onProgress?.(100);
+  return result;
+}
+
 export interface AnalyzeEditorVideoBody {
   assetId: string;
   durationSec: number;

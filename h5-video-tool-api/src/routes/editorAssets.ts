@@ -134,6 +134,9 @@ const upload = multer({
   },
 });
 
+// Separate multer instance using memoryStorage for chunk uploads
+const chunkUpload = multer({ storage: multer.memoryStorage() });
+
 function resolveOriginalName(req: Request, multerOriginal: string): string {
   const fromBody = req.body?.originalName;
   if (typeof fromBody === 'string') {
@@ -271,6 +274,174 @@ router.get('/assets/files/:id', (req, res) => {
     if (err && !res.headersSent) {
       res.status(500).json({ error: '读取文件失败' });
     }
+  });
+});
+
+/** POST multipart：分片上传 — 接收单个 chunk 并写入临时目录 */
+router.post('/assets/upload-chunk', (req, res) => {
+  chunkUpload.single('chunk')(req, res, (err: unknown) => {
+    if (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : '分片上传失败' });
+      return;
+    }
+    const { uploadId, chunkIndex, totalChunks } = req.body as {
+      uploadId?: string;
+      chunkIndex?: string;
+      totalChunks?: string;
+    };
+    if (!uploadId || typeof uploadId !== 'string' || !/^[\w-]+$/.test(uploadId)) {
+      res.status(400).json({ error: '缺少或无效的 uploadId' });
+      return;
+    }
+    const idx = Number.parseInt(chunkIndex ?? '', 10);
+    const total = Number.parseInt(totalChunks ?? '', 10);
+    if (Number.isNaN(idx) || Number.isNaN(total) || idx < 0 || total < 1) {
+      res.status(400).json({ error: '缺少或无效的 chunkIndex / totalChunks' });
+      return;
+    }
+    const chunk = req.file;
+    if (!chunk || !chunk.buffer) {
+      res.status(400).json({ error: '缺少 chunk 文件' });
+      return;
+    }
+    const chunkDir = path.join(UPLOAD_ROOT, 'chunks', uploadId);
+    fs.mkdirSync(chunkDir, { recursive: true });
+    const chunkPath = path.join(chunkDir, `chunk_${idx}`);
+    try {
+      fs.writeFileSync(chunkPath, chunk.buffer);
+    } catch (writeErr) {
+      console.error('[editor chunk write]', writeErr);
+      res.status(500).json({ error: '写入分片失败' });
+      return;
+    }
+    res.json({ success: true, chunkIndex: idx, totalChunks: total });
+  });
+});
+
+/** POST JSON：组装已上传的分片为完整文件，然后写入素材注册表 */
+router.post('/assets/upload-assemble', async (req, res) => {
+  const { uploadId, originalName } = req.body as { uploadId?: unknown; originalName?: unknown };
+  if (
+    typeof uploadId !== 'string' ||
+    !uploadId ||
+    !/^[\w-]+$/.test(uploadId)
+  ) {
+    res.status(400).json({ error: '缺少或无效的 uploadId' });
+    return;
+  }
+  if (typeof originalName !== 'string' || !originalName.trim()) {
+    res.status(400).json({ error: '缺少 originalName' });
+    return;
+  }
+  const chunkDir = path.join(UPLOAD_ROOT, 'chunks', uploadId);
+  const cleanup = () => {
+    try {
+      fs.rmSync(chunkDir, { recursive: true, force: true });
+    } catch { /* best effort */ }
+  };
+
+  if (!fs.existsSync(chunkDir)) {
+    res.status(400).json({ error: '找不到分片目录，uploadId 可能无效或已过期' });
+    return;
+  }
+
+  // 读取并排序所有分片
+  let chunkFiles: string[];
+  try {
+    chunkFiles = fs
+      .readdirSync(chunkDir)
+      .filter((f) => /^chunk_\d+$/.test(f))
+      .sort((a, b) => {
+        const ia = Number.parseInt(a.replace('chunk_', ''), 10);
+        const ib = Number.parseInt(b.replace('chunk_', ''), 10);
+        return ia - ib;
+      });
+  } catch (e) {
+    console.error('[editor assemble readdir]', e);
+    cleanup();
+    res.status(500).json({ error: '读取分片目录失败' });
+    return;
+  }
+  if (chunkFiles.length === 0) {
+    cleanup();
+    res.status(400).json({ error: '分片目录为空' });
+    return;
+  }
+
+  const username = resolveUsername(req as Request);
+  loadAssetsRegistry(username);
+  const store = getStore(username);
+  const userDir = getUserUploadDir(username);
+  fs.mkdirSync(userDir, { recursive: true });
+
+  const id = randomUUID();
+  const ext = path.extname(originalName.trim()) || '.mp4';
+  const filename = `${id}${ext}`;
+  const destPath = path.join(userDir, filename);
+
+  try {
+    const out = fs.createWriteStream(destPath);
+    await new Promise<void>((resolve, reject) => {
+      out.on('error', reject);
+      const writeNext = (i: number) => {
+        if (i >= chunkFiles.length) {
+          out.end();
+          return;
+        }
+        const buf = fs.readFileSync(path.join(chunkDir, chunkFiles[i]));
+        if (!out.write(buf)) {
+          out.once('drain', () => writeNext(i + 1));
+        } else {
+          writeNext(i + 1);
+        }
+      };
+      out.on('finish', resolve);
+      writeNext(0);
+    });
+  } catch (assembleErr) {
+    console.error('[editor assemble write]', assembleErr);
+    cleanup();
+    try { fs.unlinkSync(destPath); } catch { /* ignore */ }
+    res.status(500).json({ error: '组装分片失败' });
+    return;
+  }
+
+  cleanup();
+
+  const stat = fs.statSync(destPath);
+  // 推断 mime
+  const extLower = ext.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm',
+    '.mkv': 'video/x-matroska',
+    '.avi': 'video/x-msvideo',
+    '.ts': 'video/mp2t',
+  };
+  const mime = mimeMap[extLower] ?? 'video/mp4';
+
+  const rec: StoredEditorAsset = {
+    id,
+    filename,
+    originalName: originalName.trim(),
+    mime,
+    size: stat.size,
+    createdAt: new Date().toISOString(),
+  };
+  store.assetsById.set(id, rec);
+  saveAssetsRegistry(username);
+
+  res.json({
+    asset: {
+      id,
+      url: `/api/editor/assets/files/${id}`,
+      kind: 'video' as const,
+      originalName: rec.originalName,
+      mime: rec.mime,
+      size: rec.size,
+      createdAt: rec.createdAt,
+    },
   });
 });
 
