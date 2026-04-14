@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { saveVideoToHistory } from '../utils/videoHistory';
 import { getVideoFileUrl } from '../utils/videoHistory';
 import { filterPlaceholders } from './ShortDramaMaterialPicker';
+import { generateUUID } from '../utils/uuid';
 import {
   checkDreaminaAuthStatus,
   getVeoModels,
@@ -505,7 +506,7 @@ export function StepVideo() {
           setDreaminaJobs((prev) => [
             ...prev,
             {
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               submitId,
               taskId: queued.taskId,
               status: 'pending',
@@ -538,7 +539,7 @@ export function StepVideo() {
               : {}),
           });
           if (!queued?.taskId) return;
-          setKlingJobs((prev) => [...prev, { id: crypto.randomUUID(), taskId: queued.taskId, phase: 'pending' }]);
+          setKlingJobs((prev) => [...prev, { id: generateUUID(), taskId: queued.taskId, phase: 'pending' }]);
         } finally {
           setSubmittingProvider(null);
         }

@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from './client';
 import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../editor/types/timeline';
+import { generateUUID } from '../utils/uuid';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -407,7 +408,7 @@ export async function uploadEditorAssetChunked(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<{ asset: EditorAssetDto }> {
-  const uploadId = crypto.randomUUID();
+  const uploadId = generateUUID();
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   for (let i = 0; i < totalChunks; i++) {
     const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
