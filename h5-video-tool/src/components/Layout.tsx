@@ -157,10 +157,6 @@ function isStudioMainNavActive(pathname: string, search: string): boolean {
   return new URLSearchParams(search).get('tab') !== 'templates';
 }
 
-function isStudioTemplatesNavActive(pathname: string, search: string): boolean {
-  if (pathname !== '/studio') return false;
-  return new URLSearchParams(search).get('tab') === 'templates';
-}
 
 function getProductionNavTo(pathname: string, search: string): string {
   const params = new URLSearchParams(search);
@@ -251,7 +247,6 @@ export function Layout() {
                 className={({ isActive }) => {
                   let active = isActive;
                   if (to === '/studio') active = isStudioMainNavActive(pathname, search);
-                  else if (to === '/studio?tab=templates') active = isStudioTemplatesNavActive(pathname, search);
                   return navLinkClass(active, highlight);
                 }}
               >
