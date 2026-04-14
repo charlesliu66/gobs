@@ -78,9 +78,9 @@ if [ -d "$API_DIR" ] && [ -f "$API_DIR/tsconfig.json" ]; then
     echo "  ✓ TypeScript: zero errors"
   else
     typescript_status="fail"
-    # 转义为 JSON 字符串（基础处理）
-    TS_FIRST=$(echo "$TS_OUT" | head -5 | sed 's/"/\\"/g' | tr '\n' '|')
-    typescript_errors="[\"${TS_FIRST}\"]"
+    # 转义为合法 JSON 字符串（用 node 处理反斜杠/控制字符，Windows 路径安全）
+    TS_FIRST=$(echo "$TS_OUT" | head -5)
+    typescript_errors=$(node -e "process.stdout.write(JSON.stringify([process.argv[1]]))" "$TS_FIRST" 2>/dev/null || echo '["(TypeScript errors - see build log)"]')
     [ "$verdict" = "PASS" ] && verdict="P1_WARN"
     echo "  ✗ TypeScript errors found"
     echo "$TS_OUT" | head -10
