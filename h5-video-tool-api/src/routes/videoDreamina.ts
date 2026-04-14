@@ -262,9 +262,11 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
     rel?.();
     activeSlotReleases.delete(polled.submitId);
 
-    const videoUrl = polled.videoUrl;
+    const rawVideoUrl = polled.videoUrl;
     const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
-    const videoPath = videoUrl ? await persistVideoUrlToOutput(videoUrl, slug, req.user?.username) : undefined;
+    const videoPath = rawVideoUrl ? await persistVideoUrlToOutput(rawVideoUrl, slug, req.user?.username) : undefined;
+    // Return a small serving URL instead of the raw data URL (which can be 100 MB+).
+    const serveUrl = videoPath ? `/api/video/file?path=${encodeURIComponent(videoPath)}` : undefined;
 
     res.json({
       taskId,
@@ -272,7 +274,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
       status: 'completed' as const,
       phase: polled.phase,
       genStatus: polled.genStatus,
-      videoUrl,
+      videoUrl: serveUrl,
       videoPath,
     });
   } catch (err) {

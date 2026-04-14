@@ -721,6 +721,36 @@ export async function fetchImageAsBase64(url: string): Promise<{ base64: string;
 }
 
 /**
+ * 将 base64 图片压缩为 JPEG，最大边长 maxPx，减小上传体积。
+ * 若 Canvas 不可用则原样返回。
+ */
+async function compressImageToJpeg(
+  base64: string,
+  mimeType: string,
+  maxPx = 768,
+  quality = 0.85,
+): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve({ base64, mimeType }); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
+      if (m) resolve({ base64: m[2]!.trim(), mimeType: 'image/jpeg' });
+      else resolve({ base64, mimeType });
+    };
+    img.onerror = () => resolve({ base64, mimeType });
+    img.src = `data:${mimeType};base64,${base64}`;
+  });
+}
+
+/**
  * 与 buildShotMultimodalRefPack 逻辑一致，但支持 HTTP URL 图片（fetch 转 base64）。
  * 用于 React 组件中（useEffect）和提交视频时调用。
  */
@@ -775,12 +805,13 @@ export async function buildShotMultimodalRefPackAsync(
   for (const ch of pickedChars) {
     const url = getCharacterLookImage(ensureCharacterLookTree(ch));
     if (!url) continue;
-    const parsed = await fetchImageAsBase64(url);
-    if (!parsed) continue;
+    const raw = await fetchImageAsBase64(url);
+    if (!raw) continue;
+    const parsed = await compressImageToJpeg(raw.base64, raw.mimeType || 'image/png');
     const nm = ch.name!.trim();
     entries.push({
       base64: parsed.base64,
-      mimeType: parsed.mimeType || 'image/png',
+      mimeType: parsed.mimeType,
       label: `角色「${nm}」`,
       injectNames: nm ? [nm] : [],
     });
@@ -796,8 +827,9 @@ export async function buildShotMultimodalRefPackAsync(
   if (scene) {
     const url = firstSceneVariantImageUrl(scene);
     if (url) {
-      const parsed = await fetchImageAsBase64(url);
-      if (parsed) {
+      const raw = await fetchImageAsBase64(url);
+      if (raw) {
+        const parsed = await compressImageToJpeg(raw.base64, raw.mimeType || 'image/png');
         const sn = scene.name?.trim() || '';
         const injectNames = new Set<string>();
         if (sn) injectNames.add(sn);
@@ -805,7 +837,7 @@ export async function buildShotMultimodalRefPackAsync(
         if (sn.includes(' - ')) injectNames.add(sn.split(' - ')[0]!.trim());
         entries.push({
           base64: parsed.base64,
-          mimeType: parsed.mimeType || 'image/png',
+          mimeType: parsed.mimeType,
           label: `场景「${sn || scene.sceneRef}」`,
           injectNames: [...injectNames],
         });
@@ -830,12 +862,13 @@ export async function buildShotMultimodalRefPackAsync(
     for (const ps of propCandidates) {
       const url = firstPropVariantImageUrl(ps);
       if (!url) continue;
-      const parsed = await fetchImageAsBase64(url);
-      if (!parsed) continue;
+      const raw = await fetchImageAsBase64(url);
+      if (!raw) continue;
+      const parsed = await compressImageToJpeg(raw.base64, raw.mimeType || 'image/png');
       const nm = ps.name.trim();
       entries.push({
         base64: parsed.base64,
-        mimeType: parsed.mimeType || 'image/png',
+        mimeType: parsed.mimeType,
         label: `道具「${nm}」`,
         injectNames: [nm],
       });
