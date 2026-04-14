@@ -150,6 +150,11 @@ export interface ProductionShot {
   /** 当前保留/展示的视频版本 id */
   selectedPreviewVideoVersionId?: string;
   /**
+   * 当分镜视频正在由即梦生成时，保存 submitId 以便页面刷新后自动恢复轮询。
+   * 生成完成（成功或失败）后清空。
+   */
+  pendingVideoSubmitId?: string;
+  /**
    * 仅当分镜视频模式为「全能参考 dreamina-multimodal」时有效：覆盖发给接口的 storyboardText。
    * 未设置时使用自动拼接（结构化叙事 + @图片 说明行）。
    */

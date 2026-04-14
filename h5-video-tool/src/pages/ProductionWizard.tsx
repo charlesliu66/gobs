@@ -59,6 +59,7 @@ import { saveProductionProject, loadProductionProject, listProductionProjects, u
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
+import { getDreaminaTaskStatus } from '../api/video';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
 import { ProductionWizardShell } from '../studio/ProductionWizardShell';
@@ -267,6 +268,97 @@ export function ProductionWizard() {
   });
 
   const ar = project.meta.aspectRatio ?? '16:9';
+
+  /**
+   * 将已完成的分镜视频保存到 project.shots[shotIdx] 并写入历史记录。
+   * 提取为独立 callback 以便 mount-time resume 也能调用。
+   */
+  const saveShotVideo = useCallback(
+    (shotIdx: number, url: string, taskId: string, videoPath: string | undefined) => {
+      const s = project.shots[shotIdx];
+      if (!s) return;
+      const vp = videoPath?.trim();
+      const versionId = `${taskId || `production-shot-${s.shotIndex}`}-${Date.now()}`;
+      const version: ProductionShotVideoVersion = {
+        id: versionId,
+        taskId: taskId || `production-shot-${s.shotIndex}`,
+        createdAt: Date.now(),
+        ...(vp ? { videoPath: vp } : {}),
+        ...(url?.trim() ? { videoUrl: url } : {}),
+      };
+      setProject((p) => {
+        const shots = [...p.shots];
+        const cur = shots[shotIdx];
+        if (!cur) return p;
+        const prev = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
+        const dedup = prev.filter((x) => x.id !== version.id && x.taskId !== version.taskId);
+        const nextVersions = [version, ...dedup].sort((a, b) => b.createdAt - a.createdAt);
+        shots[shotIdx] = {
+          ...cur,
+          pendingVideoSubmitId: undefined, // clear on completion
+          previewVideoVersions: nextVersions,
+          selectedPreviewVideoVersionId: version.id,
+          previewVideoUrl: version.videoUrl,
+          previewVideoPath: version.videoPath,
+        } as ProductionShot;
+        return { ...p, shots, assembled: null };
+      });
+      const line = buildProductionShotVideoStoryboardText(s);
+      const title = (project.meta.title || '未命名').trim();
+      saveVideoToHistory({
+        taskId: taskId || `production-shot-${s.shotIndex}-${Date.now()}`,
+        videoPath: videoPath ?? '',
+        prompt: `[高级制片·${title}·镜${s.shotIndex}] ${line}`.slice(0, 12000),
+        ...(videoPath?.trim() ? {} : { videoUrl: url }),
+      });
+      toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
+    },
+    [project.shots, project.meta.title, setProject],
+  );
+
+  /** 页面加载时恢复所有带 pendingVideoSubmitId 的分镜视频轮询（刷新前已提交但未完成的任务）。 */
+  useEffect(() => {
+    const shotsWithPending = project.shots
+      .map((s, idx) => ({ s, idx }))
+      .filter(({ s }) => !!s.pendingVideoSubmitId);
+    if (!shotsWithPending.length) return;
+
+    for (const { s, idx } of shotsWithPending) {
+      const submitId = s.pendingVideoSubmitId!;
+      const shotId = String(s.shotIndex);
+      setShotBusy(shotId, 'video');
+      void (async () => {
+        const MAX_POLL_MS = 10 * 60 * 1000;
+        const startedAt = Date.now();
+        try {
+          while (Date.now() - startedAt < MAX_POLL_MS) {
+            const st = await getDreaminaTaskStatus(submitId);
+            if (st.status === 'failed') {
+              throw new Error(st.failReason || '即梦任务失败');
+            }
+            if (st.status === 'completed' && st.videoUrl) {
+              saveShotVideo(idx, st.videoUrl, st.taskId || `dreamina-${submitId}`, st.videoPath);
+              return;
+            }
+            await new Promise<void>((r) => setTimeout(r, 5000));
+          }
+          throw new Error('即梦生成等待超时');
+        } catch {
+          // Clear the pending marker on failure so the user can retry
+          setProject((p) => {
+            const shots = [...p.shots];
+            const cur = shots[idx];
+            if (!cur) return p;
+            shots[idx] = { ...cur, pendingVideoSubmitId: undefined };
+            return { ...p, shots };
+          });
+        } finally {
+          clearShotBusy(shotId);
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount only
 
   useEffect(() => {
     requestNotificationPermission();
@@ -1057,40 +1149,19 @@ export function ProductionWizard() {
     }
 
     const persistShotVideo = (url: string, taskId: string, videoPath: string | undefined) => {
-      const vp = videoPath?.trim();
-      const versionId = `${taskId || `production-shot-${s.shotIndex}`}-${Date.now()}`;
-      const version: ProductionShotVideoVersion = {
-        id: versionId,
-        taskId: taskId || `production-shot-${s.shotIndex}`,
-        createdAt: Date.now(),
-        ...(vp ? { videoPath: vp } : {}),
-        ...(url?.trim() ? { videoUrl: url } : {}),
-      };
+      saveShotVideo(selectedShotIdx, url, taskId, videoPath);
+    };
+
+    // Callback fired right after Dreamina task is submitted — saves submitId so a
+    // page refresh during polling doesn't permanently lose the in-progress task.
+    const onShotSubmitted = (submitId: string) => {
       setProject((p) => {
         const shots = [...p.shots];
         const cur = shots[selectedShotIdx];
         if (!cur) return p;
-        const prev = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
-        const dedup = prev.filter((x) => x.id !== version.id && x.taskId !== version.taskId);
-        const nextVersions = [version, ...dedup].sort((a, b) => b.createdAt - a.createdAt);
-        shots[selectedShotIdx] = {
-          ...cur,
-          previewVideoVersions: nextVersions,
-          selectedPreviewVideoVersionId: version.id,
-          previewVideoUrl: version.videoUrl,
-          previewVideoPath: version.videoPath,
-        } as ProductionShot;
-        return { ...p, shots, assembled: null };
+        shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: submitId };
+        return { ...p, shots };
       });
-      const line = buildProductionShotVideoStoryboardText(s);
-      const title = (project.meta.title || '未命名').trim();
-      saveVideoToHistory({
-        taskId: taskId || `production-shot-${s.shotIndex}-${Date.now()}`,
-        videoPath: videoPath ?? '',
-        prompt: `[高级制片·${title}·镜${s.shotIndex}] ${line}`.slice(0, 12000),
-        ...(videoPath?.trim() ? {} : { videoUrl: url }),
-      });
-      toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
     };
 
     try {
@@ -1129,7 +1200,7 @@ export function ProductionWizard() {
             model: 'dreamina-multimodal',
             multimodalImages: pack.multimodalImages,
             ...(mv ? { dreaminaModelVersion: mv } : {}),
-          }, cancelToken);
+          }, cancelToken, onShotSubmitted);
           if (polled?.videoUrl) {
             persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
           }
@@ -1180,7 +1251,7 @@ export function ProductionWizard() {
           ...(hasStill && model === 'dreamina-image2video'
             ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
             : {}),
-        }, cancelToken);
+        }, cancelToken, onShotSubmitted);
         if (polled?.videoUrl) {
           persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
         }
@@ -1223,6 +1294,8 @@ export function ProductionWizard() {
     shotVideoGen,
     setShotBusy,
     clearShotBusy,
+    saveShotVideo,
+    setProject,
   ]);
 
   const story = project.story;

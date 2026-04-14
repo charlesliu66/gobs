@@ -100,7 +100,13 @@ export function useVideoGeneration(opts?: {
   );
 
   const submitAsync = useCallback(
-    async (provider: AsyncProvider, request: VideoGenerateRequest, externalCancel?: { cancelled: boolean }): Promise<VideoGenerationResult | null> => {
+    async (
+      provider: AsyncProvider,
+      request: VideoGenerateRequest,
+      externalCancel?: { cancelled: boolean },
+      /** Called immediately after task submission, before polling starts — use to persist submitId */
+      onSubmitted?: (submitId: string, taskId: string) => void,
+    ): Promise<VideoGenerationResult | null> => {
       cancelledRef.current = false;
       emit({ status: 'submitting' });
       const startedAt = Date.now();
@@ -108,6 +114,7 @@ export function useVideoGeneration(opts?: {
         if (provider === 'dreamina') {
           const submit = await submitDreaminaAsync(request);
           if (cancelledRef.current) return null;
+          onSubmitted?.(submit.submitId, submit.taskId); // persist before polling
           let polls = 0;
           emit({
             status: 'polling',
