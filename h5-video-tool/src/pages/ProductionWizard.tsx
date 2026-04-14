@@ -240,7 +240,23 @@ export function ProductionWizard() {
 
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
-  const [shotMediaBusy, setShotMediaBusy] = useState<'frame' | 'video' | null>(null);
+  const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
+  // Per-shot cancel tokens (ref so mutations don't trigger re-render)
+  const shotCancelMap = useRef<Record<string, { cancelled: boolean }>>({});
+  const setShotBusy = useCallback(
+    (shotId: string, status: 'frame' | 'video') =>
+      setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
+    [],
+  );
+  const clearShotBusy = useCallback(
+    (shotId: string) =>
+      setShotBusyMap((prev) => {
+        const n = { ...prev };
+        delete n[shotId];
+        return n;
+      }),
+    [],
+  );
   /** 与 GET /api/video/models 一致：启用时「生成分镜视频」走 submit + 轮询，成片后写入本镜预览 */
   const [dreaminaAsync, setDreaminaAsync] = useState(false);
   const shotVideoGen = useVideoGeneration({
@@ -978,7 +994,8 @@ export function ProductionWizard() {
   const handleGenerateShotFrame = useCallback(async () => {
     const s = project.shots[selectedShotIdx];
     if (!s || !project.productionDesign) return;
-    setShotMediaBusy('frame');
+    const shotId = String(s.shotIndex);
+    setShotBusy(shotId, 'frame');
     setErr(null);
     try {
       const prompt = buildProductionShotFramePrompt(
@@ -1000,7 +1017,7 @@ export function ProductionWizard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜图生成失败');
     } finally {
-      setShotMediaBusy(null);
+      clearShotBusy(shotId);
     }
   }, [
     project.shots,
@@ -1010,12 +1027,17 @@ export function ProductionWizard() {
     ar,
     selectedShotIdx,
     patchShot,
+    setShotBusy,
+    clearShotBusy,
   ]);
 
   const handleGenerateShotVideo = useCallback(async () => {
     const s = project.shots[selectedShotIdx];
     if (!s) return;
-    setShotMediaBusy('video');
+    const shotId = String(s.shotIndex);
+    setShotBusy(shotId, 'video');
+    const cancelToken = { cancelled: false };
+    shotCancelMap.current[shotId] = cancelToken;
     setErr(null);
 
     const persistShotVideo = (url: string, taskId: string, videoPath: string | undefined) => {
@@ -1091,7 +1113,7 @@ export function ProductionWizard() {
             model: 'dreamina-multimodal',
             multimodalImages: pack.multimodalImages,
             ...(mv ? { dreaminaModelVersion: mv } : {}),
-          });
+          }, cancelToken);
           if (polled?.videoUrl) {
             persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
           }
@@ -1142,7 +1164,7 @@ export function ProductionWizard() {
           ...(hasStill && model === 'dreamina-image2video'
             ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
             : {}),
-        });
+        }, cancelToken);
         if (polled?.videoUrl) {
           persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
         }
@@ -1166,7 +1188,8 @@ export function ProductionWizard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频生成失败');
     } finally {
-      setShotMediaBusy(null);
+      clearShotBusy(shotId);
+      delete shotCancelMap.current[shotId];
     }
   }, [
     project.shots,
@@ -1181,6 +1204,8 @@ export function ProductionWizard() {
     patchShot,
     dreaminaAsync,
     shotVideoGen,
+    setShotBusy,
+    clearShotBusy,
   ]);
 
   const story = project.story;
@@ -1446,7 +1471,8 @@ export function ProductionWizard() {
             shots={project.shots}
             chSheets={chSheets}
             scSheets={scSheets}
-            shotMediaBusy={shotMediaBusy}
+            shotMediaBusy={shotBusyMap[String(shot?.shotIndex ?? '')] ?? null}
+            shotBusyMap={shotBusyMap}
             storySceneCoverage={storySceneCoverage}
             styleRefSummary={project.meta.styleRefSummary}
             shotVideoDreaminaModel={project.meta.shotVideoDreaminaModel}

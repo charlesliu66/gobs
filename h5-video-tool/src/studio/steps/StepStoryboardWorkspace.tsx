@@ -27,6 +27,7 @@ export function StepStoryboardWorkspace({
   chSheets,
   scSheets,
   shotMediaBusy,
+  shotBusyMap,
   storySceneCoverage,
   styleRefSummary,
   shotVideoDreaminaModel,
@@ -53,6 +54,7 @@ export function StepStoryboardWorkspace({
   chSheets: CharacterSheet[];
   scSheets: SceneSheet[];
   shotMediaBusy: 'frame' | 'video' | null;
+  shotBusyMap: Record<string, 'frame' | 'video'>;
   storySceneCoverage: StorySceneCoverage;
   styleRefSummary: string;
   shotVideoDreaminaModel?: string;
@@ -166,7 +168,7 @@ export function StepStoryboardWorkspace({
         shots={shots}
         scSheets={scSheets}
         selectedShotIdx={selectedShotIdx}
-        shotMediaBusy={shotMediaBusy}
+        shotBusyMap={shotBusyMap}
         onSelectShot={setSelectedShotIdx}
       />
 

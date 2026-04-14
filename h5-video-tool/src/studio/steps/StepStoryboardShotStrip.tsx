@@ -4,19 +4,21 @@ export function StepStoryboardShotStrip({
   shots,
   scSheets,
   selectedShotIdx,
-  shotMediaBusy,
+  shotBusyMap,
   onSelectShot,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
   selectedShotIdx: number;
-  shotMediaBusy: 'frame' | 'video' | null;
+  shotBusyMap: Record<string, 'frame' | 'video'>;
   onSelectShot: (idx: number) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
       <div className="flex min-w-min gap-2">
-        {shots.map((s, idx) => (
+        {shots.map((s, idx) => {
+          const isThisShotBusy = shotBusyMap[String(s.shotIndex)];
+          return (
           <button
             key={s.shotIndex}
             type="button"
@@ -37,13 +39,13 @@ export function StepStoryboardShotStrip({
                   className="h-full w-full object-cover"
                 />
               ) : null}
-              {selectedShotIdx === idx && shotMediaBusy === 'video' ? (
+              {isThisShotBusy === 'video' ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/65 backdrop-blur-[1px]">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-amber-400" />
                   <span className="px-1 text-[8px] font-medium text-amber-100">生成中</span>
                 </div>
               ) : null}
-              {selectedShotIdx === idx && shotMediaBusy === 'frame' ? (
+              {isThisShotBusy === 'frame' ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-cyan-400" />
                   <span className="px-1 text-[8px] font-medium text-cyan-100">静帧中</span>
@@ -54,7 +56,8 @@ export function StepStoryboardShotStrip({
               #{s.shotIndex} {s.durationSec}s
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

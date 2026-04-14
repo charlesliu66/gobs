@@ -100,7 +100,7 @@ export function useVideoGeneration(opts?: {
   );
 
   const submitAsync = useCallback(
-    async (provider: AsyncProvider, request: VideoGenerateRequest): Promise<VideoGenerationResult | null> => {
+    async (provider: AsyncProvider, request: VideoGenerateRequest, externalCancel?: { cancelled: boolean }): Promise<VideoGenerationResult | null> => {
       cancelledRef.current = false;
       emit({ status: 'submitting' });
       const startedAt = Date.now();
@@ -114,7 +114,7 @@ export function useVideoGeneration(opts?: {
             taskId: submit.taskId,
             submitId: submit.submitId,
           });
-          while (!cancelledRef.current && Date.now() - startedAt < MAX_POLL_MS) {
+          while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - startedAt < MAX_POLL_MS) {
             const st = await getDreaminaTaskStatus(submit.submitId);
             if (st.status === 'failed') {
               throw new Error(st.failReason || '即梦任务失败');
@@ -145,7 +145,7 @@ export function useVideoGeneration(opts?: {
         if (cancelledRef.current) return null;
         let polls = 0;
         emit({ status: 'polling', taskId: submit.taskId });
-        while (!cancelledRef.current && Date.now() - startedAt < MAX_POLL_MS) {
+        while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - startedAt < MAX_POLL_MS) {
           const st = await getKlingTaskStatus(submit.taskId);
           if (st.phase === 'failed') {
             throw new Error(st.error || '可灵任务失败');
