@@ -69,36 +69,54 @@ bash scripts/eval.sh <run-id>
 **每次修改完成后，必须保证本地、GitHub、云端服务器三端同步，缺一不可。**
 
 ```
-本地代码 → git commit → git push → SSH 部署到服务器
+本地代码 → git commit → git push → 本地编译 → SFTP 上传 → pm2 restart
 ```
 
-### 标准流程
+### 服务器连接方式
+
+- **Host**: `43.134.186.196`
+- **User**: `ubuntu`
+- **Auth**: 密码认证（密码在 `h5-video-tool-api/.env` 的 `SERVER_PASSWORD` 字段）
+- **SSH 工具**: 本机用 `paramiko`（Python）连接，无需 sshpass/plink
+
+### 服务器目录结构
+
+```
+/home/ubuntu/qas-h5/
+├── api/          # 后端（已编译的 ESM JS，对应本地 dist/）
+├── frontend/     # 前端静态文件（对应本地 h5-video-tool/dist/）
+└── scripts/
+```
+
+- PM2 进程名：`qas-api`，运行 `/home/ubuntu/qas-h5/api/index.js`
+- 服务器**无 git**，通过 SFTP 上传编译产物部署
+
+### 标准四步部署流程
 
 ```bash
-# 1. 本地：确认 TypeScript 编译无错
-cd h5-video-tool && npx tsc --noEmit
+# 1. 本地 TypeScript 编译检查
 cd h5-video-tool-api && npx tsc --noEmit
+cd h5-video-tool && npx tsc --noEmit   # 或 npm run build
 
-# 2. 提交
+# 2. 提交并推送 GitHub
 git add <修改的文件>
 git commit -m "feat/fix: ..."
-
-# 3. 推送到 GitHub
 git push origin main
 
-# 4. 部署到云端（服务器 43.134.186.196）
-ssh ubuntu@43.134.186.196
-cd /home/ubuntu/gobs
-git pull origin main
-cd h5-video-tool-api && npm run build && cd ..
-cd h5-video-tool && npm run build && cd ..
-pm2 restart all
+# 3. 本地构建产物
+cd h5-video-tool-api && npm run build   # → dist/
+cd h5-video-tool && npm run build       # → dist/
+
+# 4. SFTP 上传 + pm2 重启（用 paramiko Python 脚本）
+#    API：上传 dist/ 中有变动的 .js 文件到 /home/ubuntu/qas-h5/api/
+#    前端：上传整个 h5-video-tool/dist/ 到 /home/ubuntu/qas-h5/frontend/
+#    重启：pm2 restart qas-api
 ```
 
 ### 违禁情形
 
 - 不得只改本地、不提交
-- 不得只 push、不部署
+- 不得只 push GitHub、不部署服务器
 - 不得跳过 TypeScript 编译检查直接部署
 - AI 完成每个任务后必须主动执行上述四步，不等用户催
 
