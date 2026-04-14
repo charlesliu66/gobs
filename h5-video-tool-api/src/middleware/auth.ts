@@ -45,6 +45,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 高级制片分镜视频回放：<video src="/api/video/file?path=..."> 无法附带 Bearer
+  if (req.method === 'GET' && req.path === '/api/video/file') {
+    next();
+    return;
+  }
   // TASK-D: 资产库文件访问（支持 ?token= 认证，路由内部自行验证 token）
   if (req.method === 'GET' && /^\/api\/asset-library\/assets\/[^/]+\/file/.test(req.path)) {
     next();
