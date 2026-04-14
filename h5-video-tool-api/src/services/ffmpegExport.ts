@@ -181,10 +181,56 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
       log(Math.round(10 + (i / videoClips.length) * 40), `处理片段 ${i + 1}/${videoClips.length}`);
     }
 
-    // ── Step 2: 拼接片段（crossfade 转场暂简化为硬切，后续用 xfade filter 实现）
+    // ── Step 2: 拼接片段（支持 crossfade xfade 转场）
     log(55, '拼接片段…');
+
+    const XFADE_DUR = 0.5;
+    const segDurs = videoClips.map((vc) => (vc.sourceEnd - vc.sourceStart) / (vc.speed ?? 1));
+    const hasCrossfade = videoClips.some((vc, i) => i < videoClips.length - 1 && vc.transitionAfter === 'crossfade');
+
+    // Build the list of pieces: either original segments or xfaded pairs
+    let pieces: string[];
+    if (!hasCrossfade || segmentPaths.length < 2) {
+      pieces = segmentPaths;
+    } else {
+      pieces = [];
+      let i = 0;
+      while (i < segmentPaths.length) {
+        const durA = segDurs[i] ?? 0;
+        const durB = i + 1 < segDurs.length ? (segDurs[i + 1] ?? 0) : 0;
+        const wantXfade = i < segmentPaths.length - 1 && videoClips[i]!.transitionAfter === 'crossfade';
+        const canXfade = wantXfade && durA > XFADE_DUR * 2 && durB > XFADE_DUR * 2;
+
+        if (canXfade) {
+          const crossPath = path.join(tmpDir, `xfade_${i}.mp4`);
+          const offset = (durA - XFADE_DUR).toFixed(3);
+          await runFfmpeg([
+            '-y',
+            '-i', segmentPaths[i]!,
+            '-i', segmentPaths[i + 1]!,
+            '-filter_complex',
+            `[0:v][1:v]xfade=transition=fade:duration=${XFADE_DUR}:offset=${offset}[v];[0:a][1:a]acrossfade=d=${XFADE_DUR}[a]`,
+            '-map', '[v]',
+            '-map', '[a]',
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-crf', String(crf),
+            '-preset', preset,
+            '-pix_fmt', 'yuv420p',
+            crossPath,
+          ]);
+          pieces.push(crossPath);
+          i += 2; // both segments consumed
+        } else {
+          // cut (or crossfade degraded due to insufficient duration)
+          pieces.push(segmentPaths[i]!);
+          i += 1;
+        }
+      }
+    }
+
     const concatListPath = path.join(tmpDir, 'concat.txt');
-    const concatLines = segmentPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+    const concatLines = pieces.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
     await fs.promises.writeFile(concatListPath, concatLines, 'utf8');
 
     const concatPath = path.join(tmpDir, 'concat.mp4');
