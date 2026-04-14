@@ -10,7 +10,7 @@ import { createRequire } from 'module';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import db from '../db/assetDb.js';
-import { applyRuleTags } from './assetTaggingService.js';
+import { applyRuleTags, aiTagAsset } from './assetTaggingService.js';
 import type { AssetRecord, ImportJob } from '../types/assetLibrary.js';
 
 const require = createRequire(import.meta.url);
@@ -227,6 +227,9 @@ async function processFile(
 
     // 6. 规则打标
     applyRuleTags(assetId, asset);
+
+    // 7. AI 打标（异步不等待，失败不阻塞导入任务）
+    void aiTagAsset(assetId);
 
     return 'processed';
   } catch (err) {
