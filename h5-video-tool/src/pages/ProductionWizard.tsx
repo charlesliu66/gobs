@@ -88,6 +88,8 @@ const STEPS = [
 
 type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
 
+type BatchTask = { kind: 'char' | 'scene' | 'prop'; sheetId: string; variantId: string; prompt: string };
+
 interface BatchAssetGenState {
   current: number;
   total: number;
@@ -95,6 +97,7 @@ interface BatchAssetGenState {
   failed: number;
   startedAt: number;
   currentLabel?: string;
+  failedTasks: BatchTask[];
 }
 
 export function ProductionWizard() {
@@ -269,6 +272,8 @@ export function ProductionWizard() {
   /** 列表「AI」同款：缺图的角色定稿节点 + 场景主变体；跳过弹窗中待确认的肖像任务 */
   const [batchAssetGen, setBatchAssetGen] = useState<BatchAssetGenState | null>(null);
   const batchCancelRef = useRef<boolean>(false);
+  const failedTasksRef = useRef<BatchTask[]>([]);
+  const [failedTaskCount, setFailedTaskCount] = useState(0);
   const handleBatchGenerateMissingAssets = useCallback(async () => {
     const pd = project.productionDesign;
     const styleLock = !!project.meta.styleRefImageDataUrl?.trim();
@@ -320,6 +325,8 @@ export function ProductionWizard() {
 
     setErr(null);
     batchCancelRef.current = false;
+    failedTasksRef.current = [];
+    setFailedTaskCount(0);
     setBatchAssetGen({
       current: 0,
       total: tasks.length,
@@ -327,6 +334,7 @@ export function ProductionWizard() {
       failed: 0,
       startedAt: Date.now(),
       currentLabel: '',
+      failedTasks: [],
     });
     const g = project.meta.styleRefImageDataUrl?.trim();
 
@@ -393,6 +401,12 @@ export function ProductionWizard() {
         if (!batchCancelRef.current) {
           console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, msg);
         }
+        setBatchAssetGen((prev) => prev ? {
+          ...prev,
+          failedTasks: [...(prev.failedTasks ?? []), t],
+        } : null);
+        failedTasksRef.current = [...failedTasksRef.current, t];
+        setFailedTaskCount((n) => n + 1);
       } finally {
         completedCount++;
         setBatchAssetGen((prev) => prev
@@ -464,6 +478,104 @@ export function ProductionWizard() {
     stylePreviewRevokeRef.current = null;
     setStyleRefPreview(null);
   }, []);
+
+  const handleRetryFailed = useCallback(async () => {
+    const tasks = failedTasksRef.current;
+    if (tasks.length === 0) return;
+    setErr(null);
+    batchCancelRef.current = false;
+    failedTasksRef.current = [];
+    setFailedTaskCount(0);
+    setBatchAssetGen({
+      current: 0,
+      total: tasks.length,
+      success: 0,
+      failed: 0,
+      startedAt: Date.now(),
+      currentLabel: '',
+      failedTasks: [],
+    });
+    const g = project.meta.styleRefImageDataUrl?.trim();
+    let completedCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+    const failMessages: string[] = [];
+    const runTask = async (t: BatchTask) => {
+      if (batchCancelRef.current) return;
+      setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
+      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${t.kind === 'char' ? '角色' : t.kind === 'scene' ? '场景' : '道具'} ${t.sheetId}` } : null);
+      try {
+        const timeoutMs = 180_000;
+        const res = await Promise.race([
+          generateFrames({
+            prompt: t.prompt,
+            aspectRatio: ar,
+            shotIndex: 0,
+            singleFrameOnly: true,
+            ...(g ? { globalStyleReferenceFrame: g } : {}),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`生成超时（>${Math.round(timeoutMs / 1000)}s）`)), timeoutMs),
+          ),
+        ]);
+        if (batchCancelRef.current) return;
+        const img = res.firstFrame;
+        const applyImg = (url: string) => {
+          setProject((p) => {
+            if (t.kind === 'char') {
+              const sheets = p.characterAssets ?? [];
+              return { ...p, characterAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'char') as CharacterSheet[] };
+            }
+            if (t.kind === 'scene') {
+              const sheets = p.sceneAssets ?? [];
+              return { ...p, sceneAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'scene') as SceneSheet[] };
+            }
+            const sheets = p.propAssets ?? [];
+            return { ...p, propAssets: updateVariantImage(sheets, t.sheetId, t.variantId, url, 'prop') as PropSheet[] };
+          });
+        };
+        applyImg(img);
+        if (img.startsWith('data:')) {
+          const mime = img.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
+          uploadProductionImage(img, mime, `${t.kind}-${t.sheetId}`).then(({ url }) => applyImg(url)).catch(() => {});
+        }
+        successCount++;
+      } catch (e) {
+        failedCount++;
+        const msg = e instanceof Error ? e.message : '生成失败';
+        if (failMessages.length < 3) failMessages.push(msg);
+        setBatchAssetGen((prev) => prev ? { ...prev, failedTasks: [...(prev.failedTasks ?? []), t] } : null);
+        failedTasksRef.current = [...failedTasksRef.current, t];
+        setFailedTaskCount((n) => n + 1);
+      } finally {
+        completedCount++;
+        setBatchAssetGen((prev) => prev ? { ...prev, current: completedCount, success: successCount, failed: failedCount } : null);
+      }
+    };
+    try {
+      let cursor = 0;
+      const worker = async () => {
+        while (!batchCancelRef.current) {
+          const idx = cursor++;
+          if (idx >= tasks.length) break;
+          const task = tasks[idx];
+          if (!task) break;
+          await runTask(task);
+        }
+      };
+      await worker();
+      if (failedCount > 0) {
+        const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
+        setErr(`重试完成：${successCount} 成功，${failedCount} 仍失败${hint}`);
+      } else {
+        toast.success(`重试成功：${successCount} 项已补全`);
+      }
+    } finally {
+      setGenKey(null);
+      setBatchAssetGen(null);
+      batchCancelRef.current = false;
+    }
+  }, [project.meta.styleRefImageDataUrl, ar]);
 
   // 优先从服务端加载（URL 参数 > localStorage 记录的上次 id）
   useEffect(() => {
@@ -1271,6 +1383,8 @@ export function ProductionWizard() {
             onCancelBatch={() => {
               batchCancelRef.current = true;
             }}
+            failedTaskCount={failedTaskCount}
+            onRetryFailed={() => void handleRetryFailed()}
             onAddManualCharacter={addManualCharacter}
             onImportFromLibrary={handleImportFromLibrary}
             chSheets={chSheets}

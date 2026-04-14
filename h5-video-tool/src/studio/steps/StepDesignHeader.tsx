@@ -16,6 +16,8 @@ export function StepDesignHeader({
   batchAssetGen,
   onGenerateMissingAssets,
   onCancelBatch,
+  failedTaskCount,
+  onRetryFailed,
   onAddManualCharacter,
   onToggleLibraryImport,
 }: {
@@ -30,6 +32,8 @@ export function StepDesignHeader({
   batchAssetGen: { current: number; total: number; success: number; failed: number; currentLabel?: string } | null;
   onGenerateMissingAssets: () => void | Promise<void>;
   onCancelBatch: () => void;
+  failedTaskCount: number;
+  onRetryFailed: () => void;
   onAddManualCharacter: () => void;
   onToggleLibraryImport: () => void;
 }) {
@@ -123,6 +127,15 @@ export function StepDesignHeader({
                 className="text-xs text-red-400 hover:text-red-300 transition-colors"
               >
                 取消
+              </button>
+            ) : null}
+            {batchAssetGen === null && failedTaskCount > 0 ? (
+              <button
+                type="button"
+                onClick={onRetryFailed}
+                className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
+              >
+                重试失败项 ({failedTaskCount})
               </button>
             ) : null}
             {l2Tab === 'characters' ? (

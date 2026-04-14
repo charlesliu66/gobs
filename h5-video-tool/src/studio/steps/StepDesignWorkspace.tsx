@@ -21,6 +21,8 @@ export function StepDesignWorkspace({
   batchAssetGen,
   onGenerateMissingAssets,
   onCancelBatch,
+  failedTaskCount,
+  onRetryFailed,
   onAddManualCharacter,
   onImportFromLibrary,
   chSheets,
@@ -68,6 +70,8 @@ export function StepDesignWorkspace({
   batchAssetGen: { current: number; total: number; success: number; failed: number; startedAt: number; currentLabel?: string } | null;
   onGenerateMissingAssets: () => void;
   onCancelBatch: () => void;
+  failedTaskCount: number;
+  onRetryFailed: () => void;
   onAddManualCharacter: () => void;
   onImportFromLibrary: (char: LibraryCharacter) => void;
   chSheets: CharacterSheet[];
@@ -140,6 +144,8 @@ export function StepDesignWorkspace({
           batchAssetGen={batchAssetGen}
           onGenerateMissingAssets={onGenerateMissingAssets}
           onCancelBatch={onCancelBatch}
+          failedTaskCount={failedTaskCount}
+          onRetryFailed={onRetryFailed}
           onAddManualCharacter={onAddManualCharacter}
           onToggleLibraryImport={() => setShowLibraryImport((v) => !v)}
         />

@@ -395,9 +395,11 @@ function Step1({
 function Step2({
   jobId,
   onDone,
+  onError,
 }: {
   jobId: string;
   onDone: (storyboard: ShotWithAssets[], logline?: string) => void;
+  onError?: () => void;
 }) {
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [progress, setProgress] = useState(0);
@@ -409,6 +411,7 @@ function Step2({
   const poll = useCallback(async () => {
     if (Date.now() - startTimeRef.current > TIMEOUT_MS) {
       setError('生成超时（5分钟），请重试');
+      onError?.();
       return;
     }
     try {
@@ -422,14 +425,16 @@ function Step2({
       }
       if (status.status === 'error') {
         setError(status.error ?? '生成失败，请重试');
+        onError?.();
         return;
       }
 
       pollRef.current = setTimeout(() => { void poll(); }, 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误，请重试');
+      onError?.();
     }
-  }, [jobId, onDone]);
+  }, [jobId, onDone, onError]);
 
   useEffect(() => {
     void poll();
@@ -853,6 +858,7 @@ function Step3({
 type Step = 1 | 2 | 3;
 
 export function QuickFilm() {
+  const QUICKFILM_JOB_KEY = 'quickfilm_active_job';
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>(1);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -874,7 +880,15 @@ export function QuickFilm() {
       try {
         const session = await loadSession();
         if (!alive) return;
-        if (!session?.jobId) return;
+        if (!session?.jobId) {
+          // Fallback: restore jobId from localStorage if server session is absent
+          const savedJobId = localStorage.getItem(QUICKFILM_JOB_KEY);
+          if (savedJobId) {
+            setJobId(savedJobId);
+            setStep(2);
+          }
+          return;
+        }
         setJobId(session.jobId);
         if (session.projectId) setProjectId(session.projectId);
         setAssetFiles(session.assetFiles ?? []);
@@ -893,6 +907,7 @@ export function QuickFilm() {
       }
     })();
     return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -938,6 +953,7 @@ export function QuickFilm() {
         assetFiles: form.assetFiles.length > 0 ? form.assetFiles : undefined,
       });
       setJobId(id);
+      localStorage.setItem(QUICKFILM_JOB_KEY, id);
       setStep(2);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '启动失败，请重试');
@@ -945,12 +961,14 @@ export function QuickFilm() {
   }
 
   function handleJobDone(sb: ShotWithAssets[], ll?: string) {
+    localStorage.removeItem(QUICKFILM_JOB_KEY);
     setStoryboard(sb);
     setLogline(ll);
     setStep(3);
   }
 
   async function handleSessionSubmitted() {
+    localStorage.removeItem(QUICKFILM_JOB_KEY);
     await clearSession().catch(() => undefined);
   }
 
@@ -995,7 +1013,7 @@ export function QuickFilm() {
       )}
 
       {step === 1 && <Step1 onSubmit={handleFormSubmit} />}
-      {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} />}
+      {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} onError={() => localStorage.removeItem(QUICKFILM_JOB_KEY)} />}
       {step === 3 && jobId && (
         <Step3
           jobId={jobId}
