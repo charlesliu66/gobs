@@ -107,7 +107,10 @@ bash scripts/eval.sh <run-id>
 | 3 | Verifier | `verifier-report.md` + `eval-result.json` | 六类验证覆盖，P0/P1 清零 |
 | 5 | Integrator | `release-decision.md` | GO/NO-GO 明确 |
 
+> Gate 4（Fix Loop）已并入 Gate 3 的 P0/P1 缺陷修复循环中，编号 5 保留以维持历史兼容。
+
 **Run 目录**: `docs/workflow/runs/YYYY-MM-DD-<feature-name>/`
+（`<run-id>` 即本目录名，格式 `YYYY-MM-DD-<feature-name>`，下同。）
 
 ---
 
@@ -121,10 +124,10 @@ bash scripts/eval.sh <run-id>
 - `h5-video-tool-api/src/types/productionTypes.ts`
 - `h5-video-tool-api/src/config/productionAssets.ts`
 - `.env`（真实密钥文件）
-- 任何 `.env.example` 中未出现的环境变量
+- 任何 `.env.example` 中未声明的环境变量（新增变量必须先在 `.env.example` 中声明，再在代码中通过 `process.env.XXX` 引用）
 
 ### 禁止的操作
-- `git push --force`（除非 Integrator 明确授权）
+- `git push --force`（授权须体现在当前 run 的 `release-decision.md` 中，明确写出 "FORCE PUSH APPROVED"）
 - 跳过 Gate（Builder 不能在没有 `planner-spec.md` 的情况下开始）
 - 直接改后端底层服务（见上方禁止文件）
 - 在代码中硬编码 API Key 或密码
