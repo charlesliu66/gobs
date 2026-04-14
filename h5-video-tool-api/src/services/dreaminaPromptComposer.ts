@@ -15,7 +15,11 @@ export interface ComposeDreaminaPromptOptions {
   hints?: DreaminaPromptHints;
 }
 
-const STRUCTURED_KEYS = ['运镜', '镜头', '节奏', '对白', '声音', '环境', '动作'];
+const STRUCTURED_KEYS = [
+  '运镜', '镜头', '节奏', '对白', '声音', '环境', '动作',
+  '推轨', '跟拍', '摇镜', '固定镜头', '慢速', '快速', '中速',
+  '主体', '氛围', '场景', '情绪', '光影', '特写', '全景',
+];
 
 function normalizedName(raw: string | undefined, fallback: string): string {
   const s = (raw || '').trim().replace(/[@#\n\r\t]/g, '');
@@ -47,8 +51,11 @@ function sceneToken(
 function looksAlreadyStructured(rawPrompt: string): boolean {
   const text = rawPrompt.trim();
   if (!text) return false;
+  // 如果已包含 @图片N 引用且超过 3 行，视为已组装好的 prompt，不需要 LLM 重写
+  const hasAtRef = /@图片\d|@视频\d|@音频\d/.test(text);
+  if (hasAtRef && text.split('\n').filter(l => l.trim()).length >= 3) return true;
   const keyHits = STRUCTURED_KEYS.reduce((acc, k) => (text.includes(k) ? acc + 1 : acc), 0);
-  return keyHits >= 3 && /@图片\d|@视频\d|@音频\d/.test(text);
+  return keyHits >= 3 && hasAtRef;
 }
 
 function fallbackCompose(rawPrompt: string, imageCount: number, hints?: DreaminaPromptHints): string {
