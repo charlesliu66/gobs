@@ -2,12 +2,15 @@ import { Router, type Request } from 'express';
 import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
+import os from 'os';
 import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
 import multer from 'multer';
 import { decodeMultipartFilename } from '../utils/multipartFilename.js';
 import { getUploadsPath } from '../config/apiDataDir.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 import { getRequestAccount } from '../services/requestContext.js';
+import { getFfmpegPath } from '../services/video/ffmpegPaths.js';
 
 const router = Router();
 
@@ -469,6 +472,61 @@ router.post('/assets/upload-assemble', async (req, res) => {
       createdAt: rec.createdAt,
     },
   });
+});
+
+/** GET 波形图（showwavespic）— 缓存在系统 tmpdir，按 id+宽高 命名 */
+router.get('/assets/:id/waveform', async (req, res) => {
+  const id = req.params.id;
+  if (!id || id.includes('..') || id.includes('/') || id.includes('\\')) {
+    res.status(400).json({ error: '无效的素材 id' });
+    return;
+  }
+  const w = Math.min(4000, Math.max(20, Number.parseInt(String(req.query.w ?? '400'), 10) || 400));
+  const h = Math.min(200, Math.max(8, Number.parseInt(String(req.query.h ?? '40'), 10) || 40));
+
+  const hint = resolveUsername(req as Request);
+  const found = findAssetAcrossUsers(id, hint);
+  if (!found) {
+    res.status(404).json({ error: '素材不存在' });
+    return;
+  }
+  const { meta, username } = found;
+  const src = path.join(getUserUploadDir(username), meta.filename);
+  if (!fs.existsSync(src)) {
+    res.status(404).json({ error: '文件已丢失' });
+    return;
+  }
+
+  const cacheDir = path.join(os.tmpdir(), 'gobs-waveform-cache');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const cachePath = path.join(cacheDir, `${id}_${w}x${h}.png`);
+
+  if (!fs.existsSync(cachePath)) {
+    const bin = getFfmpegPath();
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(bin, [
+        '-y', '-i', src,
+        '-filter_complex', `showwavespic=s=${w}x${h}:colors=rgba(99,102,241,0.85):scale=sqrt`,
+        '-frames:v', '1',
+        cachePath,
+      ], { windowsHide: true });
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`showwavespic exited ${code}`));
+      });
+      proc.on('error', reject);
+    }).catch((e) => {
+      console.error('[waveform] ffmpeg error', e);
+    });
+  }
+
+  if (!fs.existsSync(cachePath)) {
+    res.status(500).json({ error: '波形图生成失败' });
+    return;
+  }
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(cachePath);
 });
 
 export default router;

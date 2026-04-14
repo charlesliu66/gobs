@@ -5,6 +5,35 @@ import { computeDurationSec, getAllTextClips } from '../types/timeline';
 import { getTextPreset } from '../textPresets';
 import { formatTimelineTime } from '../utils/formatTimelineTime';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '';
+
+/** 缓存已加载的波形图 blobURL：assetId → url */
+const waveformCache = new Map<string, string>();
+
+/** 按需获取波形图并缓存；宽度取整为 100px 档，减少重复请求 */
+function useWaveformUrl(assetId: string | undefined, widthPx: number): string | undefined {
+  const [url, setUrl] = useState<string | undefined>(() => assetId ? waveformCache.get(`${assetId}_${Math.round(widthPx / 100) * 100}`) : undefined);
+  const cacheKey = assetId ? `${assetId}_${Math.round(widthPx / 100) * 100}` : '';
+
+  useEffect(() => {
+    if (!assetId || widthPx <= 0) return;
+    const key = `${assetId}_${Math.round(widthPx / 100) * 100}`;
+    if (waveformCache.has(key)) { setUrl(waveformCache.get(key)); return; }
+    const w = Math.round(widthPx / 100) * 100;
+    const apiUrl = `${API_BASE}/api/editor/assets/${assetId}/waveform?w=${w}&h=36`;
+    fetch(apiUrl)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(r.status)))
+      .then((blob) => {
+        const objUrl = URL.createObjectURL(blob);
+        waveformCache.set(key, objUrl);
+        setUrl(objUrl);
+      })
+      .catch(() => { /* silent — waveform is optional */ });
+  }, [assetId, cacheKey, widthPx]);
+
+  return url;
+}
+
 /** 像素/秒：越大=同屏时间越短（放大细节）；越小=同屏时间越长（压缩概览）。长视频适配需能低于 12。 */
 const PX_PER_SEC_DEFAULT = 64;
 const PX_PER_SEC_MIN = 2;
@@ -63,6 +92,59 @@ interface TimelinePanelProps {
 }
 
 const CLIP_DRAG_SELECT_PX = 4;
+
+/** 音频片段块：内嵌波形背景（需要组件级调用 hook） */
+function AudioClipBlock({
+  clip,
+  trackId,
+  widthPx,
+  leftPx,
+  onMouseDown,
+  onDelete,
+}: {
+  clip: AudioClip;
+  trackId: string;
+  widthPx: number;
+  leftPx: number;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
+  const waveUrl = useWaveformUrl(clip.assetId, widthPx);
+  const isA2 = trackId === 'a2';
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      title={`音频 ${clip.id}`}
+      onMouseDown={onMouseDown}
+      className={`absolute top-1 bottom-1 cursor-grab overflow-hidden rounded px-1 text-[10px] text-white active:cursor-grabbing ${
+        isA2 ? 'bg-violet-600/90' : 'bg-emerald-600/90'
+      }`}
+      style={{ left: leftPx, width: Math.max(widthPx, 8), zIndex: 5 }}
+    >
+      {waveUrl && (
+        <img
+          src={waveUrl}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-60"
+        />
+      )}
+      <span className="pointer-events-none relative z-10">♪</span>
+      {trackId !== 'a1' && (
+        <button
+          type="button"
+          data-timeline-delete
+          className="pointer-events-auto absolute -right-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded bg-red-600 text-[10px] leading-none text-white shadow hover:bg-red-500"
+          title="删除"
+          onClick={onDelete}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function TimelinePanel({
   project,
@@ -515,27 +597,39 @@ export function TimelinePanel({
                         const len = isVideo ? vc.sourceEnd - vc.sourceStart : ac.sourceEnd - ac.sourceStart;
                         const left = c.timelineStart * pxPerSec;
                         const w = len * pxPerSec;
+
+                        // Audio clips use dedicated component (hooks must be at component level)
+                        if (!isVideo) {
+                          return (
+                            <AudioClipBlock
+                              key={c.id}
+                              clip={ac}
+                              trackId={track.id}
+                              widthPx={Math.max(w, 8)}
+                              leftPx={left}
+                              onMouseDown={(e) => onClipMouseDown(e, track.id, ac)}
+                              onDelete={(e) => { e.stopPropagation(); onDeleteClip(track.id, c.id); }}
+                            />
+                          );
+                        }
+
                         return (
                           <div
                             key={c.id}
                             role="button"
                             tabIndex={0}
-                            title={isVideo ? `拖拽移动 · ${c.id}` : `音频 ${c.id}`}
-                            onMouseDown={(e) => onClipMouseDown(e, track.id, c as VideoClip | AudioClip)}
+                            title={`拖拽移动 · ${c.id}`}
+                            onMouseDown={(e) => onClipMouseDown(e, track.id, vc)}
                             className={`absolute top-1 bottom-1 cursor-grab rounded px-1 text-[10px] text-white active:cursor-grabbing ${
-                              isVideo
-                                ? selectedVideoClipId === c.id
-                                  ? 'bg-blue-600 ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--color-surface)]'
-                                  : 'bg-blue-600/90'
-                                : track.id === 'a2'
-                                  ? 'bg-violet-600/90'
-                                  : 'bg-emerald-600/90'
+                              selectedVideoClipId === c.id
+                                ? 'bg-blue-600 ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--color-surface)]'
+                                : 'bg-blue-600/90'
                             }`}
                             style={{ left, width: Math.max(w, 8), zIndex: 5 }}
                           >
-                            <span className="pointer-events-none">{isVideo ? 'V' : '♪'}</span>
+                            <span className="pointer-events-none">V</span>
                             {/* Trim handles — video track v1 only */}
-                            {isVideo && track.id === 'v1' && onTrimClip && (
+                            {track.id === 'v1' && onTrimClip && (
                               <>
                                 <div
                                   className="pointer-events-auto absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l bg-white/20 hover:bg-amber-400/80"
