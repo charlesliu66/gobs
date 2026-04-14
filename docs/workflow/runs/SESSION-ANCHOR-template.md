@@ -1,10 +1,11 @@
 # SESSION-ANCHOR — <run-id>
 
+> **使用前：将 `<run-id>` 替换为本 run 的目录名，格式 `YYYY-MM-DD-<feature-name>`（与 RUN_TEMPLATE.md 一致）。**
 > 每轮对话开始时 AI 必须先读这个文件，然后只读"允许读取"列表中的文件。
 
 ## 本轮目标（一句话）
 
-[从 planner-spec.md 的 Goal 字段复制]
+[从 `planner-spec.md` 的 `## Goal` 字段复制粘贴，保持原文不改写]
 
 ## 验收标准 ID
 
