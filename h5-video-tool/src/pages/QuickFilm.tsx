@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   startQuickFilm,
-  getJobStatus,
   confirmStoryboard,
   saveDraft,
   listDrafts,
@@ -404,44 +403,66 @@ function Step2({
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef(Date.now());
   const TIMEOUT_MS = 5 * 60 * 1000; // 5 分钟超时
 
-  const poll = useCallback(async () => {
-    if (Date.now() - startTimeRef.current > TIMEOUT_MS) {
-      setError('生成超时（5分钟），请重试');
-      onError?.();
-      return;
-    }
-    try {
-      const status = await getJobStatus(jobId);
-      setSteps(status.steps ?? []);
-      setProgress(status.progress ?? 0);
-
-      if (status.status === 'done' && status.storyboard) {
-        onDone(status.storyboard, status.logline);
-        return;
-      }
-      if (status.status === 'error') {
-        setError(status.error ?? '生成失败，请重试');
-        onError?.();
-        return;
-      }
-
-      pollRef.current = setTimeout(() => { void poll(); }, 2500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '网络错误，请重试');
-      onError?.();
-    }
-  }, [jobId, onDone, onError]);
+  const onDoneRef = useRef(onDone);
+  const onErrorRef = useRef(onError);
+  onDoneRef.current = onDone;
+  onErrorRef.current = onError;
 
   useEffect(() => {
-    void poll();
-    return () => {
-      if (pollRef.current) clearTimeout(pollRef.current);
+    const BASE = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('gobs_token') ?? '';
+    const es = new EventSource(
+      `${BASE}/api/quickfilm/${encodeURIComponent(jobId)}/stream?token=${encodeURIComponent(token)}`
+    );
+
+    const timeoutTimer = setTimeout(() => {
+      es.close();
+      setError('生成超时（5分钟），请重试');
+      onErrorRef.current?.();
+    }, TIMEOUT_MS - (Date.now() - startTimeRef.current));
+
+    es.onmessage = (e: MessageEvent) => {
+      try {
+        const job = JSON.parse(e.data as string) as {
+          status: string;
+          progress?: number;
+          steps?: JobStep[];
+          storyboard?: ShotWithAssets[];
+          error?: string;
+          storyArc?: { logline?: string };
+        };
+        setSteps(job.steps ?? []);
+        setProgress(job.progress ?? 0);
+
+        if (job.status === 'done' && job.storyboard) {
+          clearTimeout(timeoutTimer);
+          es.close();
+          onDoneRef.current(job.storyboard, job.storyArc?.logline);
+          return;
+        }
+        if (job.status === 'error') {
+          clearTimeout(timeoutTimer);
+          es.close();
+          setError(job.error ?? '生成失败，请重试');
+          onErrorRef.current?.();
+        }
+      } catch { /* ignore parse errors */ }
     };
-  }, [poll]);
+    es.onerror = () => {
+      clearTimeout(timeoutTimer);
+      es.close();
+      setError('网络错误，请重试');
+      onErrorRef.current?.();
+    };
+
+    return () => {
+      clearTimeout(timeoutTimer);
+      es.close();
+    };
+  }, [jobId]);
 
   if (error) {
     return (

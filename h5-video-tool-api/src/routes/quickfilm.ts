@@ -2,7 +2,8 @@
  * QuickFilm API 路由
  */
 import { Router, Request, Response } from 'express';
-import { createJob, loadJob, runJobAsync, saveJob } from '../services/quickFilmService.js';
+import jwt from 'jsonwebtoken';
+import { createJob, loadJob, runJobAsync, saveJob, quickfilmJobEvents, type QuickFilmJob } from '../services/quickFilmService.js';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
@@ -95,6 +96,47 @@ quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
     logline: job.storyArc?.logline,
     title: job.story.slice(0, 30),
     projectId: job.projectId,
+  });
+});
+
+/**
+ * GET /api/quickfilm/:jobId/stream?token=<jwt> — SSE 实时推送
+ */
+quickfilmRouter.get('/:jobId/stream', (req: Request, res: Response) => {
+  const token = req.query['token'] as string | undefined;
+  if (!token) { res.status(401).json({ error: 'token required' }); return; }
+  let username: string | undefined;
+  try {
+    const payload = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as { username?: string };
+    username = typeof payload.username === 'string' ? payload.username : undefined;
+  } catch {
+    res.status(401).json({ error: 'invalid token' }); return;
+  }
+
+  const { jobId } = req.params;
+  const sanitizedUser = sanitizeUsername(username);
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
+
+  const send = (job: QuickFilmJob) => {
+    if (job.id === jobId) {
+      res.write(`data: ${JSON.stringify(job)}\n\n`);
+    }
+  };
+
+  quickfilmJobEvents.on('update', send);
+
+  // Send current state immediately
+  const current = loadJob(jobId, sanitizedUser);
+  if (current) res.write(`data: ${JSON.stringify(current)}\n\n`);
+
+  req.on('close', () => {
+    quickfilmJobEvents.off('update', send);
+    res.end();
   });
 });
 

@@ -5,8 +5,12 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
+import { EventEmitter } from 'events';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { pollDreaminaTask } from './dreaminaVideo.js';
+
+export const batchJobEvents = new EventEmitter();
+batchJobEvents.setMaxListeners(50);
 
 export type BatchJobStatus = 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled';
 
@@ -86,6 +90,7 @@ export async function updateJob(id: string, patch: Partial<BatchJob>): Promise<B
   const updated = { ...j, ...patch, updatedAt: new Date().toISOString() };
   _jobs.set(id, updated);
   await saveJobs();
+  batchJobEvents.emit('update', updated);
   return updated;
 }
 

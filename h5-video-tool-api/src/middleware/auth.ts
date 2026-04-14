@@ -65,6 +65,15 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // SSE 实时推送端点：使用 ?token= 查询参数鉴权，路由内部自行验证
+  if (req.method === 'GET' && req.path === '/api/batch-jobs/stream') {
+    next();
+    return;
+  }
+  if (req.method === 'GET' && /^\/api\/quickfilm\/[^/]+\/stream$/.test(req.path)) {
+    next();
+    return;
+  }
   /** Cookie 会话（GOBS 账号 / 矩阵桥接），不使用 Bearer */
   if (req.path === '/api/prompt/templates') {
     return next();

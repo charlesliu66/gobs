@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
@@ -8,6 +9,7 @@ import {
   getJobsByProject,
   addJob,
   cancelJob,
+  batchJobEvents,
   type BatchJob,
 } from '../services/batchJobsQueue.js';
 
@@ -64,6 +66,37 @@ router.get('/', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const ok = await cancelJob(req.params.id);
   res.json({ ok });
+});
+
+/** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送 */
+router.get('/stream', (req, res) => {
+  const token = req.query['token'] as string | undefined;
+  if (!token) { res.status(401).json({ error: 'token required' }); return; }
+  try {
+    jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret');
+  } catch {
+    res.status(401).json({ error: 'invalid token' }); return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
+
+  const send = (job: BatchJob) => {
+    res.write(`data: ${JSON.stringify(job)}\n\n`);
+  };
+
+  batchJobEvents.on('update', send);
+
+  // Send all current jobs immediately
+  void getAllJobs().then((jobs) => jobs.forEach(send));
+
+  req.on('close', () => {
+    batchJobEvents.off('update', send);
+    res.end();
+  });
 });
 
 /** GET /api/batch-jobs/video/:id — 下载成品视频 */

@@ -4,12 +4,16 @@
 import fs from 'fs';
 import path from 'path';
 import { nanoid } from 'nanoid';
+import { EventEmitter } from 'events';
 import { generateStoryArc, generateProductionDesign, generateStoryboardTable } from './studioPipeline.js';
 import { matchAssetsForShot } from './assetLibrary.js';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import type { ProductionShot, StoryArcLayer, ProductionDesignLayer } from './studioPipeline.js';
 import type { MatchedAssets } from './assetLibrary.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
+
+export const quickfilmJobEvents = new EventEmitter();
+quickfilmJobEvents.setMaxListeners(50);
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -96,6 +100,7 @@ export function loadJob(jobId: string, username?: string): QuickFilmJob | null {
 export function saveJob(job: QuickFilmJob, username?: string): void {
   ensureJobDir(username);
   fs.writeFileSync(getJobPath(job.id, username), JSON.stringify(job, null, 2), 'utf-8');
+  quickfilmJobEvents.emit('update', job);
 }
 
 function updateStep(job: QuickFilmJob, stepName: string, done: boolean, username?: string, error?: string): void {

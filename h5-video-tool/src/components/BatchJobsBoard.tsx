@@ -2,12 +2,14 @@
  * BatchJobsBoard — 即梦批量任务审片看板
  * 展示所有 batch jobs 状态，支持：
  * - 按项目过滤
- * - 实时刷新（30秒自动轮询）
+ * - 实时刷新（SSE 实时推送）
  * - 预览视频（点击展开）
  * - 一键导入到剪辑时间轴
  */
 import { useState, useEffect, useCallback } from 'react';
-import { getBatchJobs, cancelBatchJob, type BatchJobDto } from '../api/batchJobs';
+import { cancelBatchJob, type BatchJobDto } from '../api/batchJobs';
+
+const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const STATUS_LABEL: Record<BatchJobDto['status'], string> = {
   pending: '⏳ 等待中',
@@ -38,32 +40,44 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const { jobs: list } = await getBatchJobs(projectId);
-      setJobs(list);
-    } catch (e) {
-      console.warn('[BatchJobsBoard] refresh error', e);
-    } finally {
+  useEffect(() => {
+    const token = localStorage.getItem('gobs_token') ?? '';
+    const es = new EventSource(`${BASE}/api/batch-jobs/stream?token=${encodeURIComponent(token)}`);
+    es.onmessage = (e: MessageEvent) => {
       setLoading(false);
-    }
+      try {
+        const job = JSON.parse(e.data as string) as BatchJobDto;
+        setJobs((prev) => {
+          const map = new Map(prev.map((j) => [j.id, j]));
+          map.set(job.id, job);
+          const all = [...map.values()];
+          const filtered = projectId ? all.filter((j) => j.projectId === projectId) : all;
+          return filtered.sort((a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        });
+      } catch { /* ignore parse errors */ }
+    };
+    es.onerror = () => {
+      setLoading(false);
+      es.close();
+    };
+    // Mark not loading after a short delay in case no jobs exist yet
+    const fallback = setTimeout(() => setLoading(false), 2000);
+    return () => {
+      clearTimeout(fallback);
+      es.close();
+    };
   }, [projectId]);
 
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 30_000);
-    return () => clearInterval(timer);
-  }, [refresh]);
-
-  const handleCancel = async (id: string) => {
+  const handleCancel = useCallback(async (id: string) => {
     setCancellingId(id);
     try {
       await cancelBatchJob(id);
-      await refresh();
     } finally {
       setCancellingId(null);
     }
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -96,10 +110,10 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
           批量任务 · {done}/{total} 已完成
         </span>
         <button
-          onClick={() => void refresh()}
+          onClick={() => {/* SSE keeps jobs updated in real-time */}}
           className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
         >
-          刷新
+          实时
         </button>
       </div>
 
