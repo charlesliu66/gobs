@@ -24,12 +24,14 @@ import batchJobsRouter from './routes/batchJobs.js';
 import characterImageRouter from './routes/characterImage.js';
 import quickfilmRouter, { draftsRouter } from './routes/quickfilm.js';
 import assetsRouter from './routes/assets.js';
+import assetLibraryRouter from './routes/assetLibrary.js';
 import gobsAuthRouter from './routes/gobsAuth.js';
 import riskSentimentRouter from './routes/riskSentiment.js';
 import adminUsageRouter from './routes/adminUsage.js';
 import { geelarkRouter } from './routes/geelark.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 import { runWithRequestContext } from './services/requestContext.js';
+import { resetInterruptedJobs } from './services/assetIngestService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -81,6 +83,7 @@ app.use('/api/character', characterImageRouter);
 app.use('/api/quickfilm', quickfilmRouter);
 app.use('/api/quickfilm/drafts', draftsRouter);
 app.use('/api/assets', assetsRouter);
+app.use('/api/asset-library', assetLibraryRouter);
 app.use('/api/risk-sentiment', riskSentimentRouter);
 app.use('/api/geelark', geelarkRouter);
 app.use('/api/admin', adminUsageRouter);
@@ -93,4 +96,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 app.listen(PORT, () => {
   console.log(`API server running at http://localhost:${PORT}`);
   startBatchJobsPoller();
+  resetInterruptedJobs();
 });
