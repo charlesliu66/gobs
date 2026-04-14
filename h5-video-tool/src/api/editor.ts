@@ -169,6 +169,19 @@ export async function saveEditorProject(input: {
   return out.data;
 }
 
+export async function renameEditorProject(id: string, name: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+}
+
 export async function deleteEditorProject(id: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(id)}`, {
     method: 'DELETE',

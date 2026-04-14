@@ -49,6 +49,23 @@ const QUALITY_MAP: Record<string, { crf: number; preset: string }> = {
   high:     { crf: 18, preset: 'slow'      },
 };
 
+// ─── Linux 字体路径探测（drawtext 需要显式 fontfile） ────────────────────────
+
+let _linuxFontPath: string | null | undefined = undefined;
+
+function getLinuxFontPath(): string | null {
+  if (_linuxFontPath !== undefined) return _linuxFontPath;
+  if (process.platform !== 'linux') { _linuxFontPath = null; return null; }
+  const candidates = [
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    '/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf',
+    '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+  ];
+  _linuxFontPath = candidates.find((f) => fs.existsSync(f)) ?? null;
+  return _linuxFontPath;
+}
+
 // ─── 文字版式 → drawtext 参数 ─────────────────────────────────────────────────
 
 interface DrawTextOpts {
@@ -64,7 +81,7 @@ function escapeDrawtext(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:');
 }
 
-function textClipToDrawtext(opts: DrawTextOpts): string {
+function textClipToDrawtext(opts: DrawTextOpts, fontPath?: string | null): string {
   const { text, startSec, endSec, w, h, presetId } = opts;
   const escaped = escapeDrawtext(text);
   const inDur  = 0.5;
@@ -74,9 +91,12 @@ function textClipToDrawtext(opts: DrawTextOpts): string {
   const alpha = `if(lt(t-${startSec},${inDur}),(t-${startSec})/${inDur},` +
     `if(lt(t,${endSec - outDur}),1,(${endSec}-t)/${outDur}))`;
 
+  // fontfile 参数（Linux 下必须显式指定字体文件，否则 drawtext 找不到字体）
+  const fontfileParam = fontPath ? `:fontfile='${fontPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` : '';
+
   // 基础参数
   const base = `text='${escaped}':fontsize=60:fontcolor=white:alpha='${alpha}'` +
-    `:enable='between(t,${startSec},${endSec})'`;
+    `:enable='between(t,${startSec},${endSec})'${fontfileParam}`;
 
   switch (presetId) {
     case 'intro-minimal':
@@ -290,6 +310,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
     const textClips = ((textTrack?.clips ?? []) as TextClip[]);
     const subtitleCues = project.subtitles ?? [];
 
+    const fontPath = getLinuxFontPath();
     const drawtextFilters: string[] = [];
 
     // 文字版式
@@ -300,7 +321,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
         endSec: tc.timelineEnd,
         w, h,
         presetId: tc.presetId,
-      }));
+      }, fontPath));
       if (tc.subtext) {
         drawtextFilters.push(textClipToDrawtext({
           text: tc.subtext,
@@ -308,7 +329,7 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
           endSec: tc.timelineEnd,
           w, h,
           presetId: `${tc.presetId}__sub`,
-        }));
+        }, fontPath));
       }
     }
 
@@ -320,25 +341,36 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
         endSec: cue.endSec,
         w, h,
         presetId: 'sub-bottom',
-      }));
+      }, fontPath));
     }
 
     let finalPath = mixedPath;
     if (drawtextFilters.length > 0) {
-      finalPath = path.join(tmpDir, 'final.mp4');
       const vf = drawtextFilters.join(',');
-      await runFfmpeg([
-        '-y',
-        '-i', mixedPath,
-        '-vf', vf,
-        '-c:v', 'libx264',
-        '-c:a', 'copy',
-        '-crf', String(crf),
-        '-preset', preset,
-        '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
-        finalPath,
-      ]);
+      const textOutputPath = path.join(tmpDir, 'final.mp4');
+      try {
+        await runFfmpeg([
+          '-y',
+          '-i', mixedPath,
+          '-vf', vf,
+          '-c:v', 'libx264',
+          '-c:a', 'copy',
+          '-crf', String(crf),
+          '-preset', preset,
+          '-pix_fmt', 'yuv420p',
+          '-movflags', '+faststart',
+          textOutputPath,
+        ]);
+        finalPath = textOutputPath;
+      } catch (textErr) {
+        const msg = textErr instanceof Error ? textErr.message : String(textErr);
+        if (/No such filter.*drawtext|Filter not found|drawtext.*not found/i.test(msg)) {
+          log(88, '⚠️ 服务器 FFmpeg 不支持文字叠加（缺少 libfreetype），跳过文字轨继续导出');
+          finalPath = mixedPath; // 降级：导出不含文字层的版本
+        } else {
+          throw textErr;
+        }
+      }
     }
 
     // ── Step 5: 输出 ─────────────────────────────────────────────────────────

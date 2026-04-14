@@ -108,6 +108,31 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.patch('/projects/:id', async (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (!isSafeId(id)) {
+    res.status(400).json({ success: false, error: '无效的项目 id' });
+    return;
+  }
+  const body = req.body as { name?: unknown };
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : null;
+  if (!name) {
+    res.status(400).json({ success: false, error: '请提供有效的项目名称' });
+    return;
+  }
+  const dir = getUserDir(req);
+  const file = path.join(dir, `${id}.json`);
+  try {
+    const raw = JSON.parse(await fs.readFile(file, 'utf-8')) as EditorProjectDoc;
+    raw.name = name;
+    raw.updatedAt = new Date().toISOString();
+    await fs.writeFile(file, JSON.stringify(raw, null, 2), 'utf-8');
+    res.json({ success: true, data: raw });
+  } catch {
+    res.status(404).json({ success: false, error: '剪辑项目不存在' });
+  }
+});
+
 router.delete('/projects/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   if (!isSafeId(id)) {

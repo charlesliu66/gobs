@@ -6,6 +6,7 @@ import {
   deleteEditorProject,
   listEditorProjects,
   loadEditorProject,
+  renameEditorProject,
   saveEditorProject,
   type EditorProjectRecord,
 } from '../../api/editor';
@@ -38,6 +39,8 @@ export function useTimelineState() {
   const [projectList, setProjectList] = useState<Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>>>([]);
   const suppressAutoSaveRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
+  /** 曾经有内容的标记；为 false 时空项目不自动保存，避免进入页面就创建空记录 */
+  const hasContentRef = useRef(false);
 
   const setAspectRatio = useCallback((next: AspectRatioPreset) => {
     setAspectRatioState(next);
@@ -72,6 +75,7 @@ export function useTimelineState() {
         setCurrentTime(0);
         setIsPlaying(false);
         setSaveState('saved');
+        hasContentRef.current = true; // 已存在的项目后续修改应继续自动保存
       } finally {
         setTimeout(() => {
           suppressAutoSaveRef.current = false;
@@ -92,6 +96,7 @@ export function useTimelineState() {
       setCurrentTime(0);
       setIsPlaying(false);
       setSaveState('idle');
+      hasContentRef.current = false; // 新空项目不自动保存
       setTimeout(() => {
         suppressAutoSaveRef.current = false;
       }, 0);
@@ -110,12 +115,29 @@ export function useTimelineState() {
     [createNewProject, projectId, refreshProjectList],
   );
 
+  const renameProject = useCallback(
+    async (id: string, name: string) => {
+      await renameEditorProject(id, name);
+      if (id === projectId) setProjectName(name);
+      await refreshProjectList();
+    },
+    [projectId, refreshProjectList],
+  );
+
   useEffect(() => {
     void refreshProjectList();
   }, [refreshProjectList]);
 
   useEffect(() => {
     if (suppressAutoSaveRef.current) return;
+    // 只有项目有内容时才自动保存；避免进入页面就创建空记录
+    const hasContent =
+      project.tracks.some((t) => t.clips.length > 0) ||
+      (project.subtitles?.length ?? 0) > 0 ||
+      Object.keys(assets).length > 0;
+    if (hasContent) hasContentRef.current = true;
+    if (!hasContentRef.current) return;
+
     if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
     setSaveState('saving');
     saveTimerRef.current = window.setTimeout(() => {
@@ -221,5 +243,6 @@ export function useTimelineState() {
     openProject,
     createNewProject,
     removeProject,
+    renameProject,
   };
 }

@@ -11,6 +11,7 @@ import { MediaLibrary } from '../editor/components/MediaLibrary';
 import { BgmMixPanel } from '../editor/components/BgmMixPanel';
 import { TextClipEditor } from '../editor/components/TextClipEditor';
 import { TextOverlayRenderer } from '../editor/components/TextOverlayRenderer';
+import { EditorProjectManager } from '../editor/components/EditorProjectManager';
 import type { AudioClip, MediaAsset, TimelineProject, VideoClip } from '../editor/types/timeline';
 import type { TextClip } from '../editor/types/timeline';
 import {
@@ -155,6 +156,7 @@ export function EditorWorkbench() {
     openProject,
     createNewProject,
     removeProject,
+    renameProject,
   } = useTimelineState();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -187,7 +189,7 @@ export function EditorWorkbench() {
   const [selectedVideoClipId, setSelectedVideoClipId] = useState<string | null>(null);
   const [selectedTextClipId, setSelectedTextClipId] = useState<string | null>(null);
   const [showTextPanel, setShowTextPanel] = useState(false);
-  const [openingProjectId, setOpeningProjectId] = useState<string>(searchParams.get('project') ?? '');
+  const [showProjectManager, setShowProjectManager] = useState(false);
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
@@ -207,7 +209,7 @@ export function EditorWorkbench() {
   }, [searchParams, openProject, projectId]);
 
   useEffect(() => {
-    setOpeningProjectId(projectId);
+    // sync URL param to reflect current projectId
   }, [projectId]);
 
   useEffect(() => {
@@ -913,6 +915,7 @@ export function EditorWorkbench() {
   }, []);
 
   return (
+    <>
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <EditorShell
         aspectRatio={aspectRatio}
@@ -1146,32 +1149,17 @@ export function EditorWorkbench() {
                       : '未保存'}
               </span>
             </div>
-            <select
-              value={openingProjectId}
-              onChange={(e) => {
-                const id = e.target.value;
-                setOpeningProjectId(id);
-                if (!id) return;
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.set('project', id);
-                  return next;
-                });
-              }}
-              className="max-w-[180px] rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+            <button
+              type="button"
+              onClick={() => setShowProjectManager(true)}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              <option value="">打开项目…</option>
-              {projectList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              管理项目
+            </button>
             <button
               type="button"
               onClick={() => {
                 createNewProject();
-                setOpeningProjectId('');
                 setSearchParams((prev) => {
                   const next = new URLSearchParams(prev);
                   next.delete('project');
@@ -1181,13 +1169,6 @@ export function EditorWorkbench() {
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
               新建
-            </button>
-            <button
-              type="button"
-              onClick={() => void removeProject(projectId)}
-              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
-            >
-              删除
             </button>
             <button
               type="button"
@@ -1250,6 +1231,32 @@ export function EditorWorkbench() {
         }
       />
     </div>
+
+    {showProjectManager && (
+      <EditorProjectManager
+        projectList={projectList}
+        currentProjectId={projectId}
+        onOpen={(id) => {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('project', id);
+            return next;
+          });
+        }}
+        onNew={() => {
+          createNewProject();
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('project');
+            return next;
+          });
+        }}
+        onRename={renameProject}
+        onDelete={removeProject}
+        onClose={() => setShowProjectManager(false)}
+      />
+    )}
+    </>
   );
 }
 
