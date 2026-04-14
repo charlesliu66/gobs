@@ -57,6 +57,7 @@ import { getPortraitJobKey, type PortraitJobState } from '../components/producti
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
 import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
 import { toast } from '../components/Toast';
+import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
@@ -246,6 +247,7 @@ export function ProductionWizard() {
   const ar = project.meta.aspectRatio ?? '16:9';
 
   useEffect(() => {
+    requestNotificationPermission();
     void getVeoModels()
       .then((r) => setDreaminaAsync(!!r.dreaminaAsync))
       .catch(() => {});
@@ -430,8 +432,16 @@ export function ProductionWizard() {
         const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
         setErr(`部分补全成功：${successCount} 项成功，${failedCount} 项失败${hint}`);
         toast.error(`补全完成：${successCount} 成功，${failedCount} 失败`);
+        sendBrowserNotification(
+          successCount > 0 ? '生图完成' : '生图任务结束',
+          `成功 ${successCount} 项，失败 ${failedCount} 项`
+        );
       } else {
         toast.success(`已补全 ${successCount} 项缺图`);
+        sendBrowserNotification(
+          successCount > 0 ? '生图完成' : '生图任务结束',
+          `成功 ${successCount} 项，失败 ${failedCount} 项`
+        );
       }
     } finally {
       setGenKey(null);

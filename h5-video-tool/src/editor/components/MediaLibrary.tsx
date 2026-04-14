@@ -6,6 +6,7 @@ import {
   uploadEditorAsset,
   type EditorAssetDto,
 } from '../../api/editor';
+import { toast } from '../../components/Toast';
 import { EDITOR_UPLOAD_MAX_MB_FALLBACK } from '../../config/editorUpload';
 import { listAssets, buildAssetFileUrl } from '../../api/assetLibraryApi';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
@@ -215,6 +216,7 @@ export function MediaLibrary({
     try {
       const { asset } = await uploadEditorAsset(file, (pct) => setUploadProgress(pct));
       setItems((prev) => [asset, ...prev.filter((x) => x.id !== asset.id)]);
+      toast.success(`已上传 ${file.name}（${(file.size / 1024 / 1024).toFixed(1)} MB）`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {

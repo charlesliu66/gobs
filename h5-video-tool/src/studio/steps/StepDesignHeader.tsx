@@ -115,7 +115,11 @@ export function StepDesignHeader({
             {batchAssetGen !== null ? (
               <button
                 type="button"
-                onClick={onCancelBatch}
+                onClick={() => {
+                  if (window.confirm(`已完成 ${batchAssetGen.current}/${batchAssetGen.total} 项，确认取消剩余生图任务？`)) {
+                    onCancelBatch();
+                  }
+                }}
                 className="text-xs text-red-400 hover:text-red-300 transition-colors"
               >
                 取消

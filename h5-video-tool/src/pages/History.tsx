@@ -108,6 +108,7 @@ export function History() {
       const filename = `batch_shot${job.shotIndex + 1}_${job.id}.mp4`;
       const file = new File([blob], filename, { type: 'video/mp4' });
       const { asset } = await uploadEditorAsset(file);
+      toast.success(`已导入 ${filename}（${(file.size / 1024 / 1024).toFixed(1)} MB），正在跳转剪辑器…`);
       // 把 assetId 存到 sessionStorage，EditorWorkbench 启动时读取并追加
       sessionStorage.setItem('editor_pending_import', JSON.stringify({ assetId: asset.id, originalName: filename }));
       navigate('/editor');
