@@ -527,6 +527,14 @@ export function EditorWorkbench() {
     setProject((p) => snapVideoClipsSequential(p));
   }, [setProject, setIsPlaying]);
 
+  /** 拖拽边缘 Trim：实时调整片段入出点 */
+  const handleTrimClip = useCallback(
+    (clipId: string, range: { sourceStart?: number; sourceEnd?: number }) => {
+      setProject((p) => updateVideoClipSourceRange(p, clipId, range));
+    },
+    [setProject],
+  );
+
   const loadDemo = useCallback(() => {
     const assetId = 'demo_flower';
     setAssets((prev) => ({
@@ -567,6 +575,13 @@ export function EditorWorkbench() {
     el.currentTime = sourceTimeForPreview;
   }, [isPlaying, activeVideoUrl, sourceTimeForPreview, activeVideoClip?.id, activeVideoClip?.sourceStart]);
 
+  /** 同步片段播放速度到 video 元素（预览实时生效） */
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.playbackRate = activeVideoClip?.speed ?? 1;
+  }, [activeVideoClip?.speed]);
+
   /** 播放：仅时间轴内有当前视频片段时才 play；间隙或结束后保持 pause */
   useEffect(() => {
     if (!isPlaying) return;
@@ -577,6 +592,7 @@ export function EditorWorkbench() {
       return;
     }
     el.currentTime = sourceTimeForPreviewRef.current;
+    el.playbackRate = activeVideoClip.speed ?? 1;
     el.play().catch(() => setIsPlaying(false));
   }, [isPlaying, activeVideoUrl, activeVideoClip?.id, setIsPlaying]);
 
@@ -1052,6 +1068,7 @@ export function EditorWorkbench() {
             }}
             onDeleteClip={handleDeleteClip}
             onMoveClip={handleMoveClip}
+            onTrimClip={handleTrimClip}
             selectedVideoClipId={selectedVideoClipId}
             onSelectVideoClip={setSelectedVideoClipId}
             onVideoClipDragEnd={handleVideoClipDragEnd}

@@ -37,6 +37,8 @@ interface TimelinePanelProps {
   onSeek: (sec: number) => void;
   onDeleteClip: (trackId: string, clipId: string) => void;
   onMoveClip: (trackId: string, clipId: string, newTimelineStart: number) => void;
+  /** 拖拽边缘 Trim：调整视频片段入出点 */
+  onTrimClip?: (clipId: string, range: { sourceStart?: number; sourceEnd?: number }) => void;
   /** 当前选中的视频片段（仅 v1），用于微调面板 */
   selectedVideoClipId?: string | null;
   onSelectVideoClip?: (clipId: string | null) => void;
@@ -69,6 +71,7 @@ export function TimelinePanel({
   onSeek,
   onDeleteClip,
   onMoveClip,
+  onTrimClip,
   selectedVideoClipId = null,
   onSelectVideoClip,
   onVideoClipDragEnd,
@@ -154,6 +157,55 @@ export function TimelinePanel({
     snapVideoOnEnd: boolean;
     moved: boolean;
   } | null>(null);
+
+  const trimRef = useRef<{
+    clipId: string;
+    side: 'left' | 'right';
+    startClientX: number;
+    origSourceStart: number;
+    origSourceEnd: number;
+  } | null>(null);
+  const [trimOverlay, setTrimOverlay] = useState<{ clipId: string; text: string } | null>(null);
+
+  const onTrimHandleMouseDown = useCallback(
+    (e: React.MouseEvent, clip: VideoClip, side: 'left' | 'right') => {
+      if (!onTrimClip) return;
+      e.stopPropagation();
+      e.preventDefault();
+      trimRef.current = {
+        clipId: clip.id,
+        side,
+        startClientX: e.clientX,
+        origSourceStart: clip.sourceStart,
+        origSourceEnd: clip.sourceEnd,
+      };
+      const onMove = (ev: MouseEvent) => {
+        const tr = trimRef.current;
+        if (!tr) return;
+        const dSec = (ev.clientX - tr.startClientX) / pxPerSec;
+        if (tr.side === 'left') {
+          const newStart = Math.max(0, tr.origSourceStart + dSec);
+          const dur = Math.max(0, tr.origSourceEnd - newStart);
+          setTrimOverlay({ clipId: tr.clipId, text: `入点 ${newStart.toFixed(2)}s · 时长 ${dur.toFixed(2)}s` });
+          onTrimClip(tr.clipId, { sourceStart: newStart });
+        } else {
+          const newEnd = Math.max(tr.origSourceStart + 0.1, tr.origSourceEnd + dSec);
+          const dur = newEnd - tr.origSourceStart;
+          setTrimOverlay({ clipId: tr.clipId, text: `时长 ${dur.toFixed(2)}s · 出点 ${newEnd.toFixed(2)}s` });
+          onTrimClip(tr.clipId, { sourceEnd: newEnd });
+        }
+      };
+      const onUp = () => {
+        trimRef.current = null;
+        setTrimOverlay(null);
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    },
+    [onTrimClip, pxPerSec],
+  );
 
   const seekFromClientX = useCallback(
     (clientX: number) => {
@@ -482,6 +534,27 @@ export function TimelinePanel({
                             style={{ left, width: Math.max(w, 8), zIndex: 5 }}
                           >
                             <span className="pointer-events-none">{isVideo ? 'V' : '♪'}</span>
+                            {/* Trim handles — video track v1 only */}
+                            {isVideo && track.id === 'v1' && onTrimClip && (
+                              <>
+                                <div
+                                  className="pointer-events-auto absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l bg-white/20 hover:bg-amber-400/80"
+                                  onMouseDown={(e) => onTrimHandleMouseDown(e, vc, 'left')}
+                                  title="拖拽调整入点"
+                                />
+                                <div
+                                  className="pointer-events-auto absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r bg-white/20 hover:bg-amber-400/80"
+                                  onMouseDown={(e) => onTrimHandleMouseDown(e, vc, 'right')}
+                                  title="拖拽调整出点"
+                                />
+                              </>
+                            )}
+                            {/* Timecode overlay during trim */}
+                            {trimOverlay?.clipId === c.id && (
+                              <div className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[9px] text-white">
+                                {trimOverlay.text}
+                              </div>
+                            )}
                             {track.id !== 'a1' && (
                             <button
                               type="button"
