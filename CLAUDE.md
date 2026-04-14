@@ -64,6 +64,46 @@ bash scripts/eval.sh <run-id>
 
 ---
 
+## 三端一统（强制）
+
+**每次修改完成后，必须保证本地、GitHub、云端服务器三端同步，缺一不可。**
+
+```
+本地代码 → git commit → git push → SSH 部署到服务器
+```
+
+### 标准流程
+
+```bash
+# 1. 本地：确认 TypeScript 编译无错
+cd h5-video-tool && npx tsc --noEmit
+cd h5-video-tool-api && npx tsc --noEmit
+
+# 2. 提交
+git add <修改的文件>
+git commit -m "feat/fix: ..."
+
+# 3. 推送到 GitHub
+git push origin main
+
+# 4. 部署到云端（服务器 43.134.186.196）
+ssh ubuntu@43.134.186.196
+cd /home/ubuntu/gobs
+git pull origin main
+cd h5-video-tool-api && npm run build && cd ..
+cd h5-video-tool && npm run build && cd ..
+pm2 restart all
+```
+
+### 违禁情形
+
+- 不得只改本地、不提交
+- 不得只 push、不部署
+- 不得跳过 TypeScript 编译检查直接部署
+- AI 完成每个任务后必须主动执行上述四步，不等用户催
+
+---
+
 ## 环境变量说明
 
 文件位置：`h5-video-tool-api/.env`（从 `.env.example` 复制）
