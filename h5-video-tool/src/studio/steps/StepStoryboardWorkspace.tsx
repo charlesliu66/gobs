@@ -39,6 +39,7 @@ export function StepStoryboardWorkspace({
   shotPreviewPlaySrc,
   shotVideoVersions,
   selectedShotVideoVersion,
+  busyL3,
   onSetShotVideoDreaminaModel,
   onSetDreaminaModelVersion,
   onGenerateShotFrame,
@@ -46,8 +47,9 @@ export function StepStoryboardWorkspace({
   onKeepOnlyCurrentVersion,
   onSelectVideoVersion,
 }: {
-  shot: ProductionShot;
+  shot?: ProductionShot;
   shots: ProductionShot[];
+  busyL3?: boolean;
   chSheets: CharacterSheet[];
   scSheets: SceneSheet[];
   shotMediaBusy: 'frame' | 'video' | null;
@@ -71,6 +73,20 @@ export function StepStoryboardWorkspace({
   onSelectVideoVersion: (id: string) => void;
 }) {
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
+
+  if (busyL3 && (!shots || shots.length === 0)) {
+    return (
+      <div className="space-y-3 p-4">
+        <p className="text-sm text-[var(--color-text-muted)] animate-pulse">正在生成分镜表…</p>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-xl bg-[var(--color-surface-elevated)] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!shot) return null;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex min-h-[480px] flex-col gap-4 lg:flex-row">

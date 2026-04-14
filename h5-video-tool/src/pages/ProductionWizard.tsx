@@ -1326,7 +1326,7 @@ export function ProductionWizard() {
         )}
 
         {/* Step 3 分镜（三栏 + 底条） */}
-        {step === 3 && project.shots.length > 0 && shot && (
+        {step === 3 && (project.shots.length > 0 || busyL3) && (
           <StepStoryboardWorkspace
             shot={shot}
             shots={project.shots}
@@ -1345,6 +1345,7 @@ export function ProductionWizard() {
             shotPreviewPlaySrc={shotPreviewPlaySrc}
             shotVideoVersions={shotVideoVersions}
             selectedShotVideoVersion={selectedShotVideoVersion}
+            busyL3={busyL3}
             onSetShotVideoDreaminaModel={(v) =>
               setProject((p) => ({
                 ...p,
