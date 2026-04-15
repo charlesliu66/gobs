@@ -190,10 +190,28 @@ export function EditorWorkbench() {
   const [selectedTextClipId, setSelectedTextClipId] = useState<string | null>(null);
   const [showTextPanel, setShowTextPanel] = useState(false);
   const [showProjectManager, setShowProjectManager] = useState(false);
+  /** 新建项目命名弹窗 */
+  const [newProjectModal, setNewProjectModal] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
+  /** 首次自动打开最近项目的标记，防止重复触发 */
+  const hasAutoOpenedRef = useRef(false);
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
   }, []);
+
+  /** 自动打开最近项目：没有 URL project 参数时，首次加载项目列表后自动跳到最新项目 */
+  useEffect(() => {
+    const qp = searchParams.get('project');
+    if (qp) return; // URL 已指定项目，不干扰
+    if (projectList.length === 0) return; // 列表尚未加载
+    if (hasAutoOpenedRef.current) return; // 只触发一次
+    hasAutoOpenedRef.current = true;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('project', projectList[0]!.id);
+      return next;
+    });
+  }, [projectList, searchParams, setSearchParams]);
 
   useEffect(() => {
     const qp = searchParams.get('project');
@@ -1154,21 +1172,17 @@ export function EditorWorkbench() {
               onClick={() => setShowProjectManager(true)}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              管理项目
+              我的项目{projectList.length > 0 ? ` (${projectList.length})` : ''}
             </button>
             <button
               type="button"
               onClick={() => {
-                createNewProject();
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.delete('project');
-                  return next;
-                });
+                const defaultName = `剪辑-${new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace(/\//g, '')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+                setNewProjectModal({ open: true, name: defaultName });
               }}
-              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
             >
-              新建
+              + 新建
             </button>
             <button
               type="button"
@@ -1244,17 +1258,73 @@ export function EditorWorkbench() {
           });
         }}
         onNew={() => {
-          createNewProject();
-          setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete('project');
-            return next;
-          });
+          const defaultName = `剪辑-${new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace(/\//g, '')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+          setNewProjectModal({ open: true, name: defaultName });
+          setShowProjectManager(false);
         }}
         onRename={renameProject}
         onDelete={removeProject}
         onClose={() => setShowProjectManager(false)}
       />
+    )}
+
+    {/* 新建项目命名弹窗 */}
+    {newProjectModal.open && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+        onClick={(e) => { if (e.target === e.currentTarget) setNewProjectModal({ open: false, name: '' }); }}
+      >
+        <div className="w-80 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">新建剪辑项目</h3>
+          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">为新项目起一个名字，之后可以随时修改</p>
+          <input
+            autoFocus
+            type="text"
+            value={newProjectModal.name}
+            onChange={(e) => setNewProjectModal((s) => ({ ...s, name: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const name = newProjectModal.name.trim() || undefined;
+                createNewProject(name);
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('project');
+                  return next;
+                });
+                setNewProjectModal({ open: false, name: '' });
+              }
+              if (e.key === 'Escape') setNewProjectModal({ open: false, name: '' });
+            }}
+            placeholder="例：产品宣传片-0415"
+            className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setNewProjectModal({ open: false, name: '' })}
+              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const name = newProjectModal.name.trim() || undefined;
+                createNewProject(name);
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('project');
+                  return next;
+                });
+                setNewProjectModal({ open: false, name: '' });
+              }}
+              className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
+            >
+              创建
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

@@ -49,6 +49,35 @@ const QUALITY_MAP: Record<string, { crf: number; preset: string }> = {
   high:     { crf: 18, preset: 'slow'      },
 };
 
+// ─── Drawtext 支持状态缓存（服务重启前有效） ──────────────────────────────────
+
+/**
+ * null = 尚未检测；true = 支持；false = 不支持（跳过文字叠加步骤）
+ * 首次检测到不支持时设为 false，后续导出直接跳过，避免反复报错。
+ */
+let _drawtextSupported: boolean | null = null;
+
+/** 探测当前 FFmpeg 是否支持 drawtext 滤镜，结果缓存至进程生命周期 */
+async function checkDrawtextSupported(): Promise<boolean> {
+  if (_drawtextSupported !== null) return _drawtextSupported;
+  const bin = getFfmpegPath();
+  return new Promise((resolve) => {
+    const proc = spawn(bin, ['-filters'], { windowsHide: true });
+    let out = '';
+    proc.stdout.on('data', (c: Buffer) => { out += c.toString(); });
+    proc.stderr.on('data', (c: Buffer) => { out += c.toString(); });
+    proc.on('close', () => {
+      _drawtextSupported = /drawtext/.test(out);
+      console.log(`[ffmpeg-export] drawtext 支持: ${_drawtextSupported}`);
+      resolve(_drawtextSupported);
+    });
+    proc.on('error', () => {
+      _drawtextSupported = false;
+      resolve(false);
+    });
+  });
+}
+
 // ─── Linux 字体路径探测（drawtext 需要显式 fontfile） ────────────────────────
 
 let _linuxFontPath: string | null | undefined = undefined;
@@ -346,29 +375,37 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
 
     let finalPath = mixedPath;
     if (drawtextFilters.length > 0) {
-      const vf = drawtextFilters.join(',');
-      const textOutputPath = path.join(tmpDir, 'final.mp4');
-      try {
-        await runFfmpeg([
-          '-y',
-          '-i', mixedPath,
-          '-vf', vf,
-          '-c:v', 'libx264',
-          '-c:a', 'copy',
-          '-crf', String(crf),
-          '-preset', preset,
-          '-pix_fmt', 'yuv420p',
-          '-movflags', '+faststart',
-          textOutputPath,
-        ]);
-        finalPath = textOutputPath;
-      } catch (textErr) {
-        const msg = textErr instanceof Error ? textErr.message : String(textErr);
-        if (/No such filter.*drawtext|Filter not found|drawtext.*not found/i.test(msg)) {
-          log(88, '⚠️ 服务器 FFmpeg 不支持文字叠加（缺少 libfreetype），跳过文字轨继续导出');
-          finalPath = mixedPath; // 降级：导出不含文字层的版本
-        } else {
-          throw textErr;
+      // 预检：当前 FFmpeg 是否支持 drawtext（结果缓存，仅检测一次）
+      const drawtextOk = await checkDrawtextSupported();
+      if (!drawtextOk) {
+        log(88, '⚠️ 当前 FFmpeg 不支持 drawtext 滤镜（缺少 libfreetype），已跳过文字层');
+      } else {
+        const vf = drawtextFilters.join(',');
+        const textOutputPath = path.join(tmpDir, 'final.mp4');
+        try {
+          await runFfmpeg([
+            '-y',
+            '-i', mixedPath,
+            '-vf', vf,
+            '-c:v', 'libx264',
+            '-c:a', 'copy',
+            '-crf', String(crf),
+            '-preset', preset,
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            textOutputPath,
+          ]);
+          finalPath = textOutputPath;
+        } catch (textErr) {
+          const msg = textErr instanceof Error ? textErr.message : String(textErr);
+          // 兜底：如果运行时仍报 drawtext 相关错误，标记为不支持并降级导出
+          if (/No such filter|Filter not found|drawtext|libfreetype|AVFilterGraph/i.test(msg)) {
+            _drawtextSupported = false; // 更新缓存，后续导出直接跳过
+            log(88, '⚠️ drawtext 运行时失败（已记录），跳过文字层继续导出');
+            finalPath = mixedPath;
+          } else {
+            throw textErr;
+          }
         }
       }
     }
