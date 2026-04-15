@@ -151,6 +151,61 @@ router.post('/export', (req, res) => {
   res.json({ jobId, message: 'queued' });
 });
 
+/** GET /api/editor/export/files — 列出当前用户所有已导出文件（按时间倒序） */
+router.get('/export/files', (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
+  const dir = path.join(getApiDataDir(), 'exports', username);
+  if (!fs.existsSync(dir)) {
+    res.json({ files: [] });
+    return;
+  }
+  try {
+    const entries = fs.readdirSync(dir)
+      .filter((f) => /\.(mp4|mov)$/i.test(f))
+      .map((filename) => {
+        const stat = fs.statSync(path.join(dir, filename));
+        const size = stat.size;
+        const mb = size / (1024 * 1024);
+        const sizeLabel = mb >= 1 ? `${mb.toFixed(1)} MB` : `${(size / 1024).toFixed(0)} KB`;
+        // 文件名格式 exp_<timestamp>_<random>.<ext>，从时间戳解析创建时间
+        const tsMatch = filename.match(/exp_(\d+)_/);
+        const createdAt = tsMatch ? parseInt(tsMatch[1], 10) : stat.mtimeMs;
+        return {
+          filename,
+          size,
+          sizeLabel,
+          createdAt,
+          downloadUrl: `/api/editor/export/download/${encodeURIComponent(filename)}`,
+        };
+      })
+      .sort((a, b) => b.createdAt - a.createdAt); // 最新在前
+    res.json({ files: entries });
+  } catch (e) {
+    res.status(500).json({ error: '读取导出目录失败' });
+  }
+});
+
+/** DELETE /api/editor/export/files/:filename — 删除指定导出文件 */
+router.delete('/export/files/:filename', (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
+  const filename = path.basename(req.params.filename);
+  if (!filename || !/\.(mp4|mov)$/i.test(filename)) {
+    res.status(400).json({ error: '无效文件名' });
+    return;
+  }
+  const filePath = path.join(getApiDataDir(), 'exports', username, filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+  try {
+    fs.unlinkSync(filePath);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
 /** GET /api/editor/export/:jobId — 查询任务状态 */
 router.get('/export/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);

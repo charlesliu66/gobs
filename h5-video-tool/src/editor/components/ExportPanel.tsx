@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AspectRatioPreset, TimelineProject } from '../types/timeline';
-import { startEditorExport, getEditorExportStatus } from '../../api/editor';
+import { startEditorExport, getEditorExportStatus, listExportFiles, deleteExportFile } from '../../api/editor';
+import type { ExportFileRecord } from '../../api/editor';
 import { apiDownload } from '../../api/client';
 import { toast } from '../../components/Toast';
 
@@ -43,6 +44,52 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
   const [exportMsg, setExportMsg] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
+  // 历史导出面板
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyFiles, setHistoryFiles] = useState<ExportFileRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRef = useRef<HTMLDivElement>(null);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const { files } = await listExportFiles();
+      setHistoryFiles(files);
+    } catch {
+      toast.error('加载导出历史失败');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showHistory) return;
+    void loadHistory();
+  }, [showHistory, loadHistory]);
+
+  // 点击历史面板外部关闭
+  useEffect(() => {
+    if (!showHistory) return;
+    const handler = (e: MouseEvent) => {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
+        setShowHistory(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showHistory]);
+
+  const handleDeleteFile = useCallback(async (filename: string) => {
+    if (!confirm(`确认删除 ${filename}？此操作不可恢复。`)) return;
+    try {
+      await deleteExportFile(filename);
+      setHistoryFiles((prev) => prev.filter((f) => f.filename !== filename));
+      toast.success('已删除');
+    } catch (e) {
+      toast.error(`删除失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, []);
+
   const handleExport = useCallback(async () => {
     setBusy(true);
     setDownloadUrl(null);
@@ -64,6 +111,8 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
             setDownloadUrl(st.downloadUrl);
             toast.success('导出完成！点击下载');
             onPushLog(`导出完成：${st.downloadUrl}`);
+            // 自动刷新历史列表，使新文件立即出现
+            void listExportFiles().then(({ files }) => setHistoryFiles(files)).catch(() => {});
           } else {
             toast.info('导出完成（Mock 模式，暂无真实文件）');
             onPushLog('导出完成（Mock）');
@@ -84,6 +133,16 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
       setBusy(false);
     }
   }, [project, aspectRatio, resolution, format, quality, onPushLog]);
+
+  /** 从文件名中解析可读时间，格式：exp_<timestamp>_xxx.mp4 → "04-15 14:30" */
+  function formatExportTime(record: ExportFileRecord): string {
+    const d = new Date(record.createdAt);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${mm}-${dd} ${hh}:${min}`;
+  }
 
   return (
     <div ref={panelRef} className="relative flex items-center gap-2">
@@ -128,14 +187,103 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
           type="button"
           disabled={busy}
           onClick={() => setOpen((o) => !o)}
-          className="rounded-r-lg border-l border-white/20 bg-[var(--color-primary)] px-2 py-2 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="border-l border-white/20 bg-[var(--color-primary)] px-2 py-2 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           title="导出设置"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
         </button>
+        {/* 历史导出按钮 */}
+        <button
+          type="button"
+          onClick={() => setShowHistory((s) => !s)}
+          className="rounded-r-lg border-l border-white/20 bg-[var(--color-primary)] px-2 py-2 text-white hover:opacity-90 transition-opacity"
+          title="历史导出"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </button>
       </div>
+
+      {/* 历史导出面板 */}
+      {showHistory && (
+        <div
+          ref={historyRef}
+          className="absolute bottom-full right-0 z-50 mb-2 w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl"
+        >
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              历史导出
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadHistory()}
+                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+                title="刷新列表"
+              >
+                ↻ 刷新
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHistory(false)}
+                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-8 text-[11px] text-[var(--color-text-muted)]">
+                加载中…
+              </div>
+            ) : historyFiles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-1 py-8 text-[11px] text-[var(--color-text-muted)]">
+                <span>暂无导出记录</span>
+                <span className="text-[10px] opacity-60">完成导出后文件将显示在此处</span>
+              </div>
+            ) : (
+              <ul className="divide-y divide-[var(--color-border)]">
+                {historyFiles.map((file) => (
+                  <li key={file.filename} className="flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--color-surface-hover)] transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-medium text-[var(--color-text)]">
+                        {formatExportTime(file)}
+                      </p>
+                      <p className="text-[10px] text-[var(--color-text-muted)]">{file.sizeLabel}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const fn = file.filename;
+                        void apiDownload(file.downloadUrl, fn).catch((e: unknown) => {
+                          toast.error(`下载失败：${e instanceof Error ? e.message : String(e)}`);
+                        });
+                      }}
+                      className="shrink-0 rounded px-2 py-1 text-[10px] font-medium text-[var(--color-success)] hover:bg-[var(--color-success)]/10 transition-colors"
+                      title="下载"
+                    >
+                      ⬇
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteFile(file.filename)}
+                      className="shrink-0 rounded px-2 py-1 text-[10px] font-medium text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                      title="删除"
+                    >
+                      🗑
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
       {open && (
         <div className="absolute bottom-full right-0 z-50 mb-2 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-2xl">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">导出设置</p>

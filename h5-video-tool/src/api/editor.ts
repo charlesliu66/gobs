@@ -223,6 +223,30 @@ export async function getEditorExportStatus(jobId: string): Promise<EditorExport
   return apiGet<EditorExportStatusResponse>(`/api/editor/export/${encodeURIComponent(jobId)}`);
 }
 
+export interface ExportFileRecord {
+  filename: string;
+  size: number;
+  sizeLabel: string;
+  createdAt: number;
+  downloadUrl: string;
+}
+
+export async function listExportFiles(): Promise<{ files: ExportFileRecord[] }> {
+  return apiGet<{ files: ExportFileRecord[] }>('/api/editor/export/files');
+}
+
+export async function deleteExportFile(filename: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/editor/export/files/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+}
+
 /** 与后端一致：先缩窗再抽帧（仅 vision / hybrid 生效） */
 export type EditorVisionFocus =
   | { kind: 'manual'; centerSec: number; windowSec?: number }
