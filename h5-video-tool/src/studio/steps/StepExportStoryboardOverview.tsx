@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
+import { ScreeningRoomPlayer } from './ScreeningRoomPlayer';
 
 export function StepExportStoryboardOverview({
   shots,
@@ -14,9 +16,22 @@ export function StepExportStoryboardOverview({
   buildStoryLine: (shot: ProductionShot) => string;
   resolveVideoSrc: (shot: ProductionShot) => string | null;
 }) {
+  const [showScreeningRoom, setShowScreeningRoom] = useState(true);
+
   return (
     <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-      <h2 className="text-sm font-semibold">分镜整合</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">分镜整合</h2>
+        {shots.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowScreeningRoom((v) => !v)}
+            className="rounded-md px-2.5 py-1 text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+          >
+            {showScreeningRoom ? '切换网格视图' : '切换放映室'}
+          </button>
+        )}
+      </div>
       <p className="text-xs text-[var(--color-text-muted)]">
         汇总全部分镜的静帧与已生成视频（在分镜步骤逐镜生成后会同步出现在此）。成片会自动保存到「生成视频 → 历史内容」。
       </p>
@@ -35,9 +50,19 @@ export function StepExportStoryboardOverview({
           打开历史内容
         </Link>
       </div>
+
       {shots.length === 0 ? (
         <p className="text-xs text-[var(--color-text-muted)]">暂无分镜数据。</p>
+      ) : showScreeningRoom ? (
+        /* 放映室：连续串联播放 */
+        <ScreeningRoomPlayer
+          shots={shots}
+          scSheets={scSheets}
+          resolveVideoSrc={resolveVideoSrc}
+          buildStoryLine={buildStoryLine}
+        />
       ) : (
+        /* 网格视图：总览所有分镜卡片 */
         <div className="grid max-h-[min(70vh,520px)] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
           {shots.map((sh, idx) => {
             const scImg = scSheets.find((sc) => sc.sceneRef === sh.sceneRef)?.variants[0]?.imageDataUrl;
