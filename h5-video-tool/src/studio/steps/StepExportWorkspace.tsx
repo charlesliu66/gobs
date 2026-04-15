@@ -20,6 +20,8 @@ export function StepExportWorkspace({
   onPickReferenceImage,
   onAssemblePrompts,
   onCopyAllSeedance,
+  projectTitle,
+  aspectRatio,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -32,6 +34,8 @@ export function StepExportWorkspace({
   onPickReferenceImage: (file: File | null) => void;
   onAssemblePrompts: () => void;
   onCopyAllSeedance: () => void;
+  projectTitle?: string;
+  aspectRatio?: string;
 }) {
   const { setStep } = useProductionContext();
   return (
@@ -42,6 +46,8 @@ export function StepExportWorkspace({
         onBackToStoryboard={() => setStep(3)}
         buildStoryLine={buildStoryLine}
         resolveVideoSrc={resolveVideoSrc}
+        projectTitle={projectTitle}
+        aspectRatio={aspectRatio}
       />
 
       <StepExportPromptConsistency

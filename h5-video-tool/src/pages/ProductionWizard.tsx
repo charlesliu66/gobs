@@ -20,6 +20,7 @@ import {
   loadStored,
   mergeCharacterSheetsPreservingLooks,
   mergeSceneSheetsPreservingImages,
+  mergeShotVideoVersions,
   migrateProject,
   saveStored,
   type StoredWizard,
@@ -713,7 +714,19 @@ export function ProductionWizard() {
         const raw = await loadProductionProject(idToLoad);
         if (raw && typeof raw === 'object' && 'project' in raw) {
           const s = raw as unknown as StoredWizard;
-          setProject(migrateProject(s.project));
+          const serverProject = migrateProject(s.project);
+          // Merge video data from localStorage: the server sync is debounced
+          // (3 s), so a page refresh right after video generation may leave the
+          // server copy stale.  localStorage is written synchronously on every
+          // state change, so it may contain newer video paths/versions.
+          const local = loadStored();
+          if (local?.project?.shots?.length) {
+            serverProject.shots = mergeShotVideoVersions(
+              serverProject.shots,
+              local.project.shots,
+            );
+          }
+          setProject(serverProject);
           if (s.characterBible) setCharacterBible(s.characterBible);
           if (s.synopsis) setSynopsis(s.synopsis);
           if (s.structureTemplate) setStructureTemplate(s.structureTemplate);
@@ -1640,6 +1653,8 @@ export function ProductionWizard() {
             onPickReferenceImage={handleFile}
             onAssemblePrompts={() => void handleAssemble()}
             onCopyAllSeedance={copyAllSeedance}
+            projectTitle={project.meta.title}
+            aspectRatio={project.meta.aspectRatio}
           />
         )}
 

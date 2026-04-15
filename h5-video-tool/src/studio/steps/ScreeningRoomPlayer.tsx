@@ -174,6 +174,12 @@ export function ScreeningRoomPlayer({
                 m.vSrc ? 'bg-green-400' : 'bg-gray-500/80'
               }`}
             />
+            {/* 多版本角标 */}
+            {(m.shot.previewVideoVersions?.length ?? 0) > 1 && (
+              <span className="absolute left-0.5 top-0.5 rounded bg-[var(--color-primary)]/80 px-1 py-px text-[8px] font-semibold leading-none text-white">
+                v{m.shot.previewVideoVersions!.length}
+              </span>
+            )}
             {/* 镜号标签 */}
             <span className="absolute inset-x-0 bottom-0 bg-black/65 py-px text-center text-[9px] leading-3 text-white/80">
               镜{m.shot.shotIndex}
