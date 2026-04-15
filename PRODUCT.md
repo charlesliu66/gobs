@@ -176,6 +176,23 @@
 
 ## 二、Changelog
 
+### v0.36 — 2026-04-15
+
+**AI 剪辑智能优化 · 第三批（方向6 画面-音乐情绪对齐）**
+
+- **[editor-agent] 情绪张力维度（方向6）**：
+  - `VisionFrameScore` 新增 `tension`（情绪张力 0–10，与剪辑价值 score 分离）和 `emotionTag`（calm/tense/triumphant/sad/exciting）
+  - Gemini 打分 prompt 更新，每帧同时输出 tension + emotionTag
+  - 内容地图（Content Manifest）现在显示情绪分布统计（如 `exciting×5 / tense×3 | 平均张力：6.2/10`）
+- **[editor-agent] BGM 段落 × 画面情绪对齐规则**：
+  - drop（high energy）段 → 优先 tension ≥ 7、emotionTag=exciting/triumphant 的画面
+  - build（mid energy）段 → 优先 tension 4-6、emotionTag=tense 的画面
+  - intro/outro（low energy）段 → 优先 tension ≤ 3、emotionTag=calm/sad 的画面
+  - 无 BGM 时按叙事模板段落位置推断张力期望
+  - 强制约束：同一 BGM 段落内画面张力变化幅度 ≤ 5
+
+---
+
 ### v0.35 — 2026-04-15
 
 **AI 剪辑智能优化 · 第二批（方向2 叙事结构 + 方向4 切点质量）**
@@ -633,4 +650,4 @@
 
 ---
 
-*最后更新：2026-04-15（v0.35）*
+*最后更新：2026-04-15（v0.36）*
