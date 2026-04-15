@@ -32,6 +32,7 @@ import { geelarkRouter } from './routes/geelark.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 import { runWithRequestContext } from './services/requestContext.js';
 import { resetInterruptedJobs } from './services/assetIngestService.js';
+import systemRouter from './routes/system.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -60,6 +61,7 @@ app.use((req, _res, next) => {
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'h5-video-tool-api' });
 });
+app.use('/api/system', systemRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/gobs-auth', gobsAuthRouter);
@@ -93,8 +95,8 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ success: false, error: err instanceof Error ? err.message : '服务器内部错误' });
 });
 
-app.listen(PORT, () => {
-  console.log(`API server running at http://localhost:${PORT}`);
+app.listen(Number(PORT), '127.0.0.1', () => {
+  console.log(`API server running at http://127.0.0.1:${PORT}`);
   startBatchJobsPoller();
   resetInterruptedJobs();
 });

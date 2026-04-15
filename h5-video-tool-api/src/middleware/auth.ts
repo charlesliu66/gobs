@@ -36,6 +36,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 系统信息接口（版本查询无需鉴权）
+  if (req.path.startsWith('/api/system/')) {
+    next();
+    return;
+  }
   // 浏览器 <video>/<audio> 标签无法附带 Bearer，放行媒体文件流读取
   if (req.method === 'GET' && req.path.startsWith('/api/editor/assets/files/')) {
     next();
