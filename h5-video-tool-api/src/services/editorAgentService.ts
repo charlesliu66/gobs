@@ -236,23 +236,42 @@ function buildContentManifest(
       const loc = `「${name}」t=${s.tSec.toFixed(1)}s`;
       const tag = `${s.activity ?? '未知'}${s.activitySecondary ? '/' + s.activitySecondary : ''}`;
       const scoreStr = `score=${s.score.toFixed(1)}`;
+      const tensionStr = s.tension != null ? ` tension=${s.tension.toFixed(0)}` : '';
+      const emotionStr = s.emotionTag ? ` [${s.emotionTag}]` : '';
       if (s.isActionPeak) {
-        actionPeaks.push(`${loc} [${tag} ${scoreStr}]`);
+        actionPeaks.push(`${loc} [${tag} ${scoreStr}${tensionStr}${emotionStr}]`);
       }
       if (s.isTurningPoint || (s.score >= 8 && s.intensity === 'high')) {
-        hooks.push(`${loc} [${tag} ${scoreStr}${s.isTurningPoint ? ' ★转折' : ''}]`);
+        hooks.push(`${loc} [${tag} ${scoreStr}${tensionStr}${emotionStr}${s.isTurningPoint ? ' ★转折' : ''}]`);
       } else if (s.intensity === 'high') {
-        combatPeaks.push(`${loc} [${tag} ${scoreStr}]`);
+        combatPeaks.push(`${loc} [${tag} ${scoreStr}${tensionStr}${emotionStr}]`);
       } else if (s.intensity === 'mid') {
-        buildUps.push(`${loc} [${tag} ${scoreStr}]`);
+        buildUps.push(`${loc} [${tag} ${scoreStr}${tensionStr}${emotionStr}]`);
       } else {
-        calms.push(`${loc} [${tag} ${scoreStr}]`);
+        calms.push(`${loc} [${tag} ${scoreStr}${tensionStr}${emotionStr}]`);
       }
     }
   }
 
+  // 情绪分布统计
+  const emotionCounts: Record<string, number> = {};
+  let tensionSum = 0;
+  let tensionCount = 0;
+  for (const scores of scoresByAsset.values()) {
+    for (const s of scores) {
+      if (s.emotionTag) emotionCounts[s.emotionTag] = (emotionCounts[s.emotionTag] ?? 0) + 1;
+      if (s.tension != null) { tensionSum += s.tension; tensionCount++; }
+    }
+  }
+  const avgTension = tensionCount > 0 ? (tensionSum / tensionCount).toFixed(1) : '未知';
+  const emotionSummary = Object.entries(emotionCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k}×${v}`)
+    .join(' / ');
+
   const lines: string[] = ['## 内容地图（Content Manifest）'];
   lines.push('*基于视觉分析自动生成，指导叙事排片使用*');
+  lines.push(`*情绪分布：${emotionSummary || '暂无数据'} | 平均张力：${avgTension}/10*`);
   lines.push('');
   if (hooks.length) {
     lines.push(`### 🎯 钩子/转折点候选（${hooks.length} 帧）——适合开场或高潮节点`);
@@ -354,6 +373,14 @@ ${ctx.beatInfo ? formatBeatGuideBlock(ctx.beatInfo) : ''}
 - **镜头运动多样性**：连续 5 个以上 cameraMotion=static 的片段需插入 ≥ 1 个运动镜头（pan/zoom/shake）
 - **动接动原则**：运动镜头（pan/zoom/shake）后面优先接运动镜头，视觉更流畅；避免 shake→static→shake 的跳切
 - **避免模糊帧作开头**：shake（抖动）帧不适合作片段起点，适合作切点本身
+
+## 画面-音乐情绪对齐规则
+*内容地图中每帧附有 tension（情绪张力 0-10）和 emotionTag（情绪标签），排片时须与 BGM 段落能量匹配：*
+- **BGM high energy 段（drop）**：优先选 tension ≥ 7 且 emotionTag 为 exciting / triumphant 的片段
+- **BGM mid energy 段（build）**：优先选 tension 4-6 且 emotionTag 为 tense 的片段
+- **BGM low energy 段（intro/outro）**：优先选 tension ≤ 3 且 emotionTag 为 calm / sad 的片段
+- **无 BGM 段落信息时**：根据叙事模板段落位置推断：高潮段 → tension ≥ 7，铺垫段 → tension 4-6，开场/收尾 → tension ≤ 4
+- **强制约束**：同一段 BGM 内，画面 tension 变化幅度应≤5（避免 high energy 段出现 tension=1 的静态画面）
 ${ctx.narrativeTemplate ? `
 ## 叙事模板：「${ctx.narrativeTemplate.name}」
 ${ctx.narrativeTemplate.description}

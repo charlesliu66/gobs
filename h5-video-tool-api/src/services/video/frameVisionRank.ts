@@ -44,6 +44,15 @@ export interface VisionFrameScore {
   isActionPeak?: boolean;
   /** 镜头运动类型，用于切点连贯性判断 */
   cameraMotion?: 'static' | 'pan' | 'zoom' | 'shake';
+  /**
+   * 情绪张力 0–10（与 score 分离：score=剪辑价值，tension=情绪强度）
+   * >=8: 爆炸/死亡/逆转/高声对话
+   * 4-7: 奔跑/追逐/准备战斗
+   * <=3: 静态场景/UI/对话
+   */
+  tension?: number;
+  /** 情绪标签 */
+  emotionTag?: 'calm' | 'tense' | 'triumphant' | 'sad' | 'exciting';
 }
 
 function extractJsonArray(s: string): unknown {
@@ -134,12 +143,16 @@ async function scoreBatch(
 - intensity: string，行为强度，必填其中之一：low / mid / high（low=平静/UI/对话，mid=移动/准备，high=战斗/爆炸/击杀）
 - isTurningPoint: boolean，是否为叙事转折点（反杀/被包围/胜利/死亡/逃脱等高价值瞬间），true/false
 - isActionPeak: boolean，是否为动作顶点（出拳到位/弹头命中/技能爆炸瞬间/击杀落地），适合作为切入点，true/false
-- cameraMotion: string，镜头运动类型，必填其中之一：static（固定机位）/ pan（水平/垂直移动）/ zoom（推拉）/ shake（抖动/手持）`
+- cameraMotion: string，镜头运动类型，必填其中之一：static（固定机位）/ pan（水平/垂直移动）/ zoom（推拉）/ shake（抖动/手持）
+- tension: number，情绪张力 0–10（与 score 分离：score=剪辑价值，tension=情绪强度）。>=8:爆炸/死亡/逆转/高声对话；4-7:奔跑/追逐/准备战斗；<=3:静态场景/UI/对话
+- emotionTag: string，情绪标签，必填其中之一：calm（平静）/ tense（紧张）/ triumphant（胜利/得意）/ sad（悲伤）/ exciting（兴奋/热血）`
     : `- activity: string，单个标签，优先从「可选行为标签」中选（搜打撤：搜索/打架/交互/撤退 等）；无法判断填「未知」
 - intensity: string，行为强度：low / mid / high
 - isTurningPoint: boolean，是否为叙事转折点
 - isActionPeak: boolean，是否为动作顶点（击杀/技能命中瞬间），true/false
-- cameraMotion: string，镜头运动：static / pan / zoom / shake`;
+- cameraMotion: string，镜头运动：static / pan / zoom / shake
+- tension: number，情绪张力 0–10（>=8高张力，4-7中张力，<=3低张力）
+- emotionTag: string，情绪标签：calm / tense / triumphant / sad / exciting`;
 
   const intro = `用户剪辑意图：${userIntent || '高光/精彩镜头'}
 
@@ -204,6 +217,10 @@ ${activityOutputGuide}
     const isActionPeak = o.isActionPeak === true || o.isActionPeak === 'true' ? true : undefined;
     const rawCam = typeof o.cameraMotion === 'string' ? o.cameraMotion.toLowerCase().trim() : '';
     const cameraMotion = (['static', 'pan', 'zoom', 'shake'] as const).find((v) => v === rawCam);
+    const tensionRaw = typeof o.tension === 'number' ? o.tension : parseFloat(String(o.tension ?? ''));
+    const tension = Number.isFinite(tensionRaw) ? Math.min(10, Math.max(0, tensionRaw)) : undefined;
+    const rawEmotion = typeof o.emotionTag === 'string' ? o.emotionTag.toLowerCase().trim() : '';
+    const emotionTag = (['calm', 'tense', 'triumphant', 'sad', 'exciting'] as const).find((v) => v === rawEmotion);
     out.push({
       tSec,
       score: Math.min(10, Math.max(0, score)),
@@ -216,6 +233,8 @@ ${activityOutputGuide}
       isTurningPoint,
       isActionPeak,
       cameraMotion,
+      tension,
+      emotionTag,
     });
   }
   return out;
