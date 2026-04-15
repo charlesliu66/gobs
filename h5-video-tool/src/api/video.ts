@@ -186,6 +186,7 @@ export interface KlingTaskStatusResponse {
   phase: KlingPollPhase;
   row?: KlingVideoListRow;
   error?: string;
+  errorCode?: string;
 }
 
 export async function getKlingTaskStatus(taskId: string): Promise<KlingTaskStatusResponse> {
@@ -235,6 +236,7 @@ export interface DreaminaTaskPollResponse {
   failReason?: string;
   videoUrl?: string;
   videoPath?: string;
+  errorCode?: string;
 }
 
 /** 轮询即梦任务：排队中返回 queueInfo；完成返回 videoUrl */
