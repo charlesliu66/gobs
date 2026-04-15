@@ -3,22 +3,17 @@
  * 使用 createRequire 适配 ESM 模块系统
  */
 import { createRequire } from 'module';
-import path from 'path';
 import fs from 'fs';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Database = require('better-sqlite3');
 
-// API_DATA_DIR 默认为 h5-video-tool-api 目录同级的 output/，或环境变量指定
-const dataDir = process.env.API_DATA_DIR
-  ? path.resolve(process.env.API_DATA_DIR)
-  : path.resolve(process.cwd(), '..', 'output');
-
-const dbPath = path.join(dataDir, 'assets.db');
+const dbPath = resolvePath('db', 'assets.db');
 
 // 确保目录存在
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+fs.mkdirSync(resolvePath('db'), { recursive: true });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db: any = new Database(dbPath);

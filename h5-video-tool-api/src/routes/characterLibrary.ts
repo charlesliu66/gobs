@@ -12,15 +12,12 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 export const characterLibraryRouter = Router();
 
-const OUTPUT_BASE = process.env.VIDEO_OUTPUT_DIR
-  ? path.resolve(process.env.VIDEO_OUTPUT_DIR)
-  : path.resolve(process.cwd(), 'output');
-
-const LIB_DIR = path.join(OUTPUT_BASE, 'character-library');
-const SHARE_DIR = path.join(OUTPUT_BASE, 'character-library', '_shares');
+const LIB_DIR = resolvePath('character-library');
+const SHARE_DIR = resolvePath('character-library', '_shares');
 
 async function ensureDirs() {
   await fs.mkdir(LIB_DIR, { recursive: true });

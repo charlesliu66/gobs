@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
+import { resolvePath } from '../infra/storage/resolver.js';
 import type { GobsFeatureCode, GobsUserRecord, MatrixFeatureCode } from './gobsAuthTypes.js';
 import {
   ALL_GOBS_FEATURES,
@@ -16,7 +17,7 @@ function emptyBlob(): Blob {
 }
 
 function dataPath(): string {
-  return join(process.cwd(), '.data', 'gobs-users.json');
+  return join(resolvePath('.data'), 'gobs-users.json');
 }
 
 async function readBlob(): Promise<Blob> {
@@ -30,7 +31,7 @@ async function readBlob(): Promise<Blob> {
 }
 
 async function writeBlob(blob: Blob): Promise<void> {
-  await mkdir(join(process.cwd(), '.data'), { recursive: true });
+  await mkdir(resolvePath('.data'), { recursive: true });
   await writeFile(dataPath(), JSON.stringify(blob, null, 2), 'utf8');
 }
 

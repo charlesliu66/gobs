@@ -12,6 +12,7 @@ import { promisify } from 'util';
 import db from '../db/assetDb.js';
 import { applyRuleTags, aiTagAsset } from './assetTaggingService.js';
 import type { AssetRecord, ImportJob } from '../types/assetLibrary.js';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -29,11 +30,9 @@ try {
   console.warn('[assetIngest] ffprobe-static not available, metadata extraction disabled');
 }
 
-// 数据目录
+// 数据目录（通过 resolver 统一管理）
 function getDataDir(): string {
-  return process.env.API_DATA_DIR
-    ? path.resolve(process.env.API_DATA_DIR)
-    : path.resolve(process.cwd(), '..', 'output');
+  return resolvePath('assets-ingest');
 }
 
 function nowIso(): string {
@@ -185,7 +184,7 @@ async function processFile(
     }
 
     // 3. 落盘到 {dataDir}/assets/{username}/
-    const destDir = path.join(getDataDir(), 'assets', username);
+    const destDir = resolvePath('assets-ingest', username);
     fs.mkdirSync(destDir, { recursive: true });
     const assetId = nanoid(21);
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');

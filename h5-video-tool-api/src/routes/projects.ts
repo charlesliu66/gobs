@@ -16,6 +16,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 const router = Router();
 
@@ -28,10 +29,7 @@ function getProjectsDir(username: string): string {
   if (!isSafeUsername(username)) {
     throw new Error('非法用户名');
   }
-  const dataDir = process.env.API_DATA_DIR
-    ? path.resolve(process.env.API_DATA_DIR)
-    : path.resolve(process.cwd(), 'data');
-  return path.join(dataDir, 'projects', username);
+  return resolvePath('projects', username);
 }
 
 function getProjectPath(username: string, projectId: string): string {

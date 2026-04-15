@@ -11,14 +11,11 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 export const localUploadRouter = Router();
 
-const OUTPUT_BASE = process.env.VIDEO_OUTPUT_DIR
-  ? path.resolve(process.env.VIDEO_OUTPUT_DIR)
-  : path.resolve(process.cwd(), 'output');
-
-const UPLOAD_DIR = path.join(OUTPUT_BASE, 'uploads');
+const UPLOAD_DIR = resolvePath('uploads');
 fsSync.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const MAX_MB = Math.min(

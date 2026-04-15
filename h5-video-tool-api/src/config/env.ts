@@ -4,6 +4,7 @@
  */
 import { mkdirSync, existsSync } from 'node:fs';
 import { getApiDataDir, getDefaultVideoOutputDir, getUploadsPath } from './apiDataDir.js';
+import { resolvePath } from '../infra/storage/resolver.js';
 
 // ── 必填项定义 ──────────────────────────────────────────────────────────────
 const REQUIRED_VARS: Array<{ key: string; description: string }> = [
@@ -27,6 +28,8 @@ function getRequiredDirs(): Array<{ path: string; label: string }> {
     { path: getDefaultVideoOutputDir(), label: 'output（视频输出）' },
     { path: getUploadsPath(), label: 'uploads（文件上传）' },
     { path: getUploadsPath('editor'), label: 'uploads/editor' },
+    { path: resolvePath('db'), label: 'db（SQLite 数据库）' },
+    { path: resolvePath('.data'), label: '.data（内部状态）' },
   ];
 }
 

@@ -7,9 +7,10 @@ import { join } from 'path';
 import { jsonrepair } from 'jsonrepair';
 import { compassChatCompletion } from './compassLlm.js';
 import { getGeelarkOpenApiV1Base, geelarkApiTraceId, resolveGeelarkBearerToken } from './geelarkClient.js';
+import { resolvePath } from '../infra/storage/resolver.js';
 
-const DATA_FILE = join(process.cwd(), '.data', 'risk-sentiment.json');
-const EXECUTION_LOG_FILE = join(process.cwd(), '.data', 'risk-execution-log.json');
+const DATA_FILE = join(resolvePath('.data'), 'risk-sentiment.json');
+const EXECUTION_LOG_FILE = join(resolvePath('.data'), 'risk-execution-log.json');
 /** 可选：粘贴你从 skills.sh / 自建 skill 里选中的「分析侧重点」全文，会拼进 Compass 系统提示，影响「风控大师建议」等输出 */
 const RISK_EXTRA_PROMPT_FILE = join(process.cwd(), 'config', 'risk-sentiment-extra-prompt.md');
 
@@ -194,7 +195,7 @@ const defaultSnapshot = (partial?: Partial<RiskSnapshot>): RiskSnapshot => ({
 });
 
 async function ensureDataDir() {
-  await mkdir(join(process.cwd(), '.data'), { recursive: true });
+  await mkdir(resolvePath('.data'), { recursive: true });
 }
 
 function parseJsonRelaxed(raw: string): unknown {
