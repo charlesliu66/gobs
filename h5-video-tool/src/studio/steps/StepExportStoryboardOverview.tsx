@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 import { ScreeningRoomPlayer } from './ScreeningRoomPlayer';
 import { saveEditorProject } from '../../api/editor';
-import type { AspectRatioPreset, MediaAsset, VideoClip, Track } from '../../editor/types/timeline';
+import type { AspectRatioPreset, MediaAsset, VideoClip, Track, TimelineProject } from '../../editor/types/timeline';
 import { syncSourceAudioClipsFromVideo } from '../../editor/types/timeline';
 import { toast } from '../../components/Toast';
 
@@ -64,7 +64,7 @@ export function StepExportStoryboardOverview({
         { id: 'a2', type: 'audio', label: 'BGM', clips: [] },
         { id: 't1', type: 'text', label: '文字', clips: [] },
       ];
-      let project = {
+      let project: TimelineProject = {
         id: `proj_prod_${Date.now()}`,
         fps: 30,
         durationSec: cursor,
