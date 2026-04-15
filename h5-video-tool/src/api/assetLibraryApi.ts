@@ -121,7 +121,15 @@ export async function getJobStatus(jobId: string): Promise<ImportJob> {
 
 export async function listAssets(params: Record<string, string> = {}): Promise<ListAssetsResult> {
   const qs = new URLSearchParams(params).toString();
-  return apiGet<ListAssetsResult>(`${BASE}/assets${qs ? `?${qs}` : ''}`);
+  // 后端返回 { assets, total, page, pageSize }，兼容旧版 { items } 字段
+  const raw = await apiGet<{
+    assets?: LibraryAsset[];
+    items?: LibraryAsset[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>(`${BASE}/assets${qs ? `?${qs}` : ''}`);
+  return { assets: raw.assets ?? raw.items ?? [], total: raw.total, page: raw.page, pageSize: raw.pageSize };
 }
 
 // ── 批量标签更新 ──────────────────────────────────────────────────────────────
@@ -158,7 +166,14 @@ export async function searchAssets(params: SearchParams): Promise<ListAssetsResu
   if (params.page) raw.page = String(params.page);
   if (params.pageSize) raw.pageSize = String(params.pageSize);
   const qs = new URLSearchParams(raw).toString();
-  return apiGet<ListAssetsResult>(`${BASE}/search${qs ? `?${qs}` : ''}`);
+  const result = await apiGet<{
+    assets?: LibraryAsset[];
+    items?: LibraryAsset[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>(`${BASE}/search${qs ? `?${qs}` : ''}`);
+  return { assets: result.assets ?? result.items ?? [], total: result.total, page: result.page, pageSize: result.pageSize };
 }
 
 // ── 维度聚合 ──────────────────────────────────────────────────────────────────

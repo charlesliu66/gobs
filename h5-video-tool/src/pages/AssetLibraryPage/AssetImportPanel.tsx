@@ -7,7 +7,11 @@ import { importAssets, getJobStatus } from '../../api/assetLibraryApi';
 import type { ImportJob } from '../../api/assetLibraryApi';
 import { toast } from '../../components/Toast';
 
-export function AssetImportPanel() {
+interface AssetImportPanelProps {
+  onImportComplete?: () => void;
+}
+
+export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [job, setJob] = useState<ImportJob | null>(null);
@@ -40,6 +44,7 @@ export function AssetImportPanel() {
             stopPoll();
             if (status.status === 'done') {
               toast.success(`导入完成：${status.processed} 个素材`);
+              onImportComplete?.();
             } else {
               toast.error('导入出现错误，请检查详情');
             }

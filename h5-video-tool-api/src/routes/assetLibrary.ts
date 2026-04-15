@@ -99,6 +99,36 @@ router.get('/import/:jobId', (req: Request, res: Response) => {
   res.json(job);
 });
 
+// ── 辅助：批量加载 tags 并附加到素材列表 ──────────────────────────────────────
+
+function attachTags(items: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  if (items.length === 0) return items;
+  const ids = items.map((i) => i.id as string);
+  // better-sqlite3 不支持数组绑定，用命名参数展开
+  const placeholders = ids.map((_id, idx) => `@id${idx}`).join(',');
+  const params: Record<string, string> = {};
+  ids.forEach((id, idx) => { params[`id${idx}`] = id; });
+  const tagRows = db.prepare(`
+    SELECT asset_id, key, value, source, confidence, status
+    FROM asset_tags
+    WHERE asset_id IN (${placeholders}) AND status != 'rejected'
+    ORDER BY asset_id, created_at
+  `).all(params) as Array<{
+    asset_id: string; key: string; value: string;
+    source: string; confidence: number; status: string;
+  }>;
+
+  const tagMap = new Map<string, typeof tagRows>();
+  for (const row of tagRows) {
+    if (!tagMap.has(row.asset_id)) tagMap.set(row.asset_id, []);
+    tagMap.get(row.asset_id)!.push(row);
+  }
+  return items.map((item) => ({
+    ...item,
+    tags: tagMap.get(item.id as string) ?? [],
+  }));
+}
+
 // ── GET /assets ────────────────────────────────────────────────────────────────
 // 支持维度筛选：ratio, type, orientation, duration_range, quality, character, scene, purpose
 
@@ -119,13 +149,13 @@ router.get('/assets', (req: Request, res: Response) => {
   }
 
   const result = listAssets({ username, page, pageSize, filters });
-  // TASK-D: 追加 file_url 字段，便于前端直接构造访问 URL
   const token = req.headers.authorization?.slice(7) ?? '';
   const itemsWithUrl = result.items.map((item) => ({
     ...item,
     file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
   }));
-  res.json({ ...result, items: itemsWithUrl });
+  const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
+  res.json({ total: result.total, page: result.page, pageSize: result.pageSize, assets: assetsWithTags });
 });
 
 // ── GET /assets/:id/file ───────────────────────────────────────────────────────
@@ -360,13 +390,13 @@ router.get('/search', (req: Request, res: Response) => {
   }
 
   const result = searchAssets({ username, q, page, pageSize, filters });
-  // TASK-D: 追加 file_url 字段
   const token = req.headers.authorization?.slice(7) ?? '';
   const itemsWithUrl = result.items.map((item) => ({
     ...item,
     file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
   }));
-  res.json({ ...result, items: itemsWithUrl });
+  const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
+  res.json({ total: result.total, page: result.page, pageSize: result.pageSize, assets: assetsWithTags });
 });
 
 // ── GET /facets ────────────────────────────────────────────────────────────────
