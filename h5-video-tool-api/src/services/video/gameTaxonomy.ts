@@ -6,12 +6,24 @@
 import fs from 'fs';
 import path from 'path';
 
+/** 二级行为分组：primary 为一级（搜/打/撤/交互），secondary 为细分行为 */
+export interface ActivityGroup {
+  primary: string;
+  secondary: string[];
+}
+
 export interface GameTaxonomy {
   gameName?: string;
   description?: string;
   roles: string[];
   scenes: string[];
+  /** 一级行为列表（向后兼容） */
   activities: string[];
+  /**
+   * 二级行为词典。若配置了此字段，Gemini 将输出结构化行为标注。
+   * 优先级：activityGroups > activities（二者可并存，activities 作为平铺兜底）
+   */
+  activityGroups?: ActivityGroup[];
   /**
    * 参考图根目录（相对 cwd 或绝对路径）。其下约定：
    * `roles/<职业名>/*.jpg` 、`scenes/<场景名>/*.jpg`（png/webp 亦可）
@@ -53,6 +65,18 @@ export function loadGameTaxonomy(): GameTaxonomy {
       return cached.data;
     }
     const raw = JSON.parse(fs.readFileSync(abs, 'utf8')) as Record<string, unknown>;
+    let activityGroups: ActivityGroup[] | undefined;
+    if (Array.isArray(raw.activityGroups)) {
+      activityGroups = (raw.activityGroups as unknown[])
+        .filter((g): g is Record<string, unknown> => !!g && typeof g === 'object')
+        .map((g) => ({
+          primary: typeof g.primary === 'string' ? g.primary : '',
+          secondary: Array.isArray(g.secondary)
+            ? (g.secondary as unknown[]).filter((x): x is string => typeof x === 'string')
+            : [],
+        }))
+        .filter((g) => g.primary.length > 0);
+    }
     const data: GameTaxonomy = {
       gameName: typeof raw.gameName === 'string' ? raw.gameName : undefined,
       description: typeof raw.description === 'string' ? raw.description : undefined,
@@ -61,6 +85,7 @@ export function loadGameTaxonomy(): GameTaxonomy {
       activities: Array.isArray(raw.activities)
         ? raw.activities.filter((x): x is string => typeof x === 'string')
         : [],
+      activityGroups,
       referenceImagesRoot:
         typeof raw.referenceImagesRoot === 'string' ? raw.referenceImagesRoot.trim() : undefined,
     };
@@ -143,7 +168,9 @@ export function buildReferenceAnchorParts(taxonomy: GameTaxonomy): TaxonomyConte
 }
 
 export function formatTaxonomyForPrompt(t: GameTaxonomy): string {
-  if (t.roles.length + t.scenes.length + t.activities.length === 0) {
+  const hasContent =
+    t.roles.length + t.scenes.length + t.activities.length > 0 || (t.activityGroups?.length ?? 0) > 0;
+  if (!hasContent) {
     return '（未配置词表：角色/场景/行为请根据画面合理推断，用简短中文。可在 config/game-taxonomy.json 提供词表。）';
   }
   const lines: string[] = [];
@@ -151,14 +178,31 @@ export function formatTaxonomyForPrompt(t: GameTaxonomy): string {
   if (t.description) lines.push(t.description);
   if (t.roles.length) lines.push(`可选职业/角色标签（从中选 0~2 个最符合的，无法判断填 []）：${t.roles.join('、')}`);
   if (t.scenes.length) lines.push(`可选场景标签（选 0~1 个）：${t.scenes.join('、')}`);
-  if (t.activities.length)
-    lines.push(
-      `可选行为标签（搜打撤类：选 1 个最符合当前画面的）：${t.activities.join('、')}`,
-    );
+
+  if (t.activityGroups && t.activityGroups.length > 0) {
+    // 二级行为词典格式
+    lines.push('可选行为标签（二级结构）：');
+    for (const g of t.activityGroups) {
+      const subs = g.secondary.length > 0 ? `→ ${g.secondary.join(' / ')}` : '';
+      lines.push(`  [${g.primary}] ${subs}`);
+    }
+    lines.push('activity 填一级标签（如「打架」），activitySecondary 填二级标签（如「击杀瞬间」）；无法判断填「未知」。');
+  } else if (t.activities.length) {
+    lines.push(`可选行为标签（搜打撤类：选 1 个最符合当前画面的）：${t.activities.join('、')}`);
+  }
+
   if (t.referenceImagesRoot) {
     lines.push(
       `已启用参考图目录（仅首屏批次附带）：${t.referenceImagesRoot} 下 roles/<职业>/、scenes/<场景>/`,
     );
   }
   return lines.join('\n');
+}
+
+/** 导出所有一级行为标签（供其他模块使用） */
+export function getAllPrimaryActivities(t: GameTaxonomy): string[] {
+  if (t.activityGroups && t.activityGroups.length > 0) {
+    return t.activityGroups.map((g) => g.primary);
+  }
+  return t.activities;
 }

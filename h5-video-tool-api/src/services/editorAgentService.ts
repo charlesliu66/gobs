@@ -1,6 +1,12 @@
-import type { AspectRatioPreset, TimelineProject, Track, VideoClip } from '../editor/timelineSchema.js';
+import type { AspectRatioPreset, TimelineProject, Track, VideoClip, AudioClip } from '../editor/timelineSchema.js';
 import { compassChatCompletionWithUsage, type CompassChatUsage } from './promptPolish.js';
 import { sumCompassUsage, type LlmUsageCallRecord } from './editorLlmUsage.js';
+import {
+  analyzeMusicBeat,
+  isBeatAnalysisEnabled,
+  formatBeatGuideBlock,
+  type BeatInfo,
+} from './musicBeatAnalysis.js';
 import {
   buildUniformCandidateWindows,
   isCombatLikeIntent,
@@ -124,7 +130,14 @@ function buildIntentPriorityWindows(
   scores: VisionFrameScore[],
 ): CandidateWindow[] {
   if (!scores.length) return [];
-  const candidates = scores
+  // 转折点加权：isTurningPoint=true 等效 score+1.5，intensity=high 等效 score+0.5
+  const boosted = scores.map((s) => ({
+    ...s,
+    score: s.score
+      + (s.isTurningPoint ? 1.5 : 0)
+      + (s.intensity === 'high' ? 0.5 : 0),
+  }));
+  const candidates = boosted
     .filter((s) => s.score >= 4.5)
     .filter((s) => isCombatActivityLabel(s.activity))
     .filter((s) => intersectsRoleHints(s.roles, requestedRole, s.note))
@@ -152,11 +165,24 @@ function extractJson(s: string): string {
   return s.trim();
 }
 
+/** 从时间轴项目中找到 audio 轨第一个 AudioClip 的 assetId（用于 BGM beat 分析） */
+function findBgmAssetId(project: TimelineProject): string | null {
+  for (const track of project.tracks) {
+    if (track.type !== 'audio') continue;
+    for (const clip of track.clips) {
+      const ac = clip as Partial<AudioClip>;
+      if (ac.assetId) return ac.assetId;
+    }
+  }
+  return null;
+}
+
 function buildSystemPrompt(ctx: {
   targetTimelineSec: number;
   combatLike: boolean;
   hasCandidates: boolean;
   requestedRole?: string;
+  beatInfo?: BeatInfo | null;
 }): string {
   const cand = ctx.hasCandidates
     ? `
@@ -195,6 +221,13 @@ ${cand}
 ## 目标成片长度（时间轴）
 - 用户目标总长约 **${ctx.targetTimelineSec} 秒**（若用户话里写了「20 秒」等，以解析为准）。
 
+## 内容多样性约束（必须遵守，不得跳过）
+- **行为重复**：同一 activity（一级行为）连续出现不得超过 3 次；连续 3 个战斗片段后必须穿插 ≥ 1 个非战斗片段（奔跑/探索/场景过渡等）
+- **钩子优先**：时间轴第一个片段，优先选 isTurningPoint=true 或 score≥8 的片段作为开场钩子
+- **收尾优先**：时间轴最后一个片段，优先选 score 最高的片段
+- **片段时长建议**：combat 类（打架/击杀）建议 0.8-4s（高能快切）；非 combat 类（奔跑/探索/撤退）建议 2-6s
+- **总节奏**：不要全程快切（<1s），建议混合快切与慢镜（3-5s），比例约 3:1
+${ctx.beatInfo ? formatBeatGuideBlock(ctx.beatInfo) : ''}
 ## 若选中素材为空
 - 在 summary 说明无法执行，project 可与 currentProject 相同或清空 v1 clips。`;
 }
@@ -472,11 +505,28 @@ export async function runEditorAgentApply(
     });
   }
 
+  // 音乐先行：若项目已有 BGM 且节拍分析功能开启，注入节拍结构约束
+  let beatInfo: BeatInfo | null = null;
+  if (isBeatAnalysisEnabled()) {
+    const bgmAssetId = findBgmAssetId(input.currentProject);
+    if (bgmAssetId) {
+      const bgmPath = getEditorAssetAbsolutePath(bgmAssetId);
+      if (bgmPath) {
+        report({ stage: 'beat', percent: 47, message: '分析 BGM 节拍结构…', etaSec: eta(47) });
+        beatInfo = await analyzeMusicBeat(bgmPath);
+        if (beatInfo) {
+          console.log(`[editor agent] beat analysis done: BPM=${beatInfo.bpm}, sections=${beatInfo.sections.length}`);
+        }
+      }
+    }
+  }
+
   const systemPrompt = buildSystemPrompt({
     targetTimelineSec,
     combatLike,
     hasCandidates: candidateWindows.length > 0,
     requestedRole,
+    beatInfo,
   });
 
   const userText = buildUserPayload(

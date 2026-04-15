@@ -32,8 +32,14 @@ export interface VisionFrameScore {
   roles?: string[];
   /** 单一场景标签或「未知」 */
   scene?: string;
-  /** 搜打撤等行为：搜索 / 打架 / 交互 / 撤退 等 */
+  /** 一级行为：搜索 / 打架 / 交互 / 撤退 等 */
   activity?: string;
+  /** 二级行为细分：击杀瞬间 / 连招 / 开箱 / 逃命奔跑 等（配合 activityGroups 词典使用） */
+  activitySecondary?: string;
+  /** 行为强度 */
+  intensity?: 'low' | 'mid' | 'high';
+  /** 是否为叙事转折点（反杀/被包围/胜利/死亡等高价值瞬间），应优先用作片段入点 */
+  isTurningPoint?: boolean;
 }
 
 function extractJsonArray(s: string): unknown {
@@ -117,6 +123,16 @@ async function scoreBatch(
 - 若画面明确是战斗/交火/击杀瞬间，应提高 score（通常 >=7）。
 - 若画面主体明显不是目标（如非盗贼、非战斗、静态 UI/菜单），应降低 score（通常 <=4）。`
     : '';
+  const hasActivityGroups = (tax.activityGroups?.length ?? 0) > 0;
+  const activityOutputGuide = hasActivityGroups
+    ? `- activity: string，一级行为标签（搜索/打架/交互/撤退等），优先从词典中选；无法判断填「未知」
+- activitySecondary: string，二级行为细分（击杀瞬间/连招/开箱/逃命奔跑等），从词典对应分组中选；无法判断填「未知」
+- intensity: string，行为强度，必填其中之一：low / mid / high（low=平静/UI/对话，mid=移动/准备，high=战斗/爆炸/击杀）
+- isTurningPoint: boolean，是否为叙事转折点（反杀/被包围/胜利/死亡/逃脱等高价值瞬间），true/false`
+    : `- activity: string，单个标签，优先从「可选行为标签」中选（搜打撤：搜索/打架/交互/撤退 等）；无法判断填「未知」
+- intensity: string，行为强度：low / mid / high
+- isTurningPoint: boolean，是否为叙事转折点`;
+
   const intro = `用户剪辑意图：${userIntent || '高光/精彩镜头'}
 
 ${taxBlock}
@@ -128,7 +144,7 @@ ${intentRule}
 - score: number，0–10，综合「剪辑价值」：动作/战斗/冲突/视觉冲击；静态 UI、加载、纯对话可给低分
 - roles: string[]，0~2 个，须优先从上面「可选职业/角色标签」中选；无法判断用 []
 - scene: string，单个词或短语，优先从「可选场景标签」中选，否则填「未知」
-- activity: string，单个标签，优先从「可选行为标签」中选（搜打撤：搜索/打架/交互/撤退 等）；无法判断填「未知」
+${activityOutputGuide}
 - note: string，可选，极短中文（画面里看到了什么）
 
 若前面附有「参考图」，请用它与录屏帧比对后再选标签；不要 markdown，不要多余文字。`;
@@ -171,6 +187,12 @@ ${intentRule}
     }
     const scene = typeof o.scene === 'string' ? o.scene : undefined;
     const activity = typeof o.activity === 'string' ? o.activity : undefined;
+    const activitySecondary = typeof o.activitySecondary === 'string' ? o.activitySecondary : undefined;
+    const rawIntensity = typeof o.intensity === 'string' ? o.intensity.toLowerCase() : '';
+    const intensity = rawIntensity === 'low' || rawIntensity === 'mid' || rawIntensity === 'high'
+      ? (rawIntensity as 'low' | 'mid' | 'high')
+      : undefined;
+    const isTurningPoint = o.isTurningPoint === true || o.isTurningPoint === 'true' ? true : undefined;
     out.push({
       tSec,
       score: Math.min(10, Math.max(0, score)),
@@ -178,6 +200,9 @@ ${intentRule}
       roles,
       scene,
       activity,
+      activitySecondary,
+      intensity,
+      isTurningPoint,
     });
   }
   return out;
