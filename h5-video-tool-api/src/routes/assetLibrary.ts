@@ -14,7 +14,12 @@ import {
   createImportJob,
   processImportJob,
   getJobStatus,
+  decodeFilename,
+  fixGarbledFilenames,
 } from '../services/assetIngestService.js';
+
+// 服务启动时一次性修复历史乱码文件名
+fixGarbledFilenames();
 import {
   listAssets,
   searchAssets,
@@ -34,7 +39,9 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, MULTER_TMP_DIR),
   filename: (_req, file, cb) => {
     const timestamp = Date.now();
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // 修复 multer latin1→utf8 乱码，临时文件名只保留 ASCII 安全字符
+    const decoded = decodeFilename(file.originalname);
+    const safe = decoded.replace(/[^a-zA-Z0-9._-]/g, '_');
     cb(null, `${timestamp}-${safe}`);
   },
 });

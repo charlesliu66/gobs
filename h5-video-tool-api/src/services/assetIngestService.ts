@@ -147,6 +147,46 @@ export function resetInterruptedJobs(): void {
   }
 }
 
+// ── 文件名编码修复 ─────────────────────────────────────────────────────────────
+// multer 在 Node.js 中将 multipart originalname 以 Latin-1 读取，
+// 实际上文件名是 UTF-8（中文等非 ASCII 字符）。
+// 通过 latin1→utf8 重新解码还原真实文件名。
+
+export function decodeFilename(raw: string): string {
+  try {
+    const decoded = Buffer.from(raw, 'latin1').toString('utf8');
+    // 仅在解码结果包含有效 Unicode 多字节字符时才替换（防止纯 ASCII 文件名被误处理）
+    if (decoded !== raw && /[^\x00-\x7F]/.test(decoded)) {
+      return decoded;
+    }
+  } catch { /* ignore */ }
+  return raw;
+}
+
+/**
+ * 一次性修复 DB 中已存储的乱码文件名（服务启动时调用一次）
+ * 检测到 latin1→utf8 解码后包含中日韩字符则更新
+ */
+export function fixGarbledFilenames(): void {
+  const rows = db.prepare(`SELECT id, filename FROM assets`).all() as Array<{ id: string; filename: string }>;
+  let fixed = 0;
+  for (const row of rows) {
+    try {
+      const decoded = Buffer.from(row.filename, 'latin1').toString('utf8');
+      // 包含中日韩 Unicode 范围说明是被错误解读的 UTF-8
+      const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(decoded);
+      if (hasCJK && decoded !== row.filename) {
+        db.prepare(`UPDATE assets SET filename = @filename WHERE id = @id`)
+          .run({ filename: decoded, id: row.id });
+        fixed++;
+      }
+    } catch { /* ignore */ }
+  }
+  if (fixed > 0) {
+    console.log(`[assetIngest] Fixed ${fixed} garbled filename(s) in DB`);
+  }
+}
+
 // ── 文件处理核心 ───────────────────────────────────────────────────────────────
 
 interface FileInfo {
@@ -161,9 +201,12 @@ async function processFile(
   username: string,
   jobId: string,
 ): Promise<'processed' | 'failed' | 'skipped'> {
+  // 修复 multer latin1→utf8 乱码文件名
+  const originalname = decodeFilename(file.originalname);
+
   // 拒绝 0 字节文件
   if (file.size === 0) {
-    console.warn(`[assetIngest] Skipping zero-byte file: ${file.originalname}`);
+    console.warn(`[assetIngest] Skipping zero-byte file: ${originalname}`);
     return 'failed';
   }
 
@@ -177,7 +220,7 @@ async function processFile(
     `).get({ username, sha256: hash, filesize: file.size });
 
     if (existing) {
-      console.log(`[assetIngest] Duplicate skipped: ${file.originalname} (sha256=${hash.slice(0, 8)})`);
+      console.log(`[assetIngest] Duplicate skipped: ${originalname} (sha256=${hash.slice(0, 8)})`);
       // 删除 multer 临时文件
       fs.rmSync(file.path, { force: true });
       return 'skipped';
@@ -187,7 +230,8 @@ async function processFile(
     const destDir = resolvePath('assets-ingest', username);
     fs.mkdirSync(destDir, { recursive: true });
     const assetId = nanoid(21);
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // 磁盘文件名只保留 ASCII 安全字符，展示名使用 originalname（含中文）
+    const safeName = originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const destFilename = `${assetId}-${safeName}`;
     const destPath = path.join(destDir, destFilename);
     fs.renameSync(file.path, destPath);
@@ -201,7 +245,7 @@ async function processFile(
       id: assetId,
       username,
       project_id: 'default',
-      filename: file.originalname,
+      filename: originalname,
       filepath: destPath,
       mimetype: file.mimetype,
       filesize: file.size,
