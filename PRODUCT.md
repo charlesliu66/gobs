@@ -166,6 +166,17 @@
 
 ## 二、Changelog
 
+### v0.12 — 2026-04-15
+
+**路径抽象层（storageResolver）**
+
+**Refactor:**
+- **[infra] storageResolver 统一路径入口**：新增 `src/infra/storage/resolver.ts`，定义 20+ 种业务路径类型（`db`、`video-output`、`uploads/editor`、`projects`、`character-library`、`.data` 等），所有业务代码通过 `resolvePath(type, ...segments)` 获取绝对路径
+- **[fix] 修复 6 处 `process.cwd()` 旁路**：`assetDb.ts`、`localUpload.ts`、`characterLibrary.ts`、`projects.ts`、`assetIngestService.ts`、`gobsAuthStore.ts`、`riskSentimentService.ts` 全部改用 resolver，消除"更换 API_DATA_DIR 后部分路径不跟随"的隐患
+- **[infra] 目录自检扩展**：启动时自检目录新增 `db/` 和 `.data/`
+
+---
+
 ### v0.11 — 2026-04-15
 
 **基础架构安全加固 & 运维标准化（批次 0-3）**
