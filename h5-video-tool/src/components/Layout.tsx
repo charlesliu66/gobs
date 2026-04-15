@@ -283,8 +283,17 @@ export function Layout() {
         <button
           type="button"
           onClick={() => {
+            // 清除认证凭证
             localStorage.removeItem('gobs_token');
             localStorage.removeItem('gobs_user');
+            // P0：清除跨账号会导致报错的会话状态
+            localStorage.removeItem('gobs_last_project_id');
+            localStorage.removeItem('h5-production-project-v1');
+            // P0：清除敏感信息
+            localStorage.removeItem('production_compass_api_key');
+            // P2：清除残留任务 ID（换账号无意义）
+            localStorage.removeItem('quickfilm_active_job');
+            localStorage.removeItem('gobs_multishot_job_id');
             navigate('/login', { replace: true });
           }}
           className="w-full text-left flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"

@@ -239,6 +239,17 @@
 
 ---
 
+### v0.23 — 2026-04-15
+
+**多账号 localStorage 数据隔离修复**
+
+**Fix:**
+- **[auth/logout] 登出清理业务数据**：退出时额外清除 `gobs_last_project_id`、`h5-production-project-v1`（防止高级制片报「项目加载失败」）、`production_compass_api_key`（安全）、`quickfilm_active_job`、`gobs_multishot_job_id`。
+- **[history] 本机视频历史按账号分桶**：key 改为 `h5-video-history-{username}`，不同账号的本机历史互不可见。
+- **[history] 云端列表星标/隐藏偏好按账号分桶**：key 加 username 后缀，账号间偏好独立。
+
+---
+
 ### v0.22 — 2026-04-15
 
 **素材库 UI 全面重设计**

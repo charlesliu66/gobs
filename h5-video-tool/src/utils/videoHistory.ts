@@ -3,9 +3,24 @@ import { klingVideoProxyUrl } from '../api/video';
 /**
  * 生成视频历史 - localStorage 持久化
  * 仅存元数据（taskId、videoPath、prompt、createdAt），视频通过 API 获取
+ * key 按账号分桶，避免多账号数据混用
  */
-const STORAGE_KEY = 'h5-video-history';
 const MAX_ITEMS = 100;
+
+function getCurrentUsername(): string {
+  try {
+    const raw = localStorage.getItem('gobs_user');
+    if (!raw) return 'default';
+    const user = JSON.parse(raw) as { username?: string };
+    return user.username?.trim() || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
+function getStorageKey(): string {
+  return `h5-video-history-${getCurrentUsername()}`;
+}
 
 export interface VideoHistoryItem {
   taskId: string;
@@ -21,7 +36,7 @@ export interface VideoHistoryItem {
 
 export function loadVideoHistory(): VideoHistoryItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     if (!raw) return [];
     const data = JSON.parse(raw);
     return Array.isArray(data) ? data : [];
@@ -64,7 +79,7 @@ export function saveVideoToHistory(item: Omit<VideoHistoryItem, 'createdAt'>) {
     };
     const filtered = list.filter((x) => x.taskId !== entry.taskId);
     const next = [entry, ...filtered].slice(0, MAX_ITEMS);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(getStorageKey(), JSON.stringify(next));
   } catch {}
 }
 
@@ -85,7 +100,7 @@ export function setVideoHistoryStarred(taskId: string, starred: boolean): void {
     if (idx < 0) return;
     const next = [...list];
     next[idx] = { ...next[idx], starred };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(getStorageKey(), JSON.stringify(next));
   } catch {}
 }
 
@@ -100,7 +115,7 @@ export function toggleVideoHistoryStarred(taskId: string): boolean {
 export function removeVideoFromHistory(taskId: string) {
   try {
     const list = loadVideoHistory().filter((x) => x.taskId !== taskId);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    localStorage.setItem(getStorageKey(), JSON.stringify(list));
   } catch {}
 }
 
