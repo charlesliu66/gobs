@@ -73,6 +73,27 @@ async function ensureDirs(username: string) {
   await fs.mkdir(getProductionProjDir(username), { recursive: true });
 }
 
+/**
+ * 递归将所有 data: URL 字符串替换为 null，防止 base64 图片撑大项目 JSON。
+ * 被替换的字段在重新生成后会通过正常上传流程恢复为持久 URL。
+ */
+function stripBase64(obj: unknown): unknown {
+  if (typeof obj === 'string') {
+    return obj.startsWith('data:') ? null : obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(stripBase64);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      result[k] = stripBase64(v);
+    }
+    return result;
+  }
+  return obj;
+}
+
 // ── 上传图片 ──────────────────────────────────────────────────────────────────
 
 /**
@@ -195,15 +216,22 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
 
     const updatedAt = new Date().toISOString();
     const title = (projectData.meta as Record<string, unknown> | undefined)?.title as string || '未命名项目';
+    const step = typeof body.step === 'number' ? body.step : 0;
 
-    const payload = {
+    // 保存前去掉所有 data: URL，避免 base64 图片撑大 JSON（base64→null）
+    const payload = stripBase64({
       ...body,
       id,
       updatedAt,
-    };
+    }) as Record<string, unknown>;
 
-    const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+    const projDir = getProductionProjDir(username);
+    const filePath = path.join(projDir, `${id}.json`);
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+
+    // 写 sidecar 元数据（供 /list 快速读取，无需解析全量 JSON）
+    const metaPath = path.join(projDir, `${id}.meta.json`);
+    await fs.writeFile(metaPath, JSON.stringify({ id, title, updatedAt, step }), 'utf-8');
 
     res.json({ id, updatedAt, title });
   } catch (err) {
@@ -242,26 +270,58 @@ productionPersistRouter.get('/project/list', async (req: Request, res: Response)
     await ensureDirs(username);
     const userProjDir = getProductionProjDir(username);
     const files = await fs.readdir(userProjDir);
-    const jsonFiles = files.filter((f) => f.endsWith('.json')).sort().reverse();
+
+    // 优先读取轻量 sidecar 文件（几十字节），不存在时回退解析全量 JSON
+    const metaFiles = files.filter((f) => f.endsWith('.meta.json'));
+    const fullJsonIds = new Set(
+      files.filter((f) => f.endsWith('.json') && !f.endsWith('.meta.json'))
+        .map((f) => f.replace('.json', ''))
+    );
 
     const metas: ProjectMeta[] = [];
-    for (const f of jsonFiles.slice(0, 50)) {
+    const seen = new Set<string>();
+
+    // 1. 读 sidecar（快速路径）
+    for (const f of metaFiles) {
       try {
         const raw = await fs.readFile(path.join(userProjDir, f), 'utf-8');
+        const data = JSON.parse(raw) as ProjectMeta;
+        if (data.id && !seen.has(data.id)) {
+          seen.add(data.id);
+          metas.push({
+            id: String(data.id),
+            title: String(data.title ?? '未命名项目'),
+            updatedAt: String(data.updatedAt ?? ''),
+            step: Number(data.step ?? 0),
+          });
+        }
+      } catch { /* skip */ }
+    }
+
+    // 2. 回退：没有 sidecar 的旧项目，解析全量 JSON（向后兼容）
+    for (const id of fullJsonIds) {
+      if (seen.has(id)) continue; // 已有 sidecar
+      try {
+        const raw = await fs.readFile(path.join(userProjDir, `${id}.json`), 'utf-8');
         const data = JSON.parse(raw) as Record<string, unknown>;
         const proj = data.project as Record<string, unknown> | undefined;
         const meta = proj?.meta as Record<string, unknown> | undefined;
-        metas.push({
-          id: String(data.id ?? f.replace('.json', '')),
-          title: String(meta?.title ?? '未命名项目'),
-          updatedAt: String(data.updatedAt ?? ''),
-          step: Number(data.step ?? 0),
-        });
-      } catch {
-        /* skip corrupt files */
-      }
+        const parsedId = String(data.id ?? id);
+        if (!seen.has(parsedId)) {
+          seen.add(parsedId);
+          metas.push({
+            id: parsedId,
+            title: String(meta?.title ?? '未命名项目'),
+            updatedAt: String(data.updatedAt ?? ''),
+            step: Number(data.step ?? 0),
+          });
+        }
+      } catch { /* skip corrupt */ }
     }
-    res.json({ projects: metas });
+
+    // 按更新时间倒序，最多返回 50 个
+    metas.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+    res.json({ projects: metas.slice(0, 50) });
   } catch (err) {
     console.error('[production/project/list]', err);
     res.status(500).json({ error: '读取项目列表失败' });
@@ -279,9 +339,12 @@ productionPersistRouter.delete('/project', async (req: Request, res: Response) =
     return;
   }
 
-  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+  const projDir = getProductionProjDir(username);
+  const filePath = path.join(projDir, `${id}.json`);
   try {
     await fs.unlink(filePath);
+    // 同步删除 sidecar（忽略不存在的情况）
+    await fs.unlink(path.join(projDir, `${id}.meta.json`)).catch(() => {});
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: '项目不存在' });
