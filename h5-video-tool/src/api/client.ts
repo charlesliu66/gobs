@@ -80,6 +80,35 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * 携带 JWT 鉴权头下载文件，通过 Blob URL 触发浏览器保存对话框。
+ * 解决 <a href> 直接导航不带 Authorization 头导致 401 的问题。
+ */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: getAuthHeaders(),
+    });
+  } catch (e) {
+    wrapFetchError(e);
+  }
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'DELETE',

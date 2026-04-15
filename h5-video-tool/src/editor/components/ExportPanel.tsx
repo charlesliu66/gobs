@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AspectRatioPreset, TimelineProject } from '../types/timeline';
 import { startEditorExport, getEditorExportStatus } from '../../api/editor';
+import { apiDownload } from '../../api/client';
 import { toast } from '../../components/Toast';
 
 type ExportResolution = '720p' | '1080p' | '4K';
@@ -101,13 +102,18 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
         </div>
       )}
       {downloadUrl && (
-        <a
-          href={downloadUrl}
-          download
+        <button
+          type="button"
+          onClick={() => {
+            const filename = downloadUrl.split('/').pop() || 'export.mp4';
+            void apiDownload(downloadUrl, filename).catch((e: unknown) => {
+              toast.error(`下载失败：${e instanceof Error ? e.message : String(e)}`);
+            });
+          }}
           className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 px-3 py-2 text-xs font-medium text-[var(--color-success)] hover:bg-[var(--color-success)]/20 transition-colors"
         >
           ⬇ 下载成品
-        </a>
+        </button>
       )}
       <div className="flex">
         <button
