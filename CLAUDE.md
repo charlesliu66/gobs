@@ -91,23 +91,28 @@ bash scripts/eval.sh <run-id>
 - PM2 进程名：`qas-api`，运行 `/home/ubuntu/qas-h5/api/index.js`
 - 服务器**无 git**，通过 SFTP 上传编译产物部署
 
-### 标准四步部署流程
+### 标准五步部署流程
 
 ```bash
 # 1. 本地 TypeScript 编译检查
 cd h5-video-tool-api && npx tsc --noEmit
 cd h5-video-tool && npx tsc --noEmit   # 或 npm run build
 
-# 2. 提交并推送 GitHub
-git add <修改的文件>
+# 2. 更新 PRODUCT.md（功能文档 & Changelog）
+#    - 在"功能模块总览"章节更新对应功能描述
+#    - 在"Changelog"顶部新增版本条目（格式：v0.x — YYYY-MM-DD）
+#    - 更新文件末尾的"最后更新"时间
+
+# 3. 提交并推送 GitHub
+git add <修改的文件> PRODUCT.md
 git commit -m "feat/fix: ..."
 git push origin main
 
-# 3. 本地构建产物
+# 4. 本地构建产物
 cd h5-video-tool-api && npm run build   # → dist/
 cd h5-video-tool && npm run build       # → dist/
 
-# 4. SFTP 上传 + pm2 重启（用 paramiko Python 脚本）
+# 5. SFTP 上传 + pm2 重启（用 paramiko Python 脚本）
 #    API：上传 dist/ 中有变动的 .js 文件到 /home/ubuntu/qas-h5/api/
 #    前端：上传整个 h5-video-tool/dist/ 到 /home/ubuntu/qas-h5/frontend/
 #    重启：pm2 restart qas-api
@@ -118,7 +123,8 @@ cd h5-video-tool && npm run build       # → dist/
 - 不得只改本地、不提交
 - 不得只 push GitHub、不部署服务器
 - 不得跳过 TypeScript 编译检查直接部署
-- AI 完成每个任务后必须主动执行上述四步，不等用户催
+- **不得跳过 PRODUCT.md 更新**（功能文档必须与代码同步）
+- AI 完成每个任务后必须主动执行上述五步，不等用户催
 
 ---
 
