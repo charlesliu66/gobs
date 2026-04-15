@@ -16,24 +16,86 @@ import { classifyError, classifyDreaminaFailReason } from '../domain/job-status.
 const dreaminaRouter = Router();
 
 // ---------------------------------------------------------------------------
-// Global Dreamina concurrency slot
-// Dreamina allows only 1 concurrent generation task per account (ret=1310).
-// All incoming submissions (any user/session) wait here before calling the CLI.
-// The slot is released when the task poll returns a terminal state (done/failed),
-// or after DREAMINA_SLOT_TIMEOUT_MS as a safety net (frontend disconnect, etc.).
+// Global Dreamina concurrency semaphore
+// DREAMINA_MAX_CONCURRENT (env, default 5) controls parallel submissions.
+// Premium accounts typically support multiple concurrent tasks; if ret=1310
+// (ExceedConcurrencyLimit) is returned, lower the value in .env.
+// Each slot has a DREAMINA_SLOT_TIMEOUT_MS safety-net timer so a crashed
+// frontend can't permanently block the semaphore.
 // ---------------------------------------------------------------------------
-const DREAMINA_SLOT_TIMEOUT_MS = 3 * 60_000; // 3 min — max Dreamina generation time
-let dreaminaSlotEnd: Promise<void> = Promise.resolve();
+const DREAMINA_SLOT_TIMEOUT_MS = 5 * 60_000; // 5 min per-slot safety net
+
+const DREAMINA_MAX_CONCURRENT = (() => {
+  const n = parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '5', 10);
+  return Number.isFinite(n) && n >= 1 ? n : 5;
+})();
+
+console.log(`[dreamina] concurrency slots: ${DREAMINA_MAX_CONCURRENT}`);
+
+/** Counting semaphore — limits how many Dreamina CLI submissions run in parallel. */
+class DreaminaSemaphore {
+  private available: number;
+  private readonly timeoutMs: number;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(max: number, timeoutMs: number) {
+    this.available = max;
+    this.timeoutMs = timeoutMs;
+  }
+
+  private releaseSlot(): void {
+    const next = this.queue.shift();
+    if (next) {
+      next(); // hand the slot to the next waiter
+    } else {
+      this.available++;
+    }
+  }
+
+  acquire(): { waitForSlot: Promise<void>; release: () => void } {
+    // Build a release function once the caller actually holds a slot.
+    const makeHolderRelease = (): (() => void) => {
+      let done = false;
+      let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+        console.warn('[dreamina] slot safety-net timeout fired — releasing automatically');
+        rel();
+      }, this.timeoutMs);
+      const rel = () => {
+        if (done) return;
+        done = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        this.releaseSlot();
+      };
+      return rel;
+    };
+
+    if (this.available > 0) {
+      this.available--;
+      return { waitForSlot: Promise.resolve(), release: makeHolderRelease() };
+    }
+
+    // All slots busy — queue up and wait.
+    let resolveWait!: () => void;
+    const waitForSlot = new Promise<void>((resolve) => { resolveWait = resolve; });
+
+    let holderRelease: (() => void) | null = null;
+    const release = () => { holderRelease?.(); };
+
+    this.queue.push(() => {
+      // This waiter is next — give it a slot and start its safety timer.
+      holderRelease = makeHolderRelease();
+      resolveWait();
+    });
+
+    return { waitForSlot, release };
+  }
+}
+
+const dreaminaSemaphore = new DreaminaSemaphore(DREAMINA_MAX_CONCURRENT, DREAMINA_SLOT_TIMEOUT_MS);
 const activeSlotReleases = new Map<string, () => void>(); // submitId → releaseSlot fn
 
 function acquireDreaminaSlot(): { waitForSlot: Promise<void>; release: () => void } {
-  let release!: () => void;
-  const prev = dreaminaSlotEnd;
-  dreaminaSlotEnd = new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, DREAMINA_SLOT_TIMEOUT_MS);
-    release = () => { clearTimeout(timer); resolve(); };
-  });
-  return { waitForSlot: prev, release };
+  return dreaminaSemaphore.acquire();
 }
 
 
@@ -154,6 +216,15 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
         } catch (mmErr) {
           mmLastErr = mmErr instanceof Error ? mmErr : new Error(String(mmErr));
           const isTransientUpload = /upload phase.*no file upload|upload resource.*upload image/i.test(mmLastErr.message);
+          const is1310 = /ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(mmLastErr.message);
+          if (is1310) {
+            console.warn(
+              `[dreamina] ExceedConcurrencyLimit (ret=1310): account concurrent limit reached. ` +
+              `Consider lowering DREAMINA_MAX_CONCURRENT (currently ${DREAMINA_MAX_CONCURRENT}).`,
+            );
+            releaseSlot();
+            throw mmLastErr;
+          }
           if (!isTransientUpload || attempt >= MAX_MM_RETRIES) {
             releaseSlot(); // failed to submit — free the slot immediately
             throw mmLastErr;
@@ -203,6 +274,13 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       activeSlotReleases.set(submitId, releaseNonMm);
       res.json({ submitId, taskId, status: 'pending' as const });
     } catch (submitErr) {
+      const errMsg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+      if (/ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(errMsg)) {
+        console.warn(
+          `[dreamina] ExceedConcurrencyLimit (ret=1310): account concurrent limit reached. ` +
+          `Consider lowering DREAMINA_MAX_CONCURRENT (currently ${DREAMINA_MAX_CONCURRENT}).`,
+        );
+      }
       releaseNonMm();
       throw submitErr;
     }
