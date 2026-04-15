@@ -84,6 +84,7 @@ async function submitTask(options: SunoGenerateOptions): Promise<string> {
     customMode: useCustom,
     instrumental: options.instrumental ?? true,
     model,
+    callBackUrl: 'https://localhost/suno-noop',
   };
 
   if (useCustom) {
