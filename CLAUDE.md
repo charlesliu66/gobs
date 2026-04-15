@@ -203,12 +203,15 @@ cd h5-video-tool && npm run build       # → dist/
 每轮任务开始时，AI 按此顺序加载，**不主动展开其他文件**：
 
 ```
-1. CLAUDE.md（本文件）
-2. docs/TASK-INDEX.md
-3. docs/workflow/runs/<run-id>/SESSION-ANCHOR.md  ← 本轮锚点
-4. docs/workflow/runs/<run-id>/planner-spec.md
-5. SESSION-ANCHOR 中列出的源码文件（仅列出的）
+1. CLAUDE.md（本文件）                              ← Cursor 自动注入
+2. .claude/memory/feedback.md                      ← 行为规则与教训，必读，用于自检
+3. docs/TASK-INDEX.md
+4. docs/workflow/runs/<run-id>/SESSION-ANCHOR.md   ← 本轮锚点
+5. docs/workflow/runs/<run-id>/planner-spec.md
+6. SESSION-ANCHOR 中列出的源码文件（仅列出的）
 ```
+
+> **第 2 步是强制的**：`feedback.md` 记录了历次真实 Bug 的根因与规则，每次任务开始必须读完再动手，用于自检「这次改动是否触犯了已知规则」。
 
 如果不知道当前 `<run-id>`，先读 `docs/TASK-INDEX.md` 确认当前任务。
 
