@@ -1247,6 +1247,17 @@ export function ProductionWizard() {
         }
       }
 
+      // ── 追加全局风格约束（确保色调/光影一致性）────────────────────────────
+      const styleRef = project.meta.styleRefSummary?.trim();
+      const lighting = s.structuredStill?.sp_lighting?.trim();
+      const color = s.structuredStill?.sp_style?.trim();
+      const styleSuffix = [
+        lighting && !storyboardText.includes(lighting) ? `光影：${lighting}` : '',
+        color && !storyboardText.includes(color) ? `色调：${color}` : '',
+        styleRef && !storyboardText.includes(styleRef) ? `整体视觉风格：${styleRef}` : '',
+      ].filter(Boolean).join('\n');
+      if (styleSuffix) storyboardText = `${storyboardText}\n${styleSuffix}`;
+
       // ── 提交到即梦 ────────────────────────────────────────────────────────
       const submit = await submitDreaminaAsync({
         storyboardText,

@@ -407,15 +407,21 @@ function firstPropVariantImageUrl(sheet: PropSheet): string | undefined {
 }
 
 /** 分镜视频默认叙事层（与 ProductionWizard 原逻辑一致） */
-export function buildProductionShotVideoStoryboardText(shot: ProductionShot): string {
+export function buildProductionShotVideoStoryboardText(
+  shot: ProductionShot,
+  globalStyleRef?: string,
+): string {
   return [
     shot.structuredStill.sp_subject,
     shot.structuredStill.sp_environment,
+    shot.structuredStill.sp_lighting,
+    shot.structuredStill.sp_style,
     shot.structuredMotion.mp_motion,
     shot.structuredMotion.mp_camera,
     shot.structuredMotion.mp_tempo,
     shot.dialogue ? `对白：${shot.dialogue}` : '',
     shot.audioCue ? `声音：${shot.audioCue}` : '',
+    globalStyleRef?.trim() ? `整体视觉风格：${globalStyleRef.trim()}` : '',
   ]
     .filter(Boolean)
     .join('\n');
