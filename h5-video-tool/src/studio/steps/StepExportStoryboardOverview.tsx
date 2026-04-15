@@ -15,6 +15,7 @@ export function StepExportStoryboardOverview({
   resolveVideoSrc,
   projectTitle,
   aspectRatio,
+  bgmPromptHint,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -23,6 +24,7 @@ export function StepExportStoryboardOverview({
   resolveVideoSrc: (shot: ProductionShot) => string | null;
   projectTitle?: string;
   aspectRatio?: string;
+  bgmPromptHint?: string;
 }) {
   const [showScreeningRoom, setShowScreeningRoom] = useState(true);
   const [openingEditor, setOpeningEditor] = useState(false);
@@ -69,7 +71,7 @@ export function StepExportStoryboardOverview({
         fps: 30,
         durationSec: cursor,
         aspectRatio: ar,
-        mix: { sourceAudio: 1, bgm: 0, bgmFadeOut: 2, bgmFadeIn: 1 },
+        mix: { sourceAudio: 1, bgm: 0, bgmFadeOut: 2, bgmFadeIn: 1, bgmPromptHint: bgmPromptHint || undefined },
         tracks,
       };
       project = syncSourceAudioClipsFromVideo(project);

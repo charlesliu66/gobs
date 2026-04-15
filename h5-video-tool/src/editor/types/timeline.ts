@@ -107,6 +107,8 @@ export interface TimelineMix {
   bgmFadeOut?: number;
   /** BGM 淡入时长（秒），默认 1；0 = 无淡入 */
   bgmFadeIn?: number;
+  /** 来自高级制片 SoundMusicPlan 的配乐风格提示，供 BgmMixPanel 预填 */
+  bgmPromptHint?: string;
 }
 
 /** 成片字幕（时间轴秒，与导出时间线一致） */

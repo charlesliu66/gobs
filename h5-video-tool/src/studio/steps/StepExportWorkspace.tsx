@@ -22,6 +22,7 @@ export function StepExportWorkspace({
   onCopyAllSeedance,
   projectTitle,
   aspectRatio,
+  bgmPromptHint,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -36,6 +37,7 @@ export function StepExportWorkspace({
   onCopyAllSeedance: () => void;
   projectTitle?: string;
   aspectRatio?: string;
+  bgmPromptHint?: string;
 }) {
   const { setStep } = useProductionContext();
   return (
@@ -48,6 +50,7 @@ export function StepExportWorkspace({
         resolveVideoSrc={resolveVideoSrc}
         projectTitle={projectTitle}
         aspectRatio={aspectRatio}
+        bgmPromptHint={bgmPromptHint}
       />
 
       <StepExportPromptConsistency

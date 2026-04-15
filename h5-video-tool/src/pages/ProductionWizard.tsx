@@ -1761,6 +1761,12 @@ export function ProductionWizard() {
             onCopyAllSeedance={copyAllSeedance}
             projectTitle={project.meta.title}
             aspectRatio={project.meta.aspectRatio}
+            bgmPromptHint={
+              project.productionDesign?.soundMusic?.music
+                ?.map((m) => m.mood)
+                .filter(Boolean)
+                .join(', ') || undefined
+            }
           />
         )}
 

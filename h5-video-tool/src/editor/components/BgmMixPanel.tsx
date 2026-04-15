@@ -108,6 +108,11 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
   const totalSec = computeDurationSec(project);
 
   useEffect(() => {
+    const hint = project.mix?.bgmPromptHint;
+    if (hint && !prompt) setPrompt(hint);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- 仅首次挂载预填
+
+  useEffect(() => {
     if (!promptSync) return;
     setPrompt(promptSync.prompt);
     setNegativePrompt(promptSync.negativePrompt);
@@ -243,7 +248,12 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
 
         {/* 自定义描述 */}
         <div>
-          <label className="text-[10px] text-[var(--color-text-muted)]">自定义描述（中文即可）</label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] text-[var(--color-text-muted)]">自定义描述（中文即可）</label>
+            {project.mix?.bgmPromptHint && prompt === project.mix.bgmPromptHint && (
+              <span className="text-[9px] italic text-purple-400">来自制片规划</span>
+            )}
+          </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}

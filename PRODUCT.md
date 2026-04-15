@@ -103,6 +103,7 @@
 
 - 支持 AI 生成 BGM：Suno API（主引擎）+ Compass/Lyria（备用引擎），自动 fallback
 - 生成完成后显示引擎来源 badge（紫色 Suno / 蓝色 Lyria）
+- 高级制片导出到剪辑器时，自动预填制片阶段的音乐风格描述（来自 SoundMusicPlan），一键即可生成匹配配乐
 - 可调整音量、BPM、风格
 - 导出时支持淡入（1s）/ 淡出（可调 0-3s）
 
@@ -187,6 +188,20 @@
 ---
 
 ## 二、Changelog
+
+### v0.42 — 2026-04-15
+
+**配乐逻辑修复：Suno 优先调用 + 高级制片 BGM prompt 预填**
+
+**Fix:**
+- **[backend] 服务器 SUNO_API_KEY 配置**：部署环境 `.env` 补充 `SUNO_API_KEY`，一键配乐现在真正优先走 Suno API（此前因服务器缺 Key 始终 fallback 到 Lyria）
+- **[editor] Agent 自动配乐日志硬编码修复**：`EditorWorkbench.runAutoBgmFromAgentMessage` 中"Lyria"硬编码改为动态读取 `res.provider`，日志正确显示实际引擎（Suno/Lyria）
+
+**Feature:**
+- **[studio → editor] 高级制片配乐预填**：从高级制片导出到剪辑器时，自动从 `SoundMusicPlan.music[].mood` 提取配乐风格描述，写入 `TimelineProject.mix.bgmPromptHint`；BgmMixPanel 首次加载时预填该提示词，显示紫色"来自制片规划"标签，用户直接点「一键智能配乐」即可
+- **[editor] `TimelineMix` 类型扩展**：新增 `bgmPromptHint?: string` 字段，承载来自上游（高级制片）的配乐风格提示
+
+---
 
 ### v0.41 — 2026-04-15
 
@@ -739,4 +754,4 @@
 
 ---
 
-*最后更新：2026-04-15（v0.41）*
+*最后更新：2026-04-15（v0.42）*

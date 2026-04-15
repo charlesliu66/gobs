@@ -294,7 +294,7 @@ export function EditorWorkbench() {
 
   const runAutoBgmFromAgentMessage = useCallback(
     async (userMessage: string) => {
-      pushLog('进度：检测到配乐需求，正在润色并生成 BGM（Lyria）…');
+      pushLog('进度：检测到配乐需求，正在润色并生成 BGM…');
       try {
         const out = await withTimeout(
           polishEditorMusicPrompt(userMessage),
@@ -313,7 +313,7 @@ export function EditorWorkbench() {
             sampleCount: 1,
           }),
           160_000,
-          'Lyria 生成超时（160s）',
+          '配乐生成超时（160s）',
         );
         const item = res.items[0];
         if (!item) throw new Error('未返回音频');
@@ -329,7 +329,8 @@ export function EditorWorkbench() {
           },
         }));
         setProject((p) => setBgmClipOnProject(p, item.id, item.durationSec));
-        pushLog('已根据对话自动完成配乐；不满意可在左下「配乐生成」微调后再点「生成」。');
+        const providerName = res.provider === 'suno' ? 'Suno' : 'Lyria';
+        pushLog(`已根据对话自动完成配乐（引擎：${providerName}）；不满意可在左下「配乐生成」微调后再点「生成」。`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const hint = isLikelyQuotaOrRateLimitError(msg)
