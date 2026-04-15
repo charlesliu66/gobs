@@ -373,7 +373,7 @@ export function ProductionWizard() {
             } as ProductionShot;
             return { ...p, shots, assembled: null };
           });
-          toast.success(`分镜 ${job.shotIndex + 1} 视频已就绪`);
+          toast.success(`分镜 ${job.shotIndex} 视频已就绪`);
           needsFlushRef.current = true;
         }
         if (job.status === 'failed') {
@@ -386,7 +386,7 @@ export function ProductionWizard() {
             shots[idx] = { ...cur, pendingVideoSubmitId: undefined };
             return { ...p, shots };
           });
-          toast.error(`分镜 ${job.shotIndex + 1} 生成失败：${job.failReason || '未知错误'}`);
+          toast.error(`分镜 ${job.shotIndex} 生成失败：${job.failReason || '未知错误'}`);
         }
       } catch { /* ignore parse errors */ }
     };
@@ -1322,20 +1322,10 @@ export function ProductionWizard() {
       if (bj) {
         const { job } = await pollBatchJobNow(bj.id);
         if (job.status === 'done' && job.videoUrl) {
-          toast.success(`分镜 ${s.shotIndex + 1} 视频已就绪`);
+          saveShotVideo(selectedShotIdx, job.videoUrl, job.taskId || `dreamina-${s.pendingVideoSubmitId}`, undefined);
+          toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
         } else if (job.status === 'failed') {
-          toast.error(`分镜 ${s.shotIndex + 1} 生成失败：${job.failReason || '未知'}`);
-        } else {
-          toast.info(`分镜 ${s.shotIndex + 1} 仍在生成中（${job.status}）`);
-        }
-      } else {
-        // 没有 batch-job 记录——直接查即梦
-        const st = await getDreaminaTaskStatus(s.pendingVideoSubmitId);
-        if (st.status === 'completed' && st.videoUrl) {
-          saveShotVideo(selectedShotIdx, st.videoUrl, st.taskId || `dreamina-${s.pendingVideoSubmitId}`, st.videoPath);
-          toast.success(`分镜 ${s.shotIndex + 1} 视频已就绪`);
-        } else if (st.status === 'failed') {
-          toast.error(`分镜 ${s.shotIndex + 1} 生成失败：${st.failReason || '未知'}`);
+          toast.error(`分镜 ${s.shotIndex} 生成失败：${job.failReason || '未知'}`);
           setProject((p) => {
             const shots = [...p.shots];
             const cur = shots[selectedShotIdx];
@@ -1344,7 +1334,25 @@ export function ProductionWizard() {
             return { ...p, shots };
           });
         } else {
-          toast.info(`分镜 ${s.shotIndex + 1} 仍在生成中`);
+          toast.info(`分镜 ${s.shotIndex} 仍在生成中（${job.status}）`);
+        }
+      } else {
+        // 没有 batch-job 记录——直接查即梦
+        const st = await getDreaminaTaskStatus(s.pendingVideoSubmitId);
+        if (st.status === 'completed' && st.videoUrl) {
+          saveShotVideo(selectedShotIdx, st.videoUrl, st.taskId || `dreamina-${s.pendingVideoSubmitId}`, st.videoPath);
+          toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
+        } else if (st.status === 'failed') {
+          toast.error(`分镜 ${s.shotIndex} 生成失败：${st.failReason || '未知'}`);
+          setProject((p) => {
+            const shots = [...p.shots];
+            const cur = shots[selectedShotIdx];
+            if (!cur) return p;
+            shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: undefined };
+            return { ...p, shots };
+          });
+        } else {
+          toast.info(`分镜 ${s.shotIndex} 仍在生成中`);
         }
       }
     } catch (e) {
