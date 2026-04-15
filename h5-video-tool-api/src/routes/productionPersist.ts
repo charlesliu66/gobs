@@ -74,20 +74,28 @@ async function ensureDirs(username: string) {
 }
 
 /**
- * 递归将所有 data: URL 字符串替换为 null，防止 base64 图片撑大项目 JSON。
- * 被替换的字段在重新生成后会通过正常上传流程恢复为持久 URL。
+ * 只删除已知的「大体积可再生成缓存」字段里的 data: URL，
+ * 保留 imageDataUrl（角色/场景头像）、previewVideoUrl/videoUrl（视频 URL）等用户数据。
+ *
+ * 目前只有 previewStillDataUrl（分镜静帧预览，每张 ~2 MB）属于可安全删除的缓存。
+ * 其余 data: URL 字段属于用户资产，不做删除。
  */
-function stripBase64(obj: unknown): unknown {
+const STRIP_BASE64_FIELDS = new Set(['previewStillDataUrl']);
+
+function stripBase64(obj: unknown, fieldName?: string): unknown {
   if (typeof obj === 'string') {
-    return obj.startsWith('data:') ? null : obj;
+    if (obj.startsWith('data:') && fieldName && STRIP_BASE64_FIELDS.has(fieldName)) {
+      return null;
+    }
+    return obj;
   }
   if (Array.isArray(obj)) {
-    return obj.map(stripBase64);
+    return obj.map((item) => stripBase64(item, fieldName));
   }
   if (obj !== null && typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-      result[k] = stripBase64(v);
+      result[k] = stripBase64(v, k);
     }
     return result;
   }

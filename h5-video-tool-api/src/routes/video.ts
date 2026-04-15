@@ -109,30 +109,46 @@ videoRouter.use('/dreamina', dreaminaRouter);
 videoRouter.use('/', klingRouter);
 videoRouter.use('/', multishotRouter);
 
-/** GET /api/video/file?path=output/xxx.mp4 - 提供已生成视频文件访问，供历史记录预览 */
+/** GET /api/video/file?path=output/xxx.mp4 - 提供已生成视频文件访问，供历史记录预览
+ *
+ * 此接口在 auth 中间件中已针对 <video> 标签的无 Bearer 请求放行。
+ * 当有 JWT 用户时额外校验用户目录；无 JWT 时只校验路径在 outputDir 下（路径本身含不可猜测的 submitId）。
+ */
 videoRouter.get('/file', async (req: Request, res: Response) => {
-  const username = sanitizeUsername(req.user?.username);
   const rawPath = req.query.path as string | undefined;
   if (!rawPath || typeof rawPath !== 'string') {
     res.status(400).json({ error: '请提供 path 参数' });
     return;
   }
   const outputDir = getDefaultVideoOutputDir();
-  const multishotUserDir = path.join(MULTISHOT_JOBS_ROOT, username);
   const fullPath = path.resolve(getApiDataDir(), path.normalize(rawPath));
-  const userOutputDir = path.join(outputDir, username);
   const inOutputRoot = fullPath === outputDir || fullPath.startsWith(outputDir + path.sep);
-  const inMultishotRoot = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
-  if (!inOutputRoot && !inMultishotRoot) {
-    res.status(400).json({ error: 'path 必须在允许的视频目录下' });
-    return;
+
+  // 校验路径必须在 output 根目录下（防止目录穿越）
+  if (!inOutputRoot) {
+    // 兼容 multishot 目录
+    const username = sanitizeUsername(req.user?.username);
+    const multishotUserDir = path.join(MULTISHOT_JOBS_ROOT, username);
+    const inMultishotRoot = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
+    if (!inMultishotRoot) {
+      res.status(400).json({ error: 'path 必须在允许的视频目录下' });
+      return;
+    }
   }
-  const inUserOutputDir = fullPath === userOutputDir || fullPath.startsWith(userOutputDir + path.sep);
-  const inUserMultishotDir = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
-  if (!inUserOutputDir && !inUserMultishotDir) {
-    res.status(403).json({ error: '无权访问该视频' });
-    return;
+
+  // 有 JWT 用户时额外限制只能访问自己目录
+  if (req.user?.username) {
+    const username = sanitizeUsername(req.user.username);
+    const userOutputDir = path.join(outputDir, username);
+    const multishotUserDir = path.join(MULTISHOT_JOBS_ROOT, username);
+    const inUserOutputDir = fullPath === userOutputDir || fullPath.startsWith(userOutputDir + path.sep);
+    const inUserMultishotDir = fullPath === multishotUserDir || fullPath.startsWith(multishotUserDir + path.sep);
+    if (!inUserOutputDir && !inUserMultishotDir) {
+      res.status(403).json({ error: '无权访问该视频' });
+      return;
+    }
   }
+
   try {
     await fs.access(fullPath);
     res.sendFile(fullPath, { headers: { 'Content-Type': 'video/mp4' } });
