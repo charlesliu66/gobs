@@ -202,11 +202,17 @@ async function postCompassChatCompletions(
       } else {
         await recordKeyUsage({ success: false });
       }
-      throw new Error(typeof msg === 'string' && msg ? msg : 'Compass Gemini 请求失败');
+      // 网络层错误（连接失败/超时）：给出可操作的提示而不是抛出 "Network Error"
+      const isNetworkLevelError = /network error|econnreset|enotfound|econnrefused|timeout|socket hang up/i.test(msg);
+      throw new Error(
+        isNetworkLevelError
+          ? `AI 服务暂时不可达（已重试 ${maxAttempts} 次），请稍后重试。如持续出现，请检查服务器出网配置或 COMPASS_API_URL`
+          : (typeof msg === 'string' && msg ? msg : 'Compass Gemini 请求失败'),
+      );
     }
   }
 
-  throw new Error('Compass Gemini 请求失败');
+  throw new Error('Compass Gemini 请求失败（已重试 3 次）');
 }
 
 /**

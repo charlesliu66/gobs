@@ -16,15 +16,28 @@ function handleUnauthorized(res: Response): void {
   }
 }
 
+function wrapFetchError(e: unknown): never {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/Failed to fetch|NetworkError|network error|Load failed/i.test(msg)) {
+    throw new Error('无法连接到服务器，请检查网络后重试');
+  }
+  throw e instanceof Error ? e : new Error(msg);
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    wrapFetchError(e);
+  }
   handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -34,9 +47,14 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: getAuthHeaders(),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: getAuthHeaders(),
+    });
+  } catch (e) {
+    wrapFetchError(e);
+  }
   handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
