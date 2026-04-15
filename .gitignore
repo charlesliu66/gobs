@@ -37,4 +37,21 @@ subweb/
 QAS-package/
 gobs-sj-deploy.tar.gz
 *.tar.gz
-*.tar.gz
+
+# 数据库文件（运行时生成）
+**/*.db
+**/*.db-shm
+**/*.db-wal
+h5-video-tool-api/db/
+
+# 敏感凭证（运行时生成）
+h5-video-tool-api/dreamina-login.json
+
+# 用户数据（运行时生成，不属于代码）
+h5-video-tool-api/editor-projects/
+h5-video-tool-api/uploads/
+h5-video-tool-api/quickfilm/
+h5-video-tool-api/exports/
+
+# 本地配置覆盖
+.claude/settings.local.json
