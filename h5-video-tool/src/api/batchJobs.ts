@@ -44,3 +44,8 @@ export async function getBatchJobs(projectId?: string): Promise<{ jobs: BatchJob
 export async function cancelBatchJob(id: string): Promise<{ ok: boolean }> {
   return apiDelete(`/api/batch-jobs/${id}`);
 }
+
+/** 手动立即轮询某个 batch-job（用户点「检查进度」） */
+export async function pollBatchJobNow(id: string): Promise<{ job: BatchJobDto }> {
+  return apiPost(`/api/batch-jobs/${id}/poll-now`, {});
+}

@@ -129,6 +129,7 @@ export function useVideoGeneration(opts?: {
           // must not eat into the polling budget.
           const pollStartedAt = Date.now();
           let polls = 0;
+          let completedNoUrlCount = 0;
           emit({
             status: 'polling',
             taskId: submit.taskId,
@@ -154,6 +155,20 @@ export function useVideoGeneration(opts?: {
               });
               opts?.onComplete?.(out);
               return out;
+            }
+            // Backend returns completed but no videoUrl — persist failed.
+            // Retry a few times (the backend already retries once internally),
+            // then treat as a terminal failure so we don't silently poll for 10 min.
+            if (st.status === 'completed' && !st.videoUrl) {
+              completedNoUrlCount++;
+              if (completedNoUrlCount >= 3) {
+                throw new Error(
+                  '视频已生成但服务端落盘失败（3 次重试均无 URL），请检查服务器磁盘后重新生成',
+                );
+              }
+              await sleep(2000);
+              polls += 1;
+              continue;
             }
             await sleep(polls === 0 ? FIRST_POLL_MS : STABLE_POLL_MS);
             polls += 1;

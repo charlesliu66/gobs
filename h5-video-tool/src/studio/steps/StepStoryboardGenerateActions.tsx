@@ -3,22 +3,29 @@ export function StepStoryboardGenerateActions({
   dreaminaAsync,
   hasProductionDesign,
   isQueued,
+  pendingVideoSubmitId,
+  checkingProgress,
   onGenerateShotFrame,
   onGenerateShotVideo,
+  onCheckVideoProgress,
 }: {
   shotMediaBusy: 'frame' | 'video' | null;
   dreaminaAsync: boolean;
   hasProductionDesign: boolean;
   isQueued?: boolean;
+  pendingVideoSubmitId?: string;
+  checkingProgress?: boolean;
   onGenerateShotFrame: () => void;
   onGenerateShotVideo: () => void;
+  onCheckVideoProgress?: () => void;
 }) {
-  const videoButtonDisabled = shotMediaBusy === 'video' || isQueued;
+  const isSubmitting = shotMediaBusy === 'video' || isQueued;
+  const hasPendingBackend = !!pendingVideoSubmitId && !isSubmitting;
+  const videoButtonDisabled = isSubmitting || hasPendingBackend;
 
   function videoButtonLabel() {
-    if (isQueued || shotMediaBusy === 'video') {
-      return dreaminaAsync ? '即梦提交/生成中（完成后自动填入预览）…' : '视频生成中…';
-    }
+    if (isSubmitting) return '即梦提交中…';
+    if (hasPendingBackend) return '后台生成中（等待即梦出片）';
     return '生成分镜视频';
   }
 
@@ -41,13 +48,27 @@ export function StepStoryboardGenerateActions({
         >
           {videoButtonLabel()}
         </button>
+        {hasPendingBackend && onCheckVideoProgress && (
+          <button
+            type="button"
+            disabled={checkingProgress}
+            onClick={onCheckVideoProgress}
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+          >
+            {checkingProgress ? '检查中…' : '手动检查进度'}
+          </button>
+        )}
       </div>
-      {dreaminaAsync ? (
-        <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
-          已启用即梦异步：各分镜依次提交后并发轮询，成片后自动填入预览。
+      {hasPendingBackend && (
+        <p className="mt-2 text-[10px] text-amber-400/80">
+          视频已提交到即梦，后台每 5 分钟自动检查一次（首次 10 分钟后开始）。完成后自动填入预览。
         </p>
-      ) : null}
+      )}
+      {isSubmitting && dreaminaAsync && (
+        <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
+          正在提交到即梦，稍后将转入后台轮询…
+        </p>
+      )}
     </>
   );
 }
-

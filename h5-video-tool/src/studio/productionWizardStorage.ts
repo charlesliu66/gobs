@@ -132,9 +132,9 @@ export function saveStored(s: StoredWizard) {
 }
 
 /**
- * 合并两组 shots 的视频数据：按 shotIndex 匹配，
- * 将 local 中已有但 server 中缺失的 videoVersions 补入。
- * 用于页面刷新时防止服务端旧数据覆盖 localStorage 中已保存的视频。
+ * 合并两组 shots 的视频版本数据：按 shotIndex 匹配，
+ * 对每个镜头做 union merge（按 version.id 去重），保留双方的视频。
+ * 用于页面刷新时防止服务端旧数据覆盖 localStorage 中已保存的新视频。
  */
 export function mergeShotVideoVersions(
   serverShots: ProductionShot[],
@@ -154,21 +154,43 @@ export function mergeShotVideoVersions(
       : [];
 
     if (localVersions.length === 0) return serverShot;
+    if (serverVersions.length === 0) {
+      // Server has no versions — adopt local
+      const selected = localVersions.find(
+        (v) => v.id === localShot.selectedPreviewVideoVersionId,
+      ) ?? localVersions[0];
+      return {
+        ...serverShot,
+        previewVideoVersions: localVersions,
+        selectedPreviewVideoVersionId: selected?.id,
+        previewVideoPath: selected?.videoPath,
+        previewVideoUrl: selected?.videoUrl,
+        pendingVideoSubmitId:
+          serverShot.pendingVideoSubmitId || localShot.pendingVideoSubmitId,
+      } as ProductionShot;
+    }
 
-    // Server already has video data — keep as-is
-    if (serverVersions.length > 0) return serverShot;
+    // Both have versions — union merge by version id, preferring local for dupes
+    const merged = new Map<string, ProductionShotVideoVersion>();
+    for (const v of serverVersions) merged.set(v.id, v);
+    for (const v of localVersions) merged.set(v.id, v); // local overwrites dupes
+    const union = [...merged.values()].sort((a, b) => b.createdAt - a.createdAt);
 
-    // Server has no versions but local does — adopt local video data
-    const selected = localVersions.find(
-      (v) => v.id === localShot.selectedPreviewVideoVersionId,
-    ) ?? localVersions[0];
+    // If local has strictly more versions, it likely contains a newer generation
+    // that the server missed (flushServerSync failed). Pick local's selection.
+    const localIsNewer = localVersions.length > serverVersions.length
+      || (localVersions[0]?.createdAt ?? 0) > (serverVersions[0]?.createdAt ?? 0);
+    const preferredSelectedId = localIsNewer
+      ? localShot.selectedPreviewVideoVersionId
+      : serverShot.selectedPreviewVideoVersionId;
+    const selected = union.find((v) => v.id === preferredSelectedId) ?? union[0];
+
     return {
       ...serverShot,
-      previewVideoVersions: localVersions,
+      previewVideoVersions: union,
       selectedPreviewVideoVersionId: selected?.id,
       previewVideoPath: selected?.videoPath,
       previewVideoUrl: selected?.videoUrl,
-      // Preserve pendingVideoSubmitId from whichever source still has one
       pendingVideoSubmitId:
         serverShot.pendingVideoSubmitId || localShot.pendingVideoSubmitId,
     } as ProductionShot;

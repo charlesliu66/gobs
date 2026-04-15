@@ -9,6 +9,7 @@ import {
   getJobsByProject,
   addJob,
   cancelJob,
+  pollJobNow,
   batchJobEvents,
   type BatchJob,
 } from '../services/batchJobsQueue.js';
@@ -41,7 +42,8 @@ router.post('/', async (req, res) => {
       submitId: s.submitId,
       taskId: s.taskId ?? `dreamina-${s.submitId}`,
       projectId,
-      source: 'production',
+      source: (s as Record<string, unknown>).source === 'quickfilm' ? 'quickfilm' : 'production',
+      username: req.user?.username,
       shotIndex: s.shotIndex,
       shotDescription: s.shotDescription ?? '',
       model: s.model ?? 'dreamina-multimodal',
@@ -66,6 +68,15 @@ router.get('/', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const ok = await cancelJob(req.params.id);
   res.json({ ok });
+});
+
+/** POST /api/batch-jobs/:id/poll-now — 用户手动触发立即轮询 */
+router.post('/:id/poll-now', async (req, res) => {
+  const id = req.params.id?.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!id) { res.status(400).json({ error: 'invalid id' }); return; }
+  const job = await pollJobNow(id);
+  if (!job) { res.status(404).json({ error: 'job not found' }); return; }
+  res.json({ job });
 });
 
 /** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送 */

@@ -379,7 +379,21 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
 
     const rawVideoUrl = polled.videoUrl;
     const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
-    const videoPath = rawVideoUrl ? await persistVideoUrlToOutput(rawVideoUrl, slug, req.user?.username) : undefined;
+
+    // Try to persist the video; retry once after a short delay on failure.
+    let videoPath: string | undefined;
+    if (rawVideoUrl) {
+      videoPath = await persistVideoUrlToOutput(rawVideoUrl, slug, req.user?.username);
+      if (!videoPath) {
+        console.warn(`[video/dreamina/task] persist failed on 1st attempt for ${polled.submitId}, retrying in 1.5s…`);
+        await new Promise<void>((r) => setTimeout(r, 1500));
+        videoPath = await persistVideoUrlToOutput(rawVideoUrl, slug, req.user?.username);
+        if (!videoPath) {
+          console.error(`[video/dreamina/task] persist failed after retry for ${polled.submitId}`);
+        }
+      }
+    }
+
     const serveUrl = videoPath ? `/api/video/file?path=${encodeURIComponent(videoPath)}` : undefined;
 
     // Fallback: if local persistence failed but the raw URL is a playable https
@@ -388,13 +402,30 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
       ? rawVideoUrl
       : undefined;
 
+    const finalUrl = serveUrl || fallbackUrl;
+
+    // If the video was generated but we couldn't persist or serve it, tell the
+    // frontend explicitly so it can stop polling and show a meaningful error.
+    if (!finalUrl && rawVideoUrl) {
+      res.json({
+        taskId,
+        submitId: polled.submitId,
+        status: 'failed' as const,
+        phase: polled.phase,
+        genStatus: polled.genStatus,
+        failReason: '视频已生成但服务端落盘失败，请重试或检查服务器磁盘空间',
+        errorCode: 'PERSIST_FAILED',
+      });
+      return;
+    }
+
     res.json({
       taskId,
       submitId: polled.submitId,
       status: 'completed' as const,
       phase: polled.phase,
       genStatus: polled.genStatus,
-      videoUrl: serveUrl || fallbackUrl,
+      videoUrl: finalUrl,
       videoPath,
     });
   } catch (err) {

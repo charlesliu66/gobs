@@ -75,6 +75,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 批量任务视频回放：<video src="/api/batch-jobs/video/xxx"> 无法附带 Bearer
+  if (req.method === 'GET' && req.path.startsWith('/api/batch-jobs/video/')) {
+    next();
+    return;
+  }
   // SSE 实时推送端点：使用 ?token= 查询参数鉴权，路由内部自行验证
   if (req.method === 'GET' && req.path === '/api/batch-jobs/stream') {
     next();

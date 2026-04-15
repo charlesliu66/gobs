@@ -48,6 +48,8 @@ export function StepStoryboardWorkspace({
   onGenerateShotVideo,
   onKeepOnlyCurrentVersion,
   onSelectVideoVersion,
+  onCheckVideoProgress,
+  checkingProgress,
 }: {
   shot?: ProductionShot;
   shots: ProductionShot[];
@@ -75,6 +77,8 @@ export function StepStoryboardWorkspace({
   onGenerateShotVideo: () => void;
   onKeepOnlyCurrentVersion: (id: string) => void;
   onSelectVideoVersion: (id: string) => void;
+  onCheckVideoProgress?: () => void;
+  checkingProgress?: boolean;
 }) {
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
 
@@ -142,8 +146,11 @@ export function StepStoryboardWorkspace({
               dreaminaAsync={dreaminaAsync}
               hasProductionDesign={hasProductionDesign}
               isQueued={shotQueuedMap?.[String(shot?.shotIndex ?? '')] ?? false}
+              pendingVideoSubmitId={shot?.pendingVideoSubmitId}
+              checkingProgress={checkingProgress}
               onGenerateShotFrame={onGenerateShotFrame}
               onGenerateShotVideo={onGenerateShotVideo}
+              onCheckVideoProgress={onCheckVideoProgress}
             />
             <StepStoryboardFieldsEditor
               shot={shot}

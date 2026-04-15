@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import {
   getVeoModels,
 } from '../api/video';
-import { useVideoGeneration } from '../hooks/useVideoGeneration';
 import {
   emptyProductionProject,
   PRODUCTION_STORAGE_KEY,
@@ -60,7 +59,8 @@ import { saveProductionProject, loadProductionProject, listProductionProjects, u
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
-import { getDreaminaTaskStatus } from '../api/video';
+import { getDreaminaTaskStatus, submitDreaminaAsync } from '../api/video';
+import { submitBatchJobs, pollBatchJobNow, type BatchJobDto } from '../api/batchJobs';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
 import { ProductionWizardShell } from '../studio/ProductionWizardShell';
@@ -174,8 +174,7 @@ export function ProductionWizard() {
   // 防止“服务端项目尚未加载完成时”把空白初始态覆盖回服务端
   const [isServerBootstrapping, setIsServerBootstrapping] = useState(shouldLoadFromServer);
   const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
-  // 确保恢复轮询只在项目真正加载完成后执行一次
-  const hasResumedPollingRef = useRef(false);
+  // SSE 监听 batch-jobs 完成事件（替代旧的前端轮询恢复）
 
   /** 执行一次服务端保存（共享逻辑） */
   const doServerSync = useCallback(async (data: StoredWizard) => {
@@ -277,9 +276,7 @@ export function ProductionWizard() {
   );
   /** 与 GET /api/video/models 一致：启用时「生成分镜视频」走 submit + 轮询，成片后写入本镜预览 */
   const [dreaminaAsync, setDreaminaAsync] = useState(false);
-  const shotVideoGen = useVideoGeneration({
-    onError: (msg) => setErr(msg),
-  });
+  // shotVideoGen (useVideoGeneration) 已被 batch-jobs 后端轮询取代
 
   const ar = project.meta.aspectRatio ?? '16:9';
 
@@ -332,56 +329,70 @@ export function ProductionWizard() {
   );
 
   /**
-   * 页面加载时恢复所有带 pendingVideoSubmitId 的分镜视频轮询（刷新前已提交但未完成的任务）。
-   * 必须等服务端项目加载完成（isServerBootstrapping=false）后才能读到正确的 project.shots，
-   * 因此依赖 isServerBootstrapping；hasResumedPollingRef 防止多次触发。
+   * SSE 监听 batch-jobs 完成事件。当后端轮询到即梦视频已生成并落盘后，
+   * 通过 SSE 推送到前端，自动将视频填入对应分镜。
+   * 同时用于刷新后恢复——后端持续轮询不受前端刷新影响。
    */
   useEffect(() => {
-    if (isServerBootstrapping) return; // 等待服务端项目加载完成
-    if (hasResumedPollingRef.current) return; // 只执行一次
-    hasResumedPollingRef.current = true;
-
-    const shotsWithPending = project.shots
-      .map((s, idx) => ({ s, idx }))
-      .filter(({ s }) => !!s.pendingVideoSubmitId);
-    if (!shotsWithPending.length) return;
-
-    for (const { s, idx } of shotsWithPending) {
-      const submitId = s.pendingVideoSubmitId!;
-      const shotId = String(s.shotIndex);
-      setShotBusy(shotId, 'video');
-      void (async () => {
-        const MAX_POLL_MS = 10 * 60 * 1000;
-        const startedAt = Date.now();
-        try {
-          while (Date.now() - startedAt < MAX_POLL_MS) {
-            const st = await getDreaminaTaskStatus(submitId);
-            if (st.status === 'failed') {
-              throw new Error(st.failReason || '即梦任务失败');
-            }
-            if (st.status === 'completed' && st.videoUrl) {
-              saveShotVideo(idx, st.videoUrl, st.taskId || `dreamina-${submitId}`, st.videoPath);
-              return;
-            }
-            await new Promise<void>((r) => setTimeout(r, 5000));
-          }
-          throw new Error('即梦生成等待超时');
-        } catch {
-          // Clear the pending marker on failure so the user can retry
+    if (isServerBootstrapping) return;
+    const pid = serverProjectId;
+    if (!pid) return;
+    const token = localStorage.getItem('gobs_token') ?? '';
+    if (!token) return;
+    const BASE = import.meta.env.VITE_API_BASE_URL || '';
+    const es = new EventSource(`${BASE}/api/batch-jobs/stream?token=${encodeURIComponent(token)}`);
+    es.onmessage = (e: MessageEvent) => {
+      try {
+        const job = JSON.parse(e.data as string) as BatchJobDto;
+        if (job.source !== 'production' || job.projectId !== pid) return;
+        if (job.status === 'done' && job.videoUrl) {
+          // 找到对应 shot 并填入视频
           setProject((p) => {
+            const idx = p.shots.findIndex((s) => s.shotIndex === job.shotIndex);
+            if (idx < 0) return p;
+            const cur = p.shots[idx];
+            if (!cur) return p;
+            const versionId = `batch-${job.id}-${Date.now()}`;
+            const version: ProductionShotVideoVersion = {
+              id: versionId,
+              taskId: job.taskId,
+              createdAt: Date.now(),
+              videoUrl: job.videoUrl,
+            };
+            const prev = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
+            // 跳过已经有这个 taskId 的版本（避免重复）
+            if (prev.some((v) => v.taskId === job.taskId)) return p;
+            const shots = [...p.shots];
+            shots[idx] = {
+              ...cur,
+              pendingVideoSubmitId: undefined,
+              previewVideoVersions: [version, ...prev],
+              selectedPreviewVideoVersionId: versionId,
+              previewVideoUrl: job.videoUrl,
+              previewVideoPath: undefined,
+            } as ProductionShot;
+            return { ...p, shots, assembled: null };
+          });
+          toast.success(`分镜 ${job.shotIndex + 1} 视频已就绪`);
+          needsFlushRef.current = true;
+        }
+        if (job.status === 'failed') {
+          setProject((p) => {
+            const idx = p.shots.findIndex((s) => s.shotIndex === job.shotIndex);
+            if (idx < 0) return p;
             const shots = [...p.shots];
             const cur = shots[idx];
             if (!cur) return p;
             shots[idx] = { ...cur, pendingVideoSubmitId: undefined };
             return { ...p, shots };
           });
-        } finally {
-          clearShotBusy(shotId);
+          toast.error(`分镜 ${job.shotIndex + 1} 生成失败：${job.failReason || '未知错误'}`);
         }
-      })();
-    }
+      } catch { /* ignore parse errors */ }
+    };
+    return () => { es.close(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isServerBootstrapping]); // 等服务端项目加载完再执行；hasResumedPollingRef 防重复
+  }, [isServerBootstrapping, serverProjectId]);
 
   useEffect(() => {
     requestNotificationPermission();
@@ -1167,6 +1178,7 @@ export function ProductionWizard() {
     clearShotBusy,
   ]);
 
+  /** 提交即梦 + 注册 batch-job；后端轮询拿结果，前端不再长轮询。 */
   const handleGenerateShotVideo = useCallback(async () => {
     const s = project.shots[selectedShotIdx];
     if (!s) return;
@@ -1176,15 +1188,11 @@ export function ProductionWizard() {
     shotCancelMap.current[shotId] = cancelToken;
     setErr(null);
 
-    // Queue: wait for any in-flight Dreamina task to finish submitting before we submit.
-    // Use an object so TypeScript's control-flow analysis can't narrow the ref to never.
     const queueSlot = { resolve: (() => { /* replaced below */ }) as () => void };
     const prevQueue = dreaminaQueueRef.current;
     dreaminaQueueRef.current = new Promise<void>((resolve) => { queueSlot.resolve = resolve; });
-    // Mark as queued while waiting for the previous slot
     setShotQueuedMap((prev) => ({ ...prev, [shotId]: true }));
     await prevQueue;
-    // Once it's our turn, we're actively submitting — no longer in the queue
     setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
     if (cancelToken.cancelled) {
       queueSlot.resolve();
@@ -1193,33 +1201,15 @@ export function ProductionWizard() {
       return;
     }
 
-    const persistShotVideo = (url: string, taskId: string, videoPath: string | undefined) => {
-      saveShotVideo(selectedShotIdx, url, taskId, videoPath);
-    };
-
-    // Track whether we already released the queue slot (via onShotSubmitted).
-    // This prevents a double-release in the finally block.
-    let hasSubmitted = false;
-
-    // Callback fired right after Dreamina task is submitted — saves submitId AND immediately
-    // releases the queue so the next shot can submit concurrently while this one polls.
-    const onShotSubmitted = (submitId: string) => {
-      hasSubmitted = true;
-      setProject((p) => {
-        const shots = [...p.shots];
-        const cur = shots[selectedShotIdx];
-        if (!cur) return p;
-        shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: submitId };
-        return { ...p, shots };
-      });
-      // Release the queue slot immediately — next shot no longer needs to wait
-      queueSlot.resolve();
-    };
-
     try {
       const pref = project.meta.shotVideoDreaminaModel?.trim();
       const mv = project.meta.dreaminaModelVersion?.trim();
       const dur = Math.min(60, Math.max(4, Math.round(s.durationSec || 6)));
+
+      // ── 构建提交参数 ──────────────────────────────────────────────────────
+      let storyboardText = '';
+      let model = '';
+      let extraBody: Record<string, unknown> = {};
 
       if (pref === 'dreamina-multimodal') {
         const pack = await buildShotMultimodalRefPackAsync(
@@ -1230,113 +1220,81 @@ export function ProductionWizard() {
           s.manualRefOverrides,
         );
         if (!pack.multimodalImages.length) {
-          setErr(
-            '全能参考需要至少一张角色、场景或道具参考图：请在对应资产卡生成图，并确保本镜文案中出现角色姓名或道具名称。',
-          );
+          setErr('全能参考需要至少一张角色、场景或道具参考图：请在对应资产卡生成图，并确保本镜文案中出现角色姓名或道具名称。');
           return;
         }
         const base = buildProductionShotVideoStoryboardText(s);
-        if (!base.trim()) {
-          setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频');
-          return;
-        }
-        const autoPrompt = pack.defaultVideoPrompt;
-        const storyboardText = (s.videoStoryboardOverride?.trim() || autoPrompt).trim();
-
-        if (dreaminaAsync) {
-          const polled = await shotVideoGen.submitAsync('dreamina', {
-            storyboardText,
-            materials: [],
-            duration: dur,
-            aspectRatio: ar,
-            model: 'dreamina-multimodal',
-            multimodalImages: pack.multimodalImages,
-            ...(mv ? { dreaminaModelVersion: mv } : {}),
-          }, cancelToken, onShotSubmitted);
-          if (polled?.videoUrl) {
-            persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
-          }
-          return;
-        }
-
-        const res = await shotVideoGen.generateSync({
-          storyboardText,
-          materials: [],
-          duration: dur,
-          aspectRatio: ar,
-          model: 'dreamina-multimodal',
-          multimodalImages: pack.multimodalImages,
-          ...(mv ? { dreaminaModelVersion: mv } : {}),
-        });
-        const url = res?.videoUrl;
-        if (url && res.taskId) persistShotVideo(url, res.taskId, res.videoPath);
-        else setErr('视频生成未返回地址');
-        return;
-      }
-
-      const storyboardText = buildProductionShotVideoStoryboardText(s);
-      if (!storyboardText.trim()) {
-        setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频');
-        return;
-      }
-      const base64Raw = s.previewStillDataUrl?.replace(/^data:image\/\w+;base64,/, '');
-      const hasStill = !!base64Raw?.trim();
-      let model: string;
-      if (pref === 'dreamina-text2video' || pref === 'dreamina-image2video') {
-        model = pref;
+        if (!base.trim()) { setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频'); return; }
+        storyboardText = (s.videoStoryboardOverride?.trim() || pack.defaultVideoPrompt).trim();
+        model = 'dreamina-multimodal';
+        extraBody = { multimodalImages: pack.multimodalImages };
       } else {
-        model = hasStill ? 'dreamina-image2video' : 'dreamina-text2video';
-      }
-      if (model === 'dreamina-image2video' && !hasStill) {
-        setErr('即梦图生视频需要本镜分镜静帧：请先「生成分镜图」，或在下拉里改选「即梦·文生视频」。');
-        return;
-      }
-
-      if (dreaminaAsync) {
-        const polled = await shotVideoGen.submitAsync('dreamina', {
-          storyboardText,
-          materials: [],
-          duration: dur,
-          aspectRatio: ar,
-          model,
-          ...(mv ? { dreaminaModelVersion: mv } : {}),
-          ...(hasStill && model === 'dreamina-image2video'
-            ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
-            : {}),
-        }, cancelToken, onShotSubmitted);
-        if (polled?.videoUrl) {
-          persistShotVideo(polled.videoUrl, polled.taskId, polled.videoPath);
+        storyboardText = buildProductionShotVideoStoryboardText(s);
+        if (!storyboardText.trim()) { setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频'); return; }
+        const base64Raw = s.previewStillDataUrl?.replace(/^data:image\/\w+;base64,/, '');
+        const hasStill = !!base64Raw?.trim();
+        if (pref === 'dreamina-text2video' || pref === 'dreamina-image2video') {
+          model = pref;
+        } else {
+          model = hasStill ? 'dreamina-image2video' : 'dreamina-text2video';
         }
-        return;
+        if (model === 'dreamina-image2video' && !hasStill) {
+          setErr('即梦图生视频需要本镜分镜静帧：请先「生成分镜图」，或在下拉里改选「即梦·文生视频」。');
+          return;
+        }
+        if (hasStill && model === 'dreamina-image2video') {
+          extraBody = { imageBase64: base64Raw, imageMimeType: 'image/png' };
+        }
       }
 
-      const res = await shotVideoGen.generateSync({
+      // ── 提交到即梦 ────────────────────────────────────────────────────────
+      const submit = await submitDreaminaAsync({
         storyboardText,
         materials: [],
         duration: dur,
         aspectRatio: ar,
         model,
         ...(mv ? { dreaminaModelVersion: mv } : {}),
-        ...(hasStill && model === 'dreamina-image2video'
-          ? { imageBase64: base64Raw, imageMimeType: 'image/png' }
-          : {}),
+        ...extraBody,
       });
-      const url = res?.videoUrl;
-      if (url && res.taskId) persistShotVideo(url, res.taskId, res.videoPath);
-      else setErr('视频生成未返回地址');
+
+      // 释放队列槽位（后续 shot 可以开始提交）
+      queueSlot.resolve();
+
+      // 记录 pendingVideoSubmitId（UI 展示 + 服务端回写清理用）
+      setProject((p) => {
+        const shots = [...p.shots];
+        const cur = shots[selectedShotIdx];
+        if (!cur) return p;
+        shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
+        return { ...p, shots };
+      });
+
+      // ── 注册 batch-job（后端接管轮询）─────────────────────────────────────
+      const desc = storyboardText.slice(0, 120);
+      try {
+        await submitBatchJobs(serverProjectId || 'default', [{
+          submitId: submit.submitId,
+          taskId: submit.taskId,
+          shotIndex: s.shotIndex,
+          shotDescription: desc,
+          model,
+        }]);
+      } catch (e) {
+        console.warn('[production] batch-job 注册失败，视频仍在即梦生成中', e);
+      }
+
+      toast.success('已提交到即梦，后台将自动轮询取回视频');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '分镜视频生成失败');
+      setErr(e instanceof Error ? e.message : '分镜视频提交失败');
+      queueSlot.resolve();
     } finally {
-      // For the sync path or if submission failed before onShotSubmitted fired,
-      // release the queue here. The async path releases it inside onShotSubmitted.
-      if (!hasSubmitted) queueSlot.resolve();
       clearShotBusy(shotId);
       setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
       delete shotCancelMap.current[shotId];
     }
   }, [
     project.shots,
-    project.meta.title,
     project.characterAssets,
     project.sceneAssets,
     project.propAssets,
@@ -1344,15 +1302,57 @@ export function ProductionWizard() {
     project.meta.dreaminaModelVersion,
     ar,
     selectedShotIdx,
-    patchShot,
-    dreaminaAsync,
-    shotVideoGen,
+    serverProjectId,
     setShotBusy,
     clearShotBusy,
-    saveShotVideo,
     setProject,
     setShotQueuedMap,
   ]);
+
+  // ── 手动检查视频生成进度 ─────────────────────────────────────────────────
+  const [checkingProgress, setCheckingProgress] = useState(false);
+  const handleCheckVideoProgress = useCallback(async () => {
+    const s = project.shots[selectedShotIdx];
+    if (!s?.pendingVideoSubmitId) return;
+    setCheckingProgress(true);
+    try {
+      // 先找到 batch-job
+      const { jobs } = await import('../api/batchJobs').then((m) => m.getBatchJobs(serverProjectId || undefined));
+      const bj = jobs.find((j) => j.submitId === s.pendingVideoSubmitId);
+      if (bj) {
+        const { job } = await pollBatchJobNow(bj.id);
+        if (job.status === 'done' && job.videoUrl) {
+          toast.success(`分镜 ${s.shotIndex + 1} 视频已就绪`);
+        } else if (job.status === 'failed') {
+          toast.error(`分镜 ${s.shotIndex + 1} 生成失败：${job.failReason || '未知'}`);
+        } else {
+          toast.info(`分镜 ${s.shotIndex + 1} 仍在生成中（${job.status}）`);
+        }
+      } else {
+        // 没有 batch-job 记录——直接查即梦
+        const st = await getDreaminaTaskStatus(s.pendingVideoSubmitId);
+        if (st.status === 'completed' && st.videoUrl) {
+          saveShotVideo(selectedShotIdx, st.videoUrl, st.taskId || `dreamina-${s.pendingVideoSubmitId}`, st.videoPath);
+          toast.success(`分镜 ${s.shotIndex + 1} 视频已就绪`);
+        } else if (st.status === 'failed') {
+          toast.error(`分镜 ${s.shotIndex + 1} 生成失败：${st.failReason || '未知'}`);
+          setProject((p) => {
+            const shots = [...p.shots];
+            const cur = shots[selectedShotIdx];
+            if (!cur) return p;
+            shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: undefined };
+            return { ...p, shots };
+          });
+        } else {
+          toast.info(`分镜 ${s.shotIndex + 1} 仍在生成中`);
+        }
+      }
+    } catch (e) {
+      toast.error(`检查失败：${e instanceof Error ? e.message : '网络异常'}`);
+    } finally {
+      setCheckingProgress(false);
+    }
+  }, [project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject]);
 
   const story = project.story;
   const chSheets = project.characterAssets ?? [];
@@ -1665,6 +1665,8 @@ export function ProductionWizard() {
             onGenerateShotVideo={() => void handleGenerateShotVideo()}
             onKeepOnlyCurrentVersion={keepOnlyShotVideoVersion}
             onSelectVideoVersion={selectShotVideoVersion}
+            onCheckVideoProgress={() => void handleCheckVideoProgress()}
+            checkingProgress={checkingProgress}
           />
         )}
 
