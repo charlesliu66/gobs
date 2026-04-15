@@ -33,7 +33,14 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMes
   }
 }
 
-/** 根据时间轴时长和风格，自动生成并拼接多段 BGM */
+type MusicProvider = 'suno' | 'lyria';
+
+const PROVIDER_LABEL: Record<MusicProvider, string> = {
+  suno: 'Suno',
+  lyria: 'Lyria',
+};
+
+/** 根据时间轴时长和风格，自动生成并拼接多段 BGM，返回实际使用的引擎 */
 async function generateAndTileMusic(
   prompt: string,
   negativePrompt: string,
@@ -41,15 +48,18 @@ async function generateAndTileMusic(
   setAssets: Dispatch<SetStateAction<Record<string, MediaAsset>>>,
   setProject: Dispatch<SetStateAction<TimelineProject>>,
   onPushLog?: (s: string) => void,
-) {
+): Promise<MusicProvider> {
   const segmentsNeeded = Math.max(1, Math.ceil(totalSec / LYRIA_CLIP_SEC));
-  onPushLog?.(`生成 ${segmentsNeeded} 段配乐（共约 ${Math.round(segmentsNeeded * LYRIA_CLIP_SEC)}s）…`);
+  onPushLog?.(`正在生成配乐，请稍候…`);
 
   const res = await generateEditorMusic({
     prompt,
     negativePrompt: negativePrompt.trim() || undefined,
-    sampleCount: Math.min(segmentsNeeded, 3), // Lyria 最多 3 段
+    sampleCount: Math.min(segmentsNeeded, 3),
   });
+
+  const provider: MusicProvider = (res.provider === 'suno' || res.provider === 'lyria') ? res.provider : 'lyria';
+  const providerLabel = PROVIDER_LABEL[provider];
 
   let tileStart = 0;
   for (let i = 0; i < segmentsNeeded; i++) {
@@ -66,7 +76,10 @@ async function generateAndTileMusic(
     }
     tileStart += item.durationSec;
   }
-  onPushLog?.(`配乐已铺满（${segmentsNeeded} 段），可在 BGM 轨调音量`);
+
+  const totalGenSec = Math.round(res.items.reduce((s, it) => s + it.durationSec, 0));
+  onPushLog?.(`✅ 配乐完成（引擎：${providerLabel} · 时长：${totalGenSec}s · ${res.items.length} 首）`);
+  return provider;
 }
 
 interface BgmMixPanelProps {
@@ -90,6 +103,7 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
   const [negativePrompt, setNegativePrompt] = useState('vocals, lyrics');
   const [busy, setBusy] = useState(false);
   const [polishBusy, setPolishBusy] = useState(false);
+  const [lastProvider, setLastProvider] = useState<MusicProvider | null>(null);
 
   const totalSec = computeDurationSec(project);
 
@@ -144,11 +158,12 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
           `配乐润色失败，已降级为原始描述继续生成：${e instanceof Error ? e.message : String(e)}`,
         );
       }
-      await withTimeout(
+      const provider = await withTimeout(
         generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog),
-        160_000,
-        'Lyria 生成超时（160s）',
+        210_000,
+        '配乐生成超时（3.5分钟），请重试',
       );
+      setLastProvider(provider);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
@@ -163,11 +178,12 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     if (!t || busy) return;
     setBusy(true);
     try {
-      await withTimeout(
+      const provider = await withTimeout(
         generateAndTileMusic(t, negativePrompt, totalSec, setAssets, setProject, onPushLog),
-        160_000,
-        'Lyria 生成超时（160s）',
+        210_000,
+        '配乐生成超时（3.5分钟），请重试',
       );
+      setLastProvider(provider);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
@@ -182,7 +198,21 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-shrink-0 border-b border-[var(--color-border)] px-3 py-2">
-        <h3 className="text-[11px] font-semibold text-[var(--color-text)]">AI 配乐</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-[11px] font-semibold text-[var(--color-text)]">AI 配乐</h3>
+          {lastProvider && !busy && (
+            <span
+              title={lastProvider === 'suno' ? 'Suno API（主引擎）' : 'Compass Lyria（备用引擎）'}
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                lastProvider === 'suno'
+                  ? 'bg-purple-500/15 text-purple-400'
+                  : 'bg-blue-500/15 text-blue-400'
+              }`}
+            >
+              {lastProvider === 'suno' ? '🎵 Suno' : '🎵 Lyria'}
+            </span>
+          )}
+        </div>
         <p className="text-[9px] leading-snug text-[var(--color-text-muted)]">
           选择风格或输入描述，自动按视频时长生成并铺满 BGM 轨
         </p>
@@ -227,7 +257,7 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
         {/* 时长信息 */}
         <p className="text-[9px] text-[var(--color-text-muted)]">
           当前时间轴：{totalSec > 0 ? `${Math.round(totalSec)}s` : '空'}
-          {totalSec > 0 && ` · 需 ${Math.max(1, Math.ceil(totalSec / LYRIA_CLIP_SEC))} 段 Lyria 配乐`}
+          {totalSec > 0 && ` · 约需 ${Math.max(1, Math.ceil(totalSec / LYRIA_CLIP_SEC))} 首配乐`}
         </p>
 
         {/* BGM 淡出时长 */}
