@@ -176,6 +176,19 @@
 
 ## 二、Changelog
 
+### v0.38 — 2026-04-15
+
+**即梦 ret=1310 ExceedConcurrencyLimit 自动重试 + 友好提示**
+
+**Fix:**
+- **[api] `videoDreamina.ts` 自动重试**：多模态和非多模态路径均新增 1310 重试机制——首次收到 `ExceedConcurrencyLimit` 时自动等待 45s 后重试一次（不释放并发槽），透明解决"服务重启后旧任务残留"场景；重试仍失败则释放槽并抛出用户友好错误。
+- **[api] 友好错误文案**：最终失败改为抛 `"即梦账号当前有生成任务排队中，请 2-3 分钟后重试"`，不再暴露原始 `ret=1310, logid=...` 给用户。
+- **[frontend] `useVideoGeneration.ts` 兜底**：`normalizeError` 补充 `ret=1310 / ExceedConcurrencyLimit` 识别，即使后端未处理也能显示中文提示。
+
+**Root Cause：** 服务器重启后内存信号量重置为"空闲"，但即梦账号上仍有上一次 session 留下的任务在跑，提交新任务即被即梦拒绝；之前代码直接将原始 API 错误透传前端显示。
+
+---
+
 ### v0.37 — 2026-04-15
 
 **高级制片 · 放映室审片体验优化**

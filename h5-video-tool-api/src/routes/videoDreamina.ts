@@ -196,8 +196,13 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       await waitForSlot;
 
       // TOS upload is occasionally flaky (one of N images fails to upload).
-      // Retry up to 2 times when the error looks like a transient upload failure.
+      // Retry up to 2 times for transient upload failures.
+      // Also retry once (after 45s) for ret=1310 (ExceedConcurrencyLimit) —
+      // this handles the common case where a previous server session's task is
+      // still running on the Dreamina account when the backend restarts.
       const MAX_MM_RETRIES = 2;
+      const MAX_1310_RETRIES = 1; // wait 45s then retry once before giving up
+      let mm1310Attempts = 0;
       let mmResult: { submitId: string; taskId: string } | null = null;
       let mmLastErr: Error | null = null;
       for (let attempt = 0; attempt <= MAX_MM_RETRIES; attempt++) {
@@ -218,12 +223,22 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
           const isTransientUpload = /upload phase.*no file upload|upload resource.*upload image/i.test(mmLastErr.message);
           const is1310 = /ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(mmLastErr.message);
           if (is1310) {
+            if (mm1310Attempts < MAX_1310_RETRIES) {
+              mm1310Attempts++;
+              console.warn(
+                `[dreamina] ExceedConcurrencyLimit (ret=1310): another task is running. ` +
+                `Waiting 45s before retry ${mm1310Attempts}/${MAX_1310_RETRIES}…`,
+              );
+              await new Promise<void>((resolve) => setTimeout(resolve, 45_000));
+              attempt--; // don't consume an upload-retry slot for 1310 waits
+              continue;
+            }
             console.warn(
-              `[dreamina] ExceedConcurrencyLimit (ret=1310): account concurrent limit reached. ` +
+              `[dreamina] ExceedConcurrencyLimit (ret=1310): all retries exhausted. ` +
               `Consider lowering DREAMINA_MAX_CONCURRENT (currently ${DREAMINA_MAX_CONCURRENT}).`,
             );
             releaseSlot();
-            throw mmLastErr;
+            throw new Error('即梦账号当前有生成任务排队中，请 2-3 分钟后重试');
           }
           if (!isTransientUpload || attempt >= MAX_MM_RETRIES) {
             releaseSlot(); // failed to submit — free the slot immediately
@@ -259,31 +274,50 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     const { waitForSlot: waitNonMm, release: releaseNonMm } = acquireDreaminaSlot();
     await waitNonMm;
 
-    let nonMmSubmitId: string | undefined;
-    try {
-      const { submitId, taskId } = await submitDreaminaVideo({
-        prompt: storyboardText.trim(),
-        aspectRatio: aspectRatio ?? '16:9',
-        duration: duration != null ? duration : undefined,
-        model: modelTrim!,
-        imageBase64,
-        imageMimeType,
-        modelVersion: mvSubmit,
-      });
-      nonMmSubmitId = submitId;
-      activeSlotReleases.set(submitId, releaseNonMm);
-      res.json({ submitId, taskId, status: 'pending' as const });
-    } catch (submitErr) {
-      const errMsg = submitErr instanceof Error ? submitErr.message : String(submitErr);
-      if (/ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(errMsg)) {
-        console.warn(
-          `[dreamina] ExceedConcurrencyLimit (ret=1310): account concurrent limit reached. ` +
-          `Consider lowering DREAMINA_MAX_CONCURRENT (currently ${DREAMINA_MAX_CONCURRENT}).`,
-        );
+    // For non-multimodal: also retry once after 45s on ret=1310.
+    const MAX_NMM_1310_RETRIES = 1;
+    let nonMm1310Attempts = 0;
+    let nonMmResult: { submitId: string; taskId: string } | null = null;
+    let nonMmLastErr: Error | null = null;
+    while (true) {
+      try {
+        nonMmResult = await submitDreaminaVideo({
+          prompt: storyboardText.trim(),
+          aspectRatio: aspectRatio ?? '16:9',
+          duration: duration != null ? duration : undefined,
+          model: modelTrim!,
+          imageBase64,
+          imageMimeType,
+          modelVersion: mvSubmit,
+        });
+        break;
+      } catch (submitErr) {
+        nonMmLastErr = submitErr instanceof Error ? submitErr : new Error(String(submitErr));
+        const is1310 = /ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(nonMmLastErr.message);
+        if (is1310 && nonMm1310Attempts < MAX_NMM_1310_RETRIES) {
+          nonMm1310Attempts++;
+          console.warn(
+            `[dreamina] ExceedConcurrencyLimit (ret=1310): another task is running. ` +
+            `Waiting 45s before retry ${nonMm1310Attempts}/${MAX_NMM_1310_RETRIES}…`,
+          );
+          await new Promise<void>((resolve) => setTimeout(resolve, 45_000));
+          continue;
+        }
+        if (is1310) {
+          console.warn(
+            `[dreamina] ExceedConcurrencyLimit (ret=1310): all retries exhausted. ` +
+            `Consider lowering DREAMINA_MAX_CONCURRENT (currently ${DREAMINA_MAX_CONCURRENT}).`,
+          );
+          releaseNonMm();
+          throw new Error('即梦账号当前有生成任务排队中，请 2-3 分钟后重试');
+        }
+        releaseNonMm();
+        throw nonMmLastErr;
       }
-      releaseNonMm();
-      throw submitErr;
     }
+    if (!nonMmResult) { releaseNonMm(); throw nonMmLastErr ?? new Error('submit failed'); }
+    activeSlotReleases.set(nonMmResult.submitId, releaseNonMm);
+    res.json({ submitId: nonMmResult.submitId, taskId: nonMmResult.taskId, status: 'pending' as const });
   } catch (err) {
     console.error('[video/dreamina/submit]', err);
     const { errorCode, errorMessage } = classifyError(err);

@@ -45,6 +45,9 @@ function normalizeError(err: unknown): string {
   if (/(^|[\s:])429($|[\s:])|rate.?limit|too many requests/i.test(msg)) {
     return '服务繁忙，请稍后重试';
   }
+  if (/ret[=:]\s*1310|ExceedConcurrencyLimit|DREAMINA_CONCURRENCY/i.test(msg)) {
+    return '即梦账号当前有生成任务排队中，请 2-3 分钟后重试';
+  }
   return msg;
 }
 
