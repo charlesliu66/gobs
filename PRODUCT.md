@@ -171,6 +171,28 @@
 
 ## 二、Changelog
 
+### v0.31 — 2026-04-15
+
+**AI 剪辑智能优化（方向1+5+3 首批落地）**
+
+**方向 1 · 行为细化分类（Behavior Taxonomy 二级体系）：**
+- `gameTaxonomy.ts` 新增 `ActivityGroup` 接口，支持 `activityGroups`（一级+二级）配置。只需在 `config/game-taxonomy.json` 加入 `activityGroups` 字段即可启用
+- `frameVisionRank.ts` 扩展 `VisionFrameScore`：新增 `activitySecondary`（二级行为细分）、`intensity`（low/mid/high 强度）、`isTurningPoint`（叙事转折点 flag）
+- Gemini prompt 自动根据是否配置 `activityGroups` 切换输出格式（单标签 → 结构化三字段）
+- `editorAgentService.ts` 中 `buildIntentPriorityWindows` 利用新字段加权：`isTurningPoint=true` +1.5分、`intensity=high` +0.5分，转折点帧优先进入候选
+
+**方向 5 · 内容多样性约束：**
+- LLM 排片 prompt 新增强制多样性规则：同类行为连续不超过3次、战斗段必须穿插缓冲片段、首片段优选钩子/转折点、末片段优选最高分、快切与慢镜比例约 3:1
+
+**方向 3 · 音乐先行 · 节拍分析（基础版）：**
+- 新建 `scripts/beat_analysis.py`（依赖 `librosa`）：输入音频路径，输出 BPM、节拍时间点数组、能量段落（intro/build/drop/outro）
+- 新建 `src/services/musicBeatAnalysis.ts`：调用 Python 脚本，返回 `BeatInfo`；Python 或 librosa 不可用时自动降级（返回 null，不影响正常剪辑）
+- `editorAgentService.ts` 集成：当 `EDITOR_BEAT_ANALYSIS=1` 且项目有 BGM audio 轨时，自动分析 BGM 并在 LLM prompt 中注入节拍约束（段落时间分配、切点对齐建议、drop 段快切规则）
+
+**启用音乐先行功能：** 在 `.env` 中加 `EDITOR_BEAT_ANALYSIS=1`，并在剪辑器里为时间轴添加 BGM 音频轨，再触发 AI 剪辑即可。
+
+---
+
 ### v0.30 — 2026-04-15
 
 **高级制片导出页 · 放映室连续播放器（P0）**
