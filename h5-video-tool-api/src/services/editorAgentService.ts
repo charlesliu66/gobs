@@ -297,10 +297,69 @@ function buildContentManifest(
   return lines.join('\n');
 }
 
+/** 从 LLM 输出中鲁棒提取 JSON：优先 code-block → 最外层 {…} 花括号配对 → 原文 */
 function extractJson(s: string): string {
-  const m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (m) return m[1].trim();
+  // 1. 尝试所有 markdown code block，取最长的
+  const codeBlockRe = /```(?:json)?\s*([\s\S]*?)```/g;
+  let best = '';
+  let m: RegExpExecArray | null;
+  while ((m = codeBlockRe.exec(s)) !== null) {
+    const content = m[1].trim();
+    if (content.length > best.length) best = content;
+  }
+  if (best) return best;
+
+  // 2. 找最外层 { ... } 配对（处理嵌套）
+  const firstBrace = s.indexOf('{');
+  if (firstBrace >= 0) {
+    let depth = 0;
+    let inStr = false;
+    let escape = false;
+    for (let i = firstBrace; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inStr) { escape = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) return s.slice(firstBrace, i + 1);
+      }
+    }
+    // 花括号未闭合，返回从 { 到末尾（后续 repairJson 补齐）
+    return s.slice(firstBrace);
+  }
+
   return s.trim();
+}
+
+/** 尝试修复常见 LLM JSON 缺陷：尾逗号、行注释、未闭合括号 */
+function repairJson(raw: string): string {
+  let s = raw;
+  // 去掉 // 行注释（不在引号内的）
+  s = s.replace(/(?<="[^"]*"[^"]*?)\/\/[^\n]*/g, '');
+  s = s.replace(/^(\s*)\/\/[^\n]*/gm, '$1');
+  // 去掉尾逗号 ,} 和 ,]
+  s = s.replace(/,(\s*[}\]])/g, '$1');
+  // 补齐未闭合的花括号/方括号
+  let braces = 0;
+  let brackets = 0;
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (esc) { esc = false; continue; }
+    if (ch === '\\' && inStr) { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '[') brackets++;
+    else if (ch === ']') brackets--;
+  }
+  while (brackets > 0) { s += ']'; brackets--; }
+  while (braces > 0) { s += '}'; braces--; }
+  return s;
 }
 
 /** 从时间轴项目中找到 audio 轨第一个 AudioClip 的 assetId（用于 BGM beat 分析） */
@@ -731,6 +790,7 @@ export async function runEditorAgentApply(
     userText,
     temperature: 0.22,
     maxTokens: 8192,
+    responseFormat: { type: 'json_object' },
   });
   usageSink('editor_agent', agentUsage);
 
@@ -742,10 +802,19 @@ export async function runEditorAgentApply(
   });
 
   let parsed: { summary?: string; project?: TimelineProject };
+  const extracted = extractJson(rawText);
   try {
-    parsed = JSON.parse(extractJson(rawText)) as { summary?: string; project?: TimelineProject };
+    parsed = JSON.parse(extracted) as { summary?: string; project?: TimelineProject };
   } catch {
-    throw new Error('模型返回不是合法 JSON');
+    // 第二层：尝试修复常见 LLM JSON 缺陷后重新解析
+    try {
+      parsed = JSON.parse(repairJson(extracted)) as { summary?: string; project?: TimelineProject };
+      console.warn('[editor agent] JSON repair succeeded (raw had defects)');
+    } catch {
+      const snippet = rawText.slice(0, 300).replace(/\n/g, '↵');
+      console.error('[editor agent] JSON parse failed, raw snippet:', snippet);
+      throw new Error(`模型返回不是合法 JSON（已尝试自动修复）。模型原始输出片段：${snippet}`);
+    }
   }
 
   if (!parsed.project || typeof parsed.project !== 'object') {

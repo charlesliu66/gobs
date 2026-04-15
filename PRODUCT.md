@@ -176,6 +176,21 @@
 
 ## 二、Changelog
 
+### v0.39 — 2026-04-15
+
+**剪辑 Agent JSON 解析鲁棒性增强**
+
+**Fix:**
+- **[api] `editorAgentService.ts` extractJson 重写**：从仅匹配第一个 code block 改为三层提取策略——扫描所有 `` ```json ``` `` code block 取最长 → 花括号配对找最外层 `{…}` → 原文兜底，解决模型输出带额外解释文字时提取失败的问题。
+- **[api] 新增 `repairJson` 修复层**：自动处理 LLM 常见 JSON 缺陷（尾逗号、`//` 行注释、token 截断导致的未闭合括号），首次 parse 失败后自动修复重试。
+- **[api] Compass API 调用加 `response_format: { type: 'json_object' }`**：从 API 层约束 Gemini 输出纯 JSON，大幅降低非法 JSON 概率。
+- **[api] `promptPolish.ts`**：`compassChatCompletionWithUsage` 新增可选 `responseFormat` 参数，支持调用方指定输出格式约束。
+- **[api] 错误信息增强**：修复仍然失败时，错误消息包含模型原始输出前 300 字符片段，便于快速定位问题。
+
+**Root Cause：** Compass Gemini 模型偶尔在 JSON 外包裹 Markdown 说明文字或 code block 格式不标准，原 `extractJson` 仅匹配第一个 `` ``` `` 对无法应对所有变体，导致 `JSON.parse` 失败抛出"模型返回不是合法 JSON"。
+
+---
+
 ### v0.38 — 2026-04-15
 
 **即梦 ret=1310 ExceedConcurrencyLimit 自动重试 + 友好提示**
@@ -674,4 +689,4 @@
 
 ---
 
-*最后更新：2026-04-15（v0.37）*
+*最后更新：2026-04-15（v0.39）*

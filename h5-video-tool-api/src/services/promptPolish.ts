@@ -244,6 +244,8 @@ export async function compassChatCompletionWithUsage(options: {
   userText: string;
   temperature?: number;
   maxTokens?: number;
+  /** 约束模型输出格式，如 { type: 'json_object' } */
+  responseFormat?: { type: string };
 }): Promise<{ text: string; usage?: CompassChatUsage }> {
   const { model } = getCompassLlmConfig();
   const body: Record<string, unknown> = {
@@ -255,6 +257,7 @@ export async function compassChatCompletionWithUsage(options: {
     temperature: options.temperature ?? 0.3,
   };
   if (options.maxTokens != null) body.max_tokens = options.maxTokens;
+  if (options.responseFormat) body.response_format = options.responseFormat;
   return postCompassChatCompletions(body, { logLabel: 'compassChatCompletion' });
 }
 
