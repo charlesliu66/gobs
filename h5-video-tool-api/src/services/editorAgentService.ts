@@ -159,6 +159,125 @@ function buildIntentPriorityWindows(
   return mergeIntentWindows(assetId, spans);
 }
 
+// ─── 方向2：叙事模板 ────────────────────────────────────────────────────────────
+
+interface NarrativeSlot {
+  role: string;         // 叙事角色名
+  durationHint: string; // 时长建议
+  contentHint: string;  // 内容类型描述
+  intensityHint: string;// 期望 intensity
+}
+
+interface NarrativeTemplate {
+  name: string;
+  description: string;
+  slots: NarrativeSlot[];
+}
+
+const NARRATIVE_TEMPLATES: Record<string, NarrativeTemplate> = {
+  classic_highlight: {
+    name: '经典高光',
+    description: '适合混剪爽点：开场钩子 → 铺垫积累 → 战斗高潮 → 收尾',
+    slots: [
+      { role: '开场钩子', durationHint: '3-5s', contentHint: '角色登场 / 转折点 / 最强击杀镜头，isTurningPoint=true 或 score≥8', intensityHint: 'high 或 mid' },
+      { role: '铺垫积累', durationHint: '8-12s', contentHint: '奔跑、探索、接近目标，中等强度动作', intensityHint: 'mid' },
+      { role: '战斗高潮', durationHint: '10-18s', contentHint: '连续战斗高光，isActionPeak=true 的击杀瞬间密集快切', intensityHint: 'high' },
+      { role: '收尾落定', durationHint: '3-5s', contentHint: '胜利庆祝、结局镜头或 score 最高的单帧', intensityHint: 'low 或 mid' },
+    ],
+  },
+  character_story: {
+    name: '角色故事',
+    description: '适合角色宣传片：登场 → 能力展示 → 危机时刻 → 逆转',
+    slots: [
+      { role: '角色登场', durationHint: '4-6s', contentHint: '角色特写或标志性场景，cameraMotion=static 或 zoom', intensityHint: 'low' },
+      { role: '能力展示', durationHint: '10-15s', contentHint: '技能使用、连招展示，isActionPeak 帧优先', intensityHint: 'mid 至 high' },
+      { role: '危机时刻', durationHint: '5-8s', contentHint: '被围困、血量危急、逃命奔跑，isTurningPoint=true', intensityHint: 'high' },
+      { role: '逆转胜利', durationHint: '4-6s', contentHint: '反杀 / 最终击杀 / 逃脱成功，isTurningPoint=true', intensityHint: 'high' },
+    ],
+  },
+  beat_sync: {
+    name: '节奏混剪',
+    description: '完全由音乐节拍驱动，内容服从节奏段落',
+    slots: [
+      { role: 'intro 段', durationHint: '视 BGM 而定', contentHint: '平静建立，角色登场或场景全景', intensityHint: 'low' },
+      { role: 'build 段', durationHint: '视 BGM 而定', contentHint: '中等强度动作，节奏加快', intensityHint: 'mid' },
+      { role: 'drop 段', durationHint: '视 BGM 而定', contentHint: '高强度战斗，每拍一切，isActionPeak 帧优先', intensityHint: 'high' },
+      { role: 'outro 段', durationHint: '视 BGM 而定', contentHint: '收尾，回落到低张力镜头', intensityHint: 'low' },
+    ],
+  },
+};
+
+function selectNarrativeTemplate(combatLike: boolean, hasBeat: boolean): NarrativeTemplate {
+  if (hasBeat) return NARRATIVE_TEMPLATES.beat_sync!;
+  if (combatLike) return NARRATIVE_TEMPLATES.classic_highlight!;
+  return NARRATIVE_TEMPLATES.character_story!;
+}
+
+// ─── 方向2：内容地图（Content Manifest）────────────────────────────────────────
+
+function buildContentManifest(
+  scoresByAsset: Map<string, VisionFrameScore[]>,
+  assets: EditorAgentAssetContext[],
+): string {
+  if (scoresByAsset.size === 0) return '';
+
+  const assetNameMap = new Map(assets.map((a) => [a.id, a.originalName]));
+
+  // 分组：hook（转折点高分）/ combat_peak（战斗 high）/ build_up（mid）/ calm（low/静态）
+  const hooks: string[] = [];
+  const combatPeaks: string[] = [];
+  const buildUps: string[] = [];
+  const calms: string[] = [];
+  const actionPeaks: string[] = [];
+
+  for (const [assetId, scores] of scoresByAsset) {
+    const name = assetNameMap.get(assetId) ?? assetId.slice(-6);
+    for (const s of scores) {
+      const loc = `「${name}」t=${s.tSec.toFixed(1)}s`;
+      const tag = `${s.activity ?? '未知'}${s.activitySecondary ? '/' + s.activitySecondary : ''}`;
+      const scoreStr = `score=${s.score.toFixed(1)}`;
+      if (s.isActionPeak) {
+        actionPeaks.push(`${loc} [${tag} ${scoreStr}]`);
+      }
+      if (s.isTurningPoint || (s.score >= 8 && s.intensity === 'high')) {
+        hooks.push(`${loc} [${tag} ${scoreStr}${s.isTurningPoint ? ' ★转折' : ''}]`);
+      } else if (s.intensity === 'high') {
+        combatPeaks.push(`${loc} [${tag} ${scoreStr}]`);
+      } else if (s.intensity === 'mid') {
+        buildUps.push(`${loc} [${tag} ${scoreStr}]`);
+      } else {
+        calms.push(`${loc} [${tag} ${scoreStr}]`);
+      }
+    }
+  }
+
+  const lines: string[] = ['## 内容地图（Content Manifest）'];
+  lines.push('*基于视觉分析自动生成，指导叙事排片使用*');
+  lines.push('');
+  if (hooks.length) {
+    lines.push(`### 🎯 钩子/转折点候选（${hooks.length} 帧）——适合开场或高潮节点`);
+    hooks.slice(0, 6).forEach((h) => lines.push(`- ${h}`));
+  }
+  if (actionPeaks.length) {
+    lines.push(`### ⚡ 动作顶点候选（${actionPeaks.length} 帧）——isActionPeak=true，适合切入点`);
+    actionPeaks.slice(0, 6).forEach((h) => lines.push(`- ${h}`));
+  }
+  if (combatPeaks.length) {
+    lines.push(`### 🔥 战斗高光候选（${combatPeaks.length} 帧）——高强度，适合高潮段`);
+    combatPeaks.slice(0, 8).forEach((h) => lines.push(`- ${h}`));
+  }
+  if (buildUps.length) {
+    lines.push(`### 🏃 铺垫积累候选（${buildUps.length} 帧）——中强度，适合铺垫段`);
+    buildUps.slice(0, 6).forEach((h) => lines.push(`- ${h}`));
+  }
+  if (calms.length) {
+    lines.push(`### 🌅 平静/登场候选（${calms.length} 帧）——低强度，适合开场或收尾`);
+    calms.slice(0, 4).forEach((h) => lines.push(`- ${h}`));
+  }
+
+  return lines.join('\n');
+}
+
 function extractJson(s: string): string {
   const m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (m) return m[1].trim();
@@ -183,6 +302,8 @@ function buildSystemPrompt(ctx: {
   hasCandidates: boolean;
   requestedRole?: string;
   beatInfo?: BeatInfo | null;
+  contentManifest?: string;
+  narrativeTemplate?: NarrativeTemplate;
 }): string {
   const cand = ctx.hasCandidates
     ? `
@@ -228,6 +349,25 @@ ${cand}
 - **片段时长建议**：combat 类（打架/击杀）建议 0.8-4s（高能快切）；非 combat 类（奔跑/探索/撤退）建议 2-6s
 - **总节奏**：不要全程快切（<1s），建议混合快切与慢镜（3-5s），比例约 3:1
 ${ctx.beatInfo ? formatBeatGuideBlock(ctx.beatInfo) : ''}
+## 切点质量规则（必须遵守）
+- **动作顶点切入**：优先在 isActionPeak=true 的帧附近切入（如击杀落地、技能命中瞬间），可带来强烈爆发感
+- **镜头运动多样性**：连续 5 个以上 cameraMotion=static 的片段需插入 ≥ 1 个运动镜头（pan/zoom/shake）
+- **动接动原则**：运动镜头（pan/zoom/shake）后面优先接运动镜头，视觉更流畅；避免 shake→static→shake 的跳切
+- **避免模糊帧作开头**：shake（抖动）帧不适合作片段起点，适合作切点本身
+${ctx.narrativeTemplate ? `
+## 叙事模板：「${ctx.narrativeTemplate.name}」
+${ctx.narrativeTemplate.description}
+
+**请按以下叙事结构排片**（各段时长仅为参考，总长须接近目标时长）：
+${ctx.narrativeTemplate.slots.map((s, i) => `${i + 1}. **${s.role}**（${s.durationHint}）\n   内容：${s.contentHint}\n   强度：${s.intensityHint}`).join('\n')}
+
+> 注意：叙事结构是排片指导，候选窗仍是片段选取边界，不可超出候选窗范围。
+` : ''}
+${ctx.contentManifest ? `
+${ctx.contentManifest}
+
+> 上述内容地图为视觉分析结果，**请参考对应时间戳在候选窗中找到最接近的片段**，按叙事模板分配到各段落。
+` : ''}
 ## 若选中素材为空
 - 在 summary 说明无法执行，project 可与 currentProject 相同或清空 v1 clips。`;
 }
@@ -433,6 +573,8 @@ export async function runEditorAgentApply(
 
   const analysisMode = resolveEditorAnalysisMode();
   const candidateWindows: CandidateWindow[] = [];
+  /** 收集各素材的视觉评分，用于构建内容地图（方向2） */
+  const scoresByAsset = new Map<string, VisionFrameScore[]>();
   const nAssets = Math.max(1, input.assets.length);
   const taxonomy = loadGameTaxonomy();
   const availableRoles = taxonomy.roles ?? [];
@@ -471,6 +613,10 @@ export async function runEditorAgentApply(
           input.visionFocus,
         );
         wins = r.windows;
+        // 收集视觉评分用于构建内容地图（方向2）
+        if (r.visionDetail?.scores?.length) {
+          scoresByAsset.set(a.id, r.visionDetail.scores);
+        }
         // 针对“盗贼战斗高光”等意图：优先注入视觉识别出的战斗主体窗，避免只靠能量/中段启发式。
         if (combatLike && r.visionDetail?.scores?.length) {
           const intentWins = buildIntentPriorityWindows(
@@ -521,12 +667,18 @@ export async function runEditorAgentApply(
     }
   }
 
+  // 方向2：构建内容地图 + 选择叙事模板
+  const contentManifest = buildContentManifest(scoresByAsset, input.assets);
+  const narrativeTemplate = selectNarrativeTemplate(combatLike, beatInfo != null);
+
   const systemPrompt = buildSystemPrompt({
     targetTimelineSec,
     combatLike,
     hasCandidates: candidateWindows.length > 0,
     requestedRole,
     beatInfo,
+    contentManifest: contentManifest || undefined,
+    narrativeTemplate,
   });
 
   const userText = buildUserPayload(

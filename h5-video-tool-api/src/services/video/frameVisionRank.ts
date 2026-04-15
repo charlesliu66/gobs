@@ -40,6 +40,10 @@ export interface VisionFrameScore {
   intensity?: 'low' | 'mid' | 'high';
   /** 是否为叙事转折点（反杀/被包围/胜利/死亡等高价值瞬间），应优先用作片段入点 */
   isTurningPoint?: boolean;
+  /** 是否为动作顶点（出拳到位/技能命中/弹头着靶的瞬间），适合作为切入点 */
+  isActionPeak?: boolean;
+  /** 镜头运动类型，用于切点连贯性判断 */
+  cameraMotion?: 'static' | 'pan' | 'zoom' | 'shake';
 }
 
 function extractJsonArray(s: string): unknown {
@@ -128,10 +132,14 @@ async function scoreBatch(
     ? `- activity: string，一级行为标签（搜索/打架/交互/撤退等），优先从词典中选；无法判断填「未知」
 - activitySecondary: string，二级行为细分（击杀瞬间/连招/开箱/逃命奔跑等），从词典对应分组中选；无法判断填「未知」
 - intensity: string，行为强度，必填其中之一：low / mid / high（low=平静/UI/对话，mid=移动/准备，high=战斗/爆炸/击杀）
-- isTurningPoint: boolean，是否为叙事转折点（反杀/被包围/胜利/死亡/逃脱等高价值瞬间），true/false`
+- isTurningPoint: boolean，是否为叙事转折点（反杀/被包围/胜利/死亡/逃脱等高价值瞬间），true/false
+- isActionPeak: boolean，是否为动作顶点（出拳到位/弹头命中/技能爆炸瞬间/击杀落地），适合作为切入点，true/false
+- cameraMotion: string，镜头运动类型，必填其中之一：static（固定机位）/ pan（水平/垂直移动）/ zoom（推拉）/ shake（抖动/手持）`
     : `- activity: string，单个标签，优先从「可选行为标签」中选（搜打撤：搜索/打架/交互/撤退 等）；无法判断填「未知」
 - intensity: string，行为强度：low / mid / high
-- isTurningPoint: boolean，是否为叙事转折点`;
+- isTurningPoint: boolean，是否为叙事转折点
+- isActionPeak: boolean，是否为动作顶点（击杀/技能命中瞬间），true/false
+- cameraMotion: string，镜头运动：static / pan / zoom / shake`;
 
   const intro = `用户剪辑意图：${userIntent || '高光/精彩镜头'}
 
@@ -193,6 +201,9 @@ ${activityOutputGuide}
       ? (rawIntensity as 'low' | 'mid' | 'high')
       : undefined;
     const isTurningPoint = o.isTurningPoint === true || o.isTurningPoint === 'true' ? true : undefined;
+    const isActionPeak = o.isActionPeak === true || o.isActionPeak === 'true' ? true : undefined;
+    const rawCam = typeof o.cameraMotion === 'string' ? o.cameraMotion.toLowerCase().trim() : '';
+    const cameraMotion = (['static', 'pan', 'zoom', 'shake'] as const).find((v) => v === rawCam);
     out.push({
       tSec,
       score: Math.min(10, Math.max(0, score)),
@@ -203,6 +214,8 @@ ${activityOutputGuide}
       activitySecondary,
       intensity,
       isTurningPoint,
+      isActionPeak,
+      cameraMotion,
     });
   }
   return out;
