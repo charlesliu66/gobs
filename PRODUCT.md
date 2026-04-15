@@ -171,6 +171,18 @@
 
 ## 二、Changelog
 
+### v0.18 — 2026-04-15
+
+**高级制片分镜视频恢复轮询修复**
+
+**Bug Fix:**
+- **[frontend] 分镜视频刷新后不再回填**：恢复轮询的 `useEffect(deps=[])` 在组件挂载时立即执行，但服务端项目异步加载尚未完成，`project.shots` 为空，导致 `pendingVideoSubmitId` 永远无法被检测到。昨天提交的即梦任务刷新页面后不会自动续接轮询，视频生成结果丢失。
+- **[frontend] 修复方案**：将 `useEffect` 依赖改为 `[isServerBootstrapping]`，等待服务端项目加载完成（`isServerBootstrapping=false`）后再执行恢复轮询；新增 `hasResumedPollingRef` 防止因后续 `project` 变化重复触发。
+
+**根本原因：** React 两个 `useEffect(deps=[])` 同时在 mount 执行，但服务端项目加载是异步的，恢复轮询总先于项目数据可用而运行。
+
+---
+
 ### v0.17 — 2026-04-15
 
 **剪辑体验三项优化 & 错误信息改善**
