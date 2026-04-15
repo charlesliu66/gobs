@@ -3,7 +3,10 @@ import type {
   ProductionShot,
   ProductionShotVideoVersion,
   SceneSheet,
+  StructuredPromptStill,
+  StructuredPromptMotion,
 } from '../productionTypes';
+import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
 import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
 import { useProductionContext } from '../ProductionContext';
 import { StepStoryboardAssetsSidebar } from './StepStoryboardAssetsSidebar';
@@ -13,6 +16,9 @@ import { StepStoryboardGenerateActions } from './StepStoryboardGenerateActions';
 import { StepStoryboardFieldsEditor } from './StepStoryboardFieldsEditor';
 import { StepStoryboardPreviewPanel } from './StepStoryboardPreviewPanel';
 import { StepStoryboardShotStrip } from './StepStoryboardShotStrip';
+import { StepStoryboardAiReview } from './StepStoryboardAiReview';
+import { StepStoryboardQuickAdjust } from './StepStoryboardQuickAdjust';
+import { StepStoryboardContinuityCheck } from './StepStoryboardContinuityCheck';
 
 type StorySceneCoverage = { hit: number; total: number; missingLabels: string[] } | null;
 type MultimodalRefPack = {
@@ -50,6 +56,18 @@ export function StepStoryboardWorkspace({
   onSelectVideoVersion,
   onCheckVideoProgress,
   checkingProgress,
+  aiReviewResult,
+  aiReviewing,
+  onAiReview,
+  onApplySuggestion,
+  onApplyAllAndRegenerate,
+  continuityIssues,
+  continuityChecking,
+  onContinuityCheck,
+  onShowContinuousPlay,
+  onShowAbCompare,
+  onBatchGenerateAllVideos,
+  projectTitle: _projectTitle,
 }: {
   shot?: ProductionShot;
   shots: ProductionShot[];
@@ -75,10 +93,22 @@ export function StepStoryboardWorkspace({
   onSetDreaminaModelVersion: (next: string) => void;
   onGenerateShotFrame: () => void;
   onGenerateShotVideo: () => void;
+  onBatchGenerateAllVideos?: () => void;
   onKeepOnlyCurrentVersion: (id: string) => void;
   onSelectVideoVersion: (id: string) => void;
   onCheckVideoProgress?: () => void;
   checkingProgress?: boolean;
+  aiReviewResult?: ShotReviewResult | null;
+  aiReviewing?: boolean;
+  onAiReview?: () => void;
+  onApplySuggestion?: (s: ShotReviewSuggestion) => void;
+  onApplyAllAndRegenerate?: () => void;
+  continuityIssues?: ContinuityIssue[] | null;
+  continuityChecking?: boolean;
+  onContinuityCheck?: () => void;
+  onShowContinuousPlay?: () => void;
+  onShowAbCompare?: () => void;
+  projectTitle?: string;
 }) {
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
 
@@ -159,6 +189,41 @@ export function StepStoryboardWorkspace({
               onPatchShot={(patch) => patchShot(selectedShotIdx, patch)}
               onOpenLightbox={setLightboxSrc}
             />
+
+            {/* P1: Quick adjust presets */}
+            <StepStoryboardQuickAdjust
+              shot={shot}
+              onPatchStructured={(patch) => {
+                const stillKeys = ['sp_subject','sp_environment','sp_style','sp_lighting','sp_camera','sp_composition','sp_continuity','sp_negative'] as const;
+                const motionKeys = ['mp_motion','mp_camera','mp_tempo','mp_transition','mp_audio'] as const;
+                const stillPatch: Partial<StructuredPromptStill> = {};
+                const motionPatch: Partial<StructuredPromptMotion> = {};
+                for (const [k, v] of Object.entries(patch)) {
+                  if ((stillKeys as readonly string[]).includes(k)) (stillPatch as any)[k] = v;
+                  if ((motionKeys as readonly string[]).includes(k)) (motionPatch as any)[k] = v;
+                }
+                const shotPatch: Partial<typeof shot> = {};
+                if (Object.keys(stillPatch).length) {
+                  shotPatch.structuredStill = { ...shot.structuredStill, ...stillPatch };
+                }
+                if (Object.keys(motionPatch).length) {
+                  shotPatch.structuredMotion = { ...shot.structuredMotion, ...motionPatch };
+                }
+                patchShot(selectedShotIdx, shotPatch);
+              }}
+            />
+
+            {/* P0: AI review panel */}
+            {onAiReview && onApplySuggestion && onApplyAllAndRegenerate && (
+              <StepStoryboardAiReview
+                shot={shot}
+                reviewResult={aiReviewResult ?? null}
+                reviewing={aiReviewing ?? false}
+                onReview={onAiReview}
+                onApplySuggestion={onApplySuggestion}
+                onApplyAllAndRegenerate={onApplyAllAndRegenerate}
+              />
+            )}
           </div>
         </main>
 
@@ -175,6 +240,37 @@ export function StepStoryboardWorkspace({
         />
       </div>
 
+      {/* Toolbar row: batch generate, continuous play, AB compare */}
+      <div className="flex flex-wrap items-center gap-2">
+        {onBatchGenerateAllVideos && (
+          <button
+            type="button"
+            onClick={onBatchGenerateAllVideos}
+            className="rounded-lg border border-amber-500/40 bg-amber-600/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-600/25"
+          >
+            一键生成所有缺失视频
+          </button>
+        )}
+        {onShowContinuousPlay && (
+          <button
+            type="button"
+            onClick={onShowContinuousPlay}
+            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+          >
+            连续播放
+          </button>
+        )}
+        {onShowAbCompare && shotVideoVersions.length >= 2 && (
+          <button
+            type="button"
+            onClick={onShowAbCompare}
+            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+          >
+            版本 A/B 对比
+          </button>
+        )}
+      </div>
+
       <StepStoryboardShotStrip
         shots={shots}
         scSheets={scSheets}
@@ -183,6 +279,19 @@ export function StepStoryboardWorkspace({
         shotQueuedMap={shotQueuedMap}
         onSelectShot={setSelectedShotIdx}
       />
+
+      {/* P2: Continuity check */}
+      {onContinuityCheck && (
+        <StepStoryboardContinuityCheck
+          issues={continuityIssues ?? null}
+          checking={continuityChecking ?? false}
+          onCheck={onContinuityCheck}
+          onJumpToShot={(idx) => {
+            const shotArrayIdx = shots.findIndex((s) => s.shotIndex === idx);
+            if (shotArrayIdx >= 0) setSelectedShotIdx(shotArrayIdx);
+          }}
+        />
+      )}
 
       <button
         type="button"
