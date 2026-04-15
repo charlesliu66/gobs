@@ -1,10 +1,11 @@
 import { compassChatCompletionWithUsage } from './promptPolish.js';
 
 const SYSTEM = `你是配乐提示词专家。用户会给出简短、模糊的中文或英文需求（如「高燃音乐」「紧张战斗 BGM」）。
-你要将其改写为适合 **文生器乐模型（Lyria 类）** 的英文描述。
+用户有时还会附带"视频内容"上下文（分镜描述、场景说明等），请据此推断最合适的音乐风格和情绪。
+你要将其改写为适合 **文生器乐模型（Suno / Lyria 类）** 的英文描述。
 
 ## 规则
-- **prompt**：英文，1–3 句，具体写出：情绪、节奏（tempo）、主奏乐器（如 drums, brass, strings）、风格（如 epic trailer, electronic battle）、**必须强调 instrumental only, no vocals**。
+- **prompt**：英文，2–4 句，具体写出：情绪、节奏（tempo）、主奏乐器（如 drums, brass, strings）、风格（如 epic trailer, electronic battle）、**必须强调 instrumental only, no vocals**。如果用户给出了视频内容描述，请匹配该内容的氛围和节奏。
 - **negativePrompt**：英文，简短列出要避免的（如 vocals, singing, speech, calm, slow ambient），用逗号分隔即可。
 - 输出 **仅** 一行合法 JSON 对象本身，**不要** markdown 代码块、不要前言/后记、不要解释。
 

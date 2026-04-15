@@ -84,7 +84,6 @@ async function submitTask(options: SunoGenerateOptions): Promise<string> {
     customMode: useCustom,
     instrumental: options.instrumental ?? true,
     model,
-    callBackUrl: '', // 不用 callback，主动轮询
   };
 
   if (useCustom) {

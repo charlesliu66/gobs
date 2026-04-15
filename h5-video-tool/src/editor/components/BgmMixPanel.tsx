@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { generateEditorMusic, polishEditorMusicPrompt } from '../../api/editor';
-import type { MediaAsset, TimelineProject } from '../types/timeline';
+import type { MediaAsset, TimelineProject, VideoClip } from '../types/timeline';
 import { setBgmClipOnProject, computeDurationSec } from '../types/timeline';
 import { RunningStatus } from '../../components/RunningStatus';
 
@@ -14,6 +14,20 @@ function mixAudioUrl(path: string): string {
 }
 
 const LYRIA_CLIP_SEC = 32.8;
+
+/** 从时间轴视频轨提取内容摘要，供配乐 prompt 参考 */
+function extractVideoContentSummary(project: TimelineProject): string {
+  const videoTracks = project.tracks.filter((t) => t.type === 'video');
+  const notes: string[] = [];
+  for (const track of videoTracks) {
+    for (const clip of track.clips as VideoClip[]) {
+      if (clip.note?.trim()) notes.push(clip.note.trim());
+    }
+  }
+  if (notes.length === 0) return '';
+  const unique = [...new Set(notes)];
+  return unique.slice(0, 10).join('；');
+}
 
 function isLikelyQuotaOrRateLimitError(msg: string): boolean {
   return /RESOURCE_EXHAUSTED|quota|rate.?limit|429|too many requests/i.test(msg);
@@ -142,12 +156,16 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
   /** 一键智能配乐：润色 prompt + 按时间轴长度自动生成多段并拼接 */
   const runSmartBgm = useCallback(async () => {
     if (busy) return;
-    const raw = prompt.trim() || '适合视频内容的背景音乐，器乐';
+    const userDesc = prompt.trim() || '适合视频内容的背景音乐，器乐';
+    const contentSummary = extractVideoContentSummary(project);
+    const raw = contentSummary
+      ? `视频内容：${contentSummary}\n\n配乐要求：${userDesc}`
+      : userDesc;
     setBusy(true);
     try {
       let finalPrompt = raw;
       let finalNegative = negativePrompt;
-      onPushLog?.('正在优化配乐风格…');
+      onPushLog?.(`正在优化配乐风格…${contentSummary ? '（已读取视频内容）' : ''}`);
       try {
         const out = await withTimeout(
           polishEditorMusicPrompt(raw),
