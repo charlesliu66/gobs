@@ -171,6 +171,22 @@
 
 ## 二、Changelog
 
+### v0.26 — 2026-04-15
+
+**修复：角色/场景图片图裂 + 分镜视频无法播放**
+
+**Root Cause 分析：**
+- **图裂**：`stripBase64` 函数原本用于防止大体积 base64 撑大项目 JSON，但采用了「一刀切」策略，把所有 `data:` URL 字符串都删除，包括 `imageDataUrl`（角色/场景头像）。这些是用户的真实数据，不应被删。
+- **视频黑屏**：`/api/video/file` 在 auth 中间件中已对 `<video>` 标签放行（无需 Bearer），但路由内部仍用 `req.user?.username` 做用户目录鉴权。无 JWT 访问时 `req.user` 为 undefined → `username='_default'` → 与实际目录 `admin` 不匹配 → 403 Forbidden。
+- **图片文件缺失**：角色图片文件位于 `/home/ubuntu/gobs-data/output/production/images/admin/`（之前用 `API_DATA_DIR=/home/ubuntu/gobs-data` 上传），但当前 API 默认读取 `process.cwd()/output/...` 即 `/home/ubuntu/qas-h5/api/output/...`（无 `API_DATA_DIR` 配置）。
+
+**Fix:**
+- **[api] `productionPersist.ts`**：`stripBase64` 改为字段名感知版本，仅删除 `previewStillDataUrl`（分镜静帧预览，~2MB/镜，属可再生成缓存），保留 `imageDataUrl`（角色/场景图）、`videoUrl`（视频版本 URL）等所有用户资产字段。
+- **[api] `video.ts`**：`/api/video/file` 无 JWT 时（`<video>` 标签直接访问），跳过用户目录限制，只校验路径在 `outputDir` 根目录下（防目录穿越），修复公开视频播放 403。
+- **[server] 图片文件恢复**：将 `/home/ubuntu/gobs-data/output/production/images/admin/` 的所有图片复制到 `/home/ubuntu/qas-h5/api/output/production/images/admin/`，恢复角色/场景/道具图片访问。
+
+**---**
+
 ### v0.25 — 2026-04-15
 
 **即梦排队分镜显示统一为「生成中」**
