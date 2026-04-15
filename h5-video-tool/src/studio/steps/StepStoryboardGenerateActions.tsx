@@ -16,8 +16,7 @@ export function StepStoryboardGenerateActions({
   const videoButtonDisabled = shotMediaBusy === 'video' || isQueued;
 
   function videoButtonLabel() {
-    if (isQueued) return '排队等待中…';
-    if (shotMediaBusy === 'video') {
+    if (isQueued || shotMediaBusy === 'video') {
       return dreaminaAsync ? '即梦提交/生成中（完成后自动填入预览）…' : '视频生成中…';
     }
     return '生成分镜视频';
@@ -38,11 +37,7 @@ export function StepStoryboardGenerateActions({
           type="button"
           disabled={videoButtonDisabled}
           onClick={onGenerateShotVideo}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
-            isQueued
-              ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]'
-          }`}
+          className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50 border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
         >
           {videoButtonLabel()}
         </button>

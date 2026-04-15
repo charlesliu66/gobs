@@ -26,8 +26,8 @@ const dreaminaRouter = Router();
 const DREAMINA_SLOT_TIMEOUT_MS = 5 * 60_000; // 5 min per-slot safety net
 
 const DREAMINA_MAX_CONCURRENT = (() => {
-  const n = parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '5', 10);
-  return Number.isFinite(n) && n >= 1 ? n : 5;
+  const n = parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '1', 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 })();
 
 console.log(`[dreamina] concurrency slots: ${DREAMINA_MAX_CONCURRENT}`);

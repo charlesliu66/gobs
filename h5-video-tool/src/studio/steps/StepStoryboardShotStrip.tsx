@@ -43,17 +43,13 @@ export function StepStoryboardShotStrip({
                   className="h-full w-full object-cover"
                 />
               ) : null}
-              {isQueued ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60">
-                  <span className="h-4 w-4 animate-pulse rounded-full border-2 border-yellow-400/40 bg-yellow-400/20" />
-                  <span className="px-1 text-[8px] font-medium text-yellow-200">排队中</span>
-                </div>
-              ) : isThisShotBusy === 'video' ? (
+              {(isQueued || isThisShotBusy === 'video') ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/65 backdrop-blur-[1px]">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-amber-400" />
                   <span className="px-1 text-[8px] font-medium text-amber-100">生成中</span>
                 </div>
               ) : null}
+
               {isThisShotBusy === 'frame' ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-cyan-400" />
