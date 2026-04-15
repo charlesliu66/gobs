@@ -31,3 +31,10 @@ type: feedback
 
 **Why:** 没有明确 AC 的 build 容易跑偏，验证时无法对照。
 **How to apply:** 每次新任务开始前检查 docs/workflow/runs/<run-id>/planner-spec.md 是否存在。
+
+## 规则 5: 每次改动后必须更新 PRODUCT.md
+
+任何功能新增、Bug 修复、性能优化，完成后必须在 PRODUCT.md 的 Changelog 中补一条记录（版本号递增，日期正确，内容简明）。
+
+**Why:** PRODUCT.md 是产品历史的唯一真实记录，漏记会导致功能溯源困难，也违背三端一统的精神（文档也是产物的一部分）。
+**How to apply:** 完成代码改动、三端同步之后，最后一步是打开 PRODUCT.md，在 Changelog 最顶部追加新版本条目，格式参照已有条目（`### vX.Y — YYYY-MM-DD`）。
