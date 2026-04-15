@@ -211,7 +211,7 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
       {showHistory && (
         <div
           ref={historyRef}
-          className="absolute bottom-full right-0 z-50 mb-2 w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl"
+          className="absolute top-full right-0 z-50 mt-1 w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
@@ -285,7 +285,7 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
         </div>
       )}
       {open && (
-        <div className="absolute bottom-full right-0 z-50 mb-2 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-2xl">
+        <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-2xl">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">导出设置</p>
 
           {/* 分辨率 */}
