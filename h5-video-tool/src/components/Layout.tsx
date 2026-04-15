@@ -4,21 +4,11 @@ import { ThemeToggle } from './ThemeToggle';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
-const DEMO_MODE_KEY = 'gobs_demo_mode';
-
 function getStoredUser(): { username: string; displayName: string } | null {
   try {
     const raw = localStorage.getItem('gobs_user');
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
-}
-
-function getStoredDemoMode(): boolean {
-  try {
-    return localStorage.getItem(DEMO_MODE_KEY) === '1';
-  } catch {
-    return false;
-  }
 }
 
 function ProjectsIcon() {
@@ -174,19 +164,15 @@ function getProductionNavTo(pathname: string, search: string): string {
     : '/studio/production';
 }
 
-function filterNavGroup(group: NavItemDef[], demoMode: boolean): NavItemDef[] {
-  const planningSet = new Set([
-    '/platform',
-    '/platform/memory',
-    '/platform/learning-lab',
-    '/platform/ops',
-  ]);
-  if (demoMode) {
-    // 演示模式：仅展示未来规划相关页面
-    return group.filter((item) => planningSet.has(item.to));
-  }
-  // 常规模式：仅展示已完成模块，隐藏规划演示页入口
-  return group.filter((item) => !planningSet.has(item.to));
+const PLANNING_PATHS = new Set([
+  '/platform',
+  '/platform/memory',
+  '/platform/learning-lab',
+  '/platform/ops',
+]);
+
+function filterNavGroup(group: NavItemDef[]): NavItemDef[] {
+  return group.filter((item) => !PLANNING_PATHS.has(item.to));
 }
 
 function navLinkClass(active: boolean, highlight?: boolean): string {
@@ -208,15 +194,14 @@ export function Layout() {
   const isProductionWizard = pathname === '/studio/production';
   const isTiktokMatrix = pathname === '/tiktok-matrix';
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [demoMode, setDemoMode] = useState<boolean>(() => getStoredDemoMode());
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
   const visibleGroups = useMemo(() => {
-    return NAV_GROUPS.map((g) => filterNavGroup(g, demoMode));
-  }, [demoMode]);
+    return NAV_GROUPS.map((g) => filterNavGroup(g));
+  }, []);
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
@@ -263,39 +248,6 @@ export function Layout() {
         ))}
       </nav>
       <div className="gobs-glass mt-auto space-y-2 border-t border-[var(--color-border)]/70 p-3">
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5">
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <div>
-              <div className="text-xs font-semibold text-[var(--color-text)]">演示模式</div>
-              <div className="text-[11px] text-[var(--color-text-subtle)]">
-                开=未来规划；关=已完成模块
-              </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={demoMode}
-              onClick={() => {
-                const next = !demoMode;
-                setDemoMode(next);
-                try {
-                  localStorage.setItem(DEMO_MODE_KEY, next ? '1' : '0');
-                } catch {
-                  // ignore write error
-                }
-              }}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                demoMode ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-border)]'
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
-                  demoMode ? 'translate-x-5' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </label>
-        </div>
         {user && (
           <>
             <NavLink

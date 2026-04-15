@@ -2,8 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlatformMemory, type PlatformGame } from '../context/PlatformMemoryContext';
 
-const DEMO_MODE_KEY = 'gobs_demo_mode';
-
 const channelMetrics = [
   { channel: 'TikTok 官号', views: '128.4万', completion: '23.8%', cpm: 'US$3.7', status: '正常偏优' },
   { channel: 'YouTube Shorts', views: '46.2万', completion: '18.1%', cpm: 'US$4.9', status: '可优化' },
@@ -77,15 +75,6 @@ export function PlatformFramework() {
   const [newGameName, setNewGameName] = useState('');
   const [newGameGenre, setNewGameGenre] = useState('SLG');
   const [newGameStage, setNewGameStage] = useState<PlatformGame['stage']>('首发期');
-  const [demoTab, setDemoTab] = useState<'roadmap' | 'feature-detail'>('roadmap');
-
-  const demoMode = useMemo(() => {
-    try {
-      return localStorage.getItem(DEMO_MODE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  }, []);
 
   const selectedGame = useMemo(
     () => games.find((game) => game.id === selectedGameId) ?? games[0],
@@ -149,72 +138,6 @@ export function PlatformFramework() {
         </div>
       </section>
 
-      {demoMode && (
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDemoTab('roadmap')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                demoTab === 'roadmap'
-                  ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/25'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              平台链路
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemoTab('feature-detail')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                demoTab === 'feature-detail'
-                  ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/25'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              功能细节
-            </button>
-          </div>
-        </section>
-      )}
-
-      {demoTab === 'feature-detail' ? (
-        <section className="space-y-4">
-          <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
-            <h2 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">核心功能实现逻辑（演示版）</h2>
-            <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-              面向汇报场景：聚焦能力闭环、效率提升与可扩展性。
-            </p>
-          </section>
-          <section className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-              <div className="mb-2 inline-flex rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-300">视频生成</div>
-              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-                <li>统一入口调度 Veo / 可灵 / 即梦。</li>
-                <li>支持文生、图生、多模态与异步任务。</li>
-                <li>成片自动入库，直接进入历史与分发。</li>
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-              <div className="mb-2 inline-flex rounded-full bg-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-300">高级制片</div>
-              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-                <li>三层链路：故事弧 → 服化道 → 分镜表。</li>
-                <li>结构化提示词保障镜头连续与画风统一。</li>
-                <li>项目与素材可持久化，便于协作复用。</li>
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-              <div className="mb-2 inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">视频剪辑</div>
-              <ul className="space-y-2 text-sm leading-6 text-[var(--color-text-muted)]">
-                <li>音频能量 + 视觉识别自动提取高光。</li>
-                <li>Agent 直接改写时间轴，进度可视化。</li>
-                <li>自动配乐与导出，缩短交付周期。</li>
-              </ul>
-            </div>
-          </section>
-        </section>
-      ) : (
-        <>
       {/* Summary cards */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -512,8 +435,6 @@ export function PlatformFramework() {
             ))}
           </div>
         </section>
-      )}
-        </>
       )}
     </div>
   );
