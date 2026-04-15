@@ -489,9 +489,15 @@ export interface GenerateEditorMusicBody {
   prompt: string;
   negativePrompt?: string;
   sampleCount?: number;
+  /** Suno customMode 风格标签，如 "Cinematic Orchestral"（可选） */
+  style?: string;
+  /** Suno customMode 曲目标题（可选） */
+  title?: string;
 }
 
 export interface GenerateEditorMusicResponse {
+  /** 实际使用的引擎：'suno' | 'lyria' */
+  provider: 'suno' | 'lyria';
   model: string;
   clipDurationSec: number;
   instrumentalOnly: boolean;
