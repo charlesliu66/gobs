@@ -48,26 +48,31 @@ export function StepStoryboardPreviewPanel({
       )}
       <div className="mt-3">
         <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜视频</div>
-        {shotMediaBusy === 'video' ? (
+        {(shotMediaBusy === 'video' || (!shotPreviewPlaySrc && shot.pendingVideoSubmitId)) ? (
           <div className="mt-1.5 overflow-hidden rounded-xl border border-amber-500/35 bg-[linear-gradient(145deg,rgba(120,80,20,0.22),rgba(20,20,28,0.95))] shadow-inner">
             <div className="flex items-center gap-2 border-b border-amber-500/20 px-3 py-2">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
               </span>
-              <span className="text-[11px] font-semibold tracking-wide text-amber-100">正在生成中</span>
+              <span className="text-[11px] font-semibold tracking-wide text-amber-100">
+                {shotMediaBusy === 'video' ? '正在生成中' : '即梦生成中（后台轮询）'}
+              </span>
             </div>
             <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 px-4 py-8">
               <div
                 className="h-11 w-11 animate-spin rounded-full border-2 border-white/15 border-t-amber-400"
+                style={shotMediaBusy !== 'video' ? { animationDuration: '2s' } : undefined}
                 aria-hidden
               />
               <div className="text-center">
                 <p className="text-sm font-medium text-white">视频生成中</p>
                 <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
-                  {dreaminaAsync
-                    ? '已提交至即梦，排队与渲染完成后将自动出现在此处，请勿关闭本页'
-                    : '渲染完成后将自动出现在此处'}
+                  {shotMediaBusy !== 'video'
+                    ? '后端正在轮询即梦，完成后将自动出现在此处'
+                    : dreaminaAsync
+                      ? '已提交至即梦，排队与渲染完成后将自动出现在此处，请勿关闭本页'
+                      : '渲染完成后将自动出现在此处'}
                 </p>
               </div>
             </div>

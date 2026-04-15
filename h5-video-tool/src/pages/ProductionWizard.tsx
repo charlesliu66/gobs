@@ -383,6 +383,12 @@ export function ProductionWizard() {
           });
           toast.success(`分镜 ${job.shotIndex} 视频已就绪`);
           needsFlushRef.current = true;
+          // 清除对应分镜的 busy 状态（刷新恢复时设置的）
+          setShotBusyMap((prev) => {
+            const n = { ...prev };
+            delete n[String(job.shotIndex)];
+            return n;
+          });
         }
         if (job.status === 'failed') {
           setProject((p) => {
@@ -395,12 +401,26 @@ export function ProductionWizard() {
             return { ...p, shots };
           });
           toast.error(`分镜 ${job.shotIndex} 生成失败：${job.failReason || '未知错误'}`);
+          setShotBusyMap((prev) => {
+            const n = { ...prev };
+            delete n[String(job.shotIndex)];
+            return n;
+          });
         }
         // Notify slow-mode queue listeners when any production job reaches terminal state
         if (job.status === 'done' || job.status === 'failed') {
           for (const listener of sseCompletionListenersRef.current) {
             try { listener(job); } catch { /* ignore */ }
           }
+          // 检查是否所有 pending 分镜都已完成，清除批量标记
+          setProject((p) => {
+            const stillPending = p.shots.some((s) => s.pendingVideoSubmitId);
+            if (!stillPending) {
+              const bk = `gobs_batch_gen_${pid ?? 'local'}`;
+              try { localStorage.removeItem(bk); } catch { /* ignore */ }
+            }
+            return p;
+          });
         }
       } catch { /* ignore parse errors */ }
     };
@@ -1384,11 +1404,56 @@ export function ProductionWizard() {
       toast.info('所有分镜已有视频，无需生成');
       return;
     }
+    // 持久化批量标记，刷新后可自动续接
+    const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
+    try { localStorage.setItem(batchKey, '1'); } catch { /* ignore */ }
     toast.info(`开始批量生成 ${missing.length} 个分镜视频…`);
     for (const { i } of missing) {
       void generateVideoForShotIdx(i);
     }
-  }, [project.shots, generateVideoForShotIdx]);
+  }, [project.shots, serverProjectId, generateVideoForShotIdx]);
+
+  // ── 刷新恢复：还原 pending 分镜的"生成中"展示 + 自动续接批量队列 ───────────
+  const batchResumedRef = useRef(false);
+  useEffect(() => {
+    if (isServerBootstrapping || batchResumedRef.current) return;
+    if (!project.shots.length) return;
+    batchResumedRef.current = true;
+
+    const pendingIds: string[] = [];
+    for (const s of project.shots) {
+      if (s.pendingVideoSubmitId) {
+        pendingIds.push(String(s.shotIndex));
+      }
+    }
+    if (pendingIds.length) {
+      setShotBusyMap((prev) => {
+        const next = { ...prev };
+        for (const id of pendingIds) next[id] = 'video';
+        return next;
+      });
+    }
+
+    const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
+    const hadBatch = (() => { try { return localStorage.getItem(batchKey) === '1'; } catch { return false; } })();
+    if (hadBatch) {
+      const remaining = project.shots.filter((s) =>
+        !s.previewVideoUrl && !s.previewVideoPath && !s.pendingVideoSubmitId
+        && !(s.previewVideoVersions?.length),
+      );
+      if (remaining.length > 0) {
+        toast.info(`检测到 ${remaining.length} 个分镜视频待生成，自动续接批量队列…`);
+        setTimeout(() => {
+          for (const s of remaining) {
+            const idx = project.shots.indexOf(s);
+            if (idx >= 0) void generateVideoForShotIdx(idx);
+          }
+        }, 2000);
+      } else {
+        try { localStorage.removeItem(batchKey); } catch { /* ignore */ }
+      }
+    }
+  }, [isServerBootstrapping, project.shots, serverProjectId, generateVideoForShotIdx]);
 
   // ── 手动检查视频生成进度 ─────────────────────────────────────────────────
   const [checkingProgress, setCheckingProgress] = useState(false);
