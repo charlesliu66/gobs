@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import axios from 'axios';
 import path from 'path';
+import { classifyError } from '../domain/job-status.js';
 import {
   createKlingVideoTaskOnly,
   fetchIngarenaVideoListPage,
@@ -30,8 +31,8 @@ klingRouter.get('/kling/recent-list', async (req: Request, res: Response) => {
     res.json({ items, klingAvailable: true });
   } catch (err) {
     console.error('[video/kling/recent-list]', err);
-    const msg = err instanceof Error ? err.message : '拉取可灵列表失败';
-    res.status(500).json({ error: msg });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 
@@ -51,8 +52,8 @@ klingRouter.get('/kling/task/:taskId', async (req: Request, res: Response) => {
     res.json(r);
   } catch (err) {
     console.error('[video/kling/task]', err);
-    const msg = err instanceof Error ? err.message : '查询失败';
-    res.status(500).json({ error: msg });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 
@@ -105,7 +106,8 @@ klingRouter.get('/kling/ref-cache/:cacheId', async (req: Request, res: Response)
     res.sendFile(path.resolve(abs));
   } catch (err) {
     console.error('[video/kling/ref-cache]', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : '读取缓存失败' });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 
@@ -216,8 +218,8 @@ klingRouter.post('/generate-kling-async', async (req: Request, res: Response) =>
     res.json({ taskId, status: 'pending' as const });
   } catch (err) {
     console.error('[video/generate-kling-async]', err);
-    const msg = err instanceof Error ? err.message : '创建可灵任务失败';
-    res.status(500).json({ error: msg });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 

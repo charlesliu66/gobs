@@ -11,6 +11,7 @@ import {
 import { composeDreaminaPrompt, type DreaminaPromptHints } from '../services/dreaminaPromptComposer.js';
 import { persistVideoUrlToOutput } from '../services/videoUtils.js';
 import { resolveFirstDriveImageIfMissing } from '../services/videoReferenceUtils.js';
+import { classifyError, classifyDreaminaFailReason } from '../domain/job-status.js';
 
 const dreaminaRouter = Router();
 
@@ -41,6 +42,7 @@ async function ensureDreaminaAuthOrRespond(res: Response): Promise<boolean> {
   if (status.loggedIn) return true;
   res.status(400).json({
     error: status.error || '即梦 CLI 未登录，请在服务器执行 dreamina login',
+    errorCode: 'DREAMINA_NOT_LOGGED_IN',
   });
   return false;
 }
@@ -206,8 +208,8 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     }
   } catch (err) {
     console.error('[video/dreamina/submit]', err);
-    const msg = err instanceof Error ? err.message : '即梦提交失败';
-    res.status(500).json({ error: msg });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 
@@ -240,6 +242,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
         genStatus: polled.genStatus,
         queueInfo: polled.queueInfo,
         failReason: polled.failReason,
+        errorCode: classifyDreaminaFailReason(polled.failReason),
       });
       return;
     }
@@ -279,8 +282,8 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('[video/dreamina/task]', err);
-    const msg = err instanceof Error ? err.message : '查询失败';
-    res.status(500).json({ error: msg });
+    const { errorCode, errorMessage } = classifyError(err);
+    res.status(500).json({ error: errorMessage, errorCode });
   }
 });
 
