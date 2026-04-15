@@ -171,6 +171,24 @@
 
 ## 二、Changelog
 
+### v0.27 — 2026-04-15
+
+**素材库 UI 重设计 + 中文文件名编码修复 + 多账号数据隔离**
+
+**Feature / Fix:**
+- **[asset-library] 单页画廊布局**：废弃 4-Tab 结构，进入即显示全部素材真实缩略图网格（6 列正方形裁切）；图片 `<img>` 渲染，视频 `<video>` 展示首帧 + 播放按钮。
+- **[asset-library] 右侧详情抽屉**：点卡片滑入，显示大图预览、文件信息、完整 AI 标签，底部「用于生成」按钮。
+- **[asset-library] 底部上传面板**：点「上传素材」从底部滑入，完成后自动关闭并刷新画廊。
+- **[asset-library] 内嵌搜索 + 筛选**：搜索框 + 比例/类型/方向/画质 4 个 dropdown 常驻顶部。
+- **[asset-library/api] 后端响应规范化**：`GET /assets` 与 `GET /search` 返回 `assets` 字段（含完整 `tags` 数组）。
+- **[asset-library/encoding] 中文文件名乱码修复**：Multer 在 Node/Windows 下将 UTF-8 文件名错误识别为 Latin-1，新增 `decodeFilename` 工具（`latin1 → utf8`）在入库前修正；`fixGarbledFilenames()` 在服务启动时一次性迁移历史脏数据。
+- **[asset-library] 导入白屏 Bug 修复**：前端 `getJobStatus` 响应归一化（`id→jobId`、`failed/interrupted→error`），`AssetImportPanel` 加防御性 `?? ''` 防 jobId 为 undefined 时崩溃。
+- **[auth/logout] 登出清理业务数据**：退出时额外清除 `gobs_last_project_id`、`h5-production-project-v1`（防止高级制片报「项目加载失败」）、`production_compass_api_key`（安全）、`quickfilm_active_job`、`gobs_multishot_job_id`。
+- **[history] 本机视频历史按账号分桶**：key 改为 `h5-video-history-{username}`，不同账号的本机历史互不可见。
+- **[history] 云端列表星标/隐藏偏好按账号分桶**：key 加 username 后缀，账号间偏好独立。
+
+---
+
 ### v0.26 — 2026-04-15
 
 **修复：角色/场景图片图裂 + 分镜视频无法播放**
@@ -236,32 +254,6 @@
 
 **使用说明：**
 在 `h5-video-tool-api/.env` 中添加 `SUNO_API_KEY=sk-xxx` 后重启即生效；不配置或 Suno 失败时系统透明降级到 Lyria，功能不中断。
-
----
-
-### v0.23 — 2026-04-15
-
-**多账号 localStorage 数据隔离修复**
-
-**Fix:**
-- **[auth/logout] 登出清理业务数据**：退出时额外清除 `gobs_last_project_id`、`h5-production-project-v1`（防止高级制片报「项目加载失败」）、`production_compass_api_key`（安全）、`quickfilm_active_job`、`gobs_multishot_job_id`。
-- **[history] 本机视频历史按账号分桶**：key 改为 `h5-video-history-{username}`，不同账号的本机历史互不可见。
-- **[history] 云端列表星标/隐藏偏好按账号分桶**：key 加 username 后缀，账号间偏好独立。
-
----
-
-### v0.22 — 2026-04-15
-
-**素材库 UI 全面重设计**
-
-**Feature:**
-- **[asset-library] 单页画廊布局**：废弃 4-Tab 结构，进入即显示全部素材真实缩略图网格（6列，正方形裁切）。
-- **[asset-library] 真实缩略图**：图片用 `<img>` 渲染，视频用 `<video>` 展示首帧 + 播放按钮。
-- **[asset-library] 右侧详情抽屉**：点卡片滑入抽屉，展示大图预览、文件信息、完整标签，底部「用于生成」按钮。
-- **[asset-library] 底部上传面板**：点「上传素材」从底部滑入，完成后自动关闭并刷新画廊。
-- **[asset-library] 内嵌搜索+筛选**：搜索框 + 4 个筛选 dropdown 常驻顶部，无需跳转 Tab。
-- **[asset-library] 待确认标签抽屉**：橙色横幅提示 + 右侧滑入审核队列。
-- **[asset-library/api] 后端响应修复**：`GET /assets` 和 `GET /search` 返回 `assets` 字段（含完整 `tags` 数组）。
 
 ---
 
