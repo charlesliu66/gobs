@@ -180,6 +180,19 @@
 
 ---
 
+### v0.16 — 2026-04-15
+
+**仓库瘦身 & .gitignore 安全修复**
+
+**Chore:**
+- **[repo] 删除历史部署包**：清理 `deploy-full-20260413-1620/`、`deploy/cloud-baseline/`、10 个 `gobs-*.tar.gz`、2 个 `.zip` 等共 ~30MB 归档，仓库体积显著缩减
+- **[repo] 删除临时调试文件**：`debug_path.mjs`、`final_test.sh`、`test_api.sh`、`tmp_flash_image_test.png`、`gobs_ppt*.py`、空占位文件 `claude`、旧版 `.cmd` 启动脚本
+- **[repo] 删除可再生成产物**：`h5-video-tool/dist/`、`h5-video-tool-api/dist/`、`out/` 等编译输出目录
+- **[frontend] 删除死代码页面**：`TabMaterials.tsx`（全项目无路由/无引用）
+- **[security] 补全 `.gitignore`**：新增 `*.db`/`*.db-shm`/`*.db-wal`、`dreamina-login.json`、`editor-projects/`、`uploads/`、`.claude/settings.local.json` 等规则，防止数据库文件和登录凭证意外进入 Git 历史
+
+---
+
 ### v0.15 — 2026-04-15
 
 **前端状态管理升级（React Query）**
