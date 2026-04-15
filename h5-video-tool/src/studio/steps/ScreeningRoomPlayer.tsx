@@ -66,14 +66,9 @@ export function ScreeningRoomPlayer({
     item?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [currentIdx]);
 
-  // 切镜后尝试自动播放（用户已交互则生效）
-  useEffect(() => {
-    if (current?.vSrc) {
-      videoRef.current?.play().catch(() => {
-        // 浏览器阻止 autoplay，用户手动点播放即可，忽略错误
-      });
-    }
-  }, [currentIdx, current?.vSrc]);
+  const handleCanPlay = useCallback(() => {
+    videoRef.current?.play().catch(() => {});
+  }, []);
 
   if (media.length === 0) return null;
 
@@ -90,9 +85,11 @@ export function ScreeningRoomPlayer({
             ref={videoRef}
             src={current.vSrc!}
             poster={current.thumb || undefined}
+            autoPlay
             controls
             playsInline
             className="h-full w-full object-contain"
+            onCanPlay={handleCanPlay}
             onEnded={goNext}
           />
         ) : current?.thumb ? (
