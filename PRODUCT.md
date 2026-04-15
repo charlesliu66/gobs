@@ -171,6 +171,22 @@
 
 ## 二、Changelog
 
+### v0.22 — 2026-04-15
+
+**音乐生成双引擎：Suno API（主）+ Lyria（backup）**
+
+**Feature:**
+- **[backend] 新增 `sunoMusic.ts` 服务**：对接 sunoapi.org Suno API，全异步流程（提交任务 → 6s 间隔轮询 → 下载 MP3），最大等待 3.5 分钟，每次固定返回 2 首器乐曲目
+- **[backend] `editorMusic.ts` 双引擎路由**：配置 `SUNO_API_KEY` 时默认调用 Suno；敏感词错误（400）直接返回，其余 Suno 错误（配额耗尽 429、Key 无效 401、网络超时等）自动 fallback 到 Lyria；MP3/WAV 双格式文件服务
+- **[backend] 响应新增字段**：`provider: 'suno' | 'lyria'`，告知前端实际使用引擎；Suno 模式下每首 `durationSec` 使用真实时长（非固定 32.8s）
+- **[frontend] API 类型扩展**：`GenerateEditorMusicBody` 新增 `style`/`title` 字段（Suno customMode），`GenerateEditorMusicResponse` 新增 `provider` 字段
+- **[config] `.env.example` 补充**：新增 `SUNO_API_KEY`、`SUNO_MODEL`（默认 `V4_5ALL`）、`SUNO_API_BASE_URL` 三个配置项说明
+
+**使用说明：**
+在 `h5-video-tool-api/.env` 中添加 `SUNO_API_KEY=sk-xxx` 后重启即生效；不配置或 Suno 失败时系统透明降级到 Lyria，功能不中断。
+
+---
+
 ### v0.21 — 2026-04-15
 
 **素材导入白屏 Bug 修复**
