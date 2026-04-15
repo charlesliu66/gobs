@@ -40,6 +40,14 @@
 | 4 | 分镜视频 | 每个分镜生成参考视频（支持即梦多模态、文生视频、图生视频）|
 | 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
 
+**分镜工作台增强功能（v0.42+）：**
+- 一键生成所有缺失视频（批量提交至自适应队列）
+- AI 审片助手：LLM 分析 Prompt 质量 → 逐字段建议 → 一键采纳 → 重新生成
+- 快速调整面板：运镜/节奏/光影预设按钮，一键修改结构化参数
+- 连续播放审片：全屏按序播放所有镜头，键盘快捷键控制
+- 版本 A/B 对比：左右分屏同步播放 + 备注标签
+- 分镜间一致性检查：AI 检查相邻镜头连贯性，按严重程度分级展示
+
 **导出页体验（v0.30+）：**
 - **放映室**：默认视图，分镜视频串联连续播放；胶片条横向导航，绿点/灰点标注生成状态，蓝色 vN 角标显示多版本数量
 - **网格视图**：4 列卡片总览，有视频的镜头直接播放（静帧作 poster）
@@ -202,6 +210,29 @@
 - **[editor] 内容感知配乐**：一键智能配乐时自动从时间轴视频片段的 note 字段提取内容摘要（分镜描述、场景说明），拼入 polish 请求；后端 `editorMusicPromptPolish` 增强为理解"视频内容"上下文，生成的 BGM 风格匹配实际画面内容
 - **[studio → editor] 高级制片配乐预填**：从高级制片导出到剪辑器时，自动从 `SoundMusicPlan.music[].mood` 提取配乐风格描述，写入 `TimelineProject.mix.bgmPromptHint`；BgmMixPanel 首次加载时预填该提示词，显示紫色"来自制片规划"标签
 - **[editor] `TimelineMix` 类型扩展**：新增 `bgmPromptHint?: string` 字段，承载来自上游（高级制片）的配乐风格提示
+
+---
+
+### v0.42 — 2026-04-15
+
+**高级制片——分镜工作台体验优化（6 项新功能）**
+
+**Feature:**
+- **[P0] 批量生成所有缺失视频**：ShotStrip 上方新增「一键生成所有缺失视频」按钮，自动遍历所有尚无视频的分镜并通过自适应队列串行提交。核心 `handleGenerateShotVideo` 重构为参数化 `generateVideoForShotIdx(idx)` 供单镜/批量共用。
+- **[P0] AI 审片助手（评论生成 + 编辑生成）**：后端新增 `POST /api/studio/shot-review`（Compass LLM 文本审片），分析单镜结构化 Prompt 的完整性与一致性，输出综合评分（1-10）和逐字段改进建议。前端展示建议卡片，每条可「采纳」一键修改对应字段，支持「全部采纳并重新生成」完成闭环。
+- **[P1] 快速调整面板**：分镜编辑区新增运镜（固定/缓推/手持/航拍/环绕）、节奏（极慢~极速）、光影（明亮~霓虹）、一键氛围（更戏剧化/更安静/更快节奏）预设按钮，直接映射到 `structuredStill` / `structuredMotion` 字段。
+- **[P1] 连续播放审片模式**：工具栏新增「连续播放」按钮，全屏 overlay 自动按序播放所有有视频的分镜，支持键盘快捷键（← → 切镜 / 空格暂停 / Esc 退出）和底部缩略图导航，统计总时长与缺失镜头数。
+- **[P2] 版本 A/B 对比**：当本镜有 ≥2 个版本时显示「版本 A/B 对比」按钮，全屏左右分屏选择不同版本同步播放，支持为每个版本添加备注标签。
+- **[P2] 分镜间一致性检查**：后端新增 `POST /api/studio/continuity-check`（Compass LLM），检查相邻镜头的色调/角色外观/场景过渡/动作连贯/光线一致性，按 warning/error 分级。前端展示问题列表，支持跳转到问题镜头。
+
+**新增文件：**
+- `h5-video-tool-api/src/routes/shotReview.ts` — 后端 AI 审片 + 一致性检查路由
+- `h5-video-tool/src/api/shotReview.ts` — 前端 API 客户端
+- `h5-video-tool/src/studio/steps/StepStoryboardAiReview.tsx` — AI 审片面板组件
+- `h5-video-tool/src/studio/steps/StepStoryboardQuickAdjust.tsx` — 快速调整面板组件
+- `h5-video-tool/src/studio/steps/StepStoryboardContinuousPlay.tsx` — 连续播放 overlay 组件
+- `h5-video-tool/src/studio/steps/StepStoryboardAbCompare.tsx` — A/B 版本对比 overlay 组件
+- `h5-video-tool/src/studio/steps/StepStoryboardContinuityCheck.tsx` — 一致性检查面板组件
 
 ---
 

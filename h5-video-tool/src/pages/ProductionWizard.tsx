@@ -61,6 +61,7 @@ import { requestNotificationPermission, sendBrowserNotification } from '../utils
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
 import { getDreaminaTaskStatus, submitDreaminaAsync } from '../api/video';
 import { submitBatchJobs, pollBatchJobNow, type BatchJobDto } from '../api/batchJobs';
+import { postShotReview, postContinuityCheck, type ShotReviewResult, type ShotReviewSuggestion, type ContinuityIssue } from '../api/shotReview';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
 import { ProductionWizardShell } from '../studio/ProductionWizardShell';
@@ -71,6 +72,8 @@ import { StepStoryArc } from '../studio/steps/StepStoryArc';
 import { StepDesignWorkspace } from '../studio/steps/StepDesignWorkspace';
 import { StepExportWorkspace } from '../studio/steps/StepExportWorkspace';
 import { StepStoryboardWorkspace } from '../studio/steps/StepStoryboardWorkspace';
+import { StepStoryboardContinuousPlay } from '../studio/steps/StepStoryboardContinuousPlay';
+import { StepStoryboardAbCompare } from '../studio/steps/StepStoryboardAbCompare';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -1189,15 +1192,14 @@ export function ProductionWizard() {
     clearShotBusy,
   ]);
 
-  /** 提交即梦 + 注册 batch-job；后端轮询拿结果，前端不再长轮询。 */
-  const handleGenerateShotVideo = useCallback(async () => {
-    const s = project.shots[selectedShotIdx];
+  /** 核心：提交即梦 + 注册 batch-job（参数化版本，供单镜 / 批量共用）。 */
+  const generateVideoForShotIdx = useCallback(async (shotIdx: number) => {
+    const s = project.shots[shotIdx];
     if (!s) return;
     const shotId = String(s.shotIndex);
     setShotBusy(shotId, 'video');
     const cancelToken = { cancelled: false };
     shotCancelMap.current[shotId] = cancelToken;
-    setErr(null);
 
     const queueSlot = { resolve: (() => { /* replaced below */ }) as () => void };
     const prevQueue = dreaminaQueueRef.current;
@@ -1217,7 +1219,6 @@ export function ProductionWizard() {
       const mv = project.meta.dreaminaModelVersion?.trim();
       const dur = Math.min(60, Math.max(4, Math.round(s.durationSec || 6)));
 
-      // ── 构建提交参数 ──────────────────────────────────────────────────────
       let storyboardText = '';
       let model = '';
       let extraBody: Record<string, unknown> = {};
@@ -1258,7 +1259,6 @@ export function ProductionWizard() {
         }
       }
 
-      // ── 追加全局风格约束（确保色调/光影一致性）────────────────────────────
       const styleRef = project.meta.styleRefSummary?.trim();
       const lighting = s.structuredStill?.sp_lighting?.trim();
       const color = s.structuredStill?.sp_style?.trim();
@@ -1269,7 +1269,6 @@ export function ProductionWizard() {
       ].filter(Boolean).join('\n');
       if (styleSuffix) storyboardText = `${storyboardText}\n${styleSuffix}`;
 
-      // ── 提交到即梦（含 1310 自适应重试）──────────────────────────────────
       const submitReq = {
         storyboardText,
         materials: [] as { id: string; name: string; mimeType?: string }[],
@@ -1286,7 +1285,6 @@ export function ProductionWizard() {
         return /排队|1310|ExceedConcurrency/i.test(msg);
       };
 
-      /** Wait for any production batch-job to reach terminal state via SSE */
       const waitForAnyJobCompletion = (): Promise<BatchJobDto> =>
         new Promise((resolve) => {
           const handler = (job: BatchJobDto) => {
@@ -1305,7 +1303,6 @@ export function ProductionWizard() {
         }
       } catch (firstErr) {
         if (!is1310Error(firstErr)) throw firstErr;
-        // 1310 concurrency limit — switch to slow mode and wait for previous job
         dreaminaSlowModeRef.current = true;
         slowModeSuccessCountRef.current = 0;
         toast.info('即梦并发受限，等待前一个视频完成后自动提交…');
@@ -1321,16 +1318,14 @@ export function ProductionWizard() {
         }
       }
 
-      // 记录 pendingVideoSubmitId（UI 展示 + 服务端回写清理用）
       setProject((p) => {
         const shots = [...p.shots];
-        const cur = shots[selectedShotIdx];
+        const cur = shots[shotIdx];
         if (!cur) return p;
-        shots[selectedShotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
+        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
         return { ...p, shots };
       });
 
-      // ── 注册 batch-job（后端接管轮询）─────────────────────────────────────
       const desc = storyboardText.slice(0, 120);
       try {
         await submitBatchJobs(serverProjectId || 'default', [{
@@ -1344,11 +1339,9 @@ export function ProductionWizard() {
         console.warn('[production] batch-job 注册失败，视频仍在即梦生成中', e);
       }
 
-      toast.success('已提交到即梦，后台将自动轮询取回视频');
+      toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
 
-      // ── 队列释放策略 ───────────────────────────────────────────────────────
       if (dreaminaSlowModeRef.current) {
-        // Slow mode: hold the queue until this job's video is done/failed
         await waitForAnyJobCompletion();
       }
       queueSlot.resolve();
@@ -1367,14 +1360,35 @@ export function ProductionWizard() {
     project.propAssets,
     project.meta.shotVideoDreaminaModel,
     project.meta.dreaminaModelVersion,
+    project.meta.styleRefSummary,
     ar,
-    selectedShotIdx,
     serverProjectId,
     setShotBusy,
     clearShotBusy,
     setProject,
     setShotQueuedMap,
   ]);
+
+  const handleGenerateShotVideo = useCallback(async () => {
+    setErr(null);
+    await generateVideoForShotIdx(selectedShotIdx);
+  }, [generateVideoForShotIdx, selectedShotIdx]);
+
+  /** 批量生成所有缺少视频的分镜（利用自适应队列串行提交） */
+  const handleBatchGenerateAllVideos = useCallback(() => {
+    const missing = project.shots
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => !s.previewVideoUrl && !s.previewVideoPath && !s.pendingVideoSubmitId
+        && !(s.previewVideoVersions?.length));
+    if (missing.length === 0) {
+      toast.info('所有分镜已有视频，无需生成');
+      return;
+    }
+    toast.info(`开始批量生成 ${missing.length} 个分镜视频…`);
+    for (const { i } of missing) {
+      void generateVideoForShotIdx(i);
+    }
+  }, [project.shots, generateVideoForShotIdx]);
 
   // ── 手动检查视频生成进度 ─────────────────────────────────────────────────
   const [checkingProgress, setCheckingProgress] = useState(false);
@@ -1428,6 +1442,89 @@ export function ProductionWizard() {
       setCheckingProgress(false);
     }
   }, [project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject]);
+
+  // ── AI 审片助手 ──────────────────────────────────────────────────────────
+  const [aiReviewResult, setAiReviewResult] = useState<ShotReviewResult | null>(null);
+  const [aiReviewing, setAiReviewing] = useState(false);
+  const handleAiReview = useCallback(async () => {
+    const s = project.shots[selectedShotIdx];
+    if (!s) return;
+    setAiReviewing(true);
+    setAiReviewResult(null);
+    try {
+      const result = await postShotReview(
+        s as unknown as Record<string, unknown>,
+        project.meta.styleRefSummary,
+        project.meta.title,
+      );
+      setAiReviewResult(result);
+    } catch (e) {
+      toast.error(`AI 审片失败：${e instanceof Error ? e.message : '网络异常'}`);
+    } finally {
+      setAiReviewing(false);
+    }
+  }, [project.shots, selectedShotIdx, project.meta.styleRefSummary, project.meta.title]);
+
+  const handleApplySuggestion = useCallback((suggestion: ShotReviewSuggestion) => {
+    const path = suggestion.field.split('.');
+    if (path.length === 2) {
+      const [group, key] = path;
+      if (group === 'structuredStill') {
+        patchShot(selectedShotIdx, {
+          structuredStill: {
+            ...(project.shots[selectedShotIdx]?.structuredStill ?? {} as any),
+            [key]: suggestion.suggestedValue,
+          },
+        });
+      } else if (group === 'structuredMotion') {
+        patchShot(selectedShotIdx, {
+          structuredMotion: {
+            ...(project.shots[selectedShotIdx]?.structuredMotion ?? {} as any),
+            [key]: suggestion.suggestedValue,
+          },
+        });
+      }
+    } else if (path.length === 1) {
+      patchShot(selectedShotIdx, { [path[0]]: suggestion.suggestedValue } as any);
+    }
+    toast.success(`已应用建议：${suggestion.field}`);
+  }, [selectedShotIdx, project.shots, patchShot]);
+
+  const handleApplyAllAndRegenerate = useCallback(() => {
+    void generateVideoForShotIdx(selectedShotIdx);
+  }, [generateVideoForShotIdx, selectedShotIdx]);
+
+  // ── 分镜间一致性检查 ──────────────────────────────────────────────────────
+  const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[] | null>(null);
+  const [continuityChecking, setContinuityChecking] = useState(false);
+  const handleContinuityCheck = useCallback(async () => {
+    if (project.shots.length < 2) {
+      toast.info('至少需要 2 个分镜才能进行一致性检查');
+      return;
+    }
+    setContinuityChecking(true);
+    setContinuityIssues(null);
+    try {
+      const result = await postContinuityCheck(
+        project.shots as unknown as Record<string, unknown>[],
+        project.meta.styleRefSummary,
+      );
+      setContinuityIssues(result.issues);
+      if (result.issues.length === 0) {
+        toast.success('分镜间一致性检查通过');
+      } else {
+        toast.info(`发现 ${result.issues.length} 个连续性问题`);
+      }
+    } catch (e) {
+      toast.error(`一致性检查失败：${e instanceof Error ? e.message : '网络异常'}`);
+    } finally {
+      setContinuityChecking(false);
+    }
+  }, [project.shots, project.meta.styleRefSummary]);
+
+  // ── 连续播放 / AB 对比 ─────────────────────────────────────────────────────
+  const [showContinuousPlay, setShowContinuousPlay] = useState(false);
+  const [showAbCompare, setShowAbCompare] = useState(false);
 
   const story = project.story;
   const chSheets = project.characterAssets ?? [];
@@ -1738,10 +1835,22 @@ export function ProductionWizard() {
             }
             onGenerateShotFrame={() => void handleGenerateShotFrame()}
             onGenerateShotVideo={() => void handleGenerateShotVideo()}
+            onBatchGenerateAllVideos={handleBatchGenerateAllVideos}
             onKeepOnlyCurrentVersion={keepOnlyShotVideoVersion}
             onSelectVideoVersion={selectShotVideoVersion}
             onCheckVideoProgress={() => void handleCheckVideoProgress()}
             checkingProgress={checkingProgress}
+            aiReviewResult={aiReviewResult}
+            aiReviewing={aiReviewing}
+            onAiReview={() => void handleAiReview()}
+            onApplySuggestion={handleApplySuggestion}
+            onApplyAllAndRegenerate={handleApplyAllAndRegenerate}
+            continuityIssues={continuityIssues}
+            continuityChecking={continuityChecking}
+            onContinuityCheck={() => void handleContinuityCheck()}
+            onShowContinuousPlay={() => setShowContinuousPlay(true)}
+            onShowAbCompare={() => setShowAbCompare(true)}
+            projectTitle={project.meta.title}
           />
         )}
 
@@ -1789,6 +1898,20 @@ export function ProductionWizard() {
         onLoadProject={handleLoadServerProject}
       />
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+      {showContinuousPlay && (
+        <StepStoryboardContinuousPlay
+          shots={project.shots}
+          resolveVideoSrc={resolveProductionShotPreviewVideoSrc}
+          onClose={() => setShowContinuousPlay(false)}
+          onSelectShot={(idx) => { setSelectedShotIdx(idx); setStep(3); }}
+        />
+      )}
+      {showAbCompare && (
+        <StepStoryboardAbCompare
+          versions={shotVideoVersions}
+          onClose={() => setShowAbCompare(false)}
+        />
+      )}
     </>
   );
 }
