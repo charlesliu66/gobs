@@ -87,7 +87,34 @@ export async function importAssets(files: FileList): Promise<{ jobId: string; to
 }
 
 export async function getJobStatus(jobId: string): Promise<ImportJob> {
-  return apiGet<ImportJob>(`${BASE}/import/${encodeURIComponent(jobId)}`);
+  // 后端返回 DB 行结构（id, status: 'pending'|'running'|'done'|'interrupted'|'failed', error）
+  // 归一化为前端 ImportJob 格式
+  const raw = await apiGet<{
+    id?: string;
+    jobId?: string;
+    username?: string;
+    total: number;
+    processed: number;
+    failed: number;
+    skipped?: number;
+    status: string;
+    error?: string | null;
+  }>(`${BASE}/import/${encodeURIComponent(jobId)}`);
+
+  const normalizedStatus: ImportJob['status'] =
+    raw.status === 'done' ? 'done'
+    : raw.status === 'failed' || raw.status === 'interrupted' || raw.status === 'error' ? 'error'
+    : 'running';
+
+  return {
+    jobId: raw.jobId ?? raw.id ?? jobId,
+    username: raw.username ?? '',
+    total: raw.total,
+    processed: raw.processed,
+    failed: raw.failed,
+    status: normalizedStatus,
+    errors: raw.error ? [raw.error] : undefined,
+  };
 }
 
 // ── 资产列表 ──────────────────────────────────────────────────────────────────

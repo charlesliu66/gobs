@@ -171,6 +171,17 @@
 
 ## 二、Changelog
 
+### v0.21 — 2026-04-15
+
+**素材导入白屏 Bug 修复**
+
+**Fix:**
+- **[asset-library/import] 批量导入白屏修复**：修复批量导入图片后页面直接白屏的问题。根因：后端 `GET /import/:jobId` 返回 DB 行字段为 `id`，前端轮询后调用 `job.jobId.slice(0,8)` 时 `jobId` 为 `undefined` 导致 `TypeError`，React 组件树崩溃。
+- **[asset-library/import] 轮询永不停止修复**：后端 job status 存在 `'failed'` / `'interrupted'` 两个终态，但前端仅检查 `'done'` / `'error'`，导致轮询内存泄漏。现在 `getJobStatus` API 函数统一归一化：`failed`/`interrupted` → `error`。
+- **[asset-library/import] 防御性检查**：`job.jobId` 渲染处增加空值保护 `(job.jobId ?? '')` 防止后续潜在崩溃。
+
+---
+
 ### v0.20 — 2026-04-15
 
 **导出历史管理面板**

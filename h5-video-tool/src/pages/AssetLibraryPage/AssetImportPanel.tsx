@@ -35,12 +35,13 @@ export function AssetImportPanel() {
         try {
           const status = await getJobStatus(jobId);
           setJob(status);
+          // 终态：done / error（已由 getJobStatus 归一化，包含 failed/interrupted）
           if (status.status === 'done' || status.status === 'error') {
             stopPoll();
             if (status.status === 'done') {
               toast.success(`导入完成：${status.processed} 个素材`);
             } else {
-              toast.error('导入出现错误');
+              toast.error('导入出现错误，请检查详情');
             }
           }
         } catch {
@@ -101,7 +102,7 @@ export function AssetImportPanel() {
         <div className="bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-[var(--color-text)]">
-              任务 <span className="font-mono text-xs text-[var(--color-text-subtle)]">{job.jobId.slice(0, 8)}…</span>
+              任务 <span className="font-mono text-xs text-[var(--color-text-subtle)]">{(job.jobId ?? '').slice(0, 8)}…</span>
             </span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
               job.status === 'done'
