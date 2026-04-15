@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { useMaterials } from '../context/MaterialsContext';
-import { useVideoGenerate } from '../hooks/useVideoGenerate';
 import { useVideoGeneration } from '../hooks/useVideoGeneration';
 import { useNavigate } from 'react-router-dom';
 import { saveVideoToHistory } from '../utils/videoHistory';
@@ -82,7 +81,14 @@ export function StepVideo() {
   } = useCreateFlow();
   const selectedOrder = filterPlaceholders(rawSelectedOrder);
   const { accessToken } = useMaterials();
-  const { generateMultishot, loading, error, clearError, setError, useMock } = useVideoGenerate();
+  const {
+    generateMultishot,
+    loading,
+    error,
+    clearError,
+    setError,
+    useMock,
+  } = useVideoGeneration();
   const singleVideoGen = useVideoGeneration({
     onError: (msg) => setError(msg),
   });

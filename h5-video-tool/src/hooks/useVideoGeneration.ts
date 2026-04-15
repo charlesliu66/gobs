@@ -7,8 +7,12 @@ import {
   klingVideoProxyUrl,
   resolveKlingPlaybackUrl,
   submitDreaminaAsync,
+  generateMultishot,
   type VideoGenerateRequest,
+  type MultishotGenerateRequest,
+  type MultishotGenerateResponse,
 } from '../api/video';
+import { mockGenerateVideo } from '../api/mock/video';
 
 export type VideoGenerationStatus = 'idle' | 'submitting' | 'polling' | 'completed' | 'failed';
 
@@ -32,6 +36,9 @@ type AsyncProvider = 'dreamina' | 'kling';
 const FIRST_POLL_MS = 3000;
 const STABLE_POLL_MS = 5000;
 const MAX_POLL_MS = 10 * 60 * 1000;
+
+/** VITE_USE_MOCK_VIDEO 默认为 false（显式关闭 mock）*/
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_VIDEO !== 'false';
 
 function normalizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? '生成失败');
@@ -220,13 +227,53 @@ export function useVideoGeneration(opts?: {
     [emit, opts],
   );
 
+  // ── 多镜头生成（原 useVideoGenerate.generateMultishot）─────────────────────
+  const generateMultishotFn = useCallback(
+    async (req: MultishotGenerateRequest): Promise<MultishotGenerateResponse | null> => {
+      cancelledRef.current = false;
+      emit({ status: 'submitting' });
+      try {
+        if (USE_MOCK) {
+          const mock = await mockGenerateVideo();
+          emit({ status: 'completed' });
+          return mock ? { status: 'completed', videoUrl: mock.videoUrl ?? '' } : null;
+        }
+        const result = await generateMultishot(req);
+        emit({ status: 'completed' });
+        return result;
+      } catch (e) {
+        const msg = normalizeError(e);
+        emit({ status: 'failed', error: msg });
+        opts?.onError?.(msg);
+        return null;
+      }
+    },
+    [emit, opts],
+  );
+
+  // ── 便捷属性（向后兼容 useVideoGenerate 的调用方）─────────────────────────
+  const loading = state.status === 'submitting' || state.status === 'polling';
+  const error = state.error ?? null;
+  const clearError = useCallback(() => emit({ ...state, status: state.status === 'failed' ? 'idle' : state.status, error: undefined }), [emit, state]);
+  const setError = useCallback((msg: string | null) => {
+    if (msg) emit({ status: 'failed', error: msg });
+    else emit({ status: 'idle' });
+  }, [emit]);
+
   return {
     state,
     submitAsync,
     submitQueued,
     generateSync,
+    generateMultishot: generateMultishotFn,
     cancel,
     reset,
+    // 兼容 useVideoGenerate 的消费者
+    loading,
+    error,
+    clearError,
+    setError,
+    useMock: USE_MOCK,
   };
 }
 
