@@ -171,6 +171,8 @@ export function ProductionWizard() {
   // 防止“服务端项目尚未加载完成时”把空白初始态覆盖回服务端
   const [isServerBootstrapping, setIsServerBootstrapping] = useState(shouldLoadFromServer);
   const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
+  // 确保恢复轮询只在项目真正加载完成后执行一次
+  const hasResumedPollingRef = useRef(false);
 
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
   const scheduleServerSync = useCallback((data: StoredWizard) => {
@@ -318,8 +320,16 @@ export function ProductionWizard() {
     [project.shots, project.meta.title, setProject],
   );
 
-  /** 页面加载时恢复所有带 pendingVideoSubmitId 的分镜视频轮询（刷新前已提交但未完成的任务）。 */
+  /**
+   * 页面加载时恢复所有带 pendingVideoSubmitId 的分镜视频轮询（刷新前已提交但未完成的任务）。
+   * 必须等服务端项目加载完成（isServerBootstrapping=false）后才能读到正确的 project.shots，
+   * 因此依赖 isServerBootstrapping；hasResumedPollingRef 防止多次触发。
+   */
   useEffect(() => {
+    if (isServerBootstrapping) return; // 等待服务端项目加载完成
+    if (hasResumedPollingRef.current) return; // 只执行一次
+    hasResumedPollingRef.current = true;
+
     const shotsWithPending = project.shots
       .map((s, idx) => ({ s, idx }))
       .filter(({ s }) => !!s.pendingVideoSubmitId);
@@ -360,7 +370,7 @@ export function ProductionWizard() {
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount only
+  }, [isServerBootstrapping]); // 等服务端项目加载完再执行；hasResumedPollingRef 防重复
 
   useEffect(() => {
     requestNotificationPermission();
