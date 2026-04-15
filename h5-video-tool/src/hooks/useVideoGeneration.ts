@@ -116,19 +116,22 @@ export function useVideoGeneration(opts?: {
     ): Promise<VideoGenerationResult | null> => {
       cancelledRef.current = false;
       emit({ status: 'submitting' });
-      const startedAt = Date.now();
       try {
         if (provider === 'dreamina') {
           const submit = await submitDreaminaAsync(request);
           if (cancelledRef.current) return null;
           onSubmitted?.(submit.submitId, submit.taskId); // persist before polling
+          // Start timeout AFTER submission — the POST may block on the backend
+          // semaphore for minutes when DREAMINA_MAX_CONCURRENT is low; that wait
+          // must not eat into the polling budget.
+          const pollStartedAt = Date.now();
           let polls = 0;
           emit({
             status: 'polling',
             taskId: submit.taskId,
             submitId: submit.submitId,
           });
-          while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - startedAt < MAX_POLL_MS) {
+          while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - pollStartedAt < MAX_POLL_MS) {
             const st = await getDreaminaTaskStatus(submit.submitId);
             if (st.status === 'failed') {
               throw new Error(st.failReason || '即梦任务失败');
@@ -157,9 +160,10 @@ export function useVideoGeneration(opts?: {
 
         const submit = await generateKlingAsync(request);
         if (cancelledRef.current) return null;
+        const pollStartedAt = Date.now();
         let polls = 0;
         emit({ status: 'polling', taskId: submit.taskId });
-        while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - startedAt < MAX_POLL_MS) {
+        while (!cancelledRef.current && !(externalCancel?.cancelled) && Date.now() - pollStartedAt < MAX_POLL_MS) {
           const st = await getKlingTaskStatus(submit.taskId);
           if (st.phase === 'failed') {
             throw new Error(st.error || '可灵任务失败');

@@ -131,6 +131,50 @@ export function saveStored(s: StoredWizard) {
   }
 }
 
+/**
+ * 合并两组 shots 的视频数据：按 shotIndex 匹配，
+ * 将 local 中已有但 server 中缺失的 videoVersions 补入。
+ * 用于页面刷新时防止服务端旧数据覆盖 localStorage 中已保存的视频。
+ */
+export function mergeShotVideoVersions(
+  serverShots: ProductionShot[],
+  localShots: ProductionShot[],
+): ProductionShot[] {
+  if (!localShots?.length) return serverShots;
+  const localMap = new Map(localShots.map((s) => [s.shotIndex, s]));
+  return serverShots.map((serverShot) => {
+    const localShot = localMap.get(serverShot.shotIndex);
+    if (!localShot) return serverShot;
+
+    const serverVersions = Array.isArray(serverShot.previewVideoVersions)
+      ? serverShot.previewVideoVersions
+      : [];
+    const localVersions = Array.isArray(localShot.previewVideoVersions)
+      ? localShot.previewVideoVersions
+      : [];
+
+    if (localVersions.length === 0) return serverShot;
+
+    // Server already has video data — keep as-is
+    if (serverVersions.length > 0) return serverShot;
+
+    // Server has no versions but local does — adopt local video data
+    const selected = localVersions.find(
+      (v) => v.id === localShot.selectedPreviewVideoVersionId,
+    ) ?? localVersions[0];
+    return {
+      ...serverShot,
+      previewVideoVersions: localVersions,
+      selectedPreviewVideoVersionId: selected?.id,
+      previewVideoPath: selected?.videoPath,
+      previewVideoUrl: selected?.videoUrl,
+      // Preserve pendingVideoSubmitId from whichever source still has one
+      pendingVideoSubmitId:
+        serverShot.pendingVideoSubmitId || localShot.pendingVideoSubmitId,
+    } as ProductionShot;
+  });
+}
+
 /** 从剧本同步资产时保留已有定妆图 */
 export function mergeCharacterSheetsPreservingLooks(
   next: CharacterSheet[],

@@ -346,8 +346,13 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
     const rawVideoUrl = polled.videoUrl;
     const slug = `dreamina_${polled.submitId.slice(0, 12)}`;
     const videoPath = rawVideoUrl ? await persistVideoUrlToOutput(rawVideoUrl, slug, req.user?.username) : undefined;
-    // Return a small serving URL instead of the raw data URL (which can be 100 MB+).
     const serveUrl = videoPath ? `/api/video/file?path=${encodeURIComponent(videoPath)}` : undefined;
+
+    // Fallback: if local persistence failed but the raw URL is a playable https
+    // link (not a huge data: URL), return it so the frontend can still play.
+    const fallbackUrl = !serveUrl && rawVideoUrl && /^https?:\/\//i.test(rawVideoUrl)
+      ? rawVideoUrl
+      : undefined;
 
     res.json({
       taskId,
@@ -355,7 +360,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
       status: 'completed' as const,
       phase: polled.phase,
       genStatus: polled.genStatus,
-      videoUrl: serveUrl,
+      videoUrl: serveUrl || fallbackUrl,
       videoPath,
     });
   } catch (err) {

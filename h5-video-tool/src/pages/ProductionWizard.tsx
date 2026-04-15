@@ -169,32 +169,41 @@ export function ProductionWizard() {
   const [showLibraryImport, setShowLibraryImport] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const serverSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** When true, the next auto-persist cycle flushes to the server immediately. */
+  const needsFlushRef = useRef(false);
   // 防止“服务端项目尚未加载完成时”把空白初始态覆盖回服务端
   const [isServerBootstrapping, setIsServerBootstrapping] = useState(shouldLoadFromServer);
   const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
   // 确保恢复轮询只在项目真正加载完成后执行一次
   const hasResumedPollingRef = useRef(false);
 
+  /** 执行一次服务端保存（共享逻辑） */
+  const doServerSync = useCallback(async (data: StoredWizard) => {
+    try {
+      const result = await saveProductionProject(data as unknown as Record<string, unknown>, serverProjectId ?? undefined);
+      setServerProjectId(result.id);
+      try { localStorage.setItem('gobs_last_project_id', result.id); } catch { /* ignore */ }
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('projectId') !== result.id) {
+        url.searchParams.set('projectId', result.id);
+        window.history.replaceState(null, '', url.toString());
+      }
+    } catch (e) {
+      console.warn('[production] 服务端同步失败（localStorage 仍有数据）', e);
+    }
+  }, [serverProjectId]);
+
   /** 防抖同步到服务端：project 变化后 3 秒触发 */
   const scheduleServerSync = useCallback((data: StoredWizard) => {
     if (serverSyncTimerRef.current) clearTimeout(serverSyncTimerRef.current);
-    serverSyncTimerRef.current = setTimeout(async () => {
-      try {
-        const result = await saveProductionProject(data as unknown as Record<string, unknown>, serverProjectId ?? undefined);
-        setServerProjectId(result.id);
-        // 写入 localStorage，供下次打开页面自动续接
-        try { localStorage.setItem('gobs_last_project_id', result.id); } catch { /* ignore */ }
-        // 把 projectId 写入 URL，避免刷新丢失（不产生历史记录）
-        const url = new URL(window.location.href);
-        if (url.searchParams.get('projectId') !== result.id) {
-          url.searchParams.set('projectId', result.id);
-          window.history.replaceState(null, '', url.toString());
-        }
-      } catch (e) {
-        console.warn('[production] 服务端同步失败（localStorage 仍有数据）', e);
-      }
-    }, 3000);
-  }, [serverProjectId]);
+    serverSyncTimerRef.current = setTimeout(() => void doServerSync(data), 3000);
+  }, [doServerSync]);
+
+  /** 立即同步到服务端（用于视频保存等关键数据，绕过 3s 防抖） */
+  const flushServerSync = useCallback((data: StoredWizard) => {
+    if (serverSyncTimerRef.current) clearTimeout(serverSyncTimerRef.current);
+    void doServerSync(data);
+  }, [doServerSync]);
 
   /** 从服务端加载项目列表 */
   const handleLoadProjectList = useCallback(async () => {
@@ -317,6 +326,7 @@ export function ProductionWizard() {
         ...(videoPath?.trim() ? {} : { videoUrl: url }),
       });
       toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
+      needsFlushRef.current = true;
     },
     [project.shots, project.meta.title, setProject],
   );
@@ -795,7 +805,12 @@ export function ProductionWizard() {
       storyGenre,
     };
     saveStored(data);
-    scheduleServerSync(data);
+    if (needsFlushRef.current) {
+      needsFlushRef.current = false;
+      flushServerSync(data);
+    } else {
+      scheduleServerSync(data);
+    }
   }, [
     project,
     characterBible,
@@ -805,6 +820,7 @@ export function ProductionWizard() {
     step,
     storyGenre,
     scheduleServerSync,
+    flushServerSync,
     isServerBootstrapping,
     canAutoPersist,
   ]);
@@ -1385,8 +1401,21 @@ export function ProductionWizard() {
     [shot, selectedShotVideoVersion],
   );
   const selectShotVideoVersion = useCallback((versionId: string) => {
-    patchShot(selectedShotIdx, { selectedPreviewVideoVersionId: versionId });
-  }, [patchShot, selectedShotIdx]);
+    setProject((p) => {
+      const shots = [...p.shots];
+      const cur = shots[selectedShotIdx];
+      if (!cur) return p;
+      const list = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
+      const picked = list.find((v) => v.id === versionId);
+      shots[selectedShotIdx] = {
+        ...cur,
+        selectedPreviewVideoVersionId: versionId,
+        previewVideoPath: picked?.videoPath,
+        previewVideoUrl: picked?.videoUrl,
+      } as ProductionShot;
+      return { ...p, shots, assembled: null };
+    });
+  }, [selectedShotIdx]);
   const keepOnlyShotVideoVersion = useCallback((versionId: string) => {
     setProject((p) => {
       const shots = [...p.shots];
