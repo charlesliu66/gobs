@@ -166,6 +166,20 @@
 
 ## 二、Changelog
 
+### v0.15 — 2026-04-15
+
+**前端状态管理升级（React Query）**
+
+**Feature:**
+- **[frontend] React Query 基础设施**：安装 `@tanstack/react-query`，在 `main.tsx` 挂载 `QueryClientProvider`（`staleTime=10s`、`retry=1`、`refetchOnWindowFocus=false`）
+- **[frontend] `useVideoTaskQuery` hook**：新增 `useDreaminaTaskQuery(submitId)` 和 `useKlingTaskQuery(taskId)`，使用 React Query 的 `refetchInterval` 实现非阻塞视频任务轮询；任务完成/失败后自动停止轮询
+- **[frontend] 类型扩展**：`DreaminaTaskPollResponse` 和 `KlingTaskStatusResponse` 均新增可选 `errorCode` 字段，与后端批次 5 的错误码对齐
+
+**背景说明（批次 7 现状）：**
+剪辑器撤销/重做（`useUndoRedo`，depth=50）和自动保存（3s 防抖，通过 `/api/editor/projects`）已在此前版本实现，本批次确认并完善了相关基础设施。
+
+---
+
 ### v0.14 — 2026-04-15
 
 **巨石文件拆分（批次 6）**
