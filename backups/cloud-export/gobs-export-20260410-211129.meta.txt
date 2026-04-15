@@ -1,0 +1,23 @@
+timestamp=20260410-211129
+hostname=garenadev-20260408133047-r-1
+cwd=/home/ubuntu
+node=v20.20.2
+npm=10.8.2
+python3=Python 3.12.3
+pm2=6.0.14
+--- pm2 list ---
+┌────┬─────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name        │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼─────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ gobs-api    │ default     │ 0.1.0   │ fork    │ 1081507  │ 24m    │ 96   │ online    │ 0%       │ 80.3mb   │ ubuntu   │ disabled │
+│ 1  │ gobs-sj     │ default     │ N/A     │ fork    │ 212951   │ 47h    │ 20   │ online    │ 0%       │ 61.8mb   │ ubuntu   │ disabled │
+└────┴─────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+--- disk ---
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           763M  1.1M  762M   1% /run
+/dev/vda2        99G  9.7G   85G  11% /
+tmpfs           3.8G   24K  3.8G   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           763M   12K  763M   1% /run/user/1000
+--- gobs size ---
+1.3G	/home/ubuntu/gobs

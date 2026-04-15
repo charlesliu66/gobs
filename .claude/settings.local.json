@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import paramiko; print\\('paramiko ok'\\)\")",
+      "Bash(python -c \"import pexpect; print\\('pexpect ok'\\)\")",
+      "Bash(python:*)",
+      "Bash(cd /c/Users/wei.liu/Desktop/cursor_try/QAS/h5-video-tool-api echo \"=== veoPython.ts ===\" grep -n \"PYTHON_EXE\\\\|spawn.*python\" src/services/veoPython.ts)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(npm run:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.flova.ai)",
+      "WebSearch",
+      "Bash(gh repo:*)",
+      "Bash(curl:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Name:', d.get\\('name'\\)\\); print\\('Desc:', d.get\\('description'\\)\\); print\\('Stars:', d.get\\('stargazers_count'\\)\\); print\\('Archived:', d.get\\('archived'\\)\\)\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Name:', j.name\\); console.log\\('Desc:', j.description\\); console.log\\('Stars:', j.stargazers_count\\); console.log\\('Archived:', j.archived\\); console.log\\('Pushed:', j.pushed_at\\);\")",
+      "Bash(curl -s https://api.github.com/repos/microsoft/playwright-cli)",
+      "Bash(node -e \"const j=require\\('/tmp/pcli.json'\\); console.log\\('Name:', j.name, '\\\\nDesc:', j.description, '\\\\nStars:', j.stargazers_count, '\\\\nArchived:', j.archived, '\\\\nPushed:', j.pushed_at\\);\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(grep -oE '\\(title|content|description|og:description\\)[^>]*>[^<]{10,200}')",
+      "Bash(grep -oP '\\(?<=content=\"\\)[^\"]{20,300}')",
+      "Bash(node -e \"process.stdin.resume\\(\\); let d=''; process.stdin.on\\('data', c => d+=c\\); process.stdin.on\\('end', \\(\\) => { const j=JSON.parse\\(d\\); console.log\\(Buffer.from\\(j.content,'base64'\\).toString\\('utf8'\\).substring\\(0,1000\\)\\); }\\);\")",
+      "Bash(npm install:*)",
+      "Bash(playwright-cli --version)",
+      "Bash(playwright-cli install:*)",
+      "Bash(npx playwright:*)"
+    ]
+  }
+}

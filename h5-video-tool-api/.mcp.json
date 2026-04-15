@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flova-video": {
+      "command": "node",
+      "args": ["C:\\Users\\wei.liu\\.claude\\mcp\\flova-video\\mcp\\server.js"]
+    }
+  }
+}
