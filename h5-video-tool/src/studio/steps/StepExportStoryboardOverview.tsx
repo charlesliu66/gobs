@@ -49,9 +49,23 @@ export function StepExportStoryboardOverview({
                 key={`${sh.shotIndex}-${idx}`}
                 className="flex flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
               >
+                {/* 媒体区：有视频用 video（静帧作 poster），无视频用静帧 */}
                 <div className="relative aspect-video w-full bg-black/80">
-                  {thumb ? (
-                    <img src={thumb} alt="" className="h-full w-full object-cover" />
+                  {vSrc ? (
+                    <video
+                      src={vSrc}
+                      controls
+                      playsInline
+                      poster={thumb || undefined}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : thumb ? (
+                    <>
+                      <img src={thumb} alt="" className="h-full w-full object-cover" />
+                      <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]">
+                        尚未生成视频
+                      </span>
+                    </>
                   ) : (
                     <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-[var(--color-text-muted)]">
                       无静帧
@@ -61,16 +75,8 @@ export function StepExportStoryboardOverview({
                     镜{sh.shotIndex}
                   </span>
                 </div>
-                {vSrc ? (
-                  <div className="border-t border-[var(--color-border)] p-1">
-                    <video src={vSrc} controls playsInline className="h-20 w-full object-contain" />
-                  </div>
-                ) : (
-                  <p className="border-t border-[var(--color-border)] px-2 py-2 text-[10px] text-[var(--color-text-muted)]">
-                    尚未生成分镜视频
-                  </p>
-                )}
-                <p className="line-clamp-2 px-2 pb-2 text-[10px] text-[var(--color-text-muted)]">
+                {/* 描述文字 */}
+                <p className="line-clamp-2 border-t border-[var(--color-border)] px-2 py-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
                   {storyLine.slice(0, 120)}
                   {storyLine.length > 120 ? '…' : ''}
                 </p>
