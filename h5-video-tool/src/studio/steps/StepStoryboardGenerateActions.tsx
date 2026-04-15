@@ -3,6 +3,7 @@ export function StepStoryboardGenerateActions({
   dreaminaAsync,
   hasProductionDesign,
   isQueued,
+  queueDepth,
   pendingVideoSubmitId,
   checkingProgress,
   onGenerateShotFrame,
@@ -13,6 +14,8 @@ export function StepStoryboardGenerateActions({
   dreaminaAsync: boolean;
   hasProductionDesign: boolean;
   isQueued?: boolean;
+  /** How many shots are ahead in the submission queue */
+  queueDepth?: number;
   pendingVideoSubmitId?: string;
   checkingProgress?: boolean;
   onGenerateShotFrame: () => void;
@@ -24,6 +27,7 @@ export function StepStoryboardGenerateActions({
   const videoButtonDisabled = isSubmitting || hasPendingBackend;
 
   function videoButtonLabel() {
+    if (isQueued && queueDepth && queueDepth > 0) return `排队等待中…（前方 ${queueDepth} 个）`;
     if (isSubmitting) return '即梦提交中…';
     if (hasPendingBackend) return '后台生成中（等待即梦出片）';
     return '生成分镜视频';

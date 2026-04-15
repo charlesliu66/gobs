@@ -63,6 +63,8 @@ export interface VideoGenerateRequest {
     roleName?: string;
     sceneName?: string;
   };
+  /** 来源标记：production 源在后端提交后立即释放信号量 slot */
+  source?: 'production' | 'quickfilm';
 }
 
 export interface VeoModelsResponse {

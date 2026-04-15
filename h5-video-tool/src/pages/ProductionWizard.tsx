@@ -260,6 +260,11 @@ export function ProductionWizard() {
   // Serialize Dreamina submissions: each shot waits for the previous shot's submit_id to be
   // received before it sends its own request (not until polling completes — that runs concurrently).
   const dreaminaQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // Adaptive queue: slow mode waits for previous job to fully complete before next submission
+  const dreaminaSlowModeRef = useRef(false);
+  const slowModeSuccessCountRef = useRef(0);
+  // SSE completion listeners for slow-mode queue gating
+  const sseCompletionListenersRef = useRef<Set<(job: BatchJobDto) => void>>(new Set());
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
       setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
@@ -387,6 +392,12 @@ export function ProductionWizard() {
             return { ...p, shots };
           });
           toast.error(`分镜 ${job.shotIndex} 生成失败：${job.failReason || '未知错误'}`);
+        }
+        // Notify slow-mode queue listeners when any production job reaches terminal state
+        if (job.status === 'done' || job.status === 'failed') {
+          for (const listener of sseCompletionListenersRef.current) {
+            try { listener(job); } catch { /* ignore */ }
+          }
         }
       } catch { /* ignore parse errors */ }
     };
@@ -1258,19 +1269,57 @@ export function ProductionWizard() {
       ].filter(Boolean).join('\n');
       if (styleSuffix) storyboardText = `${storyboardText}\n${styleSuffix}`;
 
-      // ── 提交到即梦 ────────────────────────────────────────────────────────
-      const submit = await submitDreaminaAsync({
+      // ── 提交到即梦（含 1310 自适应重试）──────────────────────────────────
+      const submitReq = {
         storyboardText,
-        materials: [],
+        materials: [] as { id: string; name: string; mimeType?: string }[],
         duration: dur,
         aspectRatio: ar,
         model,
+        source: 'production' as const,
         ...(mv ? { dreaminaModelVersion: mv } : {}),
         ...extraBody,
-      });
+      };
 
-      // 释放队列槽位（后续 shot 可以开始提交）
-      queueSlot.resolve();
+      const is1310Error = (err: unknown): boolean => {
+        const msg = err instanceof Error ? err.message : String(err);
+        return /排队|1310|ExceedConcurrency/i.test(msg);
+      };
+
+      /** Wait for any production batch-job to reach terminal state via SSE */
+      const waitForAnyJobCompletion = (): Promise<BatchJobDto> =>
+        new Promise((resolve) => {
+          const handler = (job: BatchJobDto) => {
+            sseCompletionListenersRef.current.delete(handler);
+            resolve(job);
+          };
+          sseCompletionListenersRef.current.add(handler);
+        });
+
+      let submit: { submitId: string; taskId: string };
+      try {
+        submit = await submitDreaminaAsync(submitReq);
+        slowModeSuccessCountRef.current++;
+        if (slowModeSuccessCountRef.current >= 2) {
+          dreaminaSlowModeRef.current = false;
+        }
+      } catch (firstErr) {
+        if (!is1310Error(firstErr)) throw firstErr;
+        // 1310 concurrency limit — switch to slow mode and wait for previous job
+        dreaminaSlowModeRef.current = true;
+        slowModeSuccessCountRef.current = 0;
+        toast.info('即梦并发受限，等待前一个视频完成后自动提交…');
+        await waitForAnyJobCompletion();
+        await new Promise<void>((r) => setTimeout(r, 5000));
+        if (cancelToken.cancelled) throw new Error('已取消');
+        try {
+          submit = await submitDreaminaAsync(submitReq);
+        } catch (retryErr) {
+          throw is1310Error(retryErr)
+            ? new Error('即梦仍在并发限制中，请稍后手动重试')
+            : retryErr;
+        }
+      }
 
       // 记录 pendingVideoSubmitId（UI 展示 + 服务端回写清理用）
       setProject((p) => {
@@ -1296,6 +1345,13 @@ export function ProductionWizard() {
       }
 
       toast.success('已提交到即梦，后台将自动轮询取回视频');
+
+      // ── 队列释放策略 ───────────────────────────────────────────────────────
+      if (dreaminaSlowModeRef.current) {
+        // Slow mode: hold the queue until this job's video is done/failed
+        await waitForAnyJobCompletion();
+      }
+      queueSlot.resolve();
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分镜视频提交失败');
       queueSlot.resolve();

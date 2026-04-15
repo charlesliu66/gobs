@@ -136,6 +136,7 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     dreaminaModelVersion,
     autoComposePrompt,
     dreaminaPromptHints,
+    source,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -151,7 +152,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     dreaminaModelVersion?: string;
     autoComposePrompt?: boolean;
     dreaminaPromptHints?: DreaminaPromptHints;
+    source?: 'production' | 'quickfilm';
   };
+  const isProductionSource = source === 'production';
 
   if (!storyboardText || typeof storyboardText !== 'string' || !storyboardText.trim()) {
     res.status(400).json({ error: '请提供 storyboardText（分镜文本）' });
@@ -253,9 +256,11 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       }
       if (!mmResult) { releaseSlot(); throw mmLastErr ?? new Error('multimodal submit failed'); }
       const { submitId, taskId } = mmResult;
-      // Register the release fn — the GET /task endpoint will call it when done/failed.
-      // A 3-min safety-net timer is already baked into acquireDreaminaSlot().
-      activeSlotReleases.set(submitId, releaseSlot);
+      if (isProductionSource) {
+        releaseSlot();
+      } else {
+        activeSlotReleases.set(submitId, releaseSlot);
+      }
       res.json({ submitId, taskId, status: 'pending' as const, resolvedPrompt });
       return;
     }
@@ -316,7 +321,11 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       }
     }
     if (!nonMmResult) { releaseNonMm(); throw nonMmLastErr ?? new Error('submit failed'); }
-    activeSlotReleases.set(nonMmResult.submitId, releaseNonMm);
+    if (isProductionSource) {
+      releaseNonMm();
+    } else {
+      activeSlotReleases.set(nonMmResult.submitId, releaseNonMm);
+    }
     res.json({ submitId: nonMmResult.submitId, taskId: nonMmResult.taskId, status: 'pending' as const });
   } catch (err) {
     console.error('[video/dreamina/submit]', err);

@@ -146,6 +146,7 @@ export function StepStoryboardWorkspace({
               dreaminaAsync={dreaminaAsync}
               hasProductionDesign={hasProductionDesign}
               isQueued={shotQueuedMap?.[String(shot?.shotIndex ?? '')] ?? false}
+              queueDepth={Object.keys(shotQueuedMap ?? {}).length}
               pendingVideoSubmitId={shot?.pendingVideoSubmitId}
               checkingProgress={checkingProgress}
               onGenerateShotFrame={onGenerateShotFrame}
