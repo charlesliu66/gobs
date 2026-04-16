@@ -614,7 +614,11 @@ export function EditorWorkbench() {
     }
     el.currentTime = sourceTimeForPreviewRef.current;
     el.playbackRate = activeVideoClip.speed ?? 1;
-    el.play().catch(() => setIsPlaying(false));
+    el.play().catch((err) => {
+      // AbortError: 视频源切换中断 — onCanPlay 会重新触发 play，不中断播放状态
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setIsPlaying(false);
+    });
   }, [isPlaying, activeVideoUrl, activeVideoClip?.id, setIsPlaying]);
 
   const canPreview =
@@ -1009,6 +1013,15 @@ export function EditorWorkbench() {
                         t = Math.min(t, Math.max(0, d - 1e-3));
                       }
                       el.currentTime = t;
+                    }}
+                    onCanPlay={(e) => {
+                      if (!isPlaying) return;
+                      const el = e.currentTarget;
+                      const vc = activeVideoClipRef.current;
+                      if (!vc || !el.paused) return;
+                      el.currentTime = sourceTimeForPreviewRef.current;
+                      el.playbackRate = vc.speed ?? 1;
+                      el.play().catch(() => {});
                     }}
                     onTimeUpdate={(e) => {
                       if (!isPlaying || !activeVideoClip) return;

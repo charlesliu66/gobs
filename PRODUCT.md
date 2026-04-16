@@ -200,12 +200,13 @@
 
 ### v0.43a — 2026-04-16
 
-**剪辑工作台——导出支持高级制片分镜视频**
+**剪辑工作台——导出修复 & 播放连续性修复**
 
 **Fix:**
-- **[backend] 导出素材找不到 prod_shot_* 修复**：`editorExport.ts` 新增 `resolveLocalPathFromUrl()` 函数，在本地目录搜索 assetId 失败后，从前端传入的 asset URL（`/api/video/file?path=xxx`）中反解本地文件路径，解决高级制片分镜导入剪辑器后导出报错「素材文件不存在: assetId=prod_shot_*」
+- **[backend] 导出素材找不到 prod_shot_* 修复**：`editorExport.ts` 新增 `resolveLocalPathFromUrl()` 函数，支持从 `/api/video/file?path=xxx`、`/api/batch-jobs/video/<jobId>`、`/api/editor/assets/files/<id>` 三种 URL 格式反解本地文件路径，解决高级制片分镜导入剪辑器后导出报错「素材文件不存在」
 - **[frontend] 导出请求携带 assets 映射**：`ExportPanel` 新增 `assets` prop，导出时一并发送给后端，使后端能通过 URL 定位非本地上传的素材文件
 - **[backend] 导出接口 schema 扩展**：`EditorExportRequestBody` 新增可选 `assets` 字段，向后兼容
+- **[frontend] 分镜间播放中断修复**：剪辑工作台播放多段分镜时，切换视频源导致 `play()` 被 AbortError 中断会误设 `isPlaying=false`；现忽略 AbortError 并新增 `onCanPlay` 回调，视频加载就绪后自动恢复播放
 
 ---
 
