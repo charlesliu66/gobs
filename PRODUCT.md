@@ -207,6 +207,7 @@
 - **[frontend] 导出请求携带 assets 映射**：`ExportPanel` 新增 `assets` prop，导出时一并发送给后端，使后端能通过 URL 定位非本地上传的素材文件
 - **[backend] 导出接口 schema 扩展**：`EditorExportRequestBody` 新增可选 `assets` 字段，向后兼容
 - **[frontend] 分镜间播放中断修复**：剪辑工作台播放多段分镜时，切换视频源导致 `play()` 被 AbortError 中断会误设 `isPlaying=false`；现忽略 AbortError 并新增 `onCanPlay` 回调，视频加载就绪后自动恢复播放
+- **[backend] 导出缺失 BGM 修复**：BGM 文件存储在 `uploads/editor/music/` 下，但导出时未搜索该目录；新增 `uploads/editor/music/` 到搜索路径，并支持 `/api/editor/music/files/<id>` URL 反解
 
 ---
 

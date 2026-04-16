@@ -32,10 +32,11 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
 
 /**
  * 从 asset URL 中提取本地文件路径。
- * 支持三种 API URL 格式：
+ * 支持四种 API URL 格式：
  *   /api/video/file?path=output/xxx.mp4
- *   /api/editor/assets/files/<assetId>
  *   /api/batch-jobs/video/<jobId>
+ *   /api/editor/music/files/<id>
+ *   /api/editor/assets/files/<assetId>
  */
 function resolveLocalPathFromUrl(url: string, username: string): string | null {
   try {
@@ -57,6 +58,17 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
       const jobId = batchMatch[1];
       const full = path.join(getApiDataDir(), 'output', 'batch-jobs', 'videos', `${jobId}.mp4`);
       if (fs.existsSync(full)) return full;
+    }
+
+    // /api/editor/music/files/<id> → uploads/editor/music/<id>.(wav|mp3)
+    const musicMatch = parsed.pathname.match(/^\/api\/editor\/music\/files\/([a-zA-Z0-9_-]+)$/);
+    if (musicMatch) {
+      const musicId = musicMatch[1];
+      const musicDir = getUploadsPath('editor', 'music');
+      for (const ext of ['wav', 'mp3']) {
+        const full = path.join(musicDir, `${musicId}.${ext}`);
+        if (fs.existsSync(full)) return full;
+      }
     }
 
     // /api/editor/assets/files/<assetId>
@@ -87,6 +99,7 @@ function resolveAssetPaths(
   const safeUser = sanitizeUsername(username);
   const searchDirs = [
     path.join(getUploadsPath('editor'), safeUser),
+    getUploadsPath('editor', 'music'),
     path.join(getApiDataDir(), 'output', 'production', 'images', safeUser),
     path.join(getApiDataDir(), 'output', safeUser),
   ];
