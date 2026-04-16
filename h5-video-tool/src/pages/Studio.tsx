@@ -75,38 +75,41 @@ export function Studio() {
 
   return (
     <div className="min-h-screen">
-      {/* 顶部标题 + Tab */}
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-        <div className="max-w-6xl px-6 pt-5 pb-0">
+      {/* Header */}
+      <div className="border-b border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/80 backdrop-blur-lg">
+        <div className="max-w-6xl px-6 pt-6 pb-0">
           <div className="flex items-end justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-[var(--color-text)]">生成视频</h1>
-              <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+              <h1 className="page-title">生成视频</h1>
+              <p className="page-subtitle">
                 输入创意 → 选素材 → 即梦 AI 生成
               </p>
             </div>
-            {/* 高级制片入口 */}
             <Link
               to="/studio/production"
-              className="mb-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+              className="mb-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors flex items-center gap-1"
             >
-              高级制片 →
+              高级制片
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 6 15 12 9 18"/></svg>
             </Link>
           </div>
-          {/* Tab 栏 */}
-          <div className="mt-4 flex gap-1">
+          {/* Tab Bar */}
+          <div className="mt-5 flex gap-0.5">
             {TABS.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => switchTab(id)}
-                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors border-b-2 ${
+                className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${
                   activeTab === id
-                    ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                    : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    ? 'text-[var(--color-primary)]'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                 }`}
               >
                 {label}
+                {activeTab === id && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-[var(--color-primary)]" />
+                )}
               </button>
             ))}
           </div>

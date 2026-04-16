@@ -198,6 +198,24 @@
 
 ## 二、Changelog
 
+### v0.44 — 2026-04-16
+
+**前端设计系统建立 & UI 全面升级**
+
+**Feature:**
+- **[design] DESIGN.md 设计系统**：创建融合 Framer（工具精度）+ RunwayML（电影质感）的 GOBS 专属设计规范，涵盖色彩 Token、排版层级、组件样式、深度系统、响应式行为共 9 章节
+- **[design] Cyan 双色系**：新增 `--color-accent: #22d3ee` 作为第二色彩维度，贯穿 Hero 光晕、快捷入口、用户头像渐变、NEW 标签等，视觉层次从单色升级为双色系
+- **[css] Token 双源冲突修复**：删除 `@theme` 块中与 `:root` 重复且不一致的变量定义，统一为单一来源
+- **[css] 背景氛围升级**：body 背景从两层渐变升级为三层径向渐变（主色左上 22% + cyan 右上 12% + 底部微光 8%），深空舞台感
+- **[css] 组件类库扩充**：新增 `.btn-primary`（药丸+光晕）、`.btn-secondary`（毛玻璃）、`.btn-ghost`、`.chip` / `.chip-cyan`（标签药丸）、`.video-card`（零阴影内容卡片）、`.section-overline`（uppercase 引导词）
+- **[css] 动画体系**：新增 `animate-fade-in-up`（弹出感）、`animate-glow-pulse`（光晕呼吸）、`.stagger-children`（子元素错开入场）、`.nav-stagger`（侧栏导航入场），统一弹性缓动 `cubic-bezier(0.16, 1, 0.3, 1)`
+- **[layout] 侧栏重设计**：导航分组加 section-overline 标签（"创作"/"后期 & 素材"/"分发 & 工具"）；Active 项左侧 3px 发光指示条 + 光晕阴影；图标统一 18px/1.8 stroke
+- **[layout] 用户区升级**：渐变头像圈（primary→cyan）显示首字母 + 用户信息 + 图标工具栏（设置/监控/退出），退出按钮 hover 变红
+- **[home] 首页升级**：Hero 三层光晕（含呼吸动效）；快捷入口 emoji 替换为 5 个统一 SVG 图标，"视频分发"用 cyan accent 色差异化
+- **[studio] 页面 Header 升级**：毛玻璃 backdrop-blur + `.page-title` / `.page-subtitle` 排版类 + Tab 指示器改为绝对定位圆角小条
+
+---
+
 ### v0.43a — 2026-04-16
 
 **剪辑工作台——导出修复 & 播放连续性修复**
@@ -814,4 +832,4 @@
 
 ---
 
-*最后更新：2026-04-16（v0.43a）*
+*最后更新：2026-04-16（v0.44）*

@@ -1,8 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
-
-// ─── 步骤定义 ────────────────────────────────────────────────────────────────
 
 const STEPS = [
   {
@@ -38,11 +36,9 @@ const QUICK_IDEAS = [
   '赛博城市夜景，镜头推进',
 ] as const;
 
-// ─── 图标 ─────────────────────────────────────────────────────────────────────
-
 function UploadIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
@@ -52,7 +48,7 @@ function UploadIcon() {
 
 function VideoIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     </svg>
@@ -61,7 +57,7 @@ function VideoIcon() {
 
 function ShareIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="18" cy="5" r="3" />
       <circle cx="6" cy="12" r="3" />
       <circle cx="18" cy="19" r="3" />
@@ -73,7 +69,7 @@ function ShareIcon() {
 
 function ArrowRightIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="12 5 19 12 12 19" />
     </svg>
@@ -88,18 +84,15 @@ function SendIcon() {
   );
 }
 
-// ─── 主组件 ───────────────────────────────────────────────────────────────────
-
 export function Home() {
   const navigate = useNavigate();
   const { setPrompt, setTemplateId, setVideoAspectRatio, setVideoDuration } = useCreateFlow();
   const [draft, setDraft] = useState('');
 
-  // 步骤完成状态感知（轻量版：读 localStorage）
   const [stepsDone, setStepsDone] = useState({ materials: false, video: false });
   useEffect(() => {
     try {
-      const hasMaterials = !!localStorage.getItem('h5-materials-tab'); // 去过素材页就算
+      const hasMaterials = !!localStorage.getItem('h5-materials-tab');
       const hasVideo = (() => {
         const raw = localStorage.getItem('videoHistory');
         if (!raw) return false;
@@ -122,26 +115,31 @@ export function Home() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-2 pb-12 pt-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-2 pb-12 pt-6">
 
-      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
-      <section className="gobs-card relative overflow-hidden rounded-3xl p-6 sm:p-8">
-        <div className="pointer-events-none absolute -left-10 top-0 h-40 w-40 rounded-full bg-[var(--color-primary)]/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-12 right-0 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
-        <div className="relative text-center flex flex-col items-center gap-4">
-          <span className="rounded-full border border-[var(--color-primary)]/35 bg-[var(--color-primary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-primary-hover)]">
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      <section className="gobs-card relative overflow-hidden rounded-3xl p-8 sm:p-10 animate-fade-in-up">
+        {/* Decorative glow orbs — primary + cyan dual accent */}
+        <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-[var(--color-primary)]/20 blur-[100px] animate-glow-pulse" />
+        <div className="pointer-events-none absolute -bottom-24 -right-16 h-80 w-80 rounded-full bg-[var(--color-accent)]/12 blur-[120px]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-40 w-[120%] rounded-full bg-[var(--color-primary)]/5 blur-[80px]" />
+
+        <div className="relative text-center flex flex-col items-center gap-5">
+          <span className="chip">
             GOBS Creative Suite
           </span>
-          <h1 className="text-3xl font-semibold text-[var(--color-text)] tracking-tight sm:text-5xl">
+          <h1 className="text-3xl sm:text-5xl font-semibold text-[var(--color-text)] tracking-[-0.03em] leading-[1.1]"
+            style={{ fontFamily: '"Space Grotesk", "Plus Jakarta Sans", sans-serif' }}
+          >
             洞察即灵感，秒速出视频
           </h1>
-          <p className="max-w-2xl text-sm text-[var(--color-text-muted)] sm:text-base">
-            上传素材、生成分镜、自动出片、分发社媒，完整链路在一个工作台完成。
+          <p className="max-w-xl text-sm sm:text-[15px] text-[var(--color-text-muted)] leading-relaxed">
+            上传素材、生成分镜、自动出片、分发社媒 — 完整链路在一个工作台完成
           </p>
         </div>
 
-        {/* 快速输入框 */}
-        <div className="gobs-glass relative mt-5 w-full overflow-hidden rounded-2xl border border-[var(--color-border)]/70 shadow-xl">
+        {/* Prompt Input */}
+        <div className="relative mt-8 w-full overflow-hidden rounded-2xl border border-[var(--color-border)]/60 bg-[var(--color-surface)]/50 backdrop-blur-lg shadow-xl transition-all focus-within:border-[var(--color-primary)]/50 focus-within:shadow-[0_0_24px_rgba(124,141,255,0.1)]">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -151,18 +149,18 @@ export function Home() {
                 goCreate();
               }
             }}
-            rows={4}
-            placeholder="直接输入创意，按 Enter 开始生成…"
-            className="min-h-[120px] w-full resize-none bg-transparent px-5 py-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none"
+            rows={3}
+            placeholder="输入你的创意，按 Enter 开始生成…"
+            className="min-h-[100px] w-full resize-none bg-transparent px-5 py-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none"
           />
-          <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)]/70 bg-[var(--color-surface)]/30 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)]/40 px-4 py-2.5">
             <div className="flex flex-wrap gap-1.5">
               {QUICK_IDEAS.map((idea) => (
                 <button
                   key={idea}
                   type="button"
                   onClick={() => goCreate(idea)}
-                  className="rounded-full border border-[var(--color-border)]/80 px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/65 hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary-hover)] transition-all"
+                  className="rounded-full border border-[var(--color-border)]/60 px-2.5 py-1 text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary)]/8 hover:text-[var(--color-primary-hover)] transition-all"
                 >
                   {idea}
                 </button>
@@ -171,7 +169,7 @@ export function Home() {
             <button
               type="button"
               onClick={() => goCreate()}
-              className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-all hover:scale-105 hover:bg-[var(--color-primary-hover)] active:scale-95"
+              className="btn-primary !p-0 h-9 w-9 flex-shrink-0 !rounded-full"
               title="开始创作（Enter）"
             >
               <SendIcon />
@@ -180,31 +178,27 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── 三步流程 ──────────────────────────────────────────────────────────── */}
-      <section className="gobs-card rounded-3xl p-5 sm:p-6">
-        <h2 className="mb-5 text-center text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
-          三步完成从素材到发布
-        </h2>
+      {/* ── 三步流程 ─────────────────────────────────────────────────── */}
+      <section className="animate-fade-in" style={{ animationDelay: '100ms' }}>
+        <p className="section-overline text-center mb-6">三步完成从素材到发布</p>
 
-        <div className="flex flex-col sm:flex-row gap-4 items-stretch">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch stagger-children">
           {STEPS.map((step, idx) => {
             const Icon = step.icon;
             const isDone = (step.num === 1 && stepsDone.materials) || (step.num === 2 && stepsDone.video);
             return (
-              <div key={step.num} className="flex flex-col sm:flex-row items-stretch flex-1 gap-4">
-                {/* 卡片 */}
+              <div key={step.num} className="flex flex-col sm:flex-row items-stretch flex-1 gap-3">
                 <button
                   type="button"
                   onClick={() => navigate(step.to)}
-                  className={`group relative flex-1 flex flex-col gap-3 p-5 rounded-2xl border text-left hover:shadow-lg transition-all overflow-hidden ${
+                  className={`group relative flex-1 flex flex-col gap-4 p-5 rounded-2xl border text-left transition-all overflow-hidden ${
                     isDone
-                      ? 'border-[var(--color-success)]/50 bg-[var(--color-surface-elevated)] hover:border-[var(--color-success)]/80'
-                      : 'border-[var(--color-border)]/75 bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)]'
+                      ? 'border-[var(--color-success)]/40 bg-[var(--color-surface-elevated)] hover:border-[var(--color-success)]/70 hover:shadow-[0_0_20px_rgba(34,197,94,0.06)]'
+                      : 'border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/50 hover:shadow-[0_0_20px_rgba(124,141,255,0.06)]'
                   }`}
                 >
-                  {/* 步骤数 + 完成标记 */}
-                  <div className="relative z-10 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--color-text-muted)] tracking-widest uppercase">
+                  <div className="flex items-center justify-between">
+                    <span className="section-overline">
                       Step {step.num}
                     </span>
                     {isDone && (
@@ -215,36 +209,31 @@ export function Home() {
                     )}
                   </div>
 
-                  {/* 图标 */}
-                  <div className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center ${
-                    isDone ? 'bg-[var(--color-success)]/15 text-[var(--color-success)]' : 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    isDone ? 'bg-[var(--color-success)]/12 text-[var(--color-success)]' : 'bg-[var(--color-primary)]/12 text-[var(--color-primary)]'
                   }`}>
                     <Icon />
                   </div>
 
-                  {/* 文案 */}
-                  <div className="relative z-10 flex-1">
-                    <p className="font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
+                  <div className="flex-1">
+                    <p className="card-title group-hover:text-[var(--color-primary)] transition-colors">
                       {step.title}
                     </p>
-                    <p className="mt-1 text-xs text-[var(--color-text-muted)] leading-relaxed">
+                    <p className="mt-1.5 text-xs text-[var(--color-text-muted)] leading-relaxed">
                       {step.desc}
                     </p>
                   </div>
 
-                  {/* 按钮 */}
-                  <div className={`relative z-10 flex items-center gap-1.5 text-xs font-medium ${isDone ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-primary)]'}`}>
+                  <div className={`flex items-center gap-1.5 text-xs font-medium ${isDone ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-primary)]'}`}>
                     {isDone ? '再次进入' : step.action}
                     <ArrowRightIcon />
                   </div>
                 </button>
 
-                {/* 连接箭头（步骤之间） */}
                 {idx < STEPS.length - 1 && (
                   <div className="hidden sm:flex items-center flex-shrink-0 text-[var(--color-border)]">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
+                      <polyline points="9 6 15 12 9 18" />
                     </svg>
                   </div>
                 )}
@@ -254,32 +243,43 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── 快捷入口 ──────────────────────────────────────────────────────────── */}
-      <section className="gobs-card rounded-3xl p-5 sm:p-6">
-        <h2 className="mb-5 text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
-          快捷入口
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {SHORTCUTS.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => navigate(s.to)}
-              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface-hover)] transition-all text-sm hover:text-[var(--color-text)] ${
-                s.hot
-                  ? 'border-[var(--color-primary)]/50 hover:border-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'
-              }`}
-            >
-              {s.hot && (
-                <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-primary)] text-white">
-                  HOT
+      {/* ── 快捷入口 ─────────────────────────────────────────────────── */}
+      <section className="animate-fade-in" style={{ animationDelay: '200ms' }}>
+        <p className="section-overline mb-5">快捷入口</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 stagger-children">
+          {SHORTCUTS.map((s) => {
+            const SIcon = s.icon;
+            return (
+              <button
+                key={s.label}
+                type="button"
+                onClick={() => navigate(s.to)}
+                className={`group relative flex flex-col items-center gap-3 p-4 rounded-xl border bg-[var(--color-surface-elevated)] transition-all text-sm ${
+                  s.hot
+                    ? 'border-[var(--color-primary)]/30 hover:border-[var(--color-primary)]/60 hover:shadow-[0_0_20px_rgba(124,141,255,0.1)]'
+                    : s.accent
+                      ? 'border-[var(--color-accent)]/20 hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_20px_rgba(34,211,238,0.08)]'
+                      : 'border-[var(--color-border)]/50 hover:border-[var(--color-primary)]/30'
+                } hover:bg-[var(--color-surface-hover)]`}
+              >
+                {s.hot && (
+                  <span className="absolute -top-1.5 -right-1.5 chip !text-[8px] !py-0 !px-1.5 !border-0 bg-[var(--color-primary)] !text-white">
+                    HOT
+                  </span>
+                )}
+                <span className={`${
+                  s.hot ? 'text-[var(--color-primary)]' : s.accent ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-subtle)]'
+                } group-hover:text-[var(--color-text)] transition-colors group-hover:scale-110 transition-transform duration-200`}>
+                  <SIcon />
                 </span>
-              )}
-              <span className="text-2xl">{s.emoji}</span>
-              <span className={`font-medium text-xs ${s.hot ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}>{s.label}</span>
-            </button>
-          ))}
+                <span className={`font-medium text-xs ${
+                  s.hot ? 'text-[var(--color-primary)]' : s.accent ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'
+                } group-hover:text-[var(--color-text)] transition-colors`}>
+                  {s.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -287,12 +287,58 @@ export function Home() {
   );
 }
 
-// ─── 快捷入口数据 ──────────────────────────────────────────────────────────────
+function TemplateIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2" />
+      <rect x="2" y="14" width="9" height="8" rx="2" />
+      <rect x="15" y="14" width="7" height="8" rx="2" />
+    </svg>
+  );
+}
 
-const SHORTCUTS = [
-  { emoji: '🎬', label: '模板市场', to: '/studio?tab=templates', hot: true },
-  { emoji: '📂', label: '历史视频', to: '/history', hot: false },
-  { emoji: '✂️', label: '视频剪辑', to: '/editor', hot: false },
-  { emoji: '📱', label: '视频分发', to: '/distribute', hot: false },
-  { emoji: '📲', label: '风控大师', to: '/tiktok-matrix', hot: false },
-] as const;
+function HistoryClockIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function ScissorsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <line x1="20" y1="4" x2="8.12" y2="15.88" />
+      <line x1="14.47" y1="14.48" x2="20" y2="20" />
+      <line x1="8.12" y1="8.12" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+function RocketIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="7" y1="17" x2="17" y2="7" />
+      <polyline points="7 7 17 7 17 17" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+const SHORTCUTS: { icon: () => JSX.Element; label: string; to: string; hot: boolean; accent?: boolean }[] = [
+  { icon: TemplateIcon, label: '模板市场', to: '/studio?tab=templates', hot: true },
+  { icon: HistoryClockIcon, label: '历史视频', to: '/history', hot: false },
+  { icon: ScissorsIcon, label: '视频剪辑', to: '/editor', hot: false },
+  { icon: RocketIcon, label: '视频分发', to: '/distribute', hot: false, accent: true },
+  { icon: ShieldIcon, label: '风控大师', to: '/tiktok-matrix', hot: false },
+];

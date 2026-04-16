@@ -1,7 +1,11 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap");
 @import "tailwindcss";
 
-/* 黑夜模式（默认） */
+/* ═══════════════════════════════════════════════════════════════════════════
+   GOBS Design Tokens — Single Source of Truth
+   See DESIGN.md for full specification
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root,
 [data-theme="dark"] {
   --color-surface: #090b13;
@@ -12,6 +16,8 @@
   --color-primary: #7c8dff;
   --color-primary-hover: #97a4ff;
   --color-primary-muted: #5e73ee;
+  --color-accent: #22d3ee;
+  --color-accent-muted: #0e7490;
   --color-text: #edf1ff;
   --color-text-muted: #a7b1d5;
   --color-text-subtle: #7681ab;
@@ -31,7 +37,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 白天模式 */
 [data-theme="light"] {
   --color-surface: #fafafa;
   --color-surface-elevated: #ffffff;
@@ -44,18 +49,17 @@
   --color-text: #18181b;
   --color-text-muted: #52525b;
   --color-text-subtle: #71717a;
+  --color-accent: #0891b2;
+  --color-accent-muted: #155e75;
   --color-success: #16a34a;
   --color-error: #dc2626;
   --color-warning: #d97706;
   color-scheme: light;
 }
 
-@theme {
-  --color-surface: #0f0f12;
-  --color-surface-elevated: #16161a;
-  --color-primary: #8b5cf6;
-  --color-text: #f4f4f5;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base & Reset
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 html,
 body {
@@ -63,8 +67,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 0% -10%, rgba(124, 141, 255, 0.2), transparent 35%),
-    radial-gradient(circle at 100% 0%, rgba(85, 163, 255, 0.14), transparent 30%),
+    radial-gradient(ellipse 90% 70% at -5% -15%, rgba(124, 141, 255, 0.22), transparent 55%),
+    radial-gradient(ellipse 70% 55% at 105% -5%, rgba(34, 211, 238, 0.12), transparent 45%),
+    radial-gradient(ellipse 50% 40% at 50% 105%, rgba(124, 141, 255, 0.08), transparent 50%),
     var(--color-surface);
 }
 
@@ -77,27 +82,27 @@ h1, h2, h3, h4 {
   letter-spacing: -0.02em;
 }
 
-/* 可点击元素 */
 [role="button"],
 button:not(:disabled),
 a {
   cursor: pointer;
 }
 
-/* 焦点可见性 — 全局（键盘导航可访问性） */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* 选中色 */
 ::selection {
   background: var(--color-primary);
   color: white;
 }
 
-/* 统一滚动条（暗色主题） */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -113,46 +118,299 @@ a {
   background: var(--color-text-muted);
 }
 
-/* 过渡 */
-button, a, input, textarea {
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s, transform 0.15s;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Global Transitions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+button, a, input, textarea, select {
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, opacity 0.2s, transform 0.2s, box-shadow 0.2s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Surface Components
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .gobs-glass {
-  background: color-mix(in srgb, var(--color-surface-elevated) 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--color-surface-elevated) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .gobs-card {
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   background:
     linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 92%, #ffffff 8%), var(--color-surface-elevated));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 24px rgba(2, 8, 24, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 32px rgba(2, 8, 24, 0.28);
+  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .gobs-card:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 32px rgba(2, 8, 24, 0.32),
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
-/* 全局 input/textarea/select focus 样式 */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Focus & Input
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--color-primary) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
-/* 排版规范 - 以 TikTok 矩阵为参考，各 tab 统一 */
-.page-title { font-size: 1.5rem; font-weight: 600; color: var(--color-text); }
-.page-subtitle { font-size: 0.875rem; color: var(--color-text-muted); margin-top: 0.25rem; }
-.section-title { font-size: 0.875rem; font-weight: 500; color: var(--color-text); margin-bottom: 0.75rem; }
-.card-title { font-size: 0.875rem; font-weight: 500; color: var(--color-text); margin-bottom: 0.5rem; }
-.body-muted { font-size: 0.875rem; color: var(--color-text-muted); }
-.label-muted { font-size: 0.75rem; color: var(--color-text-muted); }
+/* ═══════════════════════════════════════════════════════════════════════════
+   Typography Utilities
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* TikTok 矩阵 (SJ) 布局 - 绿色主题 */
+.page-title {
+  font-family: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.page-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+
+.section-overline {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+}
+
+.section-title {
+  font-family: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.body-muted {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.label-muted {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Button Variants
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 0 20px rgba(124, 141, 255, 0.2);
+  border: none;
+}
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 0 30px rgba(124, 141, 255, 0.3);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+.btn-ghost:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Pill Tag / Chip
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-hover);
+}
+
+.chip-cyan {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Video Preview — Cinematic Content-First (RunwayML inspired)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.video-card {
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid transparent;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.video-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+.video-card video,
+.video-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Animations
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes gobs-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gobs-fade-in-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gobs-scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gobs-slide-in-left {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes gobs-glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: gobs-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in-up {
+  animation: gobs-fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: gobs-scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in-left {
+  animation: gobs-slide-in-left 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-glow-pulse {
+  animation: gobs-glow-pulse 2s ease-in-out infinite;
+}
+
+.stagger-children > * {
+  animation: gobs-fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 70ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 140ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 210ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 280ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 350ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 420ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 490ms; }
+
+/* Nav item stagger — for sidebar */
+.nav-stagger > *:nth-child(1) { animation: gobs-slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) 50ms both; }
+.nav-stagger > *:nth-child(2) { animation: gobs-slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) 100ms both; }
+.nav-stagger > *:nth-child(3) { animation: gobs-slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) 150ms both; }
+.nav-stagger > *:nth-child(4) { animation: gobs-slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) 200ms both; }
+.nav-stagger > *:nth-child(5) { animation: gobs-slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) 250ms both; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TikTok Matrix (Geelark) Layout Tokens
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .geelark-layout {
   --geelark-bg: oklch(0.13 0.005 260);
   --geelark-sidebar: oklch(0.17 0.005 260);
