@@ -169,13 +169,12 @@ export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {
           className="hidden"
           onChange={handleFileChange}
         />
-        {/* @ts-expect-error webkitdirectory is non-standard but widely supported */}
         <input
           ref={folderInputRef}
           type="file"
-          webkitdirectory=""
           className="hidden"
           onChange={handleFileChange}
+          {...{ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
         />
       </div>
 
