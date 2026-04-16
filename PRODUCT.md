@@ -181,11 +181,18 @@
 
 ---
 
-### 7. 快拍（Quick Film）
+### 7. 一键成片（Quick Film）
 
 **入口：** 首页「快拍」→ `/quick-film`
 
-- 快速创建短视频，简化版工作流
+**功能：**
+- 输入故事主题、主角、风格，AI 自动生成完整分镜脚本
+- 支持上传角色/场景参考素材，AI 自动匹配到对应镜头
+- 用户可逐镜预览和编辑后确认提交
+- **串行提交队列（v0.51）**：确认后只提交第一个分镜到即梦，后续分镜排队等待（`awaiting_submit`），前一个完成后自动提交下一个，避免并发超限（ret=1310）
+- **批量取消（v0.51）**：批量任务看板支持「取消全部排队」，一键释放即梦并发位
+- 支持保存草稿、会话恢复（刷新不丢失）
+- 生成结果在「历史 → 批量任务看板」实时查看
 
 ---
 
@@ -979,4 +986,18 @@
 
 ---
 
-*最后更新：2026-04-16（v0.50）*
+### v0.51 — 2026-04-16
+
+**一键成片串行提交队列 + 批量取消**
+
+**Feature:**
+- **[api] QuickFilm 串行提交队列**：`POST /quickfilm/:jobId/confirm` 改为只提交第一个分镜到即梦，其余分镜以 `awaiting_submit` 状态存入 `batchJobsQueue`。当前一个任务完成或失败时，队列自动提交下一个。避免多分镜同时提交触发即梦并发超限（ret=1310 ExceedConcurrencyLimit）
+- **[api] `batchJobsQueue` 增强**：新增 `awaiting_submit` 状态和 `submitParams` 字段；新增 `submitNextQuickfilmShot()` 自动提交逻辑，由 `pollSingleJob` 在任务终态时触发；新增服务器重启恢复机制（poller tick 检测到无活跃任务但有 awaiting_submit 时自动续接）
+- **[api] 批量取消接口**：新增 `DELETE /api/batch-jobs/project/:projectId`，一次取消项目内所有未完成任务（pending / queuing / processing / awaiting_submit）
+- **[frontend] 批量任务看板增强**：新增「取消全部排队」按钮；状态汇总行新增「待提交 N」计数；`awaiting_submit` 状态显示为「🕐 排队待提交」并支持单独取消
+
+**设计对齐：** 复用高级制片（ProductionWizard）的串行提交思路——前一个完成才放行下一个。高级制片靠前端 Promise 链 + SSE 慢速模式实现；一键成片靠后端 batchJobsQueue 事件驱动实现，适配无前端长连接的场景。
+
+---
+
+*最后更新：2026-04-16（v0.51）*

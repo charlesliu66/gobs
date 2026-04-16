@@ -6,12 +6,13 @@
  * - 预览视频（点击展开）
  * - 一键导入到剪辑时间轴
  */
-import { useState, useEffect, useCallback } from 'react';
-import { cancelBatchJob, type BatchJobDto } from '../api/batchJobs';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { cancelBatchJob, cancelBatchByProject, type BatchJobDto } from '../api/batchJobs';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const STATUS_LABEL: Record<BatchJobDto['status'], string> = {
+  awaiting_submit: '🕐 排队待提交',
   pending: '⏳ 等待中',
   queuing: '🔄 排队中',
   processing: '⚙️ 生成中',
@@ -21,6 +22,7 @@ const STATUS_LABEL: Record<BatchJobDto['status'], string> = {
 };
 
 const STATUS_COLOR: Record<BatchJobDto['status'], string> = {
+  awaiting_submit: 'text-slate-400',
   pending: 'text-[var(--color-text-muted)]',
   queuing: 'text-amber-400',
   processing: 'text-blue-400',
@@ -70,6 +72,8 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
     };
   }, [projectId]);
 
+  const [cancellingAll, setCancellingAll] = useState(false);
+
   const handleCancel = useCallback(async (id: string) => {
     setCancellingId(id);
     try {
@@ -78,6 +82,28 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
       setCancellingId(null);
     }
   }, []);
+
+  const activeProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const j of jobs) {
+      if (j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit') {
+        ids.add(j.projectId);
+      }
+    }
+    return ids;
+  }, [jobs]);
+
+  const handleCancelAll = useCallback(async () => {
+    if (!confirm('确定取消所有排队中的任务？已完成的不受影响。')) return;
+    setCancellingAll(true);
+    try {
+      for (const pid of activeProjectIds) {
+        await cancelBatchByProject(pid);
+      }
+    } finally {
+      setCancellingAll(false);
+    }
+  }, [activeProjectIds]);
 
   if (loading) {
     return (
@@ -103,10 +129,12 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
   const total = jobs.length;
 
   // Summary counts for the per-status bar
+  const awaitingCount = jobs.filter((j) => j.status === 'awaiting_submit').length;
   const queuingCount = jobs.filter((j) => j.status === 'queuing' || j.status === 'pending').length;
   const processingCount = jobs.filter((j) => j.status === 'processing').length;
   const doneCount = done;
   const failedCount = jobs.filter((j) => j.status === 'failed').length;
+  const hasActive = activeProjectIds.size > 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,12 +143,18 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
         <span className="text-sm font-medium text-[var(--color-text)]">
           批量任务 · {done}/{total} 已完成
         </span>
-        <button
-          onClick={() => {/* SSE keeps jobs updated in real-time */}}
-          className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-        >
-          实时
-        </button>
+        <div className="flex items-center gap-2">
+          {hasActive && (
+            <button
+              onClick={() => void handleCancelAll()}
+              disabled={cancellingAll}
+              className="text-[11px] px-2.5 py-1 rounded-lg border border-red-400/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+            >
+              {cancellingAll ? '取消中…' : '取消全部排队'}
+            </button>
+          )}
+          <span className="text-[10px] text-[var(--color-text-muted)]">实时</span>
+        </div>
       </div>
 
       {/* 进度条 */}
@@ -135,6 +169,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
       {jobs.length > 0 && (
         <div className="flex gap-3 px-3 py-2 text-[10px] text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
           <span>总 {total}</span>
+          {awaitingCount > 0 && <span className="text-slate-400">待提交 {awaitingCount}</span>}
           {queuingCount > 0 && <span className="text-yellow-400">排队 {queuingCount}</span>}
           {processingCount > 0 && <span className="text-blue-400">生成中 {processingCount}</span>}
           {doneCount > 0 && <span className="text-green-400">完成 {doneCount}</span>}
@@ -224,7 +259,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                       下载视频
                     </a>
                   )}
-                  {(job.status === 'pending' || job.status === 'queuing') && (
+                  {(job.status === 'pending' || job.status === 'queuing' || job.status === 'awaiting_submit') && (
                     <button
                       onClick={() => void handleCancel(job.id)}
                       disabled={cancellingId === job.id}

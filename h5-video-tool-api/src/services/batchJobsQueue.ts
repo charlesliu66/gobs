@@ -14,16 +14,25 @@ import fsSync from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import { getApiDataDir } from '../config/apiDataDir.js';
-import { pollDreaminaTask } from './dreaminaVideo.js';
+import { pollDreaminaTask, submitDreaminaVideo } from './dreaminaVideo.js';
 
 export const batchJobEvents = new EventEmitter();
 batchJobEvents.setMaxListeners(50);
 
-export type BatchJobStatus = 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled';
+export type BatchJobStatus = 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit';
+
+export interface BatchJobSubmitParams {
+  prompt: string;
+  aspectRatio: string;
+  duration: number;
+  model: string;
+  imageBase64?: string;
+  imageMimeType?: string;
+}
 
 export interface BatchJob {
   id: string;              // 唯一 id，格式 bj_<timestamp>_<random>
-  submitId: string;        // 即梦 submit_id
+  submitId: string;        // 即梦 submit_id（awaiting_submit 时为空字符串）
   taskId: string;          // dreamina-<submitId>（用于 History）
   projectId: string;       // 所属高级制片项目 id
   shotIndex: number;       // 分镜序号（0-based）
@@ -43,6 +52,7 @@ export interface BatchJob {
     queue_length?: number;
     queue_status?: string;
   };
+  submitParams?: BatchJobSubmitParams;  // awaiting_submit 时保存提交参数
 }
 
 const JOBS_FILE = path.join(getApiDataDir(), 'output', 'batch-jobs', 'jobs.json');
@@ -134,6 +144,48 @@ function shouldPollJob(job: BatchJob): boolean {
   return true;
 }
 
+// ── QuickFilm 串行提交：当一个分镜完成/失败后自动提交同项目下一个 ──────────
+
+async function submitNextQuickfilmShot(completedJob: BatchJob): Promise<void> {
+  if (completedJob.source !== 'quickfilm') return;
+
+  const all = Array.from(_jobs.values());
+  const next = all
+    .filter((j) => j.projectId === completedJob.projectId && j.status === 'awaiting_submit' && j.submitParams)
+    .sort((a, b) => a.shotIndex - b.shotIndex)[0];
+  if (!next) return;
+
+  console.log(`[batch-jobs] quickfilm auto-submit: shot ${next.shotIndex} (${next.id}) for project ${next.projectId}`);
+  const params = next.submitParams!;
+  try {
+    const { submitId, taskId } = await submitDreaminaVideo({
+      prompt: params.prompt,
+      aspectRatio: params.aspectRatio as '9:16' | '16:9' | '1:1',
+      duration: params.duration,
+      model: params.model,
+      imageBase64: params.imageBase64,
+      imageMimeType: params.imageMimeType,
+    });
+    await updateJob(next.id, {
+      status: 'pending',
+      submitId,
+      taskId: taskId || `dreamina-${submitId}`,
+      submitParams: undefined,
+    });
+    console.log(`[batch-jobs] quickfilm shot ${next.shotIndex} submitted → submitId=${submitId}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const is1310 = /ret[=:]\s*1310|ExceedConcurrencyLimit/i.test(msg);
+    if (is1310) {
+      console.warn(`[batch-jobs] quickfilm shot ${next.shotIndex}: still concurrency-limited, will retry next tick`);
+      return;
+    }
+    console.error(`[batch-jobs] quickfilm shot ${next.shotIndex} submit failed:`, msg);
+    await updateJob(next.id, { status: 'failed', failReason: msg, submitParams: undefined });
+    void submitNextQuickfilmShot(next).catch(() => {});
+  }
+}
+
 // ── 单任务轮询核心（供 poller 和 pollJobNow 共用）────────────────────────────
 
 async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
@@ -157,14 +209,27 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
         console.warn(`[batch-jobs] write-back failed for ${job.id}:`, e),
       );
     }
+    // QuickFilm 串行提交：完成后自动提交下一个分镜
+    if (job.source === 'quickfilm') {
+      void submitNextQuickfilmShot(job).catch((e) =>
+        console.warn(`[batch-jobs] quickfilm auto-submit failed:`, e),
+      );
+    }
     return updated;
   }
   if (result.phase === 'failed') {
-    return updateJob(job.id, {
+    const updated = await updateJob(job.id, {
       status: 'failed',
       failReason: result.failReason ?? '生成失败',
       lastPolledAt: new Date().toISOString(),
     });
+    // QuickFilm：即使前一个失败，也继续提交下一个
+    if (job.source === 'quickfilm') {
+      void submitNextQuickfilmShot(job).catch((e) =>
+        console.warn(`[batch-jobs] quickfilm auto-submit after failure:`, e),
+      );
+    }
+    return updated;
   }
   // 还在排队/生成中
   return updateJob(job.id, {
@@ -197,7 +262,20 @@ async function pollPendingJobs(): Promise<void> {
   const active = Array.from(_jobs.values()).filter(
     (j) => j.status === 'pending' || j.status === 'queuing' || j.status === 'processing',
   );
-  if (active.length === 0) return;
+
+  // If no active jobs but there are awaiting_submit quickfilm shots, kick off the next one.
+  // This handles edge cases like server restart where the trigger chain was interrupted.
+  if (active.length === 0) {
+    const stalled = Array.from(_jobs.values()).filter(
+      (j) => j.status === 'awaiting_submit' && j.source === 'quickfilm' && j.submitParams,
+    );
+    if (stalled.length > 0) {
+      const next = stalled.sort((a, b) => a.shotIndex - b.shotIndex)[0]!;
+      console.log(`[batch-jobs] recovering stalled quickfilm queue, submitting shot ${next.shotIndex}`);
+      await submitNextQuickfilmShot({ ...next, status: 'done' });
+    }
+    return;
+  }
 
   // 超龄任务直接标记失败
   const now = Date.now();

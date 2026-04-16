@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir } from '../config/apiDataDir.js';
-import { addJob, type BatchJob } from '../services/batchJobsQueue.js';
+import { addJob, type BatchJob, type BatchJobSubmitParams } from '../services/batchJobsQueue.js';
 import { isDreaminaEnabled, submitDreaminaVideo, checkDreaminaAuth } from '../services/dreaminaVideo.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
@@ -70,314 +70,8 @@ quickfilmRouter.post('/start', async (req: Request, res: Response) => {
   res.json({ jobId });
 });
 
-/**
- * GET /api/quickfilm/:jobId/status
- */
-quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
-  const username = sanitizeUsername(req.user?.username);
-  const { jobId } = req.params;
-  if (!jobId) {
-    res.status(400).json({ error: '缺少 jobId' });
-    return;
-  }
-
-  const job = loadJob(jobId, username);
-  if (!job) {
-    res.status(404).json({ error: '任务不存在' });
-    return;
-  }
-
-  res.json({
-    status: job.status,
-    progress: job.progress,
-    steps: job.steps,
-    storyboard: job.status === 'done' ? job.storyboard : undefined,
-    error: job.error,
-    logline: job.storyArc?.logline,
-    title: job.story.slice(0, 30),
-    projectId: job.projectId,
-  });
-});
-
-/**
- * GET /api/quickfilm/:jobId/stream?token=<jwt> — SSE 实时推送
- */
-quickfilmRouter.get('/:jobId/stream', (req: Request, res: Response) => {
-  const token = req.query['token'] as string | undefined;
-  if (!token) { res.status(401).json({ error: 'token required' }); return; }
-  let username: string | undefined;
-  try {
-    const payload = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as { username?: string };
-    username = typeof payload.username === 'string' ? payload.username : undefined;
-  } catch {
-    res.status(401).json({ error: 'invalid token' }); return;
-  }
-
-  const { jobId } = req.params;
-  const sanitizedUser = sanitizeUsername(username);
-
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
-
-  const send = (job: QuickFilmJob) => {
-    if (job.id === jobId) {
-      res.write(`data: ${JSON.stringify(job)}\n\n`);
-    }
-  };
-
-  quickfilmJobEvents.on('update', send);
-
-  // Send current state immediately
-  const current = loadJob(jobId, sanitizedUser);
-  if (current) res.write(`data: ${JSON.stringify(current)}\n\n`);
-
-  req.on('close', () => {
-    quickfilmJobEvents.off('update', send);
-    res.end();
-  });
-});
-
-/**
- * POST /api/quickfilm/:jobId/confirm
- * Body: { storyboard } — 用户确认/修改后的分镜
- */
-quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
-  const username = sanitizeUsername(req.user?.username);
-  const { jobId } = req.params;
-  const { storyboard } = req.body as { storyboard?: unknown };
-
-  if (!jobId) {
-    res.status(400).json({ error: '缺少 jobId' });
-    return;
-  }
-
-  const job = loadJob(jobId, username);
-  if (!job) {
-    res.status(404).json({ error: '任务不存在' });
-    return;
-  }
-
-  if (!Array.isArray(storyboard)) {
-    res.status(400).json({ error: '请提供 storyboard 数组' });
-    return;
-  }
-
-  if (!isDreaminaEnabled()) {
-    res.status(400).json({ error: '即梦未启用，无法执行一键成片。请先配置 dreamina-cli 并重启 API。' });
-    return;
-  }
-
-  // 检查即梦 CLI 登录态
-  const authCheck = await checkDreaminaAuth();
-  if (!authCheck.loggedIn) {
-    res.status(400).json({
-      error: `即梦 CLI 未登录：${authCheck.error || '请在服务器执行 dreamina login'}`,
-    });
-    return;
-  }
-
-  // 保存用户确认的分镜
-  job.storyboard = storyboard as typeof job.storyboard;
-  const batchJobId = nanoid();
-  job.batchJobId = batchJobId;
-
-  saveJob(job, username);
-
-  const projectId = job.projectId || `quickfilm-${jobId}`;
-  const now = new Date().toISOString();
-  const shots = storyboard as Array<{
-    shotIndex?: number;
-    durationSec?: number;
-    subject?: string;
-    action?: string;
-    dialogue?: string;
-    notes?: string;
-    structuredStill?: { sp_subject?: string; sp_environment?: string };
-    structuredMotion?: { mp_motion?: string; mp_camera?: string; mp_tempo?: string };
-    userMatchedAssets?: { characterRef?: string; sceneRef?: string };
-  }>;
-
-  const queued: BatchJob[] = [];
-  for (let i = 0; i < shots.length; i++) {
-    const shot = shots[i]!;
-    const prompt = [
-      shot.subject ? `主体：${shot.subject}` : '',
-      shot.action ? `动作：${shot.action}` : '',
-      shot.structuredStill?.sp_environment ? `环境：${shot.structuredStill.sp_environment}` : '',
-      shot.structuredStill?.sp_subject ? `画面主体：${shot.structuredStill.sp_subject}` : '',
-      shot.structuredMotion?.mp_motion ? `运动：${shot.structuredMotion.mp_motion}` : '',
-      shot.structuredMotion?.mp_camera ? `运镜：${shot.structuredMotion.mp_camera}` : '',
-      shot.structuredMotion?.mp_tempo ? `节奏：${shot.structuredMotion.mp_tempo}` : '',
-      shot.dialogue ? `对白：${shot.dialogue}` : '',
-      shot.notes ? `备注：${shot.notes}` : '',
-      `风格：${job.style}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const refBase64 = shot.userMatchedAssets?.characterRef || shot.userMatchedAssets?.sceneRef || undefined;
-    const model = refBase64 ? 'dreamina-image2video' : 'dreamina-text2video';
-
-    const { submitId, taskId } = await submitDreaminaVideo({
-      prompt,
-      aspectRatio: '9:16',
-      duration: Math.max(4, Math.min(15, Math.round(shot.durationSec ?? 5))),
-      model,
-      imageBase64: refBase64,
-      imageMimeType: refBase64 ? 'image/png' : undefined,
-    });
-
-    const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
-    const bj: BatchJob = {
-      id,
-      submitId,
-      taskId: taskId || `dreamina-${submitId}`,
-      projectId,
-      source: 'quickfilm',
-      shotIndex: shot.shotIndex ?? i,
-      shotDescription: `${shot.subject ?? ''} ${shot.action ?? ''}`.trim() || `QuickFilm 分镜 ${i + 1}`,
-      model,
-      status: 'pending',
-      createdAt: now,
-      updatedAt: now,
-    };
-    await addJob(bj);
-    queued.push(bj);
-  }
-
-  console.log('[quickfilm/confirm] storyboard confirmed and queued:', { batchJobId, queued: queued.length, projectId });
-  res.json({ batchJobId, queued: queued.length, projectId });
-});
-
-export default quickfilmRouter;
-
-// ─── Draft routes ─────────────────────────────────────────────────────────────
-
-import { Router as DraftRouter } from 'express';
-const draftsRouter = DraftRouter();
-
-function isSafeId(id: string): boolean {
-  return /^[\w-]{1,64}$/.test(id);
-}
-
-function getDraftsDir(username: string): string {
-  if (!isSafeId(username)) throw new Error('非法用户名');
-  return path.join(getApiDataDir(), 'quickfilm', 'drafts', username);
-}
-
-interface DraftBody {
-  id?: string;
-  name?: string;
-  story?: string;
-  protagonist?: string;
-  protagonistDesc?: string;
-  style?: string;
-  customStyle?: string;
-  styleImageBase64?: string;
-  assetFiles?: Array<{ name: string; base64: string }>;
-}
-
-/**
- * POST /api/quickfilm/drafts — 保存草稿
- */
-draftsRouter.post('/', async (req: Request, res: Response) => {
-  const username = req.user!.username;
-  const body = req.body as DraftBody;
-  const draftId = (body.id && isSafeId(body.id)) ? body.id : nanoid(12);
-  const dir = getDraftsDir(username);
-  const now = new Date().toISOString();
-
-  const draft = {
-    id: draftId,
-    name: body.name || (body.story?.slice(0, 20) || '未命名草稿'),
-    story: body.story ?? '',
-    protagonist: body.protagonist ?? '',
-    protagonistDesc: body.protagonistDesc ?? '',
-    style: body.style ?? '现代',
-    customStyle: body.customStyle ?? '',
-    styleImageBase64: body.styleImageBase64,
-    assetFiles: body.assetFiles ?? [],
-    updatedAt: now,
-    createdAt: now,
-  };
-
-  // If updating existing draft, preserve createdAt
-  const filePath = path.join(dir, `${draftId}.json`);
-  try {
-    const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as { createdAt?: string };
-    if (existing.createdAt) draft.createdAt = existing.createdAt;
-  } catch { /* new draft */ }
-
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(draft, null, 2), 'utf-8');
-    res.json({ success: true, id: draftId });
-  } catch (err) {
-    console.error('[quickfilm/drafts] save error', err);
-    res.status(500).json({ error: '保存草稿失败' });
-  }
-});
-
-/**
- * GET /api/quickfilm/drafts — 列出草稿
- */
-draftsRouter.get('/', async (req: Request, res: Response) => {
-  const username = req.user!.username;
-  const dir = getDraftsDir(username);
-
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
-    const drafts = files.map((f) => {
-      const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')) as Record<string, unknown>;
-      return { id: raw.id as string, name: raw.name as string, updatedAt: raw.updatedAt as string, createdAt: raw.createdAt as string };
-    });
-    drafts.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
-    res.json({ success: true, drafts });
-  } catch (err) {
-    console.error('[quickfilm/drafts] list error', err);
-    res.status(500).json({ error: '读取草稿列表失败' });
-  }
-});
-
-/**
- * GET /api/quickfilm/drafts/:id — 读取草稿
- */
-draftsRouter.get('/:id', async (req: Request, res: Response) => {
-  const username = req.user!.username;
-  const { id } = req.params;
-  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
-
-  try {
-    const raw = fs.readFileSync(path.join(getDraftsDir(username), `${id}.json`), 'utf-8');
-    res.json(JSON.parse(raw));
-  } catch {
-    res.status(404).json({ error: '草稿不存在' });
-  }
-});
-
-/**
- * DELETE /api/quickfilm/drafts/:id — 删除草稿
- */
-draftsRouter.delete('/:id', async (req: Request, res: Response) => {
-  const username = req.user!.username;
-  const { id } = req.params;
-  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
-
-  try {
-    fs.unlinkSync(path.join(getDraftsDir(username), `${id}.json`));
-    res.json({ success: true });
-  } catch {
-    res.status(404).json({ error: '草稿不存在' });
-  }
-});
-
-export { draftsRouter };
-
 // ─── Session routes (Step2/3 恢复) ───────────────────────────────────────────
+// 注意：静态路由必须在 /:jobId 参数路由之前，否则 /session 会被错误匹配为 jobId
 
 interface QuickFilmSessionBody {
   step?: 2 | 3;
@@ -469,4 +163,367 @@ quickfilmRouter.delete('/session', async (req: Request, res: Response) => {
     res.status(404).json({ error: '暂无可清空会话' });
   }
 });
+
+/**
+ * GET /api/quickfilm/:jobId/status
+ */
+quickfilmRouter.get('/:jobId/status', (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const { jobId } = req.params;
+  if (!jobId) {
+    res.status(400).json({ error: '缺少 jobId' });
+    return;
+  }
+
+  const job = loadJob(jobId, username);
+  if (!job) {
+    res.status(404).json({ error: '任务不存在' });
+    return;
+  }
+
+  res.json({
+    status: job.status,
+    progress: job.progress,
+    steps: job.steps,
+    storyboard: job.status === 'done' ? job.storyboard : undefined,
+    error: job.error,
+    logline: job.storyArc?.logline,
+    title: job.story.slice(0, 30),
+    projectId: job.projectId,
+  });
+});
+
+/**
+ * GET /api/quickfilm/:jobId/stream?token=<jwt> — SSE 实时推送
+ */
+quickfilmRouter.get('/:jobId/stream', (req: Request, res: Response) => {
+  const token = req.query['token'] as string | undefined;
+  if (!token) {
+    console.warn('[quickfilm/stream] SSE 请求缺少 token');
+    res.status(401).json({ error: 'token required' });
+    return;
+  }
+  let username: string | undefined;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'gobs-secret-change-in-production') as { username?: string };
+    username = typeof payload.username === 'string' ? payload.username : undefined;
+  } catch (err) {
+    console.warn('[quickfilm/stream] SSE token 校验失败:', err instanceof Error ? err.message : err);
+    res.status(401).json({ error: 'invalid token' });
+    return;
+  }
+
+  const { jobId } = req.params;
+  const sanitizedUser = sanitizeUsername(username);
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
+
+  const send = (job: QuickFilmJob) => {
+    if (job.id === jobId) {
+      res.write(`data: ${JSON.stringify(job)}\n\n`);
+    }
+  };
+
+  quickfilmJobEvents.on('update', send);
+
+  // Send current state immediately
+  const current = loadJob(jobId, sanitizedUser);
+  if (current) res.write(`data: ${JSON.stringify(current)}\n\n`);
+
+  req.on('close', () => {
+    quickfilmJobEvents.off('update', send);
+    res.end();
+  });
+});
+
+/**
+ * POST /api/quickfilm/:jobId/confirm
+ * Body: { storyboard } — 用户确认/修改后的分镜
+ */
+quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const { jobId } = req.params;
+  const { storyboard } = req.body as { storyboard?: unknown };
+
+  if (!jobId) {
+    res.status(400).json({ error: '缺少 jobId' });
+    return;
+  }
+
+  const job = loadJob(jobId, username);
+  if (!job) {
+    res.status(404).json({ error: '任务不存在' });
+    return;
+  }
+
+  if (!Array.isArray(storyboard)) {
+    res.status(400).json({ error: '请提供 storyboard 数组' });
+    return;
+  }
+
+  if (!isDreaminaEnabled()) {
+    res.status(400).json({ error: '即梦未启用，无法执行一键成片。请先配置 dreamina-cli 并重启 API。' });
+    return;
+  }
+
+  // 检查即梦 CLI 登录态
+  const authCheck = await checkDreaminaAuth();
+  if (!authCheck.loggedIn) {
+    res.status(400).json({
+      error: `即梦 CLI 未登录：${authCheck.error || '请在服务器执行 dreamina login'}`,
+    });
+    return;
+  }
+
+  // 保存用户确认的分镜
+  job.storyboard = storyboard as typeof job.storyboard;
+  const batchJobId = nanoid();
+  job.batchJobId = batchJobId;
+
+  saveJob(job, username);
+
+  const projectId = job.projectId || `quickfilm-${jobId}`;
+  const now = new Date().toISOString();
+  const shots = storyboard as Array<{
+    shotIndex?: number;
+    durationSec?: number;
+    subject?: string;
+    action?: string;
+    dialogue?: string;
+    notes?: string;
+    structuredStill?: { sp_subject?: string; sp_environment?: string };
+    structuredMotion?: { mp_motion?: string; mp_camera?: string; mp_tempo?: string };
+    userMatchedAssets?: { characterRef?: string; sceneRef?: string };
+  }>;
+
+  // Build submission info for all shots, but only submit the first one immediately.
+  // Remaining shots are stored as 'awaiting_submit' in batchJobsQueue;
+  // when each shot completes (or fails), the queue auto-submits the next one.
+  // This mirrors the production wizard's serial queue pattern.
+
+  const queued: BatchJob[] = [];
+  for (let i = 0; i < shots.length; i++) {
+    const shot = shots[i]!;
+    const prompt = [
+      shot.subject ? `主体：${shot.subject}` : '',
+      shot.action ? `动作：${shot.action}` : '',
+      shot.structuredStill?.sp_environment ? `环境：${shot.structuredStill.sp_environment}` : '',
+      shot.structuredStill?.sp_subject ? `画面主体：${shot.structuredStill.sp_subject}` : '',
+      shot.structuredMotion?.mp_motion ? `运动：${shot.structuredMotion.mp_motion}` : '',
+      shot.structuredMotion?.mp_camera ? `运镜：${shot.structuredMotion.mp_camera}` : '',
+      shot.structuredMotion?.mp_tempo ? `节奏：${shot.structuredMotion.mp_tempo}` : '',
+      shot.dialogue ? `对白：${shot.dialogue}` : '',
+      shot.notes ? `备注：${shot.notes}` : '',
+      `风格：${job.style}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const refBase64 = shot.userMatchedAssets?.characterRef || shot.userMatchedAssets?.sceneRef || undefined;
+    const model = refBase64 ? 'dreamina-image2video' : 'dreamina-text2video';
+    const duration = Math.max(4, Math.min(15, Math.round(shot.durationSec ?? 5)));
+    const shotDesc = `${shot.subject ?? ''} ${shot.action ?? ''}`.trim() || `QuickFilm 分镜 ${i + 1}`;
+    const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
+
+    const submitParams: BatchJobSubmitParams = {
+      prompt,
+      aspectRatio: '9:16',
+      duration,
+      model,
+      imageBase64: refBase64,
+      imageMimeType: refBase64 ? 'image/png' : undefined,
+    };
+
+    if (i === 0) {
+      // First shot: submit immediately to Dreamina
+      const { submitId, taskId } = await submitDreaminaVideo(submitParams);
+      const bj: BatchJob = {
+        id,
+        submitId,
+        taskId: taskId || `dreamina-${submitId}`,
+        projectId,
+        source: 'quickfilm',
+        shotIndex: shot.shotIndex ?? i,
+        shotDescription: shotDesc,
+        model,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await addJob(bj);
+      queued.push(bj);
+    } else {
+      // Remaining shots: queue for later, auto-submitted when previous completes
+      const bj: BatchJob = {
+        id,
+        submitId: '',
+        taskId: '',
+        projectId,
+        source: 'quickfilm',
+        shotIndex: shot.shotIndex ?? i,
+        shotDescription: shotDesc,
+        model,
+        status: 'awaiting_submit',
+        createdAt: now,
+        updatedAt: now,
+        submitParams,
+      };
+      await addJob(bj);
+      queued.push(bj);
+    }
+  }
+
+  console.log('[quickfilm/confirm] storyboard confirmed:', {
+    batchJobId,
+    submitted: 1,
+    awaiting: queued.length - 1,
+    projectId,
+  });
+  res.json({ batchJobId, queued: queued.length, projectId });
+});
+
+export default quickfilmRouter;
+
+// ─── Draft routes ─────────────────────────────────────────────────────────────
+
+import { Router as DraftRouter } from 'express';
+const draftsRouter = DraftRouter();
+
+function isSafeId(id: string): boolean {
+  return /^[\w-]{1,64}$/.test(id);
+}
+
+function getDraftsDir(username: string): string {
+  if (!isSafeId(username)) throw new Error('非法用户名');
+  return path.join(getApiDataDir(), 'quickfilm', 'drafts', username);
+}
+
+interface DraftBody {
+  id?: string;
+  name?: string;
+  story?: string;
+  protagonist?: string;
+  protagonistDesc?: string;
+  style?: string;
+  customStyle?: string;
+  styleImageBase64?: string;
+  assetFiles?: Array<{ name: string; base64: string }>;
+  storyboard?: unknown[];
+  logline?: string;
+  jobId?: string;
+  projectId?: string;
+}
+
+/**
+ * POST /api/quickfilm/drafts — 保存草稿
+ */
+draftsRouter.post('/', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const body = req.body as DraftBody;
+  const draftId = (body.id && isSafeId(body.id)) ? body.id : nanoid(12);
+  const dir = getDraftsDir(username);
+  const now = new Date().toISOString();
+
+  const draft: Record<string, unknown> = {
+    id: draftId,
+    name: body.name || (body.story?.slice(0, 20) || '未命名草稿'),
+    story: body.story ?? '',
+    protagonist: body.protagonist ?? '',
+    protagonistDesc: body.protagonistDesc ?? '',
+    style: body.style ?? '现代',
+    customStyle: body.customStyle ?? '',
+    styleImageBase64: body.styleImageBase64,
+    assetFiles: body.assetFiles ?? [],
+    updatedAt: now,
+    createdAt: now,
+  };
+  if (Array.isArray(body.storyboard) && body.storyboard.length > 0) {
+    draft.storyboard = body.storyboard;
+    draft.logline = typeof body.logline === 'string' ? body.logline : undefined;
+    draft.jobId = typeof body.jobId === 'string' ? body.jobId : undefined;
+    draft.projectId = typeof body.projectId === 'string' ? body.projectId : undefined;
+  }
+
+  // If updating existing draft, preserve createdAt
+  const filePath = path.join(dir, `${draftId}.json`);
+  try {
+    const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as { createdAt?: string };
+    if (existing.createdAt) draft.createdAt = existing.createdAt;
+  } catch { /* new draft */ }
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(draft, null, 2), 'utf-8');
+    res.json({ success: true, id: draftId });
+  } catch (err) {
+    console.error('[quickfilm/drafts] save error', err);
+    res.status(500).json({ error: '保存草稿失败' });
+  }
+});
+
+/**
+ * GET /api/quickfilm/drafts — 列出草稿
+ */
+draftsRouter.get('/', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const dir = getDraftsDir(username);
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+    const drafts = files.map((f) => {
+      const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')) as Record<string, unknown>;
+      return {
+        id: raw.id as string,
+        name: raw.name as string,
+        updatedAt: raw.updatedAt as string,
+        createdAt: raw.createdAt as string,
+        hasStoryboard: Array.isArray(raw.storyboard) && (raw.storyboard as unknown[]).length > 0,
+      };
+    });
+    drafts.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+    res.json({ success: true, drafts });
+  } catch (err) {
+    console.error('[quickfilm/drafts] list error', err);
+    res.status(500).json({ error: '读取草稿列表失败' });
+  }
+});
+
+/**
+ * GET /api/quickfilm/drafts/:id — 读取草稿
+ */
+draftsRouter.get('/:id', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const { id } = req.params;
+  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
+
+  try {
+    const raw = fs.readFileSync(path.join(getDraftsDir(username), `${id}.json`), 'utf-8');
+    res.json(JSON.parse(raw));
+  } catch {
+    res.status(404).json({ error: '草稿不存在' });
+  }
+});
+
+/**
+ * DELETE /api/quickfilm/drafts/:id — 删除草稿
+ */
+draftsRouter.delete('/:id', async (req: Request, res: Response) => {
+  const username = req.user!.username;
+  const { id } = req.params;
+  if (!isSafeId(id)) { res.status(400).json({ error: '无效的草稿 id' }); return; }
+
+  try {
+    fs.unlinkSync(path.join(getDraftsDir(username), `${id}.json`));
+    res.json({ success: true });
+  } catch {
+    res.status(404).json({ error: '草稿不存在' });
+  }
+});
+
+export { draftsRouter };
 

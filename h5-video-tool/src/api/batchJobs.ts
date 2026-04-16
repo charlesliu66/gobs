@@ -48,6 +48,11 @@ export async function cancelBatchJob(id: string): Promise<{ ok: boolean }> {
   return apiDelete(`/api/batch-jobs/${id}`);
 }
 
+/** 批量取消项目内所有未完成任务 */
+export async function cancelBatchByProject(projectId: string): Promise<{ cancelled: number; total: number }> {
+  return apiDelete(`/api/batch-jobs/project/${encodeURIComponent(projectId)}`);
+}
+
 /** 手动立即轮询某个 batch-job（用户点「检查进度」） */
 export async function pollBatchJobNow(id: string): Promise<{ job: BatchJobDto }> {
   return apiPost(`/api/batch-jobs/${id}/poll-now`, {});

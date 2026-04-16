@@ -66,6 +66,21 @@ router.get('/', async (req, res) => {
   res.json({ jobs: enriched });
 });
 
+/** DELETE /api/batch-jobs/project/:projectId — 批量取消项目内所有未完成任务 */
+router.delete('/project/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+  if (!projectId) { res.status(400).json({ error: 'need projectId' }); return; }
+  const jobs = await getJobsByProject(projectId);
+  const cancellable = jobs.filter((j) =>
+    j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit',
+  );
+  let cancelled = 0;
+  for (const j of cancellable) {
+    if (await cancelJob(j.id)) cancelled++;
+  }
+  res.json({ cancelled, total: cancellable.length });
+});
+
 /** DELETE /api/batch-jobs/:id — 取消任务 */
 router.delete('/:id', async (req, res) => {
   const ok = await cancelJob(req.params.id);
