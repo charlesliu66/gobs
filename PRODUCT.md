@@ -246,6 +246,16 @@
 
 ---
 
+### v0.47 — 2026-04-16
+
+**巨石文件拆分第一阶段：riskSentimentService 类型提取**
+
+**Refactor:**
+- **[api] `riskSentimentTypes.ts` 新建**：从 `riskSentimentService.ts`（1744行）提取全部类型定义（`RiskVideo`、`RiskCreator`、`CommentTask`、`RiskSnapshot`、`RiskStrategyBlock` 等 12 个类型，128行），主文件通过 `export type` 重导出，消费方零改动
+- 主文件行数 1744 → 1626（-118行），后续阶段将继续提取 Apify 数据采集和 LLM 解析函数
+
+---
+
 ### v0.46 — 2026-04-16
 
 **镜头版本历史完整实现（版本切换 API + 版本清理 + 上限提示）**

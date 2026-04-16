@@ -9,153 +9,39 @@ import { compassChatCompletion } from './compassLlm.js';
 import { getGeelarkOpenApiV1Base, geelarkApiTraceId, resolveGeelarkBearerToken } from './geelarkClient.js';
 import { resolvePath } from '../infra/storage/resolver.js';
 
+export type {
+  SentimentLabel,
+  RiskVideo,
+  RiskCreator,
+  CommentAttitude,
+  CommentTask,
+  StrategyProfileKey,
+  RiskExecutionProgram,
+  RiskStrategyBlock,
+  RiskStrategyVariant,
+  RiskSnapshot,
+  RiskExecutionLogEntry,
+  GeelarkPhone,
+} from './riskSentimentTypes.js';
+
+import type {
+  SentimentLabel,
+  RiskVideo,
+  RiskCreator,
+  CommentAttitude,
+  CommentTask,
+  StrategyProfileKey,
+  RiskExecutionProgram,
+  RiskStrategyBlock,
+  RiskStrategyVariant,
+  RiskSnapshot,
+  RiskExecutionLogEntry,
+  GeelarkPhone,
+} from './riskSentimentTypes.js';
+
 const DATA_FILE = join(resolvePath('.data'), 'risk-sentiment.json');
 const EXECUTION_LOG_FILE = join(resolvePath('.data'), 'risk-execution-log.json');
-/** 可选：粘贴你从 skills.sh / 自建 skill 里选中的「分析侧重点」全文，会拼进 Compass 系统提示，影响「风控大师建议」等输出 */
 const RISK_EXTRA_PROMPT_FILE = join(process.cwd(), 'config', 'risk-sentiment-extra-prompt.md');
-
-export type SentimentLabel = 'positive' | 'neutral' | 'negative';
-
-export type RiskVideo = {
-  id: string;
-  coverUrl?: string;
-  title: string;
-  author: string;
-  followers?: number;
-  publishedAt?: string;
-  likes: number;
-  comments: number;
-  shares: number;
-  sentiment: SentimentLabel;
-  riskTag: '高风险' | '可借势' | '建议覆盖' | '持续观察';
-  url: string;
-  /** Apify 评论 Actor 抓取后按赞排序截断，用于 LLM 与列表展示 */
-  topComments?: Array<{ text: string; likeCount: number }>;
-  analysis?: {
-    summary: string;
-    reasons: string[];
-    risks: string[];
-    hotCommentsSummary?: string;
-    strategies?: { positive?: string; neutral?: string; clarify?: string };
-  };
-};
-
-export type RiskCreator = {
-  id: string;
-  nickname: string;
-  followers: number;
-  recentVideoCount: number;
-  avgEngagementRate: number;
-  contentTendency: string;
-  /** 倾向的补充解释（更细） */
-  tendencyDetail?: string;
-  /** 创作者当前最可用能力标签（逗号分隔） */
-  strengths?: string;
-  /** 建议协作方式（投放/联动） */
-  collaborationSuggestion?: string;
-  potentialScore: number;
-  sampleUrl?: string;
-  status: '未跟进' | '已观察' | '已投放' | '合作中';
-};
-
-export type CommentAttitude = '正面引导' | '中性互动' | '防御缓冲' | '纠偏澄清';
-
-export type CommentTask = {
-  id: string;
-  videoId: string;
-  videoUrl: string;
-  authorNickname: string;
-  sentiment: SentimentLabel;
-  attitude: CommentAttitude;
-  lang: string;
-  candidates: string[];
-  selectedIndex: number;
-  editedText?: string;
-  /** 攻击性：反驳不实信息、维护游戏；防御性：认同作者观点、缓冲或正向引导 */
-  executionNature: 'attack' | 'defense';
-  /** @deprecated 不再下发；仅兼容旧快照 */
-  meaningZh?: string;
-};
-
-/** 风控大师 · 三方案之一：智能平衡 / 保守 / 激进 */
-export type StrategyProfileKey = 'balanced' | 'conservative' | 'aggressive';
-
-/** 建议控评时的执行纲领（行动代号、方向、攻防占比、预期效果） */
-export type RiskExecutionProgram = {
-  codename: string;
-  directionSummary: string;
-  /** 攻击性/纠偏向执行层评论占比 0–100 */
-  attackPct: number;
-  /** 防御缓冲/引导向执行层评论占比 0–100 */
-  defensePct: number;
-  expectedEffect: string;
-};
-
-export type RiskStrategyBlock = {
-  conclusion: string;
-  level: '低风险' | '中风险' | '高风险';
-  narrative: string;
-  riskPoints: string[];
-  actions: string[];
-  /** 下一步运营/社区侧优先事项（1～3 句） */
-  nextFocus?: string;
-  /** 本批评论任务的态度分布与整体口吻建议 */
-  commentToneSummary?: string;
-};
-
-export type RiskStrategyVariant = RiskStrategyBlock & {
-  /** 是否建议在本批次开展评论执行（控评） */
-  recommendControlComment: boolean;
-  /** 当 recommendControlComment 为 true 时建议填写 */
-  executionProgram?: RiskExecutionProgram;
-};
-
-export type RiskSnapshot = {
-  game: string;
-  days: 7 | 14 | 30;
-  keywords: string[];
-  limit: number;
-  updatedAt: number;
-  overview: {
-    score: number;
-    positivePct: number;
-    neutralPct: number;
-    negativePct: number;
-    helperText: string;
-    /** 各情感维度的依据（非仅数字），便于理解「正/中/负」分别体现在哪里 */
-    positiveSummary?: string;
-    neutralSummary?: string;
-    negativeSummary?: string;
-  };
-  topics: Array<{ term: string; count: number }>;
-  videos: RiskVideo[];
-  creators: RiskCreator[];
-  strategy: RiskStrategyBlock;
-  commentTasks: CommentTask[];
-  /** 三方案：智能平衡 / 保守 / 激进（与 commentTasksByProfile 对应） */
-  strategyProfiles?: Record<StrategyProfileKey, RiskStrategyVariant>;
-  /** 各方案对应的评论执行任务（文案与态度分布可不同） */
-  commentTasksByProfile?: Record<StrategyProfileKey, CommentTask[]>;
-  lastRefreshStatus: 'idle' | 'ok' | 'error';
-  lastError?: string;
-  apifyUsedMock?: boolean;
-  /** 本次 TikTok 采集实际送入 Apify 的标签（含从游戏名自动推导），可与用户手输 keywords 对照 */
-  effectiveKeywords?: string[];
-  /** social-listening：监测维度与关键词 */
-  keywordMatrix: Array<{ category: string; keywords: string[]; monitorNote?: string }>;
-  /** social-listening：绿/黄/橙/红 告警条 */
-  listeningAlerts: Array<{
-    level: '绿' | '黄' | '橙' | '红';
-    title: string;
-    detail: string;
-    responseWithin?: string;
-  }>;
-  /** social-trend-monitor：基于本批样本的「与游戏相关」崛起话题/内容形态 */
-  recentTrends: {
-    summary: string;
-    risingItems: Array<{ topic: string; whyRising: string; tieToGame: string }>;
-  };
-};
 
 const defaultSnapshot = (partial?: Partial<RiskSnapshot>): RiskSnapshot => ({
   game: partial?.game ?? '',
@@ -255,18 +141,6 @@ async function saveSnapshot(s: RiskSnapshot) {
   await ensureDataDir();
   await writeFile(DATA_FILE, JSON.stringify(s, null, 2), 'utf8');
 }
-
-export type RiskExecutionLogEntry = {
-  id: string;
-  at: number;
-  profile?: StrategyProfileKey;
-  game?: string;
-  ok: boolean;
-  message: string;
-  taskIds: string[];
-  errors: string[];
-  items: Array<{ videoUrl: string; comment: string; envId: string; deviceName?: string }>;
-};
 
 export async function appendRiskExecutionLog(
   partial: Omit<RiskExecutionLogEntry, 'id' | 'at'>,
@@ -1798,8 +1672,6 @@ export async function regenerateCommentsForVideo(
   await saveSnapshot(snap);
   return loadSnapshot();
 }
-
-export type GeelarkPhone = { id: string; name: string; serialNo?: string; status?: number };
 
 export async function listGeelarkPhones(): Promise<GeelarkPhone[]> {
   const token = await resolveGeelarkBearerToken();
