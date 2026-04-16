@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 import { ScreeningRoomPlayer } from './ScreeningRoomPlayer';
-import { saveEditorProject } from '../../api/editor';
+import { listEditorProjects, saveEditorProject } from '../../api/editor';
 import type { AspectRatioPreset, MediaAsset, VideoClip, Track, TimelineProject } from '../../editor/types/timeline';
 import { syncSourceAudioClipsFromVideo } from '../../editor/types/timeline';
 import { toast } from '../../components/Toast';
@@ -16,6 +16,7 @@ export function StepExportStoryboardOverview({
   projectTitle,
   aspectRatio,
   bgmPromptHint,
+  productionProjectId,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -25,6 +26,7 @@ export function StepExportStoryboardOverview({
   projectTitle?: string;
   aspectRatio?: string;
   bgmPromptHint?: string;
+  productionProjectId?: string;
 }) {
   const [showScreeningRoom, setShowScreeningRoom] = useState(true);
   const [openingEditor, setOpeningEditor] = useState(false);
@@ -55,7 +57,19 @@ export function StepExportStoryboardOverview({
           sourceEnd: dur,
           timelineStart: cursor,
           shotIndex: sh.shotIndex,
-          note: buildStoryLine(sh).slice(0, 60),
+          note: buildStoryLine(sh).slice(0, 120),
+          meta: {
+            source: 'production',
+            productionProjectId: productionProjectId ?? undefined,
+            shotScale: sh.shotScale,
+            cameraMove: sh.cameraMove,
+            subject: sh.subject,
+            action: sh.action,
+            sceneRef: sh.sceneRef,
+            emotion: sh.emotion,
+            lighting: sh.lighting,
+            dialogue: sh.dialogue,
+          },
         });
         cursor += dur;
       }
@@ -73,12 +87,31 @@ export function StepExportStoryboardOverview({
         aspectRatio: ar,
         mix: { sourceAudio: 1, bgm: 0, bgmFadeOut: 2, bgmFadeIn: 1, bgmPromptHint: bgmPromptHint || undefined },
         tracks,
+        sourceProductionProjectId: productionProjectId ?? undefined,
+        sourceProductionTitle: projectTitle ?? undefined,
       };
       project = syncSourceAudioClipsFromVideo(project);
 
+      // 去重检查：如果已有关联该制片项目的剪辑项目，直接打开
+      if (productionProjectId) {
+        try {
+          const { projects } = await listEditorProjects();
+          const existing = projects.find((p) => p.name === `${projectTitle}-剪辑`);
+          if (existing) {
+            const confirmCreate = window.confirm(
+              `已存在关联的剪辑项目「${existing.name}」（${new Date(existing.updatedAt).toLocaleString('zh-CN')}）。\n\n点击「确定」创建新项目，点击「取消」打开已有项目。`,
+            );
+            if (!confirmCreate) {
+              navigate(`/editor?project=${existing.id}&from=production&shots=${shotsWithVideo.length}&dur=${Math.round(cursor)}&title=${encodeURIComponent(projectTitle || '')}`);
+              return;
+            }
+          }
+        } catch { /* ignore: proceed to create */ }
+      }
+
       const name = projectTitle ? `${projectTitle}-剪辑` : `制片导入-${new Date().toLocaleDateString('zh-CN')}`;
       const saved = await saveEditorProject({ name, aspectRatio: ar, project, assets });
-      navigate(`/editor?project=${saved.id}`);
+      navigate(`/editor?project=${saved.id}&from=production&shots=${shotsWithVideo.length}&dur=${Math.round(cursor)}&title=${encodeURIComponent(projectTitle || '')}`);
     } catch (e) {
       console.error('[OpenInEditor]', e);
       toast.error('导入剪辑器失败，请重试');

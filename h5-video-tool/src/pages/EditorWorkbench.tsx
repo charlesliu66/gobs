@@ -12,6 +12,7 @@ import { BgmMixPanel } from '../editor/components/BgmMixPanel';
 import { TextClipEditor } from '../editor/components/TextClipEditor';
 import { TextOverlayRenderer } from '../editor/components/TextOverlayRenderer';
 import { EditorProjectManager } from '../editor/components/EditorProjectManager';
+import { ImportGuideModal } from '../editor/components/ImportGuideModal';
 import type { AudioClip, MediaAsset, TimelineProject, VideoClip } from '../editor/types/timeline';
 import type { TextClip } from '../editor/types/timeline';
 import {
@@ -194,6 +195,9 @@ export function EditorWorkbench() {
   const [newProjectModal, setNewProjectModal] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
   /** 首次自动打开最近项目的标记，防止重复触发 */
   const hasAutoOpenedRef = useRef(false);
+  /** 从制片导入后的引导弹窗 */
+  const [showImportGuide, setShowImportGuide] = useState(false);
+  const importGuideInfoRef = useRef<{ shots: number; dur: number; title: string; bgmHint: string } | null>(null);
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
@@ -229,6 +233,29 @@ export function EditorWorkbench() {
   useEffect(() => {
     // sync URL param to reflect current projectId
   }, [projectId]);
+
+  // 从制片导入时显示引导弹窗（仅触发一次）
+  useEffect(() => {
+    const from = searchParams.get('from');
+    if (from !== 'production') return;
+    const guideKey = `dismissed_import_guide_${searchParams.get('project') ?? ''}`;
+    if (localStorage.getItem(guideKey)) return;
+    const shotsCount = Number(searchParams.get('shots')) || 0;
+    const dur = Number(searchParams.get('dur')) || 0;
+    const title = searchParams.get('title') ? decodeURIComponent(searchParams.get('title')!) : '';
+    importGuideInfoRef.current = { shots: shotsCount, dur, title, bgmHint: '' };
+    setShowImportGuide(true);
+    localStorage.setItem(guideKey, '1');
+    // 清除 URL 中的 from 等临时参数，保留 project
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('from');
+      next.delete('shots');
+      next.delete('dur');
+      next.delete('title');
+      return next;
+    });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -1164,6 +1191,16 @@ export function EditorWorkbench() {
         }
         topBarExtra={
           <div className="flex items-center gap-2">
+            {project.sourceProductionTitle && (
+              <a
+                href={`/studio/wizard${project.sourceProductionProjectId ? `?project=${project.sourceProductionProjectId}` : ''}`}
+                className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
+                title="打开来源制片项目"
+              >
+                📎 来自「{project.sourceProductionTitle}」
+                <span className="opacity-60">→</span>
+              </a>
+            )}
             <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-2 py-1">
               <input
                 value={projectName}
@@ -1280,6 +1317,23 @@ export function EditorWorkbench() {
         onRename={renameProject}
         onDelete={removeProject}
         onClose={() => setShowProjectManager(false)}
+      />
+    )}
+
+    {/* 制片导入引导弹窗 */}
+    {showImportGuide && importGuideInfoRef.current && (
+      <ImportGuideModal
+        shotCount={importGuideInfoRef.current.shots}
+        totalDurationSec={importGuideInfoRef.current.dur}
+        sourceTitle={importGuideInfoRef.current.title || project.sourceProductionTitle}
+        bgmPromptHint={project.mix?.bgmPromptHint}
+        onGenerateBgm={() => {
+          pushLog('🎵 开始一键生成配乐…');
+        }}
+        onPreview={() => {
+          if (!isPlaying) togglePlay();
+        }}
+        onDismiss={() => setShowImportGuide(false)}
       />
     )}
 

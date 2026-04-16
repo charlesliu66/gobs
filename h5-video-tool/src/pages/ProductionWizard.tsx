@@ -1941,6 +1941,7 @@ export function ProductionWizard() {
                 .filter(Boolean)
                 .join(', ') || undefined
             }
+            productionProjectId={serverProjectId ?? undefined}
           />
         )}
 

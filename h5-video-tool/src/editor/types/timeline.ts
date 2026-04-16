@@ -54,6 +54,8 @@ export interface VideoClip {
   speed?: number;
   /** 原声音量，0–200（百分比），默认 100 */
   volume?: number;
+  /** 结构化元数据（分镜景别/运镜/主体/动作等，从高级制片导入时填充） */
+  meta?: Record<string, unknown>;
 }
 
 export interface AudioClip {
@@ -130,6 +132,10 @@ export interface TimelineProject {
   mix?: TimelineMix;
   /** 全局字幕轨 */
   subtitles?: SubtitleCue[];
+  /** 来源制片项目 ID（从高级制片导入时自动填充，用于双向链接） */
+  sourceProductionProjectId?: string;
+  /** 来源制片项目标题 */
+  sourceProductionTitle?: string;
 }
 
 export interface AgentRevision {

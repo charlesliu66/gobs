@@ -23,6 +23,7 @@ export function StepExportWorkspace({
   projectTitle,
   aspectRatio,
   bgmPromptHint,
+  productionProjectId,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -38,6 +39,7 @@ export function StepExportWorkspace({
   projectTitle?: string;
   aspectRatio?: string;
   bgmPromptHint?: string;
+  productionProjectId?: string;
 }) {
   const { setStep } = useProductionContext();
   return (
@@ -51,6 +53,7 @@ export function StepExportWorkspace({
         projectTitle={projectTitle}
         aspectRatio={aspectRatio}
         bgmPromptHint={bgmPromptHint}
+        productionProjectId={productionProjectId}
       />
 
       <StepExportPromptConsistency
