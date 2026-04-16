@@ -14,8 +14,9 @@ function reportExportBehavior(project: TimelineProject) {
     const videoTrack = project.tracks.find((t) => t.type === 'video');
     if (!videoTrack?.clips?.length) return;
     const clips = videoTrack.clips.map((c) => {
-      const dur = (c.sourceEnd ?? 0) - (c.sourceStart ?? 0);
-      const meta = (c as { meta?: Record<string, unknown> }).meta ?? {};
+      const vc = c as { sourceEnd?: number; sourceStart?: number; meta?: Record<string, unknown> };
+      const dur = (vc.sourceEnd ?? 0) - (vc.sourceStart ?? 0);
+      const meta = vc.meta ?? {};
       return {
         activityPrimary: String(meta.activityPrimary ?? meta.subject ?? ''),
         activitySecondary: String(meta.activitySecondary ?? ''),
