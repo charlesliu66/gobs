@@ -1239,6 +1239,7 @@ export function EditorWorkbench() {
             </button>
             <ExportPanel
               project={project}
+              assets={assets}
               aspectRatio={aspectRatio}
               onPushLog={pushLog}
             />

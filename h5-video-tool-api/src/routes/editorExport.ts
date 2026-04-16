@@ -30,17 +30,53 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
   return typeof p.id === 'string' && Array.isArray(p.tracks);
 }
 
-/** 把 assetId 映射到本地文件路径（多路查找） */
+/**
+ * 从 asset URL 中提取本地文件路径。
+ * 支持 /api/video/file?path=xxx 和 /api/editor/assets/files/xxx 两种格式。
+ */
+function resolveLocalPathFromUrl(url: string, username: string): string | null {
+  try {
+    const fakeBase = 'http://localhost';
+    const parsed = new URL(url, fakeBase);
+
+    // /api/video/file?path=output/admin/xxx.mp4
+    if (parsed.pathname === '/api/video/file') {
+      const relPath = parsed.searchParams.get('path');
+      if (relPath) {
+        const full = path.resolve(getApiDataDir(), path.normalize(relPath));
+        if (fs.existsSync(full)) return full;
+      }
+    }
+
+    // /api/editor/assets/files/<assetId>
+    const editorMatch = parsed.pathname.match(/^\/api\/editor\/assets\/files\/(.+)$/);
+    if (editorMatch) {
+      const fileId = decodeURIComponent(editorMatch[1]);
+      const safeUser = sanitizeUsername(username);
+      const editorDir = path.join(getUploadsPath('editor'), safeUser);
+      const full = path.join(editorDir, fileId);
+      if (fs.existsSync(full)) return full;
+      try {
+        const files = fs.readdirSync(editorDir);
+        const match = files.find((f) => f === fileId || f.startsWith(fileId + '.'));
+        if (match) return path.join(editorDir, match);
+      } catch { /* ignore */ }
+    }
+  } catch { /* malformed URL — ignore */ }
+  return null;
+}
+
+/** 把 assetId 映射到本地文件路径（多路查找 + asset URL 反解） */
 function resolveAssetPaths(
   tracks: EditorExportRequestBody['project']['tracks'],
   username: string,
+  assetUrlMap?: Record<string, { url?: string; [k: string]: unknown }>,
 ): Record<string, string> {
   const safeUser = sanitizeUsername(username);
-  // 素材可能在多个目录
   const searchDirs = [
-    path.join(getUploadsPath('editor'), safeUser), // 剪辑上传目录
-    path.join(getApiDataDir(), 'output', 'production', 'images', safeUser), // 高级制片图片
-    path.join(getApiDataDir(), 'output', safeUser), // 通用输出目录
+    path.join(getUploadsPath('editor'), safeUser),
+    path.join(getApiDataDir(), 'output', 'production', 'images', safeUser),
+    path.join(getApiDataDir(), 'output', safeUser),
   ];
 
   const map: Record<string, string> = {};
@@ -48,22 +84,21 @@ function resolveAssetPaths(
     for (const clip of track.clips) {
       const c = clip as { assetId?: string };
       if (!c.assetId || map[c.assetId]) continue;
-      // 跳过 http(s):// URL — 需要下载，暂不支持（日志提示）
       if (c.assetId.startsWith('http')) {
         console.warn('[export] assetId is a URL, skipping:', c.assetId);
         continue;
       }
       const assetId = c.assetId;
       let found = false;
+
+      // 1) 目录搜索（本地上传的素材）
       for (const dir of searchDirs) {
         if (!fs.existsSync(dir)) continue;
-        // 精确匹配
         if (fs.existsSync(path.join(dir, assetId))) {
           map[assetId] = path.join(dir, assetId);
           found = true;
           break;
         }
-        // 扫目录找前缀匹配（id 可能不含扩展名）
         try {
           const files = fs.readdirSync(dir);
           const match = files.find((f) => f === assetId || f.startsWith(assetId + '.'));
@@ -74,6 +109,17 @@ function resolveAssetPaths(
           }
         } catch { /* ignore */ }
       }
+
+      // 2) 从前端传来的 assets URL 反解本地路径（高级制片 prod_shot_* 等）
+      if (!found && assetUrlMap?.[assetId]?.url) {
+        const resolved = resolveLocalPathFromUrl(assetUrlMap[assetId].url!, username);
+        if (resolved) {
+          map[assetId] = resolved;
+          found = true;
+          console.log('[export] resolved asset via URL:', assetId, '->', resolved);
+        }
+      }
+
       if (!found) {
         console.warn('[export] asset not found locally:', assetId);
       }
@@ -91,7 +137,7 @@ router.post('/export', (req, res) => {
   }
 
   const body = req.body as EditorExportRequestBody;
-  const { project, aspectRatio, resolution = '1080p', format = 'mp4', quality = 'balanced' } = body;
+  const { project, assets: frontendAssets, aspectRatio, resolution = '1080p', format = 'mp4', quality = 'balanced' } = body;
 
   const jobId = `exp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const job: ExportJob = {
@@ -117,8 +163,8 @@ router.post('/export', (req, res) => {
       await fs.promises.mkdir(outDir, { recursive: true });
       const outputPath = path.join(outDir, `${jobId}.${format}`);
 
-      // 资产路径映射
-      const assets = resolveAssetPaths(project.tracks, username);
+      // 资产路径映射（传入前端 assets 以支持 prod_shot 等 URL 反解）
+      const assets = resolveAssetPaths(project.tracks, username, frontendAssets);
       const effectiveAspect = aspectRatio ?? project.aspectRatio;
 
       await runFfmpegExport({

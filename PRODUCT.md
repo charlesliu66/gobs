@@ -198,6 +198,17 @@
 
 ## 二、Changelog
 
+### v0.43a — 2026-04-16
+
+**剪辑工作台——导出支持高级制片分镜视频**
+
+**Fix:**
+- **[backend] 导出素材找不到 prod_shot_* 修复**：`editorExport.ts` 新增 `resolveLocalPathFromUrl()` 函数，在本地目录搜索 assetId 失败后，从前端传入的 asset URL（`/api/video/file?path=xxx`）中反解本地文件路径，解决高级制片分镜导入剪辑器后导出报错「素材文件不存在: assetId=prod_shot_*」
+- **[frontend] 导出请求携带 assets 映射**：`ExportPanel` 新增 `assets` prop，导出时一并发送给后端，使后端能通过 URL 定位非本地上传的素材文件
+- **[backend] 导出接口 schema 扩展**：`EditorExportRequestBody` 新增可选 `assets` 字段，向后兼容
+
+---
+
 ### v0.43 — 2026-04-16
 
 **高级制片——分镜编辑体验 & 版本持久化修复**
@@ -801,4 +812,4 @@
 
 ---
 
-*最后更新：2026-04-16（v0.43）*
+*最后更新：2026-04-16（v0.43a）*

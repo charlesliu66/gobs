@@ -211,6 +211,7 @@ export interface EditorExportStatusResponse {
 
 export async function startEditorExport(body: {
   project: TimelineProject;
+  assets?: Record<string, MediaAsset>;
   aspectRatio?: AspectRatioPreset;
   resolution?: string;
   format?: string;

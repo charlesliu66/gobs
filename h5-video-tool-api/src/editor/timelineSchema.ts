@@ -115,6 +115,8 @@ export interface AgentRevision {
 /** 导出任务请求体 */
 export interface EditorExportRequestBody {
   project: TimelineProject;
+  /** 前端持有的 assets 映射（assetId → {url, ...}），用于 prod_shot 等非本地文件的路径解析 */
+  assets?: Record<string, { url?: string; [k: string]: unknown }>;
   aspectRatio?: AspectRatioPreset;
   resolution?: '720p' | '1080p' | '4K';
   format?: 'mp4' | 'mov';

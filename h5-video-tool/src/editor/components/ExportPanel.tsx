@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { AspectRatioPreset, TimelineProject } from '../types/timeline';
+import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../types/timeline';
 import { startEditorExport, getEditorExportStatus, listExportFiles, deleteExportFile } from '../../api/editor';
 import type { ExportFileRecord } from '../../api/editor';
 import { apiDownload } from '../../api/client';
@@ -11,6 +11,7 @@ type ExportQuality = 'fast' | 'balanced' | 'high';
 
 interface ExportPanelProps {
   project: TimelineProject;
+  assets?: Record<string, MediaAsset>;
   aspectRatio: AspectRatioPreset;
   onPushLog: (msg: string) => void;
 }
@@ -21,7 +22,7 @@ const QUALITY_LABELS: Record<ExportQuality, string> = {
   high: '高质量 (慢)',
 };
 
-export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProps) {
+export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportPanelProps) {
   const [open, setOpen] = useState(false);
   const [resolution, setResolution] = useState<ExportResolution>('1080p');
   const panelRef = useRef<HTMLDivElement>(null);
@@ -98,7 +99,7 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
     setOpen(false);
     toast.info('导出任务已提交，请稍候…');
     try {
-      const { jobId } = await startEditorExport({ project, aspectRatio, resolution, format, quality });
+      const { jobId } = await startEditorExport({ project, assets, aspectRatio, resolution, format, quality });
       onPushLog(`导出任务 ${jobId} 已提交 (${resolution} ${format} ${quality})`);
       let tries = 0;
       while (tries < 90) {
@@ -132,7 +133,7 @@ export function ExportPanel({ project, aspectRatio, onPushLog }: ExportPanelProp
     } finally {
       setBusy(false);
     }
-  }, [project, aspectRatio, resolution, format, quality, onPushLog]);
+  }, [project, assets, aspectRatio, resolution, format, quality, onPushLog]);
 
   /** 从文件名中解析可读时间，格式：exp_<timestamp>_xxx.mp4 → "04-15 14:30" */
   function formatExportTime(record: ExportFileRecord): string {
