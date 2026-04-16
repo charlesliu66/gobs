@@ -55,7 +55,7 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
-import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
+import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, patchShotVersion, deleteShotVersions, type ProjectListItem } from '../api/production';
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
@@ -1652,7 +1652,15 @@ export function ProductionWizard() {
       } as ProductionShot;
       return { ...p, shots, assembled: null };
     });
-  }, [selectedShotIdx]);
+    if (serverProjectId) {
+      const si = shot?.shotIndex;
+      if (si != null) {
+        patchShotVersion(serverProjectId, si, versionId).catch((e) =>
+          console.warn('[patchShotVersion]', e),
+        );
+      }
+    }
+  }, [selectedShotIdx, serverProjectId, shot?.shotIndex]);
   const keepOnlyShotVideoVersion = useCallback((versionId: string) => {
     setProject((p) => {
       const shots = [...p.shots];
@@ -1670,8 +1678,13 @@ export function ProductionWizard() {
       } as ProductionShot;
       return { ...p, shots, assembled: null };
     });
+    if (serverProjectId && shot?.shotIndex != null) {
+      deleteShotVersions(serverProjectId, shot.shotIndex, versionId).catch((e) =>
+        console.warn('[deleteShotVersions]', e),
+      );
+    }
     toast.success('已保留当前版本，其余版本已移除');
-  }, [selectedShotIdx]);
+  }, [selectedShotIdx, serverProjectId, shot?.shotIndex]);
 
   const multimodalAutoPrompt = multimodalRefPack?.defaultVideoPrompt ?? '';
 

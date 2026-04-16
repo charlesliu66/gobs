@@ -386,4 +386,152 @@ productionPersistRouter.delete('/project', async (req: Request, res: Response) =
   }
 });
 
+// ── 镜头版本切换 ──────────────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/production/project/:id/shots/:shotIndex/version
+ * Body: { versionId: string }
+ * 即时持久化版本选择（不等 auto-save）
+ */
+productionPersistRouter.patch('/project/:id/shots/:shotIndex/version', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const { id, shotIndex: shotIdxStr } = req.params;
+  const { versionId } = req.body as { versionId?: string };
+
+  if (!id || !/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效的项目 id' });
+    return;
+  }
+  const shotIndex = Number(shotIdxStr);
+  if (!Number.isFinite(shotIndex) || shotIndex < 0) {
+    res.status(400).json({ error: '无效的 shotIndex' });
+    return;
+  }
+  if (!versionId || typeof versionId !== 'string') {
+    res.status(400).json({ error: '请提供 versionId' });
+    return;
+  }
+
+  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const project = data.project as Record<string, unknown> | undefined;
+    const shots = project?.shots as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(shots)) {
+      res.status(404).json({ error: '项目无 shots 数据' });
+      return;
+    }
+    const shot = shots.find((s) => s.shotIndex === shotIndex);
+    if (!shot) {
+      res.status(404).json({ error: `未找到 shotIndex=${shotIndex}` });
+      return;
+    }
+    const versions = Array.isArray(shot.previewVideoVersions)
+      ? (shot.previewVideoVersions as Array<Record<string, unknown>>)
+      : [];
+    const picked = versions.find((v) => v.id === versionId);
+    if (!picked) {
+      res.status(400).json({ error: `版本 ${versionId} 不存在` });
+      return;
+    }
+    shot.selectedPreviewVideoVersionId = versionId;
+    shot.previewVideoPath = picked.videoPath;
+    shot.previewVideoUrl = picked.videoUrl;
+    data.updatedAt = new Date().toISOString();
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    res.json({ ok: true, shotIndex, versionId });
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      res.status(404).json({ error: '项目不存在' });
+      return;
+    }
+    console.error('[production/patch-version]', err);
+    res.status(500).json({ error: '版本切换失败' });
+  }
+});
+
+// ── 镜头版本清理 ──────────────────────────────────────────────────────────────
+
+/**
+ * DELETE /api/production/project/:id/shots/:shotIndex/versions
+ * Body: { keepVersionId: string }
+ * 只保留 keepVersionId 对应的版本，删除其他版本的视频文件
+ */
+productionPersistRouter.delete('/project/:id/shots/:shotIndex/versions', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const { id, shotIndex: shotIdxStr } = req.params;
+  const keepVersionId = (req.query.keepVersionId as string | undefined) || (req.body as Record<string, unknown>)?.keepVersionId as string | undefined;
+
+  if (!id || !/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效的项目 id' });
+    return;
+  }
+  const shotIndex = Number(shotIdxStr);
+  if (!Number.isFinite(shotIndex) || shotIndex < 0) {
+    res.status(400).json({ error: '无效的 shotIndex' });
+    return;
+  }
+  if (!keepVersionId || typeof keepVersionId !== 'string') {
+    res.status(400).json({ error: '请提供 keepVersionId' });
+    return;
+  }
+
+  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const project = data.project as Record<string, unknown> | undefined;
+    const shots = project?.shots as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(shots)) {
+      res.status(404).json({ error: '项目无 shots 数据' });
+      return;
+    }
+    const shot = shots.find((s) => s.shotIndex === shotIndex);
+    if (!shot) {
+      res.status(404).json({ error: `未找到 shotIndex=${shotIndex}` });
+      return;
+    }
+    const versions = Array.isArray(shot.previewVideoVersions)
+      ? (shot.previewVideoVersions as Array<Record<string, unknown>>)
+      : [];
+    const keep = versions.find((v) => v.id === keepVersionId);
+    if (!keep) {
+      res.status(400).json({ error: `版本 ${keepVersionId} 不存在` });
+      return;
+    }
+
+    const outputBase = path.resolve(getApiDataDir());
+    let deletedCount = 0;
+    for (const v of versions) {
+      if (v.id === keepVersionId) continue;
+      const vPath = (v.videoPath as string | undefined)?.trim();
+      if (!vPath) continue;
+      const abs = path.isAbsolute(vPath)
+        ? path.resolve(vPath)
+        : path.resolve(getApiDataDir(), vPath);
+      if (!abs.startsWith(outputBase)) continue;
+      try {
+        await fs.unlink(abs);
+        deletedCount++;
+      } catch { /* file may already be gone */ }
+    }
+
+    shot.previewVideoVersions = [keep];
+    shot.selectedPreviewVideoVersionId = keepVersionId;
+    shot.previewVideoPath = keep.videoPath;
+    shot.previewVideoUrl = keep.videoUrl;
+    data.updatedAt = new Date().toISOString();
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    res.json({ ok: true, shotIndex, kept: keepVersionId, deletedFiles: deletedCount });
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      res.status(404).json({ error: '项目不存在' });
+      return;
+    }
+    console.error('[production/delete-versions]', err);
+    res.status(500).json({ error: '版本清理失败' });
+  }
+});
+
 export default productionPersistRouter;

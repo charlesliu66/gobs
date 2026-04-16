@@ -89,6 +89,11 @@ export function StepStoryboardPreviewPanel({
         )}
         {shotVideoVersions.length > 0 ? (
           <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+            {shotVideoVersions.length >= 5 && (
+              <div className="rounded border border-amber-500/30 bg-amber-950/20 px-2 py-1.5 text-[10px] text-amber-200/90">
+                版本已达 {shotVideoVersions.length} 个，建议点击「仅保留当前」清理旧版本以节省磁盘空间
+              </div>
+            )}
             <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
               <span>版本记录（{shotVideoVersions.length}）</span>
               {selectedShotVideoVersion ? (

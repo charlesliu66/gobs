@@ -109,6 +109,28 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   URL.revokeObjectURL(url);
 }
 
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    wrapFetchError(e);
+  }
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'DELETE',

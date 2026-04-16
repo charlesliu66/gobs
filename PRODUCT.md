@@ -216,6 +216,20 @@
 
 ---
 
+### v0.46 — 2026-04-16
+
+**镜头版本历史完整实现（版本切换 API + 版本清理 + 上限提示）**
+
+**Feature:**
+- **[api] PATCH `/api/production/project/:id/shots/:shotIndex/version`**：镜头版本切换即时持久化接口——切换版本时不再等待 auto-save（3s 防抖），而是立即将 `selectedPreviewVideoVersionId` 写入服务端 JSON，消除「切版本 → 刷新 → 版本回退」问题
+- **[api] DELETE `/api/production/project/:id/shots/:shotIndex/versions`**：版本清理接口——保留指定版本，删除该镜头其他版本的视频文件并更新项目 JSON；路径穿越防护确保只能删除 `API_DATA_DIR` 下的文件
+- **[frontend] `apiPatch` 通用请求函数**：`api/client.ts` 新增 PATCH HTTP 方法支持
+- **[frontend] 版本切换即时同步**：`selectShotVideoVersion` 回调在更新本地 state 的同时 fire-and-forget 调用 PATCH API
+- **[frontend] 版本清理调用后端**：「仅保留当前」按钮触发时同步调用 DELETE API 清理服务器上的旧版本视频文件
+- **[frontend] 版本上限提示**：当某镜头视频版本 >= 5 个时，版本列表上方显示黄色提示「版本已达 N 个，建议清理旧版本以节省磁盘空间」
+
+---
+
 ### v0.45 — 2026-04-16
 
 **高级制片 → 剪辑器 体验串接优化（Phase 1）**

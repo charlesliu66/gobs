@@ -3,7 +3,7 @@
  * 图片上传到后端 output/production/images/
  * 项目 JSON 保存到 output/production/projects/
  */
-import { apiGet, apiPost, apiDelete } from './client';
+import { apiGet, apiPost, apiPatch, apiDelete } from './client';
 
 export interface UploadImageResponse {
   path: string;   // 相对路径，如 output/production/images/xxx.png
@@ -83,4 +83,31 @@ export async function listProductionProjects(): Promise<{ projects: ProjectListI
  */
 export async function deleteProductionProject(id: string): Promise<{ ok: boolean }> {
   return apiDelete<{ ok: boolean }>(`/api/production/project?id=${encodeURIComponent(id)}`);
+}
+
+/**
+ * 即时持久化镜头版本选择（不等 auto-save）
+ */
+export async function patchShotVersion(
+  projectId: string,
+  shotIndex: number,
+  versionId: string,
+): Promise<{ ok: boolean }> {
+  return apiPatch<{ ok: boolean }>(
+    `/api/production/project/${encodeURIComponent(projectId)}/shots/${shotIndex}/version`,
+    { versionId },
+  );
+}
+
+/**
+ * 清理镜头的旧版本，只保留指定版本
+ */
+export async function deleteShotVersions(
+  projectId: string,
+  shotIndex: number,
+  keepVersionId: string,
+): Promise<{ ok: boolean; deletedFiles: number }> {
+  return apiDelete<{ ok: boolean; deletedFiles: number }>(
+    `/api/production/project/${encodeURIComponent(projectId)}/shots/${shotIndex}/versions?keepVersionId=${encodeURIComponent(keepVersionId)}`,
+  );
 }
