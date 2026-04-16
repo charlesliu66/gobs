@@ -38,27 +38,30 @@ router.post('/music/polish-prompt', async (req, res) => {
 const MUSIC_DIR = getUploadsPath('editor', 'music');
 fs.mkdirSync(MUSIC_DIR, { recursive: true });
 
-type MusicMeta = {
-  filename: string;
-  createdAt: string;
-  prompt: string;
-  /** 'audio/wav' | 'audio/mpeg' */
-  mime: string;
-};
-const musicById = new Map<string, MusicMeta>();
-
 function saveMusicBuffer(
   buffer: Buffer,
   ext: 'wav' | 'mp3',
-  prompt: string,
-  mime: string,
+  _prompt: string,
+  _mime: string,
 ): { id: string; url: string } {
   const id = randomUUID();
   const filename = `${id}.${ext}`;
   const abs = path.join(MUSIC_DIR, filename);
   fs.writeFileSync(abs, buffer);
-  musicById.set(id, { filename, createdAt: new Date().toISOString(), prompt, mime });
   return { id, url: `/api/editor/music/files/${id}` };
+}
+
+const MUSIC_MIME: Record<string, string> = {
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+};
+
+function resolveAudioFileOnDisk(id: string): { abs: string; mime: string } | null {
+  for (const ext of ['.mp3', '.wav']) {
+    const abs = path.join(MUSIC_DIR, `${id}${ext}`);
+    if (fs.existsSync(abs)) return { abs, mime: MUSIC_MIME[ext] || 'application/octet-stream' };
+  }
+  return null;
 }
 
 // -------- POST /music/generate --------
@@ -173,18 +176,15 @@ router.post('/music/generate', async (req, res) => {
 // -------- GET /music/files/:id --------
 
 router.get('/music/files/:id', (req, res) => {
-  const meta = musicById.get(req.params.id);
-  if (!meta) {
+  const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '');
+  const found = resolveAudioFileOnDisk(id);
+  if (!found) {
     res.status(404).json({ error: '音频不存在或已过期' });
     return;
   }
-  const abs = path.join(MUSIC_DIR, meta.filename);
-  if (!fs.existsSync(abs)) {
-    res.status(404).json({ error: '文件已丢失' });
-    return;
-  }
-  res.setHeader('Content-Type', meta.mime);
-  res.sendFile(abs, (err) => {
+  res.setHeader('Content-Type', found.mime);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(found.abs, (err) => {
     if (err && !res.headersSent) {
       res.status(500).json({ error: '读取失败' });
     }
