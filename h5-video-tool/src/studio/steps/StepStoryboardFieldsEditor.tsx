@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 
 export function StepStoryboardFieldsEditor({
@@ -11,31 +12,41 @@ export function StepStoryboardFieldsEditor({
   onPatchShot: (patch: Partial<ProductionShot>) => void;
   onOpenLightbox: (src: string) => void;
 }) {
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+
+  const sceneImg = scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)?.variants[0]?.imageDataUrl;
+
   return (
     <>
-      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-[100px_1fr]">
-        <div className="text-xs text-[var(--color-text-muted)]">参考</div>
-        <div className="flex gap-2">
-          {scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)?.variants[0]
-            ?.imageDataUrl ? (
-            <img
-              src={
-                scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)!
-                  .variants[0].imageDataUrl
-              }
-              alt=""
-              className="h-16 w-28 rounded object-cover cursor-zoom-in"
-              onClick={() => {
-                const url = scSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef)?.variants[0]?.imageDataUrl;
-                if (url) onOpenLightbox(url);
-              }}
-            />
-          ) : (
-            <div className="flex h-16 w-28 items-center justify-center rounded border border-dashed border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">
-              场景
-            </div>
-          )}
+      {/* Collapsed summary — always visible */}
+      <div className="mt-3 flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+        {sceneImg ? (
+          <img
+            src={sceneImg}
+            alt=""
+            className="h-10 w-16 shrink-0 rounded object-cover cursor-zoom-in"
+            onClick={() => onOpenLightbox(sceneImg)}
+          />
+        ) : (
+          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded border border-dashed border-[var(--color-border)] text-[8px] text-[var(--color-text-muted)]">场景</div>
+        )}
+        <div className="min-w-0 flex-1 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+          <span className="font-medium text-[var(--color-text)]">{shot.subject || '(未设主体)'}</span>
+          {' · '}{shot.shotScale || '?'}{' · '}{shot.cameraMove || '?'}{' · '}{shot.durationSec}s
+          {shot.action ? <span className="block truncate opacity-70">{shot.action}</span> : null}
         </div>
+        <button
+          type="button"
+          onClick={() => setFieldsOpen(!fieldsOpen)}
+          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+        >
+          {fieldsOpen ? '收起参数' : '展开编辑'}
+        </button>
+      </div>
+
+      {/* Expanded fields editor */}
+      {fieldsOpen && (
+      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-[100px_1fr]">
         <label className="text-xs text-[var(--color-text-muted)] sm:col-span-2 sm:grid sm:grid-cols-[100px_1fr] sm:items-center sm:gap-3">
           <span className="block sm:shrink-0">时长（秒）</span>
           <input
@@ -164,6 +175,7 @@ export function StepStoryboardFieldsEditor({
           />
         </label>
       </div>
+      )}
       <details className="mt-4 rounded border border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)] p-3 text-xs">
         <summary className="cursor-pointer font-medium text-[var(--color-text)]">
           结构化 Prompt（静帧 / 运动）

@@ -12,8 +12,78 @@ import {
   type ProductionShot,
   type CharacterVisualProfile,
 } from '../services/studioPipeline.js';
+import { compassChatCompletion } from '../services/compassLlm.js';
 
 export const studioRouter = Router();
+
+// ── Auto-refine: batch review all shots in one LLM call ──────────────────
+const BATCH_REFINE_SYSTEM = `你是资深分镜导演。给你一组结构化镜头 JSON 数组，逐镜检查并优化以下字段使其可直接用于 Seedance 2.0 AI 视频生成：
+- structuredStill：sp_subject 需具体人物外貌/动作，sp_environment 需场景细节，sp_lighting 需明确光源/色温，sp_style 需风格一致
+- structuredMotion：mp_motion 需清晰的动作描述，mp_camera 需精确运镜指令，mp_tempo 需节奏描述
+
+你必须仅输出一段合法 JSON 数组（与输入长度相同，每个元素只包含需要修改的字段路径和新值）。
+格式：[{"shotIndex":number,"patches":[{"path":"structuredStill.sp_lighting","value":"..."},...]}]
+如果某镜不需要修改，patches 为空数组。不要输出 markdown 代码块。只改确实不够好的字段，不要为了改而改。`;
+
+async function autoRefineShots(
+  shots: ProductionShot[],
+  styleRef?: string,
+): Promise<ProductionShot[]> {
+  if (!shots.length) return shots;
+  const pickFields = (s: ProductionShot) => ({
+    shotIndex: s.shotIndex,
+    subject: s.subject,
+    action: s.action,
+    lighting: s.lighting,
+    structuredStill: s.structuredStill,
+    structuredMotion: s.structuredMotion,
+  });
+  const userText = JSON.stringify({
+    globalStyleRef: styleRef ?? '',
+    shots: shots.map(pickFields),
+  });
+  try {
+    const raw = await compassChatCompletion({
+      systemPrompt: BATCH_REFINE_SYSTEM,
+      userText,
+      temperature: 0.3,
+      maxTokens: 16384,
+    });
+    let text = raw.trim();
+    const fence = /^```(?:json)?\s*([\s\S]*?)```$/m.exec(text);
+    if (fence) text = fence[1].trim();
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+    if (firstBracket >= 0 && lastBracket > firstBracket) {
+      text = text.slice(firstBracket, lastBracket + 1);
+    }
+    const patches = JSON.parse(text) as Array<{
+      shotIndex: number;
+      patches: Array<{ path: string; value: string }>;
+    }>;
+    const refined = shots.map((s) => {
+      const entry = patches.find((p) => p.shotIndex === s.shotIndex);
+      if (!entry?.patches?.length) return s;
+      let next = { ...s };
+      for (const p of entry.patches) {
+        const parts = p.path.split('.');
+        if (parts.length === 2) {
+          const [group, key] = parts;
+          if (group === 'structuredStill' && next.structuredStill) {
+            next = { ...next, structuredStill: { ...next.structuredStill, [key]: p.value } };
+          } else if (group === 'structuredMotion' && next.structuredMotion) {
+            next = { ...next, structuredMotion: { ...next.structuredMotion, [key]: p.value } };
+          }
+        }
+      }
+      return next;
+    });
+    return refined;
+  } catch (e) {
+    console.warn('[studio/auto-refine] skipped:', e instanceof Error ? e.message : e);
+    return shots;
+  }
+}
 
 const TEMPLATES: StructureTemplate[] = ['three_act', 'five_act', 'save_the_cat'];
 
@@ -88,13 +158,17 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
     return;
   }
   const maxDur = typeof maxTotalDurationSec === 'number' && maxTotalDurationSec > 0 ? maxTotalDurationSec : 60;
+  const styleRef = typeof (req.body as Record<string, unknown>).styleRef === 'string'
+    ? ((req.body as Record<string, unknown>).styleRef as string).trim()
+    : productionDesign.colorGrading?.trim();
   try {
-    const shots = await generateStoryboardTable({
+    const rawShots = await generateStoryboardTable({
       story,
       productionDesign,
       maxTotalDurationSec: maxDur,
       extraNotes: typeof extraNotes === 'string' ? extraNotes.trim() : undefined,
     });
+    const shots = await autoRefineShots(rawShots, styleRef);
     res.json({ shots });
   } catch (err) {
     console.error('[studio/storyboard-table]', err);

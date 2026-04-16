@@ -235,6 +235,33 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
 
     const projDir = getProductionProjDir(username);
     const filePath = path.join(projDir, `${id}.json`);
+
+    // Merge video versions: writeBackToProject may have added versions
+    // that the frontend hasn't seen yet; don't lose them on overwrite.
+    try {
+      const existingRaw = await fs.readFile(filePath, 'utf-8');
+      const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+      const existingProject = existing.project as Record<string, unknown> | undefined;
+      const existingShots = existingProject?.shots as Array<Record<string, unknown>> | undefined;
+      const incomingProject = payload.project as Record<string, unknown> | undefined;
+      const incomingShots = incomingProject?.shots as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(existingShots) && Array.isArray(incomingShots)) {
+        for (const iShot of incomingShots) {
+          const eShot = existingShots.find((e) => e.shotIndex === iShot.shotIndex);
+          if (!eShot) continue;
+          const eVersions = Array.isArray(eShot.previewVideoVersions) ? eShot.previewVideoVersions as Array<Record<string, unknown>> : [];
+          const iVersions = Array.isArray(iShot.previewVideoVersions) ? iShot.previewVideoVersions as Array<Record<string, unknown>> : [];
+          if (!eVersions.length) continue;
+          const merged = new Map<string, Record<string, unknown>>();
+          for (const v of eVersions) if (v.id) merged.set(v.id as string, v);
+          for (const v of iVersions) if (v.id) merged.set(v.id as string, v);
+          iShot.previewVideoVersions = [...merged.values()].sort(
+            (a, b) => ((b.createdAt as number) || 0) - ((a.createdAt as number) || 0),
+          );
+        }
+      }
+    } catch { /* first save or file missing — no merge needed */ }
+
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
 
     // 写 sidecar 元数据（供 /list 快速读取，无需解析全量 JSON）
