@@ -296,3 +296,17 @@ export async function deleteFolder(id: string): Promise<void> {
 export async function moveAssetsToFolder(folderId: string, assetIds: string[]): Promise<void> {
   await apiPost(`${BASE}/folders/${encodeURIComponent(folderId)}/move-assets`, { assetIds });
 }
+
+// ── AI 一键整理 ──────────────────────────────────────────────────────────────
+
+export interface AutoOrganizeResult {
+  created_folders: string[];
+  moved_count: number;
+  tagged_count: number;
+  still_uncategorized: number;
+  total_folders: number;
+}
+
+export async function autoOrganize(): Promise<AutoOrganizeResult> {
+  return apiPost<AutoOrganizeResult>(`${BASE}/auto-organize`, {});
+}

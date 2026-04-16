@@ -748,4 +748,130 @@ function getFolderDepth(folderId: string, username: string): number {
   return depth;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// AI 一键整理
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.post('/auto-organize', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  try {
+    const now = new Date().toISOString();
+
+    // Step 1: AI 打标所有 ai_category='未分类' 的素材
+    const uncategorized = db.prepare(
+      `SELECT id FROM assets WHERE username = @username AND (ai_category IS NULL OR ai_category = '未分类')`
+    ).all({ username }) as Array<{ id: string }>;
+
+    let taggedCount = 0;
+    if (uncategorized.length > 0) {
+      const { aiTagAsset } = await import('../services/assetTaggingService.js');
+      for (const row of uncategorized) {
+        try {
+          await aiTagAsset(row.id);
+          taggedCount++;
+        } catch {
+          // non-blocking
+        }
+      }
+    }
+
+    // Step 2: 文件名前缀分析 — 对仍然未分类的素材，用文件名前缀推断分组
+    const stillUncategorized = db.prepare(
+      `SELECT id, filename FROM assets WHERE username = @username AND (ai_category IS NULL OR ai_category = '未分类') AND (folder_id IS NULL)`
+    ).all({ username }) as Array<{ id: string; filename: string }>;
+
+    const prefixGroups = new Map<string, string[]>();
+    for (const row of stillUncategorized) {
+      const base = row.filename.replace(/\.[^.]+$/, '');
+      // 提取中文前缀（去掉尾部数字/标点）或英文前缀
+      const m = base.match(/^([\u4e00-\u9fff]+)/);
+      if (m && m[1].length >= 2) {
+        const prefix = m[1];
+        if (!prefixGroups.has(prefix)) prefixGroups.set(prefix, []);
+        prefixGroups.get(prefix)!.push(row.id);
+      }
+    }
+    // 只对 >=2 个文件共享前缀的才建文件夹
+    for (const [prefix, ids] of prefixGroups) {
+      if (ids.length < 2) prefixGroups.delete(prefix);
+    }
+
+    // Step 3: 获取用户现有文件夹（name -> id 映射）
+    const existingFolders = db.prepare(
+      `SELECT id, name FROM asset_folders WHERE username = @username AND parent_id IS NULL`
+    ).all({ username }) as Array<{ id: string; name: string }>;
+
+    const folderMap = new Map<string, string>();
+    for (const f of existingFolders) {
+      folderMap.set(f.name, f.id);
+    }
+
+    function getOrCreateFolder(name: string): string {
+      if (folderMap.has(name)) return folderMap.get(name)!;
+      const id = `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare(`
+        INSERT INTO asset_folders (id, username, parent_id, name, sort_order, created_at, updated_at)
+        VALUES (@id, @username, NULL, @name, 0, @now, @now)
+      `).run({ id, username, name, now });
+      folderMap.set(name, id);
+      return id;
+    }
+
+    const createdFolders: string[] = [];
+    let movedCount = 0;
+    const initialFolderCount = existingFolders.length;
+
+    // Step 4: 按 ai_category 归入文件夹
+    const categorized = db.prepare(
+      `SELECT id, ai_category FROM assets WHERE username = @username AND ai_category IS NOT NULL AND ai_category != '未分类' AND (folder_id IS NULL)`
+    ).all({ username }) as Array<{ id: string; ai_category: string }>;
+
+    const updateFolder = db.prepare(
+      `UPDATE assets SET folder_id = @folder_id, updated_at = @now WHERE id = @id AND username = @username`
+    );
+
+    db.transaction(() => {
+      for (const row of categorized) {
+        const folderId = getOrCreateFolder(row.ai_category);
+        updateFolder.run({ folder_id: folderId, now, id: row.id, username });
+        movedCount++;
+      }
+
+      // Step 5: 文件名前缀分组归入
+      for (const [prefix, ids] of prefixGroups) {
+        const folderId = getOrCreateFolder(prefix);
+        for (const id of ids) {
+          updateFolder.run({ folder_id: folderId, now, id, username });
+          movedCount++;
+        }
+      }
+    })();
+
+    // 计算新建的文件夹
+    for (const [name] of folderMap) {
+      if (!existingFolders.find(f => f.name === name)) {
+        createdFolders.push(name);
+      }
+    }
+
+    const stillUncat = (db.prepare(
+      `SELECT COUNT(*) as cnt FROM assets WHERE username = @username AND (folder_id IS NULL)`
+    ).get({ username }) as { cnt: number }).cnt;
+
+    res.json({
+      created_folders: createdFolders,
+      moved_count: movedCount,
+      tagged_count: taggedCount,
+      still_uncategorized: stillUncat,
+      total_folders: initialFolderCount + createdFolders.length,
+    });
+
+  } catch (err) {
+    console.error('[auto-organize] Error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
 export default router;

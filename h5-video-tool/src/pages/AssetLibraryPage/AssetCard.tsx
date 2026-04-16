@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
 import { buildAssetFileUrl, addFavorite, removeFavorite } from '../../api/assetLibraryApi';
 
@@ -27,6 +27,7 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
   const [isFav, setIsFav] = useState(asset.is_favorite ?? false);
   const [hovering, setHovering] = useState(false);
   const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
+  const [visible, setVisible] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,6 +37,17 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
   const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
   const category = asset.ai_category ?? '未分类';
   const catColor = CATEGORY_COLORS[category] ?? CATEGORY_COLORS['未分类'];
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   function handleFavorite(e: React.MouseEvent) {
     e.stopPropagation();
@@ -94,7 +106,9 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
       >
         {/* Thumbnail */}
         <div className="aspect-square bg-[var(--color-surface-hover)] relative overflow-hidden">
-          {imgError ? (
+          {!visible ? (
+            <div className="w-full h-full bg-[var(--color-surface-hover)]" />
+          ) : imgError ? (
             <div className="w-full h-full flex items-center justify-center">
               <span className="text-4xl opacity-40">{isVideo ? '🎬' : '🖼'}</span>
             </div>
@@ -114,7 +128,6 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
               src={fileUrl}
               alt={asset.filename}
               className="w-full h-full object-cover"
-              loading="lazy"
               onError={() => setImgError(true)}
             />
           )}

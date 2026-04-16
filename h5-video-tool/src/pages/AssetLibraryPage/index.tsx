@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listAssets } from '../../api/assetLibraryApi';
-import type { LibraryAsset } from '../../api/assetLibraryApi';
+import { listAssets, autoOrganize } from '../../api/assetLibraryApi';
+import type { LibraryAsset, AutoOrganizeResult } from '../../api/assetLibraryApi';
 import { AssetGallery } from './AssetGallery';
 import { AssetDetailDrawer } from './AssetDetailDrawer';
 import { AssetUploadSheet } from './AssetUploadSheet';
 import { AssetReviewQueue } from './AssetReviewQueue';
+import { toast } from '../../components/Toast';
 
 export function AssetLibraryPage() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function AssetLibraryPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [activeAsset, setActiveAsset] = useState<LibraryAsset | null>(null);
   const [stats, setStats] = useState({ total: 0, pending: 0 });
+  const [organizing, setOrganizing] = useState(false);
 
   const refreshStats = useCallback(async () => {
     try {
@@ -46,6 +48,24 @@ export function AssetLibraryPage() {
     navigate(`/studio?assetId=${encodeURIComponent(asset.id)}`);
   }
 
+  async function handleAutoOrganize() {
+    setOrganizing(true);
+    try {
+      const result: AutoOrganizeResult = await autoOrganize();
+      const parts: string[] = [];
+      if (result.created_folders.length > 0) parts.push(`新建 ${result.created_folders.length} 个文件夹`);
+      if (result.moved_count > 0) parts.push(`整理 ${result.moved_count} 个素材`);
+      if (result.tagged_count > 0) parts.push(`AI 识别 ${result.tagged_count} 个`);
+      if (result.still_uncategorized > 0) parts.push(`${result.still_uncategorized} 个未能分类`);
+      toast.success(parts.length > 0 ? parts.join('，') : '所有素材已整理完毕');
+      setGalleryKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '整理失败');
+    } finally {
+      setOrganizing(false);
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto py-6 px-4">
 
@@ -70,14 +90,29 @@ export function AssetLibraryPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setUploadOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition shadow-sm shrink-0"
-        >
-          <span>📤</span>
-          <span>上传素材</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            disabled={organizing}
+            onClick={() => void handleAutoOrganize()}
+            className="flex items-center gap-2 px-4 py-2.5 border-2 border-[var(--color-primary)] text-[var(--color-primary)] rounded-xl font-semibold hover:bg-[var(--color-primary)]/10 disabled:opacity-60 transition"
+          >
+            {organizing ? (
+              <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span>🪄</span>
+            )}
+            <span>{organizing ? 'AI 整理中...' : 'AI 一键整理'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition shadow-sm"
+          >
+            <span>📤</span>
+            <span>上传素材</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Pending review banner ── */}

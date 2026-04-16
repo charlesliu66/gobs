@@ -36,7 +36,9 @@ export function listAssets(query: SearchQuery): PagedResult {
     params.aiCategory = aiCategory;
   }
 
-  if (folderId) {
+  if (folderId === '__none__') {
+    conditions.push('(a.folder_id IS NULL)');
+  } else if (folderId) {
     conditions.push('a.folder_id = @folderId');
     params.folderId = folderId;
   }

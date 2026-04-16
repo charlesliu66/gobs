@@ -60,11 +60,13 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
   const tabRef = useRef(tab);
   const categoryRef = useRef(activeCategory);
   const folderRef = useRef(activeFolder);
+  const foldersRef = useRef(folders);
   useEffect(() => { queryRef.current = query; }, [query]);
   useEffect(() => { filtersRef.current = filters; }, [filters]);
   useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => { categoryRef.current = activeCategory; }, [activeCategory]);
   useEffect(() => { folderRef.current = activeFolder; }, [activeFolder]);
+  useEffect(() => { foldersRef.current = folders; }, [folders]);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,7 +82,12 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
     try {
       const res = await listFolders();
       setFolders(res.folders);
+      foldersRef.current = res.folders;
+      if (res.folders.length > 0 && tabRef.current === 'all' && !folderRef.current && !categoryRef.current && !queryRef.current) {
+        void fetchPage(1, true);
+      }
     } catch { /* supplementary */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCreateFolder() {
@@ -178,7 +185,11 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
         };
         if (q) params.q = q;
         if (cat) params.ai_category = cat;
-        if (fld) params.folder_id = fld;
+        if (fld) {
+          params.folder_id = fld;
+        } else if (currentTab === 'all' && !q && !cat && !Object.values(f).some(Boolean) && foldersRef.current.length > 0) {
+          params.folder_id = '__none__';
+        }
         for (const [k, v] of Object.entries(f)) {
           if (v) params[k] = v;
         }
@@ -531,7 +542,7 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
               </div>
             ))}
           </div>
-        ) : tab !== 'drive' && assets.length === 0 ? (
+        ) : tab !== 'drive' && assets.length === 0 && folders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-28 text-center">
             <div className="text-7xl mb-5 opacity-50">
               {tab === 'recent' ? '🕒' : tab === 'favorites' ? '⭐' : '📂'}
@@ -551,18 +562,76 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
           </div>
         ) : tab !== 'drive' ? (
           <>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-              {assets.map((asset) => (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  selected={selectedIds.has(asset.id)}
-                  onSelect={handleSelect}
-                  onClick={onAssetClick}
-                  onUseForGenerate={onUseForGenerate}
-                />
-              ))}
-            </div>
+            {/* Folder grid view: when on "all" tab with no active filter/folder/search, show folders first */}
+            {tab === 'all' && !activeFolder && !activeCategory && !query && activeFilters === 0 && folders.length > 0 && (
+              <div className="space-y-3 mb-6">
+                <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+                  文件夹
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      onClick={() => { setActiveFolder(folder.id); setActiveCategory(null); }}
+                      onDragOver={(e) => handleFolderDragOver(e, folder.id)}
+                      onDragLeave={handleFolderDragLeave}
+                      onDrop={(e) => handleFolderDrop(e, folder.id)}
+                      className={`group cursor-pointer rounded-xl border transition-all ${
+                        dropTargetFolder === folder.id
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 ring-2 ring-[var(--color-primary)]'
+                          : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="aspect-square flex flex-col items-center justify-center p-4">
+                        <span className="text-5xl mb-3 opacity-80 group-hover:scale-110 transition-transform">📁</span>
+                        <p className="text-sm font-medium text-[var(--color-text)] text-center truncate w-full px-1">
+                          {folder.name}
+                        </p>
+                        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
+                          {folder.asset_count ?? 0} 个素材
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {assets.length > 0 && (
+                  <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider pt-4">
+                    未整理素材
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Back button when inside a folder */}
+            {activeFolder && (
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveFolder(null)}
+                  className="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1"
+                >
+                  ← 返回全部
+                </button>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  / {folders.find(f => f.id === activeFolder)?.name}
+                </span>
+              </div>
+            )}
+
+            {assets.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                {assets.map((asset) => (
+                  <AssetCard
+                    key={asset.id}
+                    asset={asset}
+                    selected={selectedIds.has(asset.id)}
+                    onSelect={handleSelect}
+                    onClick={onAssetClick}
+                    onUseForGenerate={onUseForGenerate}
+                  />
+                ))}
+              </div>
+            )}
 
             {hasMore && (
               <div className="flex justify-center pt-6 pb-2">
