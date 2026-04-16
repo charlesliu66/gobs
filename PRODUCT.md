@@ -1000,4 +1000,19 @@
 
 ---
 
-*最后更新：2026-04-16（v0.51）*
+### v0.52 — 2026-04-16
+
+**H5 地牢主题 Loading 体验组件 & 资产生成工具**
+
+**Feature:**
+- **[frontend] Loading 组件体系新建**（`src/components/loading/`）：统一等待管理器 `useLoadingOrchestrator` Hook + 全屏主题化展示组件 `DungeonLoadingScreen`，支持 5 个场景（地牢入口/酒馆/铁匠铺/结算台/断线重连）、时长分级自动升级（0-1s/1-3s/3-8s/8-15s/15s+）、非线性进度条、角色化文案三段递进（守门人/酒馆老板/铁匠/结算吏/旁白）、彩蛋系统（敲门回嘴/火把点亮/今日命签/安抚礼包）
+- **[api] Loading 资产生成脚本**（`scripts/generate-loading-assets.ts`）：调用 Compass/Imagen 批量生成场景背景图（16:9，支持游戏原画画风参考锁定）+ 调用 SUNO 批量生成场景环境音效（纯器乐 MP3），已存在资产自动跳过，支持 `--images-only` / `--audio-only` 参数
+- **[frontend] shimmer 动画关键帧**：`index.css` 新增进度条光泽流动动画
+
+**资产清单（output/loading-assets/）：**
+- 5 张 16:9 场景背景图（Imagen + Gold And Glory 原画画风参考）
+- 10 首场景环境音效（SUNO V4.5 纯器乐，每场景 2 首备选）
+
+---
+
+*最后更新：2026-04-16（v0.52）*

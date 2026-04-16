@@ -368,6 +368,11 @@ input:focus, textarea:focus, select:focus {
   50% { opacity: 1; }
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 .animate-fade-in {
   animation: gobs-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
