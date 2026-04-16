@@ -32,7 +32,10 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
 
 /**
  * 从 asset URL 中提取本地文件路径。
- * 支持 /api/video/file?path=xxx 和 /api/editor/assets/files/xxx 两种格式。
+ * 支持三种 API URL 格式：
+ *   /api/video/file?path=output/xxx.mp4
+ *   /api/editor/assets/files/<assetId>
+ *   /api/batch-jobs/video/<jobId>
  */
 function resolveLocalPathFromUrl(url: string, username: string): string | null {
   try {
@@ -46,6 +49,14 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
         const full = path.resolve(getApiDataDir(), path.normalize(relPath));
         if (fs.existsSync(full)) return full;
       }
+    }
+
+    // /api/batch-jobs/video/<jobId> → <apiDataDir>/output/batch-jobs/videos/<jobId>.mp4
+    const batchMatch = parsed.pathname.match(/^\/api\/batch-jobs\/video\/([a-zA-Z0-9_-]+)$/);
+    if (batchMatch) {
+      const jobId = batchMatch[1];
+      const full = path.join(getApiDataDir(), 'output', 'batch-jobs', 'videos', `${jobId}.mp4`);
+      if (fs.existsSync(full)) return full;
     }
 
     // /api/editor/assets/files/<assetId>
@@ -63,6 +74,7 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
       } catch { /* ignore */ }
     }
   } catch { /* malformed URL — ignore */ }
+  console.warn('[export] resolveLocalPathFromUrl: no match for', url);
   return null;
 }
 
@@ -121,7 +133,8 @@ function resolveAssetPaths(
       }
 
       if (!found) {
-        console.warn('[export] asset not found locally:', assetId);
+        const assetUrl = assetUrlMap?.[assetId]?.url;
+        console.warn('[export] asset not found locally:', assetId, 'url:', assetUrl ?? '(no url in assets)');
       }
     }
   }
