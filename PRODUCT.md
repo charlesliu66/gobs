@@ -958,4 +958,25 @@
 
 ---
 
-*最后更新：2026-04-16（v0.49）*
+### v0.50 — 2026-04-16
+
+**P1-G 外部依赖状态机标准化（第一阶段）**
+
+**Feature:**
+- **[api] `domain/job-status.ts` 增强**：新增 7 个服务适配函数 `fromBatchJobStatus`、`fromDreaminaPhase`、`fromKlingPhase`、`fromQuickFilmStatus`、`fromDreaminaHttpStatus`、`fromEditorExportStatus`、`fromRemixStatus`，将各服务原生状态映射到统一枚举 `queued | running | succeeded | failed | timeout | canceled`。新增 `isTerminalStatus()` 判断终态工具函数
+- **[api] Batch Jobs SSE 推送附加 `unifiedStatus`**：`GET /api/batch-jobs/stream` 和 `GET /api/batch-jobs` 响应中附加 `unifiedStatus` 字段（向后兼容，不改变原有 `status` 字段），前端可渐进式迁移
+- **[frontend] `types/jobStatus.ts` 新建**：前端统一任务状态类型定义，与后端 `domain/job-status.ts` 对齐，提供 `toUnifiedStatus()` 通用适配函数和 `isTerminalStatus()` 工具函数
+- **[frontend] `BatchJobDto.unifiedStatus` 可选字段**：前端类型定义中添加后端自动附加的统一状态字段
+
+**状态映射对照表：**
+| 原生状态 | 统一状态 |
+|---|---|
+| `pending` / `awaiting_submit` / `queued` | `queued` |
+| `running` / `processing` / `queuing` / `querying` / `rendering` | `running` |
+| `done` / `completed` / `succeeded` / `success` | `succeeded` |
+| `failed` / `error` | `failed` |
+| `cancelled` / `canceled` | `canceled` |
+
+---
+
+*最后更新：2026-04-16（v0.50）*

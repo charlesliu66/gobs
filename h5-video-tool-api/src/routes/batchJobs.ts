@@ -13,6 +13,7 @@ import {
   batchJobEvents,
   type BatchJob,
 } from '../services/batchJobsQueue.js';
+import { fromBatchJobStatus } from '../domain/job-status.js';
 
 const router = Router();
 
@@ -61,7 +62,8 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   const { projectId } = req.query as { projectId?: string };
   const jobs = projectId ? await getJobsByProject(projectId) : await getAllJobs();
-  res.json({ jobs });
+  const enriched = jobs.map((j) => ({ ...j, unifiedStatus: fromBatchJobStatus(j.status) }));
+  res.json({ jobs: enriched });
 });
 
 /** DELETE /api/batch-jobs/:id — 取消任务 */
@@ -96,7 +98,8 @@ router.get('/stream', (req, res) => {
   (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
 
   const send = (job: BatchJob) => {
-    res.write(`data: ${JSON.stringify(job)}\n\n`);
+    const enriched = { ...job, unifiedStatus: fromBatchJobStatus(job.status) };
+    res.write(`data: ${JSON.stringify(enriched)}\n\n`);
   };
 
   batchJobEvents.on('update', send);

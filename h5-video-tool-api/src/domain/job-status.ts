@@ -116,3 +116,143 @@ export function classifyDreaminaFailReason(failReason: string | undefined): JobE
   if (/concurren|1310/.test(lower)) return 'DREAMINA_CONCURRENCY';
   return 'DREAMINA_TASK_FAILED';
 }
+
+// ── 各服务状态 → 统一 JobStatus 适配层 ──────────────────────────────────────
+
+/**
+ * 映射 BatchJobStatus → 统一 JobStatus
+ * BatchJobStatus: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit'
+ */
+export function fromBatchJobStatus(
+  s: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit',
+): JobStatus {
+  switch (s) {
+    case 'pending':
+    case 'awaiting_submit':
+      return 'queued';
+    case 'queuing':
+    case 'processing':
+      return 'running';
+    case 'done':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+    case 'cancelled':
+      return 'canceled';
+  }
+}
+
+/**
+ * 映射 DreaminaPollPhase → 统一 JobStatus
+ * DreaminaPollPhase: 'querying' | 'success' | 'failed'
+ */
+export function fromDreaminaPhase(
+  phase: 'querying' | 'success' | 'failed',
+): JobStatus {
+  switch (phase) {
+    case 'querying':
+      return 'running';
+    case 'success':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+  }
+}
+
+/**
+ * 映射 KlingPollPhase → 统一 JobStatus
+ * KlingPollPhase: 'pending' | 'processing' | 'succeeded' | 'failed'
+ */
+export function fromKlingPhase(
+  phase: 'pending' | 'processing' | 'succeeded' | 'failed',
+): JobStatus {
+  switch (phase) {
+    case 'pending':
+      return 'queued';
+    case 'processing':
+      return 'running';
+    case 'succeeded':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+  }
+}
+
+/**
+ * 映射 QuickFilm JobStatus → 统一 JobStatus
+ * QuickFilm: 'pending' | 'running' | 'done' | 'error'
+ */
+export function fromQuickFilmStatus(
+  s: 'pending' | 'running' | 'done' | 'error',
+): JobStatus {
+  switch (s) {
+    case 'pending':
+      return 'queued';
+    case 'running':
+      return 'running';
+    case 'done':
+      return 'succeeded';
+    case 'error':
+      return 'failed';
+  }
+}
+
+/**
+ * 映射 Dreamina HTTP 路由状态 → 统一 JobStatus
+ * videoDreamina route: 'pending' | 'completed' | 'failed'
+ */
+export function fromDreaminaHttpStatus(
+  s: 'pending' | 'completed' | 'failed',
+): JobStatus {
+  switch (s) {
+    case 'pending':
+      return 'running';
+    case 'completed':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+  }
+}
+
+/**
+ * 映射 Editor 导出状态 → 统一 JobStatus
+ * Editor export: 'queued' | 'processing' | 'done' | 'error'
+ */
+export function fromEditorExportStatus(
+  s: 'queued' | 'processing' | 'done' | 'error',
+): JobStatus {
+  switch (s) {
+    case 'queued':
+      return 'queued';
+    case 'processing':
+      return 'running';
+    case 'done':
+      return 'succeeded';
+    case 'error':
+      return 'failed';
+  }
+}
+
+/**
+ * 映射 Remix 状态 → 统一 JobStatus
+ * Remix: 'pending' | 'rendering' | 'done' | 'failed'
+ */
+export function fromRemixStatus(
+  s: 'pending' | 'rendering' | 'done' | 'failed',
+): JobStatus {
+  switch (s) {
+    case 'pending':
+      return 'queued';
+    case 'rendering':
+      return 'running';
+    case 'done':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+  }
+}
+
+/** 判断是否为终态（succeeded / failed / timeout / canceled） */
+export function isTerminalStatus(s: JobStatus): boolean {
+  return s === 'succeeded' || s === 'failed' || s === 'timeout' || s === 'canceled';
+}

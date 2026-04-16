@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiDelete } from './client';
+import type { UnifiedJobStatus } from '../types/jobStatus';
 
 export interface BatchJobDto {
   id: string;
@@ -9,7 +10,9 @@ export interface BatchJobDto {
   shotDescription: string;
   model: string;
   source?: 'production' | 'quickfilm';
-  status: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled';
+  status: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit';
+  /** 统一状态（后端自动附加），新代码优先使用此字段 */
+  unifiedStatus?: UnifiedJobStatus;
   createdAt: string;
   updatedAt: string;
   videoUrl?: string;
