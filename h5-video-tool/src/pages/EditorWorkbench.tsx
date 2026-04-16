@@ -1203,7 +1203,7 @@ export function EditorWorkbench() {
                   📎 来自「{project.sourceProductionTitle}」
                   <span className="opacity-60">→</span>
                 </a>
-                {project.sourceProductionProjectId && currentProjectId && (
+                {project.sourceProductionProjectId && projectId && (
                   <button
                     type="button"
                     onClick={() => setShowSyncModal(true)}
@@ -1335,12 +1335,12 @@ export function EditorWorkbench() {
     )}
 
     {/* 制片同步弹窗 */}
-    {showSyncModal && currentProjectId && (
+    {showSyncModal && projectId && (
       <SyncProductionModal
-        editorProjectId={currentProjectId}
+        editorProjectId={projectId}
         onSynced={() => {
           setShowSyncModal(false);
-          if (currentProjectId) void loadProject(currentProjectId);
+          if (projectId) void openProject(projectId);
         }}
         onClose={() => setShowSyncModal(false)}
       />
