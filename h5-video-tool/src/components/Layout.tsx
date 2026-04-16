@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo, type JSX } from 'react';
+import { useState, useEffect, useMemo, type JSX } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 
