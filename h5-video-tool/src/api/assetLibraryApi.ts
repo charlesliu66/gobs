@@ -67,10 +67,10 @@ export interface BatchTagUpdate {
 
 // ── 导入（multipart/form-data）───────────────────────────────────────────────
 
-export async function importAssets(files: FileList): Promise<{ jobId: string; total: number }> {
+export async function importAssets(files: FileList | File[]): Promise<{ jobId: string; total: number }> {
   const formData = new FormData();
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
+  const list = files instanceof FileList ? Array.from(files) : files;
+  for (const f of list) {
     if (f) formData.append('files', f);
   }
   const token = localStorage.getItem('gobs_token');
