@@ -1,5 +1,6 @@
 import type { AspectRatioPreset, TimelineProject, Track, VideoClip, AudioClip } from '../editor/timelineSchema.js';
 import { compassChatCompletionWithUsage, type CompassChatUsage } from './promptPolish.js';
+import { buildPreferencePromptSnippet } from './userPreferenceService.js';
 import { sumCompassUsage, type LlmUsageCallRecord } from './editorLlmUsage.js';
 import {
   analyzeMusicBeat,
@@ -382,6 +383,7 @@ function buildSystemPrompt(ctx: {
   beatInfo?: BeatInfo | null;
   contentManifest?: string;
   narrativeTemplate?: NarrativeTemplate;
+  userPreferenceSnippet?: string;
 }): string {
   const cand = ctx.hasCandidates
     ? `
@@ -455,7 +457,8 @@ ${ctx.contentManifest}
 > 上述内容地图为视觉分析结果，**请参考对应时间戳在候选窗中找到最接近的片段**，按叙事模板分配到各段落。
 ` : ''}
 ## 若选中素材为空
-- 在 summary 说明无法执行，project 可与 currentProject 相同或清空 v1 clips。`;
+- 在 summary 说明无法执行，project 可与 currentProject 相同或清空 v1 clips。
+${ctx.userPreferenceSnippet ? `\n${ctx.userPreferenceSnippet}\n` : ''}`;
 }
 
 function buildUserPayload(
@@ -599,6 +602,7 @@ function etaSecFromPercent(percent: number, roughTotalMs: number): number {
 
 export interface RunEditorAgentApplyOptions {
   onProgress?: (p: EditorAgentProgressPayload) => void;
+  username?: string;
 }
 
 export async function runEditorAgentApply(
@@ -757,6 +761,9 @@ export async function runEditorAgentApply(
   const contentManifest = buildContentManifest(scoresByAsset, input.assets);
   const narrativeTemplate = selectNarrativeTemplate(combatLike, beatInfo != null);
 
+  const prefUsername = options?.username || 'default';
+  const userPreferenceSnippet = await buildPreferencePromptSnippet(prefUsername).catch(() => '');
+
   const systemPrompt = buildSystemPrompt({
     targetTimelineSec,
     combatLike,
@@ -765,6 +772,7 @@ export async function runEditorAgentApply(
     beatInfo,
     contentManifest: contentManifest || undefined,
     narrativeTemplate,
+    userPreferenceSnippet: userPreferenceSnippet || undefined,
   });
 
   const userText = buildUserPayload(

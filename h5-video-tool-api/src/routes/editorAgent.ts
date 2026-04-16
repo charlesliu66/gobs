@@ -5,6 +5,8 @@ import { runEditorAgentChat } from '../services/editorAgentChat.js';
 import type { EditorAgentApplyInput } from '../services/editorAgentService.js';
 import { runEditorAgentApply } from '../services/editorAgentService.js';
 import { parseEditorVisionFocusBody } from '../services/video/editorVideoAnalysis.js';
+import { updatePreferenceFromExport, loadPreference, type ExportBehaviorReport } from '../services/userPreferenceService.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
 
@@ -139,7 +141,8 @@ router.post('/agent/apply', async (req, res) => {
     return;
   }
   try {
-    const { summary, project, llmUsage } = await runEditorAgentApply(parsed.input);
+    const username = sanitizeUsername(req.user?.username);
+    const { summary, project, llmUsage } = await runEditorAgentApply(parsed.input, { username });
     res.json({ summary, project, llmUsage });
   } catch (e) {
     console.error('[editor/agent/apply]', e);
@@ -166,8 +169,10 @@ router.post('/agent/apply-stream', async (req, res) => {
   };
 
   try {
+    const username = sanitizeUsername(req.user?.username);
     const result = await runEditorAgentApply(parsed.input, {
       onProgress: (p) => send({ type: 'progress', ...p }),
+      username,
     });
     send({
       type: 'done',
@@ -180,6 +185,35 @@ router.post('/agent/apply-stream', async (req, res) => {
     console.error('[editor/agent/apply-stream]', e);
     send({ type: 'error', error: e instanceof Error ? e.message : 'Agent 调用失败' });
     res.end();
+  }
+});
+
+/** 上报导出行为统计，更新用户偏好画像 */
+router.post('/preference/report', async (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
+  const report = req.body as ExportBehaviorReport;
+  if (!Array.isArray(report?.clips)) {
+    res.status(400).json({ error: '请提供 clips 数组' });
+    return;
+  }
+  try {
+    const pref = await updatePreferenceFromExport(username, report);
+    res.json({ ok: true, totalExports: pref.totalExports });
+  } catch (e) {
+    console.error('[editor/preference/report]', e);
+    res.status(500).json({ error: '偏好更新失败' });
+  }
+});
+
+/** 查看当前用户偏好画像 */
+router.get('/preference', async (req, res) => {
+  const username = sanitizeUsername(req.user?.username);
+  try {
+    const pref = await loadPreference(username);
+    res.json({ preference: pref });
+  } catch (e) {
+    console.error('[editor/preference]', e);
+    res.status(500).json({ error: '读取偏好失败' });
   }
 });
 

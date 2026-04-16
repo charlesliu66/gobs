@@ -246,6 +246,25 @@
 
 ---
 
+### v0.48 — 2026-04-16
+
+**AI 剪辑智能优化 · 方向7 用户反馈学习（基础版）**
+
+**Feature:**
+- **[api] `userPreferenceService.ts` 新建**：轻量级用户偏好画像服务——导出时收集行为统计（片段 activity 类型、平均时长、数量），使用 EMA（指数移动平均，α=0.3）平滑更新，避免单次导出覆盖历史偏好
+- **[api] `POST /api/editor/preference/report`**：接收前端导出时的行为报告，更新用户偏好 JSON 文件（按用户名隔离存储）
+- **[api] `GET /api/editor/preference`**：查看当前用户偏好画像（调试用）
+- **[api] `buildPreferencePromptSnippet`**：根据用户历史偏好生成 LLM prompt 片段（如"偏好的内容类型：击杀瞬间、团战"、"平均片段时长 2.1秒（偏好快切）"），自动注入剪辑 Agent 排片时的 system prompt
+- **[editor-agent] 偏好注入**：`editorAgentService.ts` 的 `buildSystemPrompt` 新增 `userPreferenceSnippet` 参数，排片调用时自动加载当前用户偏好；`runEditorAgentApply` 通过 `options.username` 传入用户身份
+- **[frontend] 导出行为静默上报**：`ExportPanel` 导出成功后 fire-and-forget 调用 preference/report，收集视频轨 clips 的 activity、时长、meta 数据
+
+**设计要点：**
+- 偏好数据为纯 JSON 文件（`{DATA_DIR}/.data/preferences/{username}.json`），不依赖数据库
+- LLM prompt 中明确标注"用户当前指令优先级高于历史偏好"，避免偏好干扰显式需求
+- 首次导出即建立画像，无需用户额外操作
+
+---
+
 ### v0.47 — 2026-04-16
 
 **巨石文件拆分第一阶段：riskSentimentService 类型提取**
@@ -922,4 +941,4 @@
 
 ---
 
-*最后更新：2026-04-16（v0.47）*
+*最后更新：2026-04-16（v0.48）*

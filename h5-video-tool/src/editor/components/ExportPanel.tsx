@@ -2,12 +2,34 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../types/timeline';
 import { startEditorExport, getEditorExportStatus, listExportFiles, deleteExportFile } from '../../api/editor';
 import type { ExportFileRecord } from '../../api/editor';
-import { apiDownload } from '../../api/client';
+import { apiPost, apiDownload } from '../../api/client';
 import { toast } from '../../components/Toast';
 
 type ExportResolution = '720p' | '1080p' | '4K';
 type ExportFormat = 'mp4' | 'mov';
 type ExportQuality = 'fast' | 'balanced' | 'high';
+
+function reportExportBehavior(project: TimelineProject) {
+  try {
+    const videoTrack = project.tracks.find((t) => t.type === 'video');
+    if (!videoTrack?.clips?.length) return;
+    const clips = videoTrack.clips.map((c) => {
+      const dur = (c.sourceEnd ?? 0) - (c.sourceStart ?? 0);
+      const meta = (c as { meta?: Record<string, unknown> }).meta ?? {};
+      return {
+        activityPrimary: String(meta.activityPrimary ?? meta.subject ?? ''),
+        activitySecondary: String(meta.activitySecondary ?? ''),
+        durationSec: Math.round(dur * 10) / 10,
+        wasAgentGenerated: !!meta.source,
+      };
+    });
+    const totalDurationSec = Math.round(project.durationSec ?? 0);
+    apiPost('/api/editor/preference/report', { clips, totalDurationSec, bgmChanged: false })
+      .catch(() => {});
+  } catch {
+    // silent
+  }
+}
 
 interface ExportPanelProps {
   project: TimelineProject;
@@ -112,8 +134,8 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
             setDownloadUrl(st.downloadUrl);
             toast.success('导出完成！点击下载');
             onPushLog(`导出完成：${st.downloadUrl}`);
-            // 自动刷新历史列表，使新文件立即出现
             void listExportFiles().then(({ files }) => setHistoryFiles(files)).catch(() => {});
+            reportExportBehavior(project);
           } else {
             toast.info('导出完成（Mock 模式，暂无真实文件）');
             onPushLog('导出完成（Mock）');
