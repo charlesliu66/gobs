@@ -90,7 +90,10 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
   return null;
 }
 
-/** 把 assetId 映射到本地文件路径（多路查找 + asset URL 反解） */
+/**
+ * 把时间轴上所有 clip 的 assetId 映射到本地文件绝对路径。
+ * 策略：URL 反解优先（最可靠，与浏览器能播放等价），目录搜索兜底。
+ */
 function resolveAssetPaths(
   tracks: EditorExportRequestBody['project']['tracks'],
   username: string,
@@ -116,38 +119,41 @@ function resolveAssetPaths(
       const assetId = c.assetId;
       let found = false;
 
-      // 1) 目录搜索（本地上传的素材）
-      for (const dir of searchDirs) {
-        if (!fs.existsSync(dir)) continue;
-        if (fs.existsSync(path.join(dir, assetId))) {
-          map[assetId] = path.join(dir, assetId);
-          found = true;
-          break;
-        }
-        try {
-          const files = fs.readdirSync(dir);
-          const match = files.find((f) => f === assetId || f.startsWith(assetId + '.'));
-          if (match) {
-            map[assetId] = path.join(dir, match);
-            found = true;
-            break;
-          }
-        } catch { /* ignore */ }
-      }
-
-      // 2) 从前端传来的 assets URL 反解本地路径（高级制片 prod_shot_* 等）
-      if (!found && assetUrlMap?.[assetId]?.url) {
+      // 1) URL 反解（最可靠：前端能播放 = 后端能定位文件）
+      if (assetUrlMap?.[assetId]?.url) {
         const resolved = resolveLocalPathFromUrl(assetUrlMap[assetId].url!, username);
         if (resolved) {
           map[assetId] = resolved;
           found = true;
-          console.log('[export] resolved asset via URL:', assetId, '->', resolved);
+        }
+      }
+
+      // 2) 目录搜索兜底（用户上传的素材可能没有 URL 映射）
+      if (!found) {
+        for (const dir of searchDirs) {
+          if (!fs.existsSync(dir)) continue;
+          if (fs.existsSync(path.join(dir, assetId))) {
+            map[assetId] = path.join(dir, assetId);
+            found = true;
+            break;
+          }
+          try {
+            const files = fs.readdirSync(dir);
+            const match = files.find((f) => f === assetId || f.startsWith(assetId + '.'));
+            if (match) {
+              map[assetId] = path.join(dir, match);
+              found = true;
+              break;
+            }
+          } catch { /* ignore */ }
         }
       }
 
       if (!found) {
         const assetUrl = assetUrlMap?.[assetId]?.url;
-        console.warn('[export] asset not found locally:', assetId, 'url:', assetUrl ?? '(no url in assets)');
+        console.warn(`[export] ❌ asset not resolved: id=${assetId} track=${track.type} url=${assetUrl ?? '(none)'}`);
+      } else {
+        console.log(`[export] ✓ ${assetId} → ${map[assetId]}`);
       }
     }
   }

@@ -310,6 +310,9 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
     const fadeIn    = project.mix?.bgmFadeIn  ?? 1;
 
     let mixedPath = concatPath;
+    if (bgmClip && !bgmSrc) {
+      log(66, `⚠️ BGM 片段存在但文件未找到 (assetId=${bgmClip.assetId})，导出将不含配乐`);
+    }
     if (bgmSrc && fs.existsSync(bgmSrc)) {
       mixedPath = path.join(tmpDir, 'mixed.mp4');
       const bgmSs = bgmClip?.sourceStart ?? 0;
