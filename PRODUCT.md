@@ -941,4 +941,21 @@
 
 ---
 
-*最后更新：2026-04-16（v0.48）*
+### v0.49 — 2026-04-16
+
+**巨石文件拆分第二阶段 — LLM 解析函数提取 + 前端 hooks 拆分**
+
+**Refactor:**
+- **[api] `riskSentimentParsing.ts` 新建**（747 行）：从 `riskSentimentService.ts` 提取 28 个 LLM 解析/归一化/快照补全函数，包括 `parseJsonRelaxed`、`extractJsonObject`、`normalizePct3`、`deriveOverviewScoreFromPcts`、`parseKeywordMatrix`、`normalizeCreators`、`rehydrateSnapshot` 等。主文件从 1744 行降至 1051 行（减少 693 行），跳过 Apify 采集相关函数
+- **[frontend] `useProductionShotReview.ts` 新建**（116 行）：AI 审片 + 分镜间一致性检查 hook，封装 `handleAiReview`、`handleApplySuggestion`、`handleApplyAllAndRegenerate`、`handleContinuityCheck` 四个回调及相关 state
+- **[frontend] `useProductionShotVersions.ts` 新建**（106 行）：分镜视频版本管理 hook，封装 `shotVideoVersions`、`selectShotVideoVersion`、`keepOnlyShotVideoVersion` 等版本选择/清理逻辑。`ProductionWizard.tsx` 从 1981 行降至 1851 行
+
+**后端文件拆分进度（riskSentimentService.ts）：**
+- `riskSentimentTypes.ts` → 140 行（类型定义，Phase 1）
+- `riskSentimentParsing.ts` → 747 行（解析/归一化，Phase 2）
+- `riskSentimentService.ts` → 1051 行（业务逻辑 + Apify 采集）
+- 原始行数：1889 行 → 拆分后主文件：1051 行（减少 44%）
+
+---
+
+*最后更新：2026-04-16（v0.49）*

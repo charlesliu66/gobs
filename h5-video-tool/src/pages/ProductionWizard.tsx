@@ -55,13 +55,12 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
-import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, patchShotVersion, deleteShotVersions, type ProjectListItem } from '../api/production';
+import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
 import { getDreaminaTaskStatus, submitDreaminaAsync } from '../api/video';
 import { submitBatchJobs, pollBatchJobNow, type BatchJobDto } from '../api/batchJobs';
-import { postShotReview, postContinuityCheck, type ShotReviewResult, type ShotReviewSuggestion, type ContinuityIssue } from '../api/shotReview';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
 import { ProductionWizardShell } from '../studio/ProductionWizardShell';
@@ -74,6 +73,8 @@ import { StepExportWorkspace } from '../studio/steps/StepExportWorkspace';
 import { StepStoryboardWorkspace } from '../studio/steps/StepStoryboardWorkspace';
 import { StepStoryboardContinuousPlay } from '../studio/steps/StepStoryboardContinuousPlay';
 import { StepStoryboardAbCompare } from '../studio/steps/StepStoryboardAbCompare';
+import { useProductionShotReview } from '../studio/useProductionShotReview';
+import { useProductionShotVersions } from '../studio/useProductionShotVersions';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -1509,83 +1510,14 @@ export function ProductionWizard() {
   }, [project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject]);
 
   // ── AI 审片助手 ──────────────────────────────────────────────────────────
-  const [aiReviewResult, setAiReviewResult] = useState<ShotReviewResult | null>(null);
-  const [aiReviewing, setAiReviewing] = useState(false);
-  const handleAiReview = useCallback(async () => {
-    const s = project.shots[selectedShotIdx];
-    if (!s) return;
-    setAiReviewing(true);
-    setAiReviewResult(null);
-    try {
-      const result = await postShotReview(
-        s as unknown as Record<string, unknown>,
-        project.meta.styleRefSummary,
-        project.meta.title,
-      );
-      setAiReviewResult(result);
-    } catch (e) {
-      toast.error(`AI 审片失败：${e instanceof Error ? e.message : '网络异常'}`);
-    } finally {
-      setAiReviewing(false);
-    }
-  }, [project.shots, selectedShotIdx, project.meta.styleRefSummary, project.meta.title]);
-
-  const handleApplySuggestion = useCallback((suggestion: ShotReviewSuggestion) => {
-    const path = suggestion.field.split('.');
-    if (path.length === 2) {
-      const [group, key] = path;
-      if (group === 'structuredStill') {
-        patchShot(selectedShotIdx, {
-          structuredStill: {
-            ...(project.shots[selectedShotIdx]?.structuredStill ?? {} as any),
-            [key]: suggestion.suggestedValue,
-          },
-        });
-      } else if (group === 'structuredMotion') {
-        patchShot(selectedShotIdx, {
-          structuredMotion: {
-            ...(project.shots[selectedShotIdx]?.structuredMotion ?? {} as any),
-            [key]: suggestion.suggestedValue,
-          },
-        });
-      }
-    } else if (path.length === 1) {
-      patchShot(selectedShotIdx, { [path[0]]: suggestion.suggestedValue } as any);
-    }
-    toast.success(`已应用建议：${suggestion.field}`);
-  }, [selectedShotIdx, project.shots, patchShot]);
-
-  const handleApplyAllAndRegenerate = useCallback(() => {
-    void generateVideoForShotIdx(selectedShotIdx);
-  }, [generateVideoForShotIdx, selectedShotIdx]);
-
-  // ── 分镜间一致性检查 ──────────────────────────────────────────────────────
-  const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[] | null>(null);
-  const [continuityChecking, setContinuityChecking] = useState(false);
-  const handleContinuityCheck = useCallback(async () => {
-    if (project.shots.length < 2) {
-      toast.info('至少需要 2 个分镜才能进行一致性检查');
-      return;
-    }
-    setContinuityChecking(true);
-    setContinuityIssues(null);
-    try {
-      const result = await postContinuityCheck(
-        project.shots as unknown as Record<string, unknown>[],
-        project.meta.styleRefSummary,
-      );
-      setContinuityIssues(result.issues);
-      if (result.issues.length === 0) {
-        toast.success('分镜间一致性检查通过');
-      } else {
-        toast.info(`发现 ${result.issues.length} 个连续性问题`);
-      }
-    } catch (e) {
-      toast.error(`一致性检查失败：${e instanceof Error ? e.message : '网络异常'}`);
-    } finally {
-      setContinuityChecking(false);
-    }
-  }, [project.shots, project.meta.styleRefSummary]);
+  // ── AI 审片 + 一致性检查 ────────────────────────────────────────────────────
+  const {
+    aiReviewResult, aiReviewing, handleAiReview,
+    handleApplySuggestion, handleApplyAllAndRegenerate,
+    continuityIssues, continuityChecking, handleContinuityCheck,
+  } = useProductionShotReview({
+    project, selectedShotIdx, patchShot, generateVideoForShotIdx,
+  });
 
   // ── 连续播放 / AB 对比 ─────────────────────────────────────────────────────
   const [showContinuousPlay, setShowContinuousPlay] = useState(false);
@@ -1615,76 +1547,14 @@ export function ProductionWizard() {
   }, [shot, chSheets, scSheets, propSheets]);
 
   const shotBlob = useMemo(() => (shot ? buildShotBlobText(shot) : ''), [shot]);
-  const shotVideoVersions = useMemo(() => {
-    if (!shot) return [] as ProductionShotVideoVersion[];
-    const list = Array.isArray(shot.previewVideoVersions) ? shot.previewVideoVersions : [];
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [shot]);
-  const selectedShotVideoVersion = useMemo(() => {
-    if (!shot) return null;
-    const selectedId = shot.selectedPreviewVideoVersionId?.trim();
-    return shotVideoVersions.find((v) => v.id === selectedId) ?? shotVideoVersions[0] ?? null;
-  }, [shot, shotVideoVersions]);
-  const shotPreviewPlaySrc = useMemo(
-    () =>
-      selectedShotVideoVersion
-        ? resolveProductionShotPreviewVideoSrc({
-            previewVideoPath: selectedShotVideoVersion.videoPath,
-            previewVideoUrl: selectedShotVideoVersion.videoUrl,
-          })
-        : shot
-          ? resolveProductionShotPreviewVideoSrc(shot)
-          : '',
-    [shot, selectedShotVideoVersion],
-  );
-  const selectShotVideoVersion = useCallback((versionId: string) => {
-    setProject((p) => {
-      const shots = [...p.shots];
-      const cur = shots[selectedShotIdx];
-      if (!cur) return p;
-      const list = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
-      const picked = list.find((v) => v.id === versionId);
-      shots[selectedShotIdx] = {
-        ...cur,
-        selectedPreviewVideoVersionId: versionId,
-        previewVideoPath: picked?.videoPath,
-        previewVideoUrl: picked?.videoUrl,
-      } as ProductionShot;
-      return { ...p, shots, assembled: null };
-    });
-    if (serverProjectId) {
-      const si = shot?.shotIndex;
-      if (si != null) {
-        patchShotVersion(serverProjectId, si, versionId).catch((e) =>
-          console.warn('[patchShotVersion]', e),
-        );
-      }
-    }
-  }, [selectedShotIdx, serverProjectId, shot?.shotIndex]);
-  const keepOnlyShotVideoVersion = useCallback((versionId: string) => {
-    setProject((p) => {
-      const shots = [...p.shots];
-      const cur = shots[selectedShotIdx];
-      if (!cur) return p;
-      const list = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
-      const keep = list.find((v) => v.id === versionId);
-      if (!keep) return p;
-      shots[selectedShotIdx] = {
-        ...cur,
-        previewVideoVersions: [keep],
-        selectedPreviewVideoVersionId: keep.id,
-        previewVideoPath: keep.videoPath,
-        previewVideoUrl: keep.videoUrl,
-      } as ProductionShot;
-      return { ...p, shots, assembled: null };
-    });
-    if (serverProjectId && shot?.shotIndex != null) {
-      deleteShotVersions(serverProjectId, shot.shotIndex, versionId).catch((e) =>
-        console.warn('[deleteShotVersions]', e),
-      );
-    }
-    toast.success('已保留当前版本，其余版本已移除');
-  }, [selectedShotIdx, serverProjectId, shot?.shotIndex]);
+
+  // ── 分镜视频版本管理 ────────────────────────────────────────────────────────
+  const {
+    shotVideoVersions, selectedShotVideoVersion, shotPreviewPlaySrc,
+    selectShotVideoVersion, keepOnlyShotVideoVersion,
+  } = useProductionShotVersions({
+    project, selectedShotIdx, setProject, serverProjectId,
+  });
 
   const multimodalAutoPrompt = multimodalRefPack?.defaultVideoPrompt ?? '';
 
