@@ -13,6 +13,7 @@ import { TextClipEditor } from '../editor/components/TextClipEditor';
 import { TextOverlayRenderer } from '../editor/components/TextOverlayRenderer';
 import { EditorProjectManager } from '../editor/components/EditorProjectManager';
 import { ImportGuideModal } from '../editor/components/ImportGuideModal';
+import { SyncProductionModal } from '../editor/components/SyncProductionModal';
 import type { AudioClip, MediaAsset, TimelineProject, VideoClip } from '../editor/types/timeline';
 import type { TextClip } from '../editor/types/timeline';
 import {
@@ -198,6 +199,7 @@ export function EditorWorkbench() {
   /** 从制片导入后的引导弹窗 */
   const [showImportGuide, setShowImportGuide] = useState(false);
   const importGuideInfoRef = useRef<{ shots: number; dur: number; title: string; bgmHint: string } | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
@@ -1192,14 +1194,26 @@ export function EditorWorkbench() {
         topBarExtra={
           <div className="flex items-center gap-2">
             {project.sourceProductionTitle && (
-              <a
-                href={`/studio/wizard${project.sourceProductionProjectId ? `?project=${project.sourceProductionProjectId}` : ''}`}
-                className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
-                title="打开来源制片项目"
-              >
-                📎 来自「{project.sourceProductionTitle}」
-                <span className="opacity-60">→</span>
-              </a>
+              <>
+                <a
+                  href={`/studio/wizard${project.sourceProductionProjectId ? `?project=${project.sourceProductionProjectId}` : ''}`}
+                  className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
+                  title="打开来源制片项目"
+                >
+                  📎 来自「{project.sourceProductionTitle}」
+                  <span className="opacity-60">→</span>
+                </a>
+                {project.sourceProductionProjectId && currentProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSyncModal(true)}
+                    className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
+                    title="从制片项目同步最新版本"
+                  >
+                    🔄 同步更新
+                  </button>
+                )}
+              </>
             )}
             <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-2 py-1">
               <input
@@ -1317,6 +1331,18 @@ export function EditorWorkbench() {
         onRename={renameProject}
         onDelete={removeProject}
         onClose={() => setShowProjectManager(false)}
+      />
+    )}
+
+    {/* 制片同步弹窗 */}
+    {showSyncModal && currentProjectId && (
+      <SyncProductionModal
+        editorProjectId={currentProjectId}
+        onSynced={() => {
+          setShowSyncModal(false);
+          if (currentProjectId) void loadProject(currentProjectId);
+        }}
+        onClose={() => setShowSyncModal(false)}
       />
     )}
 

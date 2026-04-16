@@ -194,6 +194,58 @@ export async function deleteEditorProject(id: string): Promise<void> {
   }
 }
 
+// ─── 增量同步：制片 → 剪辑 ─────────────────────────────────────
+
+export interface SyncDiffItem {
+  shotIndex: number;
+  currentVersionId: string | null;
+  latestVersionId: string;
+  latestVideoUrl: string;
+  latestDurationSec: number;
+  hasUpdate: boolean;
+}
+
+export interface SyncProductionResponse {
+  success: boolean;
+  productionTitle: string;
+  diffs: SyncDiffItem[];
+}
+
+export async function syncProductionCheck(editorProjectId: string): Promise<SyncProductionResponse> {
+  return apiPost<SyncProductionResponse>(
+    `/api/editor/projects/${encodeURIComponent(editorProjectId)}/sync-production`,
+    {},
+  );
+}
+
+export interface ApplySyncReplacement {
+  shotIndex: number;
+  newVersionId: string;
+  newVideoUrl: string;
+  newDurationSec: number;
+  newMeta?: Record<string, unknown>;
+}
+
+export async function applySyncReplacements(
+  editorProjectId: string,
+  replacements: ApplySyncReplacement[],
+): Promise<EditorProjectRecord> {
+  const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(editorProjectId)}/apply-sync`, {
+    method: 'PATCH',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replacements }),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText);
+  }
+  const out = await res.json() as { success: boolean; data: EditorProjectRecord };
+  return out.data;
+}
+
+// ─── 导出 ─────────────────────────────────────────────────────
+
 export interface EditorExportStartResponse {
   jobId: string;
   message?: string;
