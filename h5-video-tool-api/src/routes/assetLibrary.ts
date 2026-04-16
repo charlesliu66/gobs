@@ -26,6 +26,7 @@ import {
   getFacets,
 } from '../services/assetSearchService.js';
 import { getHighlightCandidates } from '../services/assetHighlightService.js';
+import { getThumbPath, ensureThumbnail } from '../services/assetThumbnailService.js';
 
 const router = Router();
 
@@ -63,6 +64,18 @@ function requireUser(req: Request, res: Response): string | null {
     return null;
   }
   return username;
+}
+
+function addUrls(item: Record<string, unknown>, token: string) {
+  const id = item.id as string;
+  const fileUrl = `/api/asset-library/assets/${id}/file?token=${encodeURIComponent(token)}`;
+  const thumbUrl = `/api/asset-library/assets/${id}/thumb?token=${encodeURIComponent(token)}`;
+  const thumbExists = item.filepath ? fs.existsSync(getThumbPath(item.filepath as string)) : false;
+  return {
+    ...item,
+    file_url: fileUrl,
+    thumbnail_url: thumbExists ? thumbUrl : fileUrl,
+  };
 }
 
 // ── POST /import ───────────────────────────────────────────────────────────────
@@ -173,12 +186,67 @@ router.get('/assets', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...item,
-    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    ...addUrls(item as unknown as Record<string, unknown>, token),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
   res.json({ total: result.total, page: result.page, pageSize: result.pageSize, assets: assetsWithTags });
+});
+
+// ── GET /assets/:id/thumb ──────────────────────────────────────────────────────
+
+router.get('/assets/:id/thumb', (req: Request, res: Response) => {
+  let username = req.user?.username;
+  if (!username) {
+    const queryToken = req.query.token as string | undefined;
+    if (queryToken) {
+      const secret = process.env.JWT_SECRET || 'gobs-secret-change-in-production';
+      try {
+        const payload = jwt.verify(queryToken, secret) as { username: string };
+        username = payload.username;
+      } catch {
+        res.status(401).json({ error: 'token 无效或已过期' });
+        return;
+      }
+    } else {
+      res.status(401).json({ error: '未鉴权' });
+      return;
+    }
+  }
+
+  const { id: assetId } = req.params;
+  const asset = db.prepare(
+    `SELECT id, username, filepath, mimetype FROM assets WHERE id = @id`
+  ).get({ id: assetId }) as { id: string; username: string; filepath: string; mimetype: string } | undefined;
+
+  if (!asset) { res.status(404).json({ error: '资产不存在' }); return; }
+  if (asset.username !== username) { res.status(403).json({ error: '无权访问' }); return; }
+
+  const thumbPath = getThumbPath(asset.filepath);
+  if (fs.existsSync(thumbPath)) {
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    const stream = fs.createReadStream(thumbPath);
+    stream.pipe(res);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: '读取失败' });
+    });
+    return;
+  }
+
+  // 缩略图不存在时异步生成并回退到原文件
+  void ensureThumbnail(asset.filepath, asset.mimetype);
+  if (fs.existsSync(asset.filepath)) {
+    res.setHeader('Content-Type', asset.mimetype || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    const stream = fs.createReadStream(asset.filepath);
+    stream.pipe(res);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: '文件读取失败' });
+    });
+  } else {
+    res.status(404).json({ error: '文件不存在' });
+  }
 });
 
 // ── GET /assets/:id/file ───────────────────────────────────────────────────────
@@ -392,6 +460,51 @@ router.post('/assets/batch-tags', (req: Request, res: Response) => {
   res.json({ ok: true, results });
 });
 
+// ── GET /pending-tags ──────────────────────────────────────────────────────────
+// 分页返回待确认标签，避免一次拉取全部
+
+router.get('/pending-tags', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string || '20', 10)));
+  const offset = (page - 1) * pageSize;
+
+  const totalRow = db.prepare(`
+    SELECT COUNT(*) as cnt FROM asset_tags t
+    JOIN assets a ON a.id = t.asset_id
+    WHERE a.username = @username AND t.status = 'pending'
+  `).get({ username }) as { cnt: number };
+
+  const rows = db.prepare(`
+    SELECT t.asset_id, t.key, t.value, t.source, t.confidence, t.status, t.created_at,
+           a.filename, a.mimetype, a.ai_category
+    FROM asset_tags t
+    JOIN assets a ON a.id = t.asset_id
+    WHERE a.username = @username AND t.status = 'pending'
+    ORDER BY t.created_at DESC
+    LIMIT @limit OFFSET @offset
+  `).all({ username, limit: pageSize, offset }) as Array<{
+    asset_id: string; key: string; value: string; source: string;
+    confidence: number; status: string; created_at: string;
+    filename: string; mimetype: string; ai_category: string;
+  }>;
+
+  res.json({
+    total: totalRow.cnt,
+    page,
+    pageSize,
+    items: rows.map((r) => ({
+      asset_id: r.asset_id,
+      filename: r.filename,
+      mimetype: r.mimetype,
+      ai_category: r.ai_category,
+      tag: { key: r.key, value: r.value, source: r.source, confidence: r.confidence, status: r.status },
+    })),
+  });
+});
+
 // ── GET /search ────────────────────────────────────────────────────────────────
 // 关键词全文搜索 + 维度筛选
 
@@ -423,8 +536,7 @@ router.get('/search', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...item,
-    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    ...addUrls(item as unknown as Record<string, unknown>, token),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
@@ -523,8 +635,7 @@ router.get('/favorites', (req: Request, res: Response) => {
 
   const token = req.headers.authorization?.slice(7) ?? '';
   const itemsWithUrl = items.map((item) => ({
-    ...item,
-    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    ...addUrls(item, token),
     is_favorite: true,
   }));
   const assetsWithTags = attachTags(itemsWithUrl);
@@ -580,13 +691,43 @@ router.get('/recent', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = items.map((item) => ({
-    ...item,
-    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    ...addUrls(item, token),
     is_favorite: favoriteSet.has(item.id as string),
   }));
   const assetsWithTags = attachTags(itemsWithUrl);
 
   res.json({ assets: assetsWithTags, total: items.length });
+});
+
+// ── POST /generate-thumbnails ───────────────────────────────────────────────
+// 批量为存量素材补生成缩略图
+
+router.post('/generate-thumbnails', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  try {
+    const assets = db.prepare(
+      `SELECT id, filepath, mimetype FROM assets WHERE username = @username`
+    ).all({ username }) as Array<{ id: string; filepath: string; mimetype: string }>;
+
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const asset of assets) {
+      if (!asset.filepath || !fs.existsSync(asset.filepath)) { failed++; continue; }
+      if (fs.existsSync(getThumbPath(asset.filepath))) { skipped++; continue; }
+      const result = await ensureThumbnail(asset.filepath, asset.mimetype);
+      if (result) generated++;
+      else failed++;
+    }
+
+    res.json({ total: assets.length, generated, skipped, failed });
+  } catch (err) {
+    console.error('[generate-thumbnails]', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : '缩略图生成失败' });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

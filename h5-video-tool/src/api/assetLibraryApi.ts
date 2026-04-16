@@ -27,6 +27,7 @@ export interface LibraryAsset {
   updated_at: string;
   tags: AssetTag[];
   file_url?: string;
+  thumbnail_url?: string;
   mimetype?: string;
   filesize?: number;
   duration?: number | null;
@@ -138,6 +139,29 @@ export async function batchUpdateTags(
   updates: BatchTagUpdate[]
 ): Promise<{ ok: boolean; results: Array<{ assetId: string; key: string; result: string }> }> {
   return apiPost(`${BASE}/assets/batch-tags`, { updates });
+}
+
+// ── 待确认标签（分页）────────────────────────────────────────────────────────
+
+export interface PendingTagItem {
+  asset_id: string;
+  filename: string;
+  mimetype: string;
+  ai_category: string;
+  tag: AssetTag;
+}
+
+export interface PendingTagsResult {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: PendingTagItem[];
+}
+
+export async function getPendingTags(page = 1, pageSize = 20): Promise<PendingTagsResult> {
+  return apiGet<PendingTagsResult>(
+    `${BASE}/pending-tags?page=${page}&pageSize=${pageSize}`
+  );
 }
 
 // ── 搜索 ──────────────────────────────────────────────────────────────────────

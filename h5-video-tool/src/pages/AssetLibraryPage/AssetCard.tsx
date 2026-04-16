@@ -35,6 +35,7 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
   const isVideo = mime.startsWith('video/');
   const isImage = !isVideo && !imgError;
   const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
+  const thumbUrl = asset.thumbnail_url ?? fileUrl;
   const category = asset.ai_category ?? '未分类';
   const catColor = CATEGORY_COLORS[category] ?? CATEGORY_COLORS['未分类'];
 
@@ -113,19 +114,29 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
               <span className="text-4xl opacity-40">{isVideo ? '🎬' : '🖼'}</span>
             </div>
           ) : isVideo ? (
-            <video
-              ref={videoRef}
-              src={fileUrl}
-              className="w-full h-full object-cover"
-              preload="metadata"
-              muted
-              playsInline
-              loop
-              onError={() => setImgError(true)}
-            />
+            hovering ? (
+              <video
+                ref={videoRef}
+                src={fileUrl}
+                className="w-full h-full object-cover"
+                preload="metadata"
+                muted
+                playsInline
+                loop
+                autoPlay
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <img
+                src={thumbUrl}
+                alt={asset.filename}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            )
           ) : (
             <img
-              src={fileUrl}
+              src={thumbUrl}
               alt={asset.filename}
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}

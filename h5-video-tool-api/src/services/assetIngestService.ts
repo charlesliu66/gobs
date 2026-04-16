@@ -11,6 +11,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import db from '../db/assetDb.js';
 import { applyRuleTags, aiTagAsset } from './assetTaggingService.js';
+import { ensureThumbnail } from './assetThumbnailService.js';
 import type { AssetRecord, ImportJob } from '../types/assetLibrary.js';
 import { resolvePath } from '../infra/storage/resolver.js';
 
@@ -274,7 +275,10 @@ async function processFile(
     // 6. 规则打标
     applyRuleTags(assetId, asset);
 
-    // 7. AI 打标（异步不等待，失败不阻塞导入任务）
+    // 7. 生成缩略图（异步，失败不阻塞）
+    void ensureThumbnail(destPath, file.mimetype);
+
+    // 8. AI 打标（异步不等待，失败不阻塞导入任务）
     void aiTagAsset(assetId);
 
     return 'processed';

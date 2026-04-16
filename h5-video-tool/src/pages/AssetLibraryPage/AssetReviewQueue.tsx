@@ -1,46 +1,39 @@
 /**
- * TASK-C: AssetReviewQueue — 待确认标签批量审核
- * AC-C1: 勾选多项 → 确认/拒绝/修改标签
+ * AssetReviewQueue — 待确认标签批量审核（分页版本）
  */
 import { useState, useEffect, useCallback } from 'react';
-import { listAssets, batchUpdateTags } from '../../api/assetLibraryApi';
-import type { LibraryAsset, AssetTag } from '../../api/assetLibraryApi';
+import { getPendingTags, batchUpdateTags } from '../../api/assetLibraryApi';
+import type { PendingTagItem } from '../../api/assetLibraryApi';
 import { toast } from '../../components/Toast';
 
-interface PendingItem {
-  asset: LibraryAsset;
-  tag: AssetTag;
-  selected: boolean;
-}
+const PAGE_SIZE = 20;
 
 export function AssetReviewQueue() {
-  const [items, setItems] = useState<PendingItem[]>([]);
+  const [items, setItems] = useState<(PendingTagItem & { selected: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [editMode, setEditMode] = useState<{ assetId: string; key: string } | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const load = useCallback(async () => {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const load = useCallback(async (p = page) => {
     setLoading(true);
     try {
-      // 拉取所有素材，筛选出有 pending 标签的条目
-      const result = await listAssets({ pageSize: '100' });
-      const pending: PendingItem[] = [];
-      for (const asset of result.assets) {
-        const pendingTags = asset.tags.filter((t) => t.status === 'pending');
-        for (const tag of pendingTags) {
-          pending.push({ asset, tag, selected: false });
-        }
-      }
-      setItems(pending);
+      const result = await getPendingTags(p, PAGE_SIZE);
+      setItems(result.items.map((i) => ({ ...i, selected: false })));
+      setTotal(result.total);
+      setPage(result.page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '加载失败');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(page); }, [page, load]);
 
   const allSelected = items.length > 0 && items.every((i) => i.selected);
   const selectedCount = items.filter((i) => i.selected).length;
@@ -60,7 +53,7 @@ export function AssetReviewQueue() {
     try {
       await batchUpdateTags(
         selected.map((i) => ({
-          assetId: i.asset.id,
+          assetId: i.asset_id,
           key: i.tag.key,
           value: i.tag.value,
           status: action === 'confirm' ? 'confirmed' : 'rejected',
@@ -68,7 +61,7 @@ export function AssetReviewQueue() {
         }))
       );
       toast.success(`已${action === 'confirm' ? '确认' : '拒绝'} ${selected.length} 个标签`);
-      await load();
+      await load(page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
     } finally {
@@ -76,17 +69,17 @@ export function AssetReviewQueue() {
     }
   }
 
-  async function handleEdit(item: PendingItem) {
-    setEditMode({ assetId: item.asset.id, key: item.tag.key });
+  function handleEdit(item: PendingTagItem) {
+    setEditMode({ assetId: item.asset_id, key: item.tag.key });
     setEditValue(item.tag.value);
   }
 
-  async function handleEditSubmit(item: PendingItem) {
+  async function handleEditSubmit(item: PendingTagItem) {
     if (!editValue.trim()) return;
     setSubmitting(true);
     try {
       await batchUpdateTags([{
-        assetId: item.asset.id,
+        assetId: item.asset_id,
         key: item.tag.key,
         value: editValue.trim(),
         status: 'confirmed',
@@ -94,12 +87,24 @@ export function AssetReviewQueue() {
       }]);
       toast.success('已修改并确认');
       setEditMode(null);
-      await load();
+      await load(page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '修改失败');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleSingleAction(item: PendingTagItem, action: 'confirm' | 'reject') {
+    await batchUpdateTags([{
+      assetId: item.asset_id,
+      key: item.tag.key,
+      value: item.tag.value,
+      status: action === 'confirm' ? 'confirmed' : 'rejected',
+      action: 'upsert',
+    }]);
+    toast.success(action === 'confirm' ? '已确认' : '已拒绝');
+    await load(page);
   }
 
   if (loading) {
@@ -116,8 +121,8 @@ export function AssetReviewQueue() {
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-bold text-[var(--color-text)]">
           待确认标签
-          {items.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-[var(--color-text-muted)]">({items.length} 项)</span>
+          {total > 0 && (
+            <span className="ml-2 text-sm font-normal text-[var(--color-text-muted)]">({total} 项)</span>
           )}
         </h2>
         <div className="ml-auto flex gap-2">
@@ -139,7 +144,7 @@ export function AssetReviewQueue() {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={() => void load(page)}
             className="px-4 py-2 border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition"
           >
             刷新
@@ -173,10 +178,10 @@ export function AssetReviewQueue() {
           {/* 列表 */}
           <div className="divide-y divide-[var(--color-border)]">
             {items.map((item, idx) => {
-              const isEditing = editMode?.assetId === item.asset.id && editMode?.key === item.tag.key;
+              const isEditing = editMode?.assetId === item.asset_id && editMode?.key === item.tag.key;
               return (
                 <div
-                  key={`${item.asset.id}-${item.tag.key}-${item.tag.value}`}
+                  key={`${item.asset_id}-${item.tag.key}-${item.tag.value}`}
                   className={`flex items-center gap-3 px-4 py-3 transition ${
                     item.selected ? 'bg-[var(--color-primary)]/6' : 'hover:bg-[var(--color-surface-hover)]'
                   }`}
@@ -187,13 +192,10 @@ export function AssetReviewQueue() {
                     onChange={() => toggleItem(idx)}
                     className="w-4 h-4 cursor-pointer accent-[var(--color-primary)]"
                   />
-                  {/* 素材名 */}
-                  <span className="flex-1 text-sm text-[var(--color-text)] truncate" title={item.asset.filename}>
-                    {item.asset.filename}
+                  <span className="flex-1 text-sm text-[var(--color-text)] truncate" title={item.filename}>
+                    {item.filename}
                   </span>
-                  {/* 标签键 */}
                   <span className="w-24 text-xs text-[var(--color-text-subtle)] truncate">{item.tag.key}</span>
-                  {/* 标签值（可编辑） */}
                   <div className="flex-1">
                     {isEditing ? (
                       <div className="flex gap-2">
@@ -224,7 +226,6 @@ export function AssetReviewQueue() {
                       <span className="text-sm text-[var(--color-text)]">{item.tag.value}</span>
                     )}
                   </div>
-                  {/* 来源 */}
                   <span className={`w-28 text-xs px-2 py-0.5 rounded-full text-center ${
                     item.tag.source === 'ai'
                       ? 'bg-blue-500/15 text-blue-400'
@@ -233,16 +234,12 @@ export function AssetReviewQueue() {
                     {item.tag.source === 'ai' ? 'AI' : '人工'}
                     {item.tag.confidence < 1 ? ` ${Math.round(item.tag.confidence * 100)}%` : ''}
                   </span>
-                  {/* 操作 */}
                   {!isEditing && (
                     <div className="w-32 flex justify-end gap-1">
                       <button
                         type="button"
                         title="确认"
-                        onClick={() => void batchUpdateTags([{
-                          assetId: item.asset.id, key: item.tag.key,
-                          value: item.tag.value, status: 'confirmed', action: 'upsert',
-                        }]).then(() => { toast.success('已确认'); return load(); })}
+                        onClick={() => void handleSingleAction(item, 'confirm')}
                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-500/15 text-green-500 hover:bg-green-500/30 transition text-sm"
                       >
                         ✓
@@ -250,10 +247,7 @@ export function AssetReviewQueue() {
                       <button
                         type="button"
                         title="拒绝"
-                        onClick={() => void batchUpdateTags([{
-                          assetId: item.asset.id, key: item.tag.key,
-                          value: item.tag.value, status: 'rejected', action: 'upsert',
-                        }]).then(() => { toast.success('已拒绝'); return load(); })}
+                        onClick={() => void handleSingleAction(item, 'reject')}
                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/15 text-red-500 hover:bg-red-500/30 transition text-sm"
                       >
                         ✗
@@ -272,6 +266,33 @@ export function AssetReviewQueue() {
               );
             })}
           </div>
+
+          {/* 分页 */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
+              <span className="text-xs text-[var(--color-text-muted)]">
+                第 {page}/{totalPages} 页，共 {total} 项
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1 text-xs border border-[var(--color-border)] rounded hover:bg-[var(--color-surface-hover)] disabled:opacity-40 transition"
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-3 py-1 text-xs border border-[var(--color-border)] rounded hover:bg-[var(--color-surface-hover)] disabled:opacity-40 transition"
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

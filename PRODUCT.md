@@ -1028,4 +1028,20 @@
 
 ---
 
-*最后更新：2026-04-16（v0.48）*
+### v0.53 — 2026-04-16
+
+**素材库性能优化：缩略图 + ReviewQueue 分页 + 错误标签清理**
+
+**Feature:**
+- **[api] 缩略图服务** (`assetThumbnailService.ts`)：上传时自动生成 300×300 JPEG 缩略图（图片用 sharp、视频用 ffmpeg 取首帧），存放于原文件同目录 `.thumbs/` 子文件夹
+- **[api] `GET /assets/:id/thumb`** 端点：专门服务缩略图，支持 token query 认证，24h 浏览器缓存；缩略图不存在时触发异步生成并回退原文件
+- **[api] `POST /generate-thumbnails`** 端点：一键批量为所有存量素材补生成缩略图
+- **[api] `GET /pending-tags`** 端点：分页返回待确认标签（替代原来一次拉 100 条全量方案）
+- **[api] 全部 asset 列表 API** 返回 `thumbnail_url` 字段（assets/search/favorites/recent）
+- **[frontend] AssetCard** 网格视图使用缩略图渲染，视频素材仅 hover 时加载原始视频流
+- **[frontend] ReviewQueue** 分页化（每页 20 条），不再一次加载所有素材筛选 pending
+- **[data] 清理 28 个 ai_tag_error 错误标签**，从错误信息中恢复 9 个素材的 AI 分类
+
+---
+
+*最后更新：2026-04-16（v0.53）*
