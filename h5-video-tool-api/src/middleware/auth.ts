@@ -97,6 +97,16 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // Google Drive OAuth 回调：浏览器重定向无 Bearer，用 state 参数识别用户
+  if (req.method === 'GET' && req.path === '/api/drive/callback') {
+    next();
+    return;
+  }
+  // Drive 缩略图代理：前端 <img> 无法带 Bearer
+  if (req.method === 'GET' && req.path === '/api/drive/thumbnail') {
+    next();
+    return;
+  }
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

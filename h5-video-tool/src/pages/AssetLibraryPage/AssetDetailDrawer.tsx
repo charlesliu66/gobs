@@ -25,6 +25,7 @@ function formatDate(iso: string): string {
 const TAG_LABEL: Record<string, string> = {
   type: '类型', ratio: '比例', orientation: '方向', quality: '质量',
   platform: '平台', ai_type: '内容类型', ai_scene: '场景', ai_purpose: '用途', ai_platform: '推荐平台',
+  ai_category: '分类', ai_description: 'AI 描述',
 };
 
 function TagChip({ tag, variant }: { tag: AssetTag; variant: 'rule' | 'ai' }) {
@@ -124,6 +125,12 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
               <MetaRow label="时长" value={`${duration.toFixed(1)}s`} />
             )}
             <MetaRow label="上传时间" value={formatDate(asset.created_at)} />
+            {asset.ai_category && asset.ai_category !== '未分类' && (
+              <MetaRow label="AI 分类" value={asset.ai_category} />
+            )}
+            {asset.ai_description && (
+              <MetaRow label="AI 描述" value={asset.ai_description} />
+            )}
           </div>
 
           {/* Tags */}

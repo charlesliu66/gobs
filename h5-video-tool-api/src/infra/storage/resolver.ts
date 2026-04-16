@@ -38,6 +38,7 @@ export type StorageType =
   | '.data/remix-rules'     // <root>/.data/remix-rules
   | 'assets-index'          // <root>/asset-index.json 所在目录（根目录）
   | 'assets-ingest'         // <root>/assets — 素材摄入
+  | 'drive-cache'           // <root>/drive-cache — Google Drive 缓存
 
 // ── 路径映射表 ─────────────────────────────────────────────────────────────────
 const PATH_MAP: Record<StorageType, () => string> = {
@@ -63,6 +64,7 @@ const PATH_MAP: Record<StorageType, () => string> = {
   '.data/remix-rules':    () => path.join(getApiDataDir(), '.data', 'remix-rules'),
   'assets-index':         () => getApiDataDir(),
   'assets-ingest':        () => path.join(getApiDataDir(), 'assets'),
+  'drive-cache':          () => path.join(getApiDataDir(), 'drive-cache'),
 };
 
 // ── 公开 API ──────────────────────────────────────────────────────────────────

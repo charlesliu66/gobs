@@ -19,49 +19,43 @@ interface PagedResult {
 }
 
 /**
- * 按维度标签筛选资产（分页）
+ * 按维度标签筛选资产（分页），支持 ai_category 直接筛选
  */
 export function listAssets(query: SearchQuery): PagedResult {
-  const { username, page = 1, pageSize = 20, filters } = query;
+  const { username, page = 1, pageSize = 20, filters, aiCategory, folderId } = query;
   const offset = (page - 1) * pageSize;
 
-  // 筛选维度（仅允许白名单键）
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  if (filterKeys.length === 0) {
-    // 无筛选，直接查 assets 表
-    const total = (db.prepare(`SELECT COUNT(*) as cnt FROM assets WHERE username = @username`)
-      .get({ username }) as { cnt: number }).cnt;
-
-    const items = db.prepare(`
-      SELECT * FROM assets WHERE username = @username
-      ORDER BY created_at DESC LIMIT @limit OFFSET @offset
-    `).all({ username, limit: pageSize, offset }) as AssetRecord[];
-
-    return { items, total, page, pageSize };
-  }
-
-  // 有筛选：通过 JOIN asset_tags 筛选，每个维度一次 INTERSECT/EXISTS
-  // 构建 EXISTS 子查询：每个 filter 条件
-  const existsClauses = filterKeys.map((key, i) => `
-    EXISTS (
-      SELECT 1 FROM asset_tags t${i}
-      WHERE t${i}.asset_id = a.id
-        AND t${i}.key = @key_${i}
-        AND t${i}.value = @val_${i}
-        AND t${i}.status != 'rejected'
-    )
-  `);
-
-  const whereClause = `a.username = @username AND ${existsClauses.join(' AND ')}`;
-
-  // 构建参数
+  const conditions: string[] = ['a.username = @username'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, limit: pageSize, offset };
+
+  if (aiCategory) {
+    conditions.push('a.ai_category = @aiCategory');
+    params.aiCategory = aiCategory;
+  }
+
+  if (folderId) {
+    conditions.push('a.folder_id = @folderId');
+    params.folderId = folderId;
+  }
+
   filterKeys.forEach((key, i) => {
+    conditions.push(`
+      EXISTS (
+        SELECT 1 FROM asset_tags t${i}
+        WHERE t${i}.asset_id = a.id
+          AND t${i}.key = @key_${i}
+          AND t${i}.value = @val_${i}
+          AND t${i}.status != 'rejected'
+      )
+    `);
     params[`key_${i}`] = key;
     params[`val_${i}`] = filters[key];
   });
+
+  const whereClause = conditions.join(' AND ');
 
   const total = (db.prepare(`SELECT COUNT(*) as cnt FROM assets a WHERE ${whereClause}`)
     .get(params) as { cnt: number }).cnt;
@@ -75,43 +69,51 @@ export function listAssets(query: SearchQuery): PagedResult {
 }
 
 /**
- * 关键词全文搜索（filename + tag value LIKE）
+ * 关键词搜索（filename + ai_description + tag value LIKE），支持 ai_category 筛选
  */
 export function searchAssets(query: SearchQuery): PagedResult {
-  const { username, q = '', page = 1, pageSize = 20, filters } = query;
+  const { username, q = '', page = 1, pageSize = 20, filters, aiCategory } = query;
   const offset = (page - 1) * pageSize;
   const likeQ = `%${q}%`;
 
-  // 筛选维度
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  // 构建 EXISTS 子查询
-  const existsClauses = filterKeys.map((key, i) => `
-    EXISTS (
-      SELECT 1 FROM asset_tags t${i}
-      WHERE t${i}.asset_id = a.id
-        AND t${i}.key = @key_${i}
-        AND t${i}.value = @val_${i}
-        AND t${i}.status != 'rejected'
-    )
-  `);
-
-  const keywordClause = q
-    ? `(a.filename LIKE @q OR EXISTS (
-        SELECT 1 FROM asset_tags tq
-        WHERE tq.asset_id = a.id AND tq.value LIKE @q AND tq.status != 'rejected'
-      ))`
-    : '1=1';
-
-  const filterClause = existsClauses.length > 0 ? `AND ${existsClauses.join(' AND ')}` : '';
-  const whereClause = `a.username = @username AND ${keywordClause} ${filterClause}`;
-
+  const conditions: string[] = ['a.username = @username'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, q: likeQ, limit: pageSize, offset };
+
+  if (aiCategory) {
+    conditions.push('a.ai_category = @aiCategory');
+    params.aiCategory = aiCategory;
+  }
+
+  if (q) {
+    conditions.push(`(
+      a.filename LIKE @q
+      OR a.ai_description LIKE @q
+      OR a.ai_category LIKE @q
+      OR EXISTS (
+        SELECT 1 FROM asset_tags tq
+        WHERE tq.asset_id = a.id AND tq.value LIKE @q AND tq.status != 'rejected'
+      )
+    )`);
+  }
+
   filterKeys.forEach((key, i) => {
+    conditions.push(`
+      EXISTS (
+        SELECT 1 FROM asset_tags t${i}
+        WHERE t${i}.asset_id = a.id
+          AND t${i}.key = @key_${i}
+          AND t${i}.value = @val_${i}
+          AND t${i}.status != 'rejected'
+      )
+    `);
     params[`key_${i}`] = key;
     params[`val_${i}`] = filters[key];
   });
+
+  const whereClause = conditions.join(' AND ');
 
   const total = (db.prepare(`SELECT COUNT(*) as cnt FROM assets a WHERE ${whereClause}`)
     .get(params) as { cnt: number }).cnt;

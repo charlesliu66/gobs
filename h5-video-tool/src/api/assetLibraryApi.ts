@@ -3,7 +3,7 @@
  * 对接后端 /api/asset-library/* (TASK-A 实现)
  * TASK-D: 新增 getAssetHighlights
  */
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiDelete } from './client';
 
 const BASE = '/api/asset-library';
 
@@ -26,14 +26,14 @@ export interface LibraryAsset {
   created_at: string;
   updated_at: string;
   tags: AssetTag[];
-  /** TASK-D: 服务端文件访问 URL（含 token 认证），由后端追加 */
   file_url?: string;
-  /** 原始字段别名（后端返回 mimetype，TASK-D 统一前端接口） */
   mimetype?: string;
-  /** 文件大小（filesize 别名） */
   filesize?: number;
-  /** 视频时长（秒） */
   duration?: number | null;
+  ai_category?: string;
+  ai_description?: string;
+  is_favorite?: boolean;
+  last_used_at?: string;
 }
 
 export interface ListAssetsResult {
@@ -150,6 +150,7 @@ export interface SearchParams {
   duration_range?: string;
   quality?: string;
   purpose?: string;
+  ai_category?: string;
   page?: number;
   pageSize?: number;
 }
@@ -163,6 +164,7 @@ export async function searchAssets(params: SearchParams): Promise<ListAssetsResu
   if (params.duration_range) raw.duration_range = params.duration_range;
   if (params.quality) raw.quality = params.quality;
   if (params.purpose) raw.purpose = params.purpose;
+  if (params.ai_category) raw.ai_category = params.ai_category;
   if (params.page) raw.page = String(params.page);
   if (params.pageSize) raw.pageSize = String(params.pageSize);
   const qs = new URLSearchParams(raw).toString();
@@ -198,9 +200,99 @@ export async function getAssetHighlights(assetId: string): Promise<HighlightCand
   return res.highlights ?? [];
 }
 
-// ── TASK-D: 构造带 token 的文件 URL ──────────────────────────────────────────
+// ── 构造带 token 的文件 URL ──────────────────────────────────────────────────
 
 export function buildAssetFileUrl(assetId: string): string {
   const token = localStorage.getItem('gobs_token') ?? '';
   return `/api/asset-library/assets/${encodeURIComponent(assetId)}/file?token=${encodeURIComponent(token)}`;
+}
+
+// ── 收藏 ────────────────────────────────────────────────────────────────────
+
+export async function addFavorite(assetId: string): Promise<void> {
+  await apiPost(`${BASE}/favorites/${encodeURIComponent(assetId)}`, {});
+}
+
+export async function removeFavorite(assetId: string): Promise<void> {
+  await apiDelete(`${BASE}/favorites/${encodeURIComponent(assetId)}`);
+}
+
+export async function listFavorites(params: { page?: number; pageSize?: number } = {}): Promise<ListAssetsResult> {
+  const raw: Record<string, string> = {};
+  if (params.page) raw.page = String(params.page);
+  if (params.pageSize) raw.pageSize = String(params.pageSize);
+  const qs = new URLSearchParams(raw).toString();
+  const result = await apiGet<{
+    assets?: LibraryAsset[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>(`${BASE}/favorites${qs ? `?${qs}` : ''}`);
+  return { assets: result.assets ?? [], total: result.total, page: result.page, pageSize: result.pageSize };
+}
+
+// ── 最近使用 ────────────────────────────────────────────────────────────────
+
+export async function recordUsage(assetId: string, context?: string): Promise<void> {
+  await apiPost(`${BASE}/usage`, { assetId, context });
+}
+
+export async function listRecent(limit = 50): Promise<{ assets: LibraryAsset[]; total: number }> {
+  const result = await apiGet<{
+    assets?: LibraryAsset[];
+    total: number;
+  }>(`${BASE}/recent?limit=${limit}`);
+  return { assets: result.assets ?? [], total: result.total };
+}
+
+// ── 分类统计（虚拟文件夹）────────────────────────────────────────────────────
+
+export interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+export async function getCategories(): Promise<{ categories: CategoryCount[]; total: number }> {
+  return apiGet<{ categories: CategoryCount[]; total: number }>(`${BASE}/categories`);
+}
+
+// ── 自定义文件夹 ────────────────────────────────────────────────────────────
+
+export interface AssetFolder {
+  id: string;
+  username: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+  asset_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listFolders(): Promise<{ folders: AssetFolder[] }> {
+  return apiGet<{ folders: AssetFolder[] }>(`${BASE}/folders`);
+}
+
+export async function createFolder(name: string, parentId?: string): Promise<{ folder: AssetFolder }> {
+  return apiPost(`${BASE}/folders`, { name, parentId });
+}
+
+export async function renameFolder(id: string, name: string): Promise<void> {
+  const token = localStorage.getItem('gobs_token');
+  await fetch(`${BASE}/folders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  await apiDelete(`${BASE}/folders/${encodeURIComponent(id)}`);
+}
+
+export async function moveAssetsToFolder(folderId: string, assetIds: string[]): Promise<void> {
+  await apiPost(`${BASE}/folders/${encodeURIComponent(folderId)}/move-assets`, { assetIds });
 }

@@ -257,6 +257,9 @@ async function processFile(
       orientation: meta.orientation,
       has_audio: meta.has_audio ? 1 : 0,
       status: 'ready',
+      ai_category: '未分类',
+      ai_description: null,
+      folder_id: null,
       created_at: now,
       updated_at: now,
     };

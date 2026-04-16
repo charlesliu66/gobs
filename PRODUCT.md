@@ -147,10 +147,18 @@
 
 **入口：** 顶部导航「素材库」→ `/asset-library`
 
+- **Tab 导航**：最近使用 / 收藏 / 全部素材 / Google Drive 四个 Tab 切换
 - 单页画廊布局：6 列真实缩略图网格（图片 `<img>` / 视频首帧 + 播放按钮）
-- 右侧详情抽屉：大图预览、文件信息、AI 标签、「用于生成」按钮
+- **AI 智能分类**：上传时自动识别素材类型（角色/武器道具/场景/UI素材/宣传图/视频片段），生成 30 字以内描述
+- **左侧栏**：AI 分类虚拟文件夹（按 category 分组显示数量）+ 自定义文件夹（支持创建/重命名/删除）
+- **收藏**：素材卡片星标收藏，收藏 Tab 快速查看
+- **拖拽整理**：拖拽素材卡片到左侧文件夹即可归档；选中多个素材后也可批量移动
+- **图片悬停放大**：鼠标悬停图片素材 400ms 弹出大图预览浮窗
+- **视频悬停播放**：鼠标悬停视频素材自动静音播放
+- 右侧详情抽屉：大图预览、文件信息、AI 分类/描述、标签、「用于生成」按钮
 - 底部上传面板：拖拽上传，完成后自动关闭并刷新
-- 搜索 + 筛选：比例/类型/方向/画质 4 个 dropdown 常驻顶部
+- 搜索 + 筛选：关键词（文件名 + AI 描述）搜索 + 比例/类型/方向/画质 4 个 dropdown
+- **Google Drive 集成**：OAuth 连接后可浏览 Drive 文件，按需缓存到服务器使用
 - 多账号数据隔离：不同用户的素材互不可见
 
 ---
@@ -198,6 +206,28 @@
 ---
 
 ## 二、Changelog
+
+### v0.47 — 2026-04-16
+
+**素材库智能优化（Phase 0-4 全量）**
+
+**Feature:**
+- **[asset-library] AI 智能分类**：上传时自动识别 7 大类别（角色/武器道具/场景/UI素材/宣传图/视频片段/未分类）+ 30 字描述，结果存入 assets 表 `ai_category` / `ai_description`
+- **[asset-library] Tab 导航**：新增「最近使用」「收藏」Tab，加上原有「全部素材」和「Google Drive」
+- **[asset-library] 收藏系统**：素材卡片星标收藏/取消收藏，`asset_favorites` 表持久化
+- **[asset-library] 最近使用**：`asset_usage_log` 记录使用历史，最近使用 Tab 展示
+- **[asset-library] AI 分类虚拟文件夹**：左侧栏按 ai_category 分组，显示各类别数量，点击筛选
+- **[asset-library] 自定义文件夹 CRUD**：侧栏创建/重命名/删除文件夹，支持 3 级嵌套
+- **[asset-library] 拖拽归档**：素材卡片支持 HTML5 原生拖拽到文件夹；选中多个后可批量移动
+- **[asset-library] 图片悬停放大**：鼠标悬停图片 400ms 弹出 360px 大图预览浮窗（fixed 定位）
+- **[asset-library] 搜索增强**：搜索范围扩展到 ai_description + ai_category
+- **[asset-library] Google Drive 集成**：OAuth 2.0 连接、文件浏览、按需缓存、缩略图代理
+
+**Schema 变更：**
+- `assets` 表新增 `ai_category TEXT`、`ai_description TEXT`、`folder_id TEXT`
+- 新增 `asset_folders`、`asset_favorites`、`asset_usage_log` 三张表
+
+---
 
 ### v0.46 — 2026-04-16
 
@@ -882,4 +912,4 @@
 
 ---
 
-*最后更新：2026-04-16（v0.46）*
+*最后更新：2026-04-16（v0.47）*

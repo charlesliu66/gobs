@@ -7,6 +7,11 @@ export type TagSource = 'rule' | 'ai' | 'human';
 export type TagStatus = 'confirmed' | 'pending' | 'rejected';
 export type JobStatus = 'pending' | 'running' | 'done' | 'interrupted' | 'failed';
 
+export const AI_CATEGORIES = [
+  '角色', '武器道具', '场景', 'UI素材', '宣传图', '视频片段', '未分类',
+] as const;
+export type AiCategory = typeof AI_CATEGORIES[number];
+
 export interface AssetRecord {
   id: string;
   username: string;
@@ -23,6 +28,9 @@ export interface AssetRecord {
   orientation: string | null;
   has_audio: number; // 0 or 1 (SQLite boolean)
   status: AssetStatus;
+  ai_category: AiCategory;
+  ai_description: string | null;
+  folder_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +65,8 @@ export interface SearchQuery {
   page?: number;
   pageSize?: number;
   filters: Record<string, string>;
+  aiCategory?: string;
+  folderId?: string;
 }
 
 export type FacetResult = Record<string, Record<string, number>>;

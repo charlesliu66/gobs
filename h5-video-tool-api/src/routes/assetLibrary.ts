@@ -146,6 +146,9 @@ router.get('/assets', (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '20', 10)));
 
+  const aiCategory = typeof req.query.ai_category === 'string' ? req.query.ai_category : '';
+  const folderId = typeof req.query.folder_id === 'string' ? req.query.folder_id : '';
+
   const FILTER_KEYS = ['ratio', 'type', 'orientation', 'duration_range', 'quality', 'character', 'scene', 'purpose'];
   const filters: Record<string, string> = {};
   for (const key of FILTER_KEYS) {
@@ -155,11 +158,24 @@ router.get('/assets', (req: Request, res: Response) => {
     }
   }
 
-  const result = listAssets({ username, page, pageSize, filters });
+  const result = listAssets({
+    username, page, pageSize, filters,
+    aiCategory: aiCategory || undefined,
+    folderId: folderId || undefined,
+  });
+
   const token = req.headers.authorization?.slice(7) ?? '';
+
+  const favoriteSet = new Set(
+    (db.prepare(`SELECT asset_id FROM asset_favorites WHERE user_id = @user_id`)
+      .all({ user_id: username }) as Array<{ asset_id: string }>)
+      .map(r => r.asset_id)
+  );
+
   const itemsWithUrl = result.items.map((item) => ({
     ...item,
     file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
   res.json({ total: result.total, page: result.page, pageSize: result.pageSize, assets: assetsWithTags });
@@ -386,6 +402,7 @@ router.get('/search', (req: Request, res: Response) => {
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '20', 10)));
+  const aiCategory = typeof req.query.ai_category === 'string' ? req.query.ai_category : '';
 
   const FILTER_KEYS = ['ratio', 'type', 'orientation', 'duration_range', 'quality', 'character', 'scene', 'purpose'];
   const filters: Record<string, string> = {};
@@ -396,11 +413,19 @@ router.get('/search', (req: Request, res: Response) => {
     }
   }
 
-  const result = searchAssets({ username, q, page, pageSize, filters });
+  const result = searchAssets({ username, q, page, pageSize, filters, aiCategory });
   const token = req.headers.authorization?.slice(7) ?? '';
+
+  const favoriteSet = new Set(
+    (db.prepare(`SELECT asset_id FROM asset_favorites WHERE user_id = @user_id`)
+      .all({ user_id: username }) as Array<{ asset_id: string }>)
+      .map(r => r.asset_id)
+  );
+
   const itemsWithUrl = result.items.map((item) => ({
     ...item,
     file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
   res.json({ total: result.total, page: result.page, pageSize: result.pageSize, assets: assetsWithTags });
@@ -415,5 +440,312 @@ router.get('/facets', (req: Request, res: Response) => {
   const result = getFacets(username);
   res.json(result);
 });
+
+// ── GET /categories ─────────────────────────────────────────────────────────
+// 返回各 ai_category 的素材计数（虚拟文件夹）
+
+router.get('/categories', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const rows = db.prepare(`
+    SELECT COALESCE(ai_category, '未分类') as category, COUNT(*) as count
+    FROM assets WHERE username = @username
+    GROUP BY ai_category
+    ORDER BY count DESC
+  `).all({ username }) as Array<{ category: string; count: number }>;
+
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  res.json({ categories: rows, total });
+});
+
+// ── POST /favorites/:assetId ────────────────────────────────────────────────
+// 收藏素材
+
+router.post('/favorites/:assetId', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { assetId } = req.params;
+  const asset = db.prepare(`SELECT id FROM assets WHERE id = @id AND username = @username`)
+    .get({ id: assetId, username }) as { id: string } | undefined;
+  if (!asset) {
+    res.status(404).json({ error: '素材不存在' });
+    return;
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO asset_favorites (user_id, asset_id, created_at)
+    VALUES (@user_id, @asset_id, datetime('now'))
+  `).run({ user_id: username, asset_id: assetId });
+
+  res.json({ ok: true });
+});
+
+// ── DELETE /favorites/:assetId ──────────────────────────────────────────────
+// 取消收藏
+
+router.delete('/favorites/:assetId', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { assetId } = req.params;
+  db.prepare(`DELETE FROM asset_favorites WHERE user_id = @user_id AND asset_id = @asset_id`)
+    .run({ user_id: username, asset_id: assetId });
+
+  res.json({ ok: true });
+});
+
+// ── GET /favorites ──────────────────────────────────────────────────────────
+// 收藏列表
+
+router.get('/favorites', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '24', 10)));
+  const offset = (page - 1) * pageSize;
+
+  const total = (db.prepare(`
+    SELECT COUNT(*) as cnt FROM asset_favorites f
+    JOIN assets a ON f.asset_id = a.id
+    WHERE f.user_id = @username AND a.username = @username
+  `).get({ username }) as { cnt: number }).cnt;
+
+  const items = db.prepare(`
+    SELECT a.* FROM assets a
+    JOIN asset_favorites f ON f.asset_id = a.id
+    WHERE f.user_id = @username AND a.username = @username
+    ORDER BY f.created_at DESC
+    LIMIT @limit OFFSET @offset
+  `).all({ username, limit: pageSize, offset }) as Array<Record<string, unknown>>;
+
+  const token = req.headers.authorization?.slice(7) ?? '';
+  const itemsWithUrl = items.map((item) => ({
+    ...item,
+    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    is_favorite: true,
+  }));
+  const assetsWithTags = attachTags(itemsWithUrl);
+
+  res.json({ assets: assetsWithTags, total, page, pageSize });
+});
+
+// ── POST /usage ─────────────────────────────────────────────────────────────
+// 记录素材使用
+
+router.post('/usage', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { assetId, context } = req.body as { assetId?: string; context?: string };
+  if (!assetId) {
+    res.status(400).json({ error: '缺少 assetId' });
+    return;
+  }
+
+  db.prepare(`
+    INSERT INTO asset_usage_log (user_id, asset_id, context, used_at)
+    VALUES (@user_id, @asset_id, @context, datetime('now'))
+  `).run({ user_id: username, asset_id: assetId, context: context ?? null });
+
+  res.json({ ok: true });
+});
+
+// ── GET /recent ─────────────────────────────────────────────────────────────
+// 最近使用列表（去重，按最后使用时间排序）
+
+router.get('/recent', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string || '50', 10)));
+
+  const items = db.prepare(`
+    SELECT a.*, MAX(u.used_at) as last_used_at FROM assets a
+    JOIN asset_usage_log u ON u.asset_id = a.id
+    WHERE u.user_id = @username AND a.username = @username
+    GROUP BY a.id
+    ORDER BY last_used_at DESC
+    LIMIT @limit
+  `).all({ username, limit }) as Array<Record<string, unknown>>;
+
+  const token = req.headers.authorization?.slice(7) ?? '';
+
+  const favoriteSet = new Set(
+    (db.prepare(`SELECT asset_id FROM asset_favorites WHERE user_id = @user_id`)
+      .all({ user_id: username }) as Array<{ asset_id: string }>)
+      .map(r => r.asset_id)
+  );
+
+  const itemsWithUrl = items.map((item) => ({
+    ...item,
+    file_url: `/api/asset-library/assets/${item.id}/file?token=${encodeURIComponent(token)}`,
+    is_favorite: favoriteSet.has(item.id as string),
+  }));
+  const assetsWithTags = attachTags(itemsWithUrl);
+
+  res.json({ assets: assetsWithTags, total: items.length });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 3: 自定义文件夹 CRUD
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /folders ─────────────────────────────────────────────────────────────
+
+router.get('/folders', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const rows = db.prepare(`
+    SELECT f.*, (SELECT COUNT(*) FROM assets a WHERE a.folder_id = f.id AND a.username = @username) as asset_count
+    FROM asset_folders f
+    WHERE f.username = @username
+    ORDER BY f.sort_order, f.name
+  `).all({ username }) as Array<Record<string, unknown>>;
+
+  res.json({ folders: rows });
+});
+
+// ── POST /folders ────────────────────────────────────────────────────────────
+
+router.post('/folders', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { name, parentId } = req.body as { name?: string; parentId?: string };
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: '文件夹名称不能为空' });
+    return;
+  }
+
+  if (parentId) {
+    const depth = getFolderDepth(parentId, username);
+    if (depth >= 3) {
+      res.status(400).json({ error: '文件夹最多嵌套 3 层' });
+      return;
+    }
+  }
+
+  const id = `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO asset_folders (id, username, parent_id, name, sort_order, created_at, updated_at)
+    VALUES (@id, @username, @parent_id, @name, 0, @now, @now)
+  `).run({ id, username, parent_id: parentId ?? null, name: name.trim(), now });
+
+  res.json({ folder: { id, username, parent_id: parentId ?? null, name: name.trim(), sort_order: 0, created_at: now, updated_at: now } });
+});
+
+// ── PATCH /folders/:id ───────────────────────────────────────────────────────
+
+router.patch('/folders/:id', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id } = req.params;
+  const folder = db.prepare(`SELECT * FROM asset_folders WHERE id = @id AND username = @username`)
+    .get({ id, username }) as Record<string, unknown> | undefined;
+
+  if (!folder) {
+    res.status(404).json({ error: '文件夹不存在' });
+    return;
+  }
+
+  const { name, sortOrder } = req.body as { name?: string; sortOrder?: number };
+  const now = new Date().toISOString();
+
+  if (name !== undefined) {
+    if (!name.trim()) { res.status(400).json({ error: '名称不能为空' }); return; }
+    db.prepare(`UPDATE asset_folders SET name = @name, updated_at = @now WHERE id = @id`)
+      .run({ name: name.trim(), now, id });
+  }
+  if (sortOrder !== undefined) {
+    db.prepare(`UPDATE asset_folders SET sort_order = @sort, updated_at = @now WHERE id = @id`)
+      .run({ sort: sortOrder, now, id });
+  }
+
+  res.json({ ok: true });
+});
+
+// ── DELETE /folders/:id ──────────────────────────────────────────────────────
+
+router.delete('/folders/:id', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id } = req.params;
+  const folder = db.prepare(`SELECT * FROM asset_folders WHERE id = @id AND username = @username`)
+    .get({ id, username }) as Record<string, unknown> | undefined;
+
+  if (!folder) {
+    res.status(404).json({ error: '文件夹不存在' });
+    return;
+  }
+
+  db.transaction(() => {
+    db.prepare(`UPDATE assets SET folder_id = NULL WHERE folder_id = @id AND username = @username`)
+      .run({ id, username });
+    db.prepare(`UPDATE asset_folders SET parent_id = NULL WHERE parent_id = @id AND username = @username`)
+      .run({ id, username });
+    db.prepare(`DELETE FROM asset_folders WHERE id = @id AND username = @username`)
+      .run({ id, username });
+  })();
+
+  res.json({ ok: true });
+});
+
+// ── POST /folders/:id/move-assets ────────────────────────────────────────────
+
+router.post('/folders/:id/move-assets', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id: folderId } = req.params;
+  const { assetIds } = req.body as { assetIds?: string[] };
+
+  if (!Array.isArray(assetIds) || assetIds.length === 0) {
+    res.status(400).json({ error: '缺少 assetIds' });
+    return;
+  }
+
+  const targetFolderId = folderId === 'none' ? null : folderId;
+
+  if (targetFolderId) {
+    const folder = db.prepare(`SELECT id FROM asset_folders WHERE id = @id AND username = @username`)
+      .get({ id: targetFolderId, username }) as { id: string } | undefined;
+    if (!folder) {
+      res.status(404).json({ error: '目标文件夹不存在' });
+      return;
+    }
+  }
+
+  const now = new Date().toISOString();
+  const stmt = db.prepare(`UPDATE assets SET folder_id = @folder_id, updated_at = @now WHERE id = @id AND username = @username`);
+  const moveAll = db.transaction(() => {
+    for (const aid of assetIds) {
+      stmt.run({ folder_id: targetFolderId, now, id: aid, username });
+    }
+  });
+  moveAll();
+
+  res.json({ ok: true, moved: assetIds.length });
+});
+
+function getFolderDepth(folderId: string, username: string): number {
+  let depth = 1;
+  let current = folderId;
+  while (depth < 10) {
+    const row = db.prepare(`SELECT parent_id FROM asset_folders WHERE id = @id AND username = @username`)
+      .get({ id: current, username }) as { parent_id: string | null } | undefined;
+    if (!row || !row.parent_id) break;
+    current = row.parent_id;
+    depth++;
+  }
+  return depth;
+}
 
 export default router;

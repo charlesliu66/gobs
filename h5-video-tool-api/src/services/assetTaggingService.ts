@@ -11,6 +11,7 @@ import { promisify } from 'util';
 import { spawn } from 'child_process';
 import db from '../db/assetDb.js';
 import type { AssetRecord } from '../types/assetLibrary.js';
+import { AI_CATEGORIES } from '../types/assetLibrary.js';
 import { compassChatCompletionWithContent } from './promptPolish.js';
 
 const execFileAsync = promisify(execFile);
@@ -156,188 +157,133 @@ async function extractFirstFrame(videoPath: string): Promise<string> {
   }
 }
 
-// ── AI 标签响应解析 ────────────────────────────────────────────────────────────
+// ── AI 分类响应解析 ──────────────────────────────────────────────────────────
 
-interface AiTagResponse {
-  type?: string;
-  scene?: string;
-  purpose?: string | string[];
-  platform?: string | string[];
-  confidence?: {
-    type?: number;
-    scene?: number;
-    purpose?: number;
-    platform?: number;
-  };
+interface AiCategoryResponse {
+  category: string;
+  description: string;
 }
 
+const VALID_CATEGORIES = new Set(AI_CATEGORIES);
+
 function stripJsonMarkdown(text: string): string {
-  // Remove markdown code blocks if present: ```json ... ``` or ``` ... ```
   const m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (m) return m[1].trim();
   return text.trim();
 }
 
-function parseAiTagResponse(raw: string): AiTagResponse | null {
+function parseAiCategoryResponse(raw: string): AiCategoryResponse | null {
   try {
     const cleaned = stripJsonMarkdown(raw);
-    return JSON.parse(cleaned) as AiTagResponse;
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    const category = typeof parsed.category === 'string' ? parsed.category.trim() : '';
+    const description = typeof parsed.description === 'string' ? parsed.description.trim() : '';
+    if (!category) return null;
+    return { category, description };
   } catch {
     console.warn('[aiTagAsset] JSON parse failed, raw:', raw.slice(0, 200));
     return null;
   }
 }
 
-// ── AI 打标主函数 ──────────────────────────────────────────────────────────────
+// ── AI 打标主函数（简化版：只返回 category + description）──────────────────────
 
-const AI_TAG_PROMPT = `分析这张游戏素材图片，返回 JSON 格式（不要其他文字，不要 markdown 代码块）：
-{
-  "type": "角色立绘|游戏截图|录屏|宣传图|UI素材",
-  "scene": "战斗|日常|菜单|过场|其他",
-  "purpose": ["买量","社媒","版本宣发"],
-  "platform": ["TikTok","YouTube"],
-  "confidence": {
-    "type": 0.9,
-    "scene": 0.85,
-    "purpose": 0.7,
-    "platform": 0.8
-  }
-}`;
+const AI_TAG_PROMPT = `你是一个游戏素材分类助手。请分析这张图片，返回 JSON（不要其他文字，不要 markdown 代码块）：
 
-const CONFIDENCE_THRESHOLD = 0.7;
-const FALLBACK_CONFIDENCE = 0.6;
+1. category：从以下类别中选一个
+   - "角色"：人物、怪物、NPC、Boss 等有生命的实体
+   - "武器道具"：武器、装备、道具、物品、宝箱等物件
+   - "场景"：地图、背景、建筑、环境、地形等场景元素
+   - "UI素材"：按钮、图标、Banner、界面元素
+   - "宣传图"：KV 图、海报、封面、营销物料
+   - "视频片段"：录屏、CG 片段、过场动画截图
+
+2. description：用一句中文简要描述图片内容（30字以内）
+
+仅返回 JSON，不要其他内容。
+示例：{"category": "角色", "description": "手持火焰剑的重甲战士"}`;
 
 /**
- * AI 打标接口（TASK-B 实现）
- * 调用 Compass Vision API 分析资产图片/视频帧，写入 AI 标签到 asset_tags 表
- * 失败时不抛出，不影响 asset.status，记录 error 标签供前端重试
+ * AI 打标（简化版）
+ * 只产出 category + description，直接写入 assets 表的 ai_category / ai_description 列。
+ * 同时在 asset_tags 写一条 ai_category 标签供检索兼容。
+ * 失败时 category 设为"未分类"，不阻塞上传。
  */
 export async function aiTagAsset(assetId: string): Promise<void> {
   try {
-    // 1. 从 DB 读取 asset 信息
     const asset = db.prepare(`SELECT * FROM assets WHERE id = @id`).get({ id: assetId }) as AssetRecord | undefined;
     if (!asset) {
       console.warn(`[aiTagAsset] Asset not found: ${assetId}`);
       return;
     }
 
-    // 2. 获取图片 base64
     let imageBase64: string;
     const isVideo = asset.mimetype.startsWith('video/');
     const isImage = asset.mimetype.startsWith('image/');
 
     if (isImage) {
-      // 直接读取图片
       imageBase64 = fs.readFileSync(asset.filepath).toString('base64');
     } else if (isVideo) {
-      // 截取视频首帧
       imageBase64 = await extractFirstFrame(asset.filepath);
     } else {
       console.warn(`[aiTagAsset] Unsupported mimetype: ${asset.mimetype} for asset ${assetId}`);
       return;
     }
 
-    // 3. 调用 Compass Vision API
     const mimeForUrl = isVideo ? 'image/jpeg' : (asset.mimetype as string);
     const dataUrl = `data:${mimeForUrl};base64,${imageBase64}`;
 
     const rawResponse = await compassChatCompletionWithContent({
-      systemPrompt: '你是游戏素材分析助手，严格按要求输出 JSON，不要其他文字。',
+      systemPrompt: '你是游戏素材分类助手，严格按要求输出 JSON，不要其他文字。',
       userContent: [
         { type: 'text', text: AI_TAG_PROMPT },
         { type: 'image_url', image_url: { url: dataUrl } },
       ],
       temperature: 0.1,
-      maxTokens: 512,
+      maxTokens: 256,
     });
 
-    // 4. 解析响应
-    const parsed = parseAiTagResponse(rawResponse);
+    const parsed = parseAiCategoryResponse(rawResponse);
     if (!parsed) {
       throw new Error(`AI response parse failed: ${rawResponse.slice(0, 100)}`);
     }
 
-    const conf = parsed.confidence ?? {};
+    const category = VALID_CATEGORIES.has(parsed.category as typeof AI_CATEGORIES[number])
+      ? parsed.category
+      : '未分类';
+    const description = parsed.description.slice(0, 100);
     const now = nowIso();
 
-    const insertAiTag = db.prepare(`
-      INSERT INTO asset_tags (asset_id, key, value, source, confidence, status, created_at)
-      VALUES (@asset_id, @key, @value, 'ai', @confidence, @status, @created_at)
-    `);
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE assets SET ai_category = @category, ai_description = @description, updated_at = @now
+        WHERE id = @id
+      `).run({ category, description, now, id: assetId });
 
-    const insertAiTags = db.transaction(() => {
-      // type
-      if (parsed.type) {
-        const c = typeof conf.type === 'number' ? conf.type : FALLBACK_CONFIDENCE;
-        insertAiTag.run({
-          asset_id: assetId,
-          key: 'ai_type',
-          value: parsed.type,
-          confidence: c,
-          status: c < CONFIDENCE_THRESHOLD ? 'pending' : 'confirmed',
-          created_at: now,
-        });
+      db.prepare(`
+        INSERT INTO asset_tags (asset_id, key, value, source, confidence, status, created_at)
+        VALUES (@asset_id, 'ai_category', @value, 'ai', 1.0, 'confirmed', @created_at)
+      `).run({ asset_id: assetId, value: category, created_at: now });
+
+      if (description) {
+        db.prepare(`
+          INSERT INTO asset_tags (asset_id, key, value, source, confidence, status, created_at)
+          VALUES (@asset_id, 'ai_description', @value, 'ai', 1.0, 'confirmed', @created_at)
+        `).run({ asset_id: assetId, value: description, created_at: now });
       }
+    })();
 
-      // scene
-      if (parsed.scene) {
-        const c = typeof conf.scene === 'number' ? conf.scene : FALLBACK_CONFIDENCE;
-        insertAiTag.run({
-          asset_id: assetId,
-          key: 'ai_scene',
-          value: parsed.scene,
-          confidence: c,
-          status: c < CONFIDENCE_THRESHOLD ? 'pending' : 'confirmed',
-          created_at: now,
-        });
-      }
-
-      // purpose（可为数组）
-      const purposes = Array.isArray(parsed.purpose)
-        ? parsed.purpose
-        : parsed.purpose ? [parsed.purpose] : [];
-      const purposeConf = typeof conf.purpose === 'number' ? conf.purpose : FALLBACK_CONFIDENCE;
-      for (const p of purposes) {
-        if (typeof p === 'string' && p.trim()) {
-          insertAiTag.run({
-            asset_id: assetId,
-            key: 'ai_purpose',
-            value: p.trim(),
-            confidence: purposeConf,
-            status: purposeConf < CONFIDENCE_THRESHOLD ? 'pending' : 'confirmed',
-            created_at: now,
-          });
-        }
-      }
-
-      // platform（AI 建议，可为数组）
-      const platforms = Array.isArray(parsed.platform)
-        ? parsed.platform
-        : parsed.platform ? [parsed.platform] : [];
-      const platformConf = typeof conf.platform === 'number' ? conf.platform : FALLBACK_CONFIDENCE;
-      for (const pl of platforms) {
-        if (typeof pl === 'string' && pl.trim()) {
-          insertAiTag.run({
-            asset_id: assetId,
-            key: 'ai_platform',
-            value: pl.trim(),
-            confidence: platformConf,
-            status: platformConf < CONFIDENCE_THRESHOLD ? 'pending' : 'confirmed',
-            created_at: now,
-          });
-        }
-      }
-    });
-
-    insertAiTags();
-    console.log(`[aiTagAsset] Done: ${assetId} (type=${parsed.type}, scene=${parsed.scene})`);
+    console.log(`[aiTagAsset] Done: ${assetId} → ${category} | ${description}`);
 
   } catch (err) {
-    // 5. 失败：记录 error 标签，asset.status 保持 ready，不抛出
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[aiTagAsset] Failed for asset ${assetId}:`, errorMsg);
 
     try {
+      db.prepare(`
+        UPDATE assets SET ai_category = '未分类', updated_at = @now WHERE id = @id
+      `).run({ now: nowIso(), id: assetId });
+
       db.prepare(`
         INSERT INTO asset_tags (asset_id, key, value, source, confidence, status, created_at)
         VALUES (@asset_id, 'ai_tag_error', @value, 'ai', 0, 'pending', @created_at)
@@ -349,6 +295,5 @@ export async function aiTagAsset(assetId: string): Promise<void> {
     } catch (dbErr) {
       console.error(`[aiTagAsset] Failed to record error tag:`, dbErr);
     }
-    // 不重新抛出，不阻塞导入任务
   }
 }
