@@ -246,6 +246,7 @@ export function MultiShotPromptInput({
         active={loadingFrameIndex !== null}
         label={loadingFrameIndex === -1 ? '正在批量生成分镜预览' : '正在生成分镜帧'}
         stallAfterSec={25}
+        scene="rehearsal"
       />
 
       <div className="flex flex-wrap gap-2">

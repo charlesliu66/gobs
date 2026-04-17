@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { importAssets, getJobStatus } from '../../api/assetLibraryApi';
 import type { ImportJob } from '../../api/assetLibraryApi';
 import { toast } from '../../components/Toast';
+import { RunningStatus } from '../../components/RunningStatus';
 
 const ACCEPTED_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
@@ -200,6 +201,8 @@ export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {
           📁 选择文件夹
         </button>
       </div>
+
+      <RunningStatus active={uploading} label="正在上传素材" stallAfterSec={20} scene="props-room" />
 
       {/* 进度卡片 */}
       {job && (

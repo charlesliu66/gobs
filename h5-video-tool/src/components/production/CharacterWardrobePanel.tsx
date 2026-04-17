@@ -302,6 +302,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
               active={genningBase || standardizing}
               label={genningBase ? '正在生成基础形象' : '正在处理参考图'}
               stallAfterSec={25}
+              scene="props-room"
             />
           </div>
         </div>
@@ -515,6 +516,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
                     active={genningId === state.id}
                     label={`正在生成状态：${state.label}`}
                     stallAfterSec={25}
+                    scene="props-room"
                   />
                 </div>
               ))}
@@ -579,7 +581,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             </div>
             {loadingAssets ? (
               <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">
-                <RunningStatus active={true} label="正在加载素材库" stallAfterSec={15} className="mx-auto" />
+                <RunningStatus active={true} label="正在加载素材库" stallAfterSec={15} className="mx-auto" scene="props-room" />
               </div>
             ) : assetList.length === 0 ? (
               <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">素材库中没有角色类型的素材</div>

@@ -1,15 +1,16 @@
-/** H5 地牢主题 Loading 体验 — 公开导出 */
+/** 百老汇筑梦师 Loading 体验 — 公开导出 */
 
-export { default as DungeonLoadingScreen } from './DungeonLoadingScreen';
+export { default as TheaterLoadingScreen } from './TheaterLoadingScreen';
 export { useLoadingOrchestrator, nonLinearPercent } from './useLoadingOrchestrator';
 export type { LoadingState } from './useLoadingOrchestrator';
 
 export { pickCopy, getProgressiveChain, getFallbackCopy, SPEAKER_NAMES, getSceneSpeaker } from './copyPool';
 
 export {
-  onKnock,
-  onTorchSwipe,
-  onFortuneClick,
+  onSpotlightDrag,
+  onCurtainPull,
+  onApplause,
+  onInspirationDice,
   onLongWait,
   drawFortune,
   resetEasterEggState,

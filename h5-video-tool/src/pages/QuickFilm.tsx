@@ -11,7 +11,7 @@ import {
   loadSession,
   clearSession,
 } from '../api/quickfilm';
-import type { ShotWithAssets, JobStep, DraftMeta } from '../api/quickfilm';
+import type { ShotWithAssets, JobStep, DraftMeta, DraftData } from '../api/quickfilm';
 import { createProject } from '../api/projectsStorage';
 import { toast } from '../components/Toast';
 import { RunningStatus } from '../components/RunningStatus';
@@ -33,8 +33,10 @@ interface Step1Form {
 
 function Step1({
   onSubmit,
+  onRestoreStoryboard,
 }: {
   onSubmit: (form: Step1Form) => void;
+  onRestoreStoryboard?: (draft: DraftData) => void;
 }) {
   const [form, setForm] = useState<Step1Form>({
     story: '',
@@ -101,6 +103,12 @@ function Step1({
   async function handleLoadDraft(id: string) {
     try {
       const draft = await loadDraft(id);
+      if (draft.storyboard && draft.storyboard.length > 0 && onRestoreStoryboard) {
+        onRestoreStoryboard(draft);
+        setShowDrafts(false);
+        toast.success('已恢复分镜草稿');
+        return;
+      }
       setForm({
         story: draft.story,
         protagonist: draft.protagonist,
@@ -209,7 +217,10 @@ function Step1({
                       onClick={() => handleLoadDraft(d.id)}
                       className="flex-1 text-left"
                     >
-                      <p className="text-sm font-medium text-[var(--color-text)] truncate">{d.name}</p>
+                      <p className="text-sm font-medium text-[var(--color-text)] truncate">
+                        {d.name}
+                        {d.hasStoryboard && <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--color-primary)]/20 text-[var(--color-primary)]">含分镜</span>}
+                      </p>
                       <p className="text-[11px] text-[var(--color-text-subtle)]">
                         {new Date(d.updatedAt).toLocaleString('zh-CN')}
                       </p>
@@ -395,10 +406,12 @@ function Step2({
   jobId,
   onDone,
   onError,
+  onRestart,
 }: {
   jobId: string;
   onDone: (storyboard: ShotWithAssets[], logline?: string) => void;
   onError?: () => void;
+  onRestart?: () => void;
 }) {
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [progress, setProgress] = useState(0);
@@ -414,53 +427,82 @@ function Step2({
   useEffect(() => {
     const BASE = import.meta.env.VITE_API_BASE_URL || '';
     const token = localStorage.getItem('gobs_token') ?? '';
-    const es = new EventSource(
-      `${BASE}/api/quickfilm/${encodeURIComponent(jobId)}/stream?token=${encodeURIComponent(token)}`
-    );
+    if (!token) {
+      setError('登录已过期，请重新登录');
+      onErrorRef.current?.();
+      return;
+    }
+
+    const url = `${BASE}/api/quickfilm/${encodeURIComponent(jobId)}/stream?token=${encodeURIComponent(token)}`;
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+    let es: EventSource | null = null;
+    let closed = false;
 
     const timeoutTimer = setTimeout(() => {
-      es.close();
+      closed = true;
+      es?.close();
       setError('生成超时（5分钟），请重试');
       onErrorRef.current?.();
     }, TIMEOUT_MS - (Date.now() - startTimeRef.current));
 
-    es.onmessage = (e: MessageEvent) => {
-      try {
-        const job = JSON.parse(e.data as string) as {
-          status: string;
-          progress?: number;
-          steps?: JobStep[];
-          storyboard?: ShotWithAssets[];
-          error?: string;
-          storyArc?: { logline?: string };
-        };
-        setSteps(job.steps ?? []);
-        setProgress(job.progress ?? 0);
+    function connect() {
+      if (closed) return;
+      es = new EventSource(url);
 
-        if (job.status === 'done' && job.storyboard) {
+      es.onmessage = (e: MessageEvent) => {
+        retryCount = 0;
+        try {
+          const job = JSON.parse(e.data as string) as {
+            status: string;
+            progress?: number;
+            steps?: JobStep[];
+            storyboard?: ShotWithAssets[];
+            error?: string;
+            storyArc?: { logline?: string };
+          };
+          setSteps(job.steps ?? []);
+          setProgress(job.progress ?? 0);
+
+          if (job.status === 'done' && job.storyboard) {
+            closed = true;
+            clearTimeout(timeoutTimer);
+            es?.close();
+            onDoneRef.current(job.storyboard, job.storyArc?.logline);
+            return;
+          }
+          if (job.status === 'error') {
+            closed = true;
+            clearTimeout(timeoutTimer);
+            es?.close();
+            setError(job.error ?? '生成失败，请重试');
+            onErrorRef.current?.();
+          }
+        } catch { /* ignore parse errors */ }
+      };
+
+      es.onerror = () => {
+        es?.close();
+        if (closed) return;
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          console.warn(`[QuickFilm SSE] 连接失败，${retryCount}s 后重试 (${retryCount}/${MAX_RETRIES})`);
+          setTimeout(connect, retryCount * 1000);
+        } else {
+          closed = true;
           clearTimeout(timeoutTimer);
-          es.close();
-          onDoneRef.current(job.storyboard, job.storyArc?.logline);
-          return;
-        }
-        if (job.status === 'error') {
-          clearTimeout(timeoutTimer);
-          es.close();
-          setError(job.error ?? '生成失败，请重试');
+          setError('连接服务器失败，请检查网络后刷新页面重试');
           onErrorRef.current?.();
         }
-      } catch { /* ignore parse errors */ }
-    };
-    es.onerror = () => {
-      clearTimeout(timeoutTimer);
-      es.close();
-      setError('网络错误，请重试');
-      onErrorRef.current?.();
-    };
+      };
+    }
+
+    connect();
 
     return () => {
+      closed = true;
       clearTimeout(timeoutTimer);
-      es.close();
+      es?.close();
     };
   }, [jobId]);
 
@@ -472,7 +514,7 @@ function Step2({
         <p className="text-[var(--color-text-muted)] mb-6">{error}</p>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => onRestart ? onRestart() : window.location.reload()}
           className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-medium hover:bg-[var(--color-primary-hover)] transition"
         >
           重新开始
@@ -511,8 +553,8 @@ function Step2({
             {progress}%
           </div>
         </div>
-        <h2 className="text-xl font-bold text-[var(--color-text)] mb-1">AI 正在创作中</h2>
-        <p className="text-sm text-[var(--color-text-muted)]">通常需要 1-2 分钟，请稍候</p>
+        <h2 className="text-xl font-bold text-[var(--color-text)] mb-1">联合编剧正在创作中</h2>
+        <p className="text-sm text-[var(--color-text-muted)]">编剧室的灯还亮着，通常需要 1-2 分钟</p>
       </div>
 
       <div className="bg-[var(--color-surface-elevated)] rounded-2xl p-6 border border-[var(--color-border)] space-y-4">
@@ -771,22 +813,51 @@ function ShotCard({
 
 function Step3({
   jobId,
+  projectId,
   storyboard,
   logline,
   assetFiles,
+  storyMeta,
   onSubmitted,
 }: {
   jobId: string;
+  projectId?: string;
   storyboard: ShotWithAssets[];
   logline?: string;
   assetFiles: Array<{ name: string; base64: string }>;
+  storyMeta?: { story: string; protagonist: string; protagonistDesc: string; style: string };
   onSubmitted?: () => Promise<void> | void;
 }) {
   const navigate = useNavigate();
   const [shots, setShots] = useState<ShotWithAssets[]>(storyboard);
   const [confirming, setConfirming] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const totalDuration = shots.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
+
+  async function handleSaveDraft() {
+    setSavingDraft(true);
+    try {
+      await saveDraft({
+        name: logline?.slice(0, 20) || storyMeta?.story?.slice(0, 20) || '分镜草稿',
+        story: storyMeta?.story ?? '',
+        protagonist: storyMeta?.protagonist ?? '',
+        protagonistDesc: storyMeta?.protagonistDesc ?? '',
+        style: storyMeta?.style ?? '',
+        customStyle: '',
+        assetFiles,
+        storyboard: shots,
+        logline,
+        jobId,
+        projectId,
+      });
+      toast.success('分镜草稿已保存');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '保存草稿失败');
+    } finally {
+      setSavingDraft(false);
+    }
+  }
 
   async function handleConfirm() {
     setConfirming(true);
@@ -849,7 +920,15 @@ function Step3({
           onClick={() => navigate(-1)}
           className="px-4 py-3 border border-[var(--color-border)] rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] transition flex items-center gap-2"
         >
-          ✏️ 修改分镜
+          ✏️ 修改
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveDraft}
+          disabled={savingDraft}
+          className="px-4 py-3 border border-[var(--color-border)] rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+        >
+          {savingDraft ? '保存中…' : '💾 存草稿'}
         </button>
         <button
           type="button"
@@ -868,7 +947,7 @@ function Step3({
         </button>
       </div>
       <div className="fixed bottom-20 left-4 right-4 sm:left-60 sm:right-6 z-40">
-        <RunningStatus active={confirming} label="正在提交一键成片任务" stallAfterSec={20} />
+        <RunningStatus active={confirming} label="正在提交一键成片任务" stallAfterSec={20} scene="premiere" />
       </div>
     </div>
   );
@@ -887,6 +966,7 @@ export function QuickFilm() {
   const [storyboard, setStoryboard] = useState<ShotWithAssets[]>([]);
   const [logline, setLogline] = useState<string | undefined>();
   const [assetFiles, setAssetFiles] = useState<Array<{ name: string; base64: string }>>([]);
+  const [storyMeta, setStoryMeta] = useState<{ story: string; protagonist: string; protagonistDesc: string; style: string } | undefined>();
   const [restoring, setRestoring] = useState(true);
   const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -956,6 +1036,7 @@ export function QuickFilm() {
     try {
       const style = form.style === '自定义' ? form.customStyle || '现代' : form.style;
       setAssetFiles(form.assetFiles);
+      setStoryMeta({ story: form.story, protagonist: form.protagonist || '主角', protagonistDesc: form.protagonistDesc || '', style });
       await clearSession().catch(() => undefined);
       let ensuredProjectId = projectId;
       if (!ensuredProjectId) {
@@ -1033,14 +1114,32 @@ export function QuickFilm() {
         </div>
       )}
 
-      {step === 1 && <Step1 onSubmit={handleFormSubmit} />}
-      {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} onError={() => localStorage.removeItem(QUICKFILM_JOB_KEY)} />}
+      {step === 1 && <Step1 onSubmit={handleFormSubmit} onRestoreStoryboard={(draft) => {
+        setJobId(draft.jobId || `draft-${draft.id}`);
+        setProjectId(draft.projectId ?? null);
+        setStoryboard(draft.storyboard ?? []);
+        setLogline(draft.logline);
+        setAssetFiles(draft.assetFiles ?? []);
+        setStoryMeta({ story: draft.story, protagonist: draft.protagonist, protagonistDesc: draft.protagonistDesc, style: draft.style });
+        setStep(3);
+      }} />}
+      {step === 2 && jobId && <Step2 jobId={jobId} onDone={handleJobDone} onError={() => {
+        localStorage.removeItem(QUICKFILM_JOB_KEY);
+        void clearSession().catch(() => undefined);
+      }} onRestart={() => {
+        localStorage.removeItem(QUICKFILM_JOB_KEY);
+        void clearSession().catch(() => undefined);
+        setJobId(null);
+        setStep(1);
+      }} />}
       {step === 3 && jobId && (
         <Step3
           jobId={jobId}
+          projectId={projectId ?? undefined}
           storyboard={storyboard}
           logline={logline}
           assetFiles={assetFiles}
+          storyMeta={storyMeta}
           onSubmitted={handleSessionSubmitted}
         />
       )}

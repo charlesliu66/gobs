@@ -114,6 +114,7 @@ export function StepDesignHeader({
                 active={true}
                 label={`正在补全缺图 ${batchAssetGen.current}/${batchAssetGen.total}`}
                 stallAfterSec={30}
+                scene="props-room"
               />
             ) : null}
             {batchAssetGen !== null ? (

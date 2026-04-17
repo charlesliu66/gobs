@@ -352,6 +352,7 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
           active={busy || polishBusy}
           label={polishBusy ? '正在优化配乐提示词' : '正在生成配乐'}
           stallAfterSec={30}
+          scene="fine-cut"
         />
       </div>
     </div>

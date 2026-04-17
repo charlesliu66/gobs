@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listProjects, createProject, deleteProject, renameProject, type ProjectListItem } from '../api/projectsStorage';
+import { RunningStatus } from '../components/RunningStatus';
 
 const STEP_LABELS = ['剧本', '服化道', '分镜', '完成'] as const;
 
@@ -172,8 +173,8 @@ export function ProjectList() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-20 text-sm text-[var(--color-text-muted)]">
-          加载中…
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <RunningStatus active={true} label="正在加载项目列表" stallAfterSec={10} scene="lobby" />
         </div>
       )}
 

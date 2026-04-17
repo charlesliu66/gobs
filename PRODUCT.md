@@ -215,6 +215,22 @@
 
 ## 二、Changelog
 
+### v0.55 — 2026-04-16
+
+**百老汇筑梦师 — Loading 体验全量接入**
+
+**Feature:**
+- **[frontend] Loading 组件体系重新主题化**（`src/components/loading/`）：将地牢主题全面替换为「百老汇筑梦师」剧院隐喻。7 个剧院空间（编剧室/排练厅/精修室/首演台/巡演厅/大厅/道具间）、11 个幕后角色（联合编剧/摄影师/灯光师/舞台监督/制片人/剪辑师/作曲家/化妆师/道具师/经纪人/引座员）、三段递进文案链、剧院主题彩蛋（聚光灯拖动/幕布拉开/掌声触发/灵感骰子）
+- **[frontend] `TheaterLoadingScreen` 全屏剧院 Loading 组件**：替代 `DungeonLoadingScreen`，剧院金+深红配色体系、聚光灯扫过舞台进度条、场景标识徽章
+- **[frontend] `RunningStatus` 组件升级**：新增可选 `scene` prop，传入剧院场景后 >3s 自动升级为卡片式角色文案轮播，不传时保持原有行为（完全向后兼容）
+- **[frontend] 10+ 个等待场景全量接入剧院体验**：
+  - 高优先级：StepVideo（视频生成→排练厅）、QuickFilm（一键成片→编剧室/首演台）、StepDesignHeader（补全缺图→道具间）
+  - 中优先级：BgmMixPanel（BGM→精修室）、History（视频合并→精修室）、ExportPanel（导出→首演台）、CharacterWardrobePanel（定妆图→道具间）
+  - 轻优先级：TabGenerate（Prompt 润色→编剧室）、TabDistribute（文案生成→巡演厅）、AssetImportPanel（素材上传→道具间）、ProjectList（项目加载→大厅）、MultiShotPromptInput（分镜帧→排练厅）
+- **[api] Loading 资产生成脚本升级**（`scripts/generate-loading-assets.ts`）：Prompt 全面改为剧院主题（编剧室桌面/排练厅舞台/精修室混音台/首演大幕/巡演办公室/剧院大厅/道具间），SUNO 音效改为剧院环境音（打字机声/舞台回响/设备嗡鸣/首演序曲/爵士钢琴/手工氛围），场景从 5→7 个
+
+---
+
 ### v0.54 — 2026-04-16
 
 **高级制片：角色状态变体优化 — 形象演化 & 状态衣橱功能打通**
@@ -1062,4 +1078,4 @@
 
 ---
 
-*最后更新：2026-04-16（v0.54）*
+*最后更新：2026-04-16（v0.55）*

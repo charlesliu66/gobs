@@ -1,7 +1,7 @@
 /**
- * H5 地牢主题 Loading 体验 — 角色化文案池
+ * 百老汇筑梦师 Loading 体验 — 角色化文案池
  *
- * 每个场景绑定一个主说话人，文案按毒度分级，支持三段递进。
+ * 每个场景绑定一个主说话人（剧院幕后角色），文案按语气分级，支持三段递进。
  * 24h 内同场景同文案不重复超过 2 次。
  */
 import type { LoadingScene, LoadingCopy, ProgressiveChain, Speaker, CopyTone } from './types';
@@ -9,108 +9,144 @@ import type { LoadingScene, LoadingCopy, ProgressiveChain, Speaker, CopyTone } f
 // ─── 文案库 ──────────────────────────────────────────────
 
 const COPY_POOL: Record<LoadingScene, LoadingCopy[]> = {
-  'dungeon-entrance': [
-    { text: '门闩卡住了。你先别冲，我先骂两句木匠。', tone: 'light', speaker: 'gatekeeper' },
-    { text: '急什么？上一个勇士的盔甲还挂门把上呢。', tone: 'light', speaker: 'gatekeeper' },
-    { text: '别拍门，门会紧张。', tone: 'light', speaker: 'gatekeeper' },
-    { text: '你是今天第三个说"这把稳了"的人。前两个没回来。', tone: 'medium', speaker: 'gatekeeper' },
-    { text: '开门中。提醒你，里面不接受退货。', tone: 'medium', speaker: 'gatekeeper' },
-    { text: '门快开了，你的勇气呢？', tone: 'medium', speaker: 'gatekeeper' },
-    { text: '要不你先写遗言？我帮你润色。', tone: 'heavy', speaker: 'gatekeeper' },
-    { text: '再敲我就让门开慢点。', tone: 'heavy', speaker: 'gatekeeper' },
+  'writers-room': [
+    { text: '联合编剧正在构思下一幕……', tone: 'light', speaker: 'co-writer' },
+    { text: '灵感正在发酵，别催，好剧本急不来。', tone: 'light', speaker: 'co-writer' },
+    { text: '编剧正在润色台词，逐字逐句。', tone: 'light', speaker: 'co-writer' },
+    { text: '联合编剧说："等等，我有个更好的想法……"', tone: 'medium', speaker: 'co-writer' },
+    { text: '创意在碰撞中——编剧室的咖啡已经续了第三杯。', tone: 'medium', speaker: 'co-writer' },
+    { text: '剧本快写完了，结局还在挣扎。', tone: 'medium', speaker: 'co-writer' },
+    { text: '编剧把草稿揉成团又展开了，这是好兆头。', tone: 'heavy', speaker: 'co-writer' },
+    { text: '灵感之神目前堵在路上，预计马上到。', tone: 'heavy', speaker: 'co-writer' },
   ],
-  tavern: [
-    { text: '队友在路上了，先坐。', tone: 'light', speaker: 'bartender' },
-    { text: '来杯麦酒？反正你待会儿也要"再来一把"。', tone: 'light', speaker: 'bartender' },
-    { text: '先等等，命运在给你配对手。', tone: 'light', speaker: 'bartender' },
-    { text: '队友已发车，脑子可能没上车。', tone: 'medium', speaker: 'bartender' },
-    { text: '他们可能在争谁当肉盾。', tone: 'medium', speaker: 'bartender' },
-    { text: '上一桌四个人进去，回来俩。另外俩？别问。', tone: 'medium', speaker: 'bartender' },
-    { text: '我看你今天运气不错，适合破产。', tone: 'heavy', speaker: 'bartender' },
-    { text: '要不你自己去？反正结局差不多。', tone: 'heavy', speaker: 'bartender' },
+  rehearsal: [
+    { text: '摄影师在找最佳角度……', tone: 'light', speaker: 'cinematographer' },
+    { text: '灯光师在调整光位，氛围马上就到。', tone: 'light', speaker: 'lighting' },
+    { text: '演员正在走位，请保持安静。', tone: 'light', speaker: 'stage-manager' },
+    { text: '道具组在布景——每个细节都不能马虎。', tone: 'medium', speaker: 'props-master' },
+    { text: '摄影师说再给他一分钟，上一个镜头太完美需要消化一下。', tone: 'medium', speaker: 'cinematographer' },
+    { text: '灯光师和摄影师在讨论色温，这很重要。', tone: 'medium', speaker: 'lighting' },
+    { text: '舞台监督提醒：完美需要时间，天才需要更多。', tone: 'heavy', speaker: 'stage-manager' },
+    { text: '导演喊了一声 Action——然后又喊了 Cut，重来。', tone: 'heavy', speaker: 'stage-manager' },
   ],
-  blacksmith: [
-    { text: '刀给你磨好了，手抖我可不包售后。', tone: 'light', speaker: 'blacksmith' },
-    { text: '你这把剑很亮，怪物看到会先笑再砍。', tone: 'light', speaker: 'blacksmith' },
-    { text: '正在打磨你的装备，顺便打磨你的期望值。', tone: 'medium', speaker: 'blacksmith' },
-    { text: '武器已开刃，智商请自备。', tone: 'medium', speaker: 'blacksmith' },
-    { text: '好消息：装备满耐久。坏消息：你不是。', tone: 'medium', speaker: 'blacksmith' },
-    { text: '剑已交付，能砍到谁看你人品。', tone: 'heavy', speaker: 'blacksmith' },
+  'fine-cut': [
+    { text: '剪辑师正在拼接片段……', tone: 'light', speaker: 'editor' },
+    { text: '作曲家正在谱曲，旋律呼之欲出。', tone: 'light', speaker: 'composer' },
+    { text: '剪辑师在微调每一帧的节奏。', tone: 'light', speaker: 'editor' },
+    { text: '作曲家灵感迸发，整个精修室都在震动。', tone: 'medium', speaker: 'composer' },
+    { text: '剪辑师说这个转场再磨一磨就完美了。', tone: 'medium', speaker: 'editor' },
+    { text: '配乐快好了，剪辑师已经在跟着节拍点头。', tone: 'medium', speaker: 'composer' },
+    { text: '精修是一门手艺——剪辑师正在施展。', tone: 'heavy', speaker: 'editor' },
+    { text: '作曲家推翻了第三版，说第四版才是命运之作。', tone: 'heavy', speaker: 'composer' },
   ],
-  settlement: [
-    { text: '正在清点你的战利品。', tone: 'light', speaker: 'clerk' },
-    { text: '恭喜存活。奖励正在计算。', tone: 'light', speaker: 'clerk' },
-    { text: '数量有点多… 确认不是偷的？', tone: 'medium', speaker: 'clerk' },
-    { text: '战利品清点中，别催，少一件算你的。', tone: 'medium', speaker: 'clerk' },
-    { text: '撤离成功。地牢表示：下次不会这么客气。', tone: 'medium', speaker: 'clerk' },
-    { text: '算完了，税后可能让你失望。', tone: 'heavy', speaker: 'clerk' },
-    { text: '结算中。提醒：贪多嚼不烂，你今天嚼了不少。', tone: 'heavy', speaker: 'clerk' },
-    { text: '扣税另算。别看我，规矩不是我定的。', tone: 'heavy', speaker: 'clerk' },
+  premiere: [
+    { text: '舞台经理在做最后检查……', tone: 'light', speaker: 'stage-manager' },
+    { text: '大幕即将拉开，一切就绪。', tone: 'light', speaker: 'stage-manager' },
+    { text: '首演前的紧张——连灯光师的手都在抖。', tone: 'medium', speaker: 'lighting' },
+    { text: '舞台经理确认：道具就位、灯光就位、信心就位。', tone: 'medium', speaker: 'stage-manager' },
+    { text: '观众席正在安静下来……', tone: 'medium', speaker: 'usher' },
+    { text: '制片人在后台来回踱步，这是好迹象。', tone: 'heavy', speaker: 'producer' },
+    { text: '首演夜的空气里有电——和一点焦虑。', tone: 'heavy', speaker: 'stage-manager' },
+    { text: '深呼吸，你的作品马上就要和世界见面了。', tone: 'heavy', speaker: 'producer' },
   ],
-  reconnect: [
-    { text: '连接断了，地牢没断。你还在里面。', tone: 'light', speaker: 'narrator' },
-    { text: '正在重连，你的角色在原地发呆。', tone: 'light', speaker: 'narrator' },
-    { text: '怪物发现你掉线了，正在围观。', tone: 'medium', speaker: 'narrator' },
-    { text: '重连中。好消息：你还活着。坏消息：暂时的。', tone: 'medium', speaker: 'narrator' },
-    { text: '地牢迷路了。你可以重试，或者先回大厅整备。', tone: 'heavy', speaker: 'narrator' },
-    { text: '怪物先到了，数据晚点到。点击重连再战。', tone: 'heavy', speaker: 'narrator' },
+  'on-tour': [
+    { text: '经纪人在写宣传文案……', tone: 'light', speaker: 'agent' },
+    { text: '经纪人正在为每个平台量身定制推广策略。', tone: 'light', speaker: 'agent' },
+    { text: '海报正在印刷，全世界的剧院都在等。', tone: 'medium', speaker: 'agent' },
+    { text: '经纪人说："这部作品值得更大的舞台。"', tone: 'medium', speaker: 'agent' },
+    { text: '巡演路线规划中——下一站，全世界。', tone: 'heavy', speaker: 'agent' },
+    { text: '经纪人挂了六个电话，每个平台都想要首发权。', tone: 'heavy', speaker: 'agent' },
+  ],
+  lobby: [
+    { text: '引座员在整理海报墙……', tone: 'light', speaker: 'usher' },
+    { text: '剧院大厅正在亮灯，请稍候。', tone: 'light', speaker: 'usher' },
+    { text: '引座员确认：你的专属位置已经准备好了。', tone: 'medium', speaker: 'usher' },
+    { text: '穹顶灯正在暖场，氛围即将就位。', tone: 'medium', speaker: 'usher' },
+    { text: '大厅里的每一张海报都在向你招手。', tone: 'heavy', speaker: 'usher' },
+    { text: '引座员："贵宾到——开灯！"', tone: 'heavy', speaker: 'usher' },
+  ],
+  'props-room': [
+    { text: '道具师在整理素材……', tone: 'light', speaker: 'props-master' },
+    { text: '道具间忙碌中——每件道具都要归位。', tone: 'light', speaker: 'props-master' },
+    { text: '化妆师在给角色定妆，不能急。', tone: 'medium', speaker: 'makeup' },
+    { text: '道具师说这批素材质量不错，值得仔细整理。', tone: 'medium', speaker: 'props-master' },
+    { text: '化妆师："完美的妆容需要耐心，就像好的表演。"', tone: 'heavy', speaker: 'makeup' },
+    { text: '道具间快满了——你的创作素材真不少。', tone: 'heavy', speaker: 'props-master' },
   ],
 };
 
 const FALLBACK_COPIES: LoadingCopy[] = [
-  { text: '地牢管理员临时通知：今天怪物心情不好，建议你也别太好。', tone: 'medium', speaker: 'narrator' },
-  { text: '等久了？放心，进去会死得很快。', tone: 'heavy', speaker: 'narrator' },
-  { text: '正在加载你的下一次阵亡现场。', tone: 'heavy', speaker: 'narrator' },
-  { text: '进度条：慢是慢点，送是你送的。', tone: 'heavy', speaker: 'narrator' },
-  { text: '欢迎回来，今天也请优雅暴毙。', tone: 'heavy', speaker: 'narrator' },
+  { text: '后台正在紧张筹备，请在观众席稍候。', tone: 'light', speaker: 'usher' },
+  { text: '幕布后面很忙，但一切都在掌控之中。', tone: 'medium', speaker: 'stage-manager' },
+  { text: '制片人说：好作品不怕等，观众会记住的。', tone: 'medium', speaker: 'producer' },
+  { text: '整个剧组都在为你的作品奔波——稍安勿躁。', tone: 'heavy', speaker: 'producer' },
+  { text: '舞台监督确认：延迟不是问题，质量才是。', tone: 'heavy', speaker: 'stage-manager' },
 ];
 
 // ─── 三段递进链 ──────────────────────────────────────────
 
 const PROGRESSIVE_CHAINS: ProgressiveChain[] = [
   {
-    scene: 'dungeon-entrance',
-    speaker: 'gatekeeper',
+    scene: 'writers-room',
+    speaker: 'co-writer',
     steps: [
-      { delayMs: 2000, text: '守门人：别拍门，门会紧张。' },
-      { delayMs: 5000, text: '守门人：好消息，门快开了；坏消息，门后不是惊喜。' },
-      { delayMs: 8000, text: '守门人：要不你先写遗言？我帮你润色。' },
+      { delayMs: 2000, text: '联合编剧：灵感正在发酵……' },
+      { delayMs: 6000, text: '联合编剧："等等，我有个更好的想法……"' },
+      { delayMs: 12000, text: '联合编剧把草稿揉成团又展开了——是好兆头。' },
     ],
   },
   {
-    scene: 'tavern',
-    speaker: 'bartender',
+    scene: 'rehearsal',
+    speaker: 'cinematographer',
     steps: [
-      { delayMs: 2000, text: '酒馆老板：队友在路上了，先坐。' },
-      { delayMs: 5000, text: '酒馆老板：他们可能在争谁当肉盾。' },
-      { delayMs: 8000, text: '酒馆老板：要不你自己去？反正结局差不多。' },
+      { delayMs: 2000, text: '摄影师在调整机位……' },
+      { delayMs: 6000, text: '灯光师和摄影师在讨论色温，氛围快到了。' },
+      { delayMs: 12000, text: '导演喊了一声 Action——画面正在生成。' },
     ],
   },
   {
-    scene: 'blacksmith',
-    speaker: 'blacksmith',
+    scene: 'fine-cut',
+    speaker: 'editor',
     steps: [
-      { delayMs: 2000, text: '铁匠：正在打磨你的装备…' },
-      { delayMs: 5000, text: '铁匠：顺便打磨你的期望值。' },
-      { delayMs: 8000, text: '铁匠：好消息：装备满耐久。坏消息：你不是。' },
+      { delayMs: 2000, text: '剪辑师正在拼接素材……' },
+      { delayMs: 6000, text: '作曲家灵感迸发，配乐呼之欲出。' },
+      { delayMs: 12000, text: '精修接近尾声——每一帧都值得。' },
     ],
   },
   {
-    scene: 'settlement',
-    speaker: 'clerk',
+    scene: 'premiere',
+    speaker: 'stage-manager',
     steps: [
-      { delayMs: 2000, text: '结算吏：正在清点你的战利品。' },
-      { delayMs: 5000, text: '结算吏：数量有点多… 确认不是偷的？' },
-      { delayMs: 8000, text: '结算吏：算完了，税后可能让你失望。' },
+      { delayMs: 2000, text: '舞台经理在做最后检查……' },
+      { delayMs: 5000, text: '灯光就位、道具就位——一切准备就绪。' },
+      { delayMs: 8000, text: '大幕即将拉开——深呼吸。' },
     ],
   },
   {
-    scene: 'reconnect',
-    speaker: 'narrator',
+    scene: 'on-tour',
+    speaker: 'agent',
     steps: [
-      { delayMs: 2000, text: '连接断了，地牢没断。你还在里面。' },
-      { delayMs: 5000, text: '怪物发现你掉线了，正在围观。' },
-      { delayMs: 8000, text: '怪物先到了，数据晚点到。点击重连再战。' },
+      { delayMs: 2000, text: '经纪人在研究各平台规则……' },
+      { delayMs: 5000, text: '宣传文案打磨中——每个字都要打动人。' },
+      { delayMs: 8000, text: '经纪人："准备好了，下一站——全世界。"' },
+    ],
+  },
+  {
+    scene: 'lobby',
+    speaker: 'usher',
+    steps: [
+      { delayMs: 2000, text: '引座员正在整理海报墙……' },
+      { delayMs: 4000, text: '穹顶灯暖场中，氛围即将就位。' },
+      { delayMs: 6000, text: '引座员："贵宾到——开灯！"' },
+    ],
+  },
+  {
+    scene: 'props-room',
+    speaker: 'props-master',
+    steps: [
+      { delayMs: 2000, text: '道具师在清点素材……' },
+      { delayMs: 5000, text: '每件道具都要归位，不能马虎。' },
+      { delayMs: 8000, text: '道具间整理完毕——随时可以开拍。' },
     ],
   },
 ];
@@ -143,27 +179,35 @@ function markUsed(scene: LoadingScene, text: string) {
 // ─── 公开 API ─────────────────────────────────────────────
 
 export const SPEAKER_NAMES: Record<Speaker, string> = {
-  gatekeeper: '守门人',
-  bartender: '酒馆老板',
-  blacksmith: '铁匠',
-  narrator: '地牢旁白',
-  clerk: '结算吏',
+  'co-writer': '联合编剧',
+  cinematographer: '摄影师',
+  lighting: '灯光师',
+  'stage-manager': '舞台监督',
+  producer: '制片人',
+  editor: '剪辑师',
+  composer: '作曲家',
+  makeup: '化妆师',
+  'props-master': '道具师',
+  agent: '经纪人',
+  usher: '引座员',
 };
 
 export function getSceneSpeaker(scene: LoadingScene): Speaker {
   const map: Record<LoadingScene, Speaker> = {
-    'dungeon-entrance': 'gatekeeper',
-    tavern: 'bartender',
-    blacksmith: 'blacksmith',
-    settlement: 'clerk',
-    reconnect: 'narrator',
+    'writers-room': 'co-writer',
+    rehearsal: 'cinematographer',
+    'fine-cut': 'editor',
+    premiere: 'stage-manager',
+    'on-tour': 'agent',
+    lobby: 'usher',
+    'props-room': 'props-master',
   };
   return map[scene];
 }
 
 /**
- * 按毒度偏好过滤获取一条文案（自带去重）
- * @param maxTone 最大允许毒度: light=温和, medium=中等, heavy=全量
+ * 按语气偏好过滤获取一条文案（自带去重）
+ * @param maxTone 最大允许语气: light=温和, medium=中等, heavy=全量
  */
 export function pickCopy(
   scene: LoadingScene,

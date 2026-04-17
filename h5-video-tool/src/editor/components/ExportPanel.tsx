@@ -4,6 +4,7 @@ import { startEditorExport, getEditorExportStatus, listExportFiles, deleteExport
 import type { ExportFileRecord } from '../../api/editor';
 import { apiPost, apiDownload } from '../../api/client';
 import { toast } from '../../components/Toast';
+import { RunningStatus } from '../../components/RunningStatus';
 
 type ExportResolution = '720p' | '1080p' | '4K';
 type ExportFormat = 'mp4' | 'mov';
@@ -182,6 +183,7 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
               style={{ width: `${exportProgress}%` }}
             />
           </div>
+          <RunningStatus active={true} label="正在导出成片" stallAfterSec={30} scene="premiere" />
         </div>
       )}
       {downloadUrl && (

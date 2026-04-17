@@ -22,6 +22,7 @@ import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
 import { AssetPicker } from '../components/AssetPicker';
+import { RunningStatus } from '../components/RunningStatus';
 import type { LibraryAsset } from '../api/assetLibraryApi';
 
 function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
@@ -947,6 +948,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           </button>
         )}
       </section>
+
+      <RunningStatus active={polishLoading} label="正在润色 Prompt" stallAfterSec={15} scene="writers-room" />
 
       {polishError && (
         <div className="flex items-center gap-2">

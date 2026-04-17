@@ -645,6 +645,7 @@ export function StepVideo() {
           }
           label={loading ? '正在生成视频' : '正在提交视频任务'}
           stallAfterSec={30}
+          scene="rehearsal"
         />
 
         <p className="text-xs text-[var(--color-text-muted)]">
@@ -700,6 +701,7 @@ export function StepVideo() {
               active={batchSubmitting}
               label="正在批量提交分镜任务"
               stallAfterSec={25}
+              scene="rehearsal"
             />
           </div>
         )}

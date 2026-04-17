@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
+import { RunningStatus } from '../components/RunningStatus';
 
 import {
   fetchAccounts,
@@ -345,6 +346,7 @@ export function TabDistribute() {
                 >
                   {captionGenLoading ? '生成中…' : (caption?.trim() || hashtags?.trim()) ? '一键优化' : '一键生成'}
                 </button>
+                <RunningStatus active={captionGenLoading} label="正在生成文案" stallAfterSec={15} scene="on-tour" />
               </div>
             </div>
             <p className="text-[10px] text-[var(--color-text-subtle)] leading-snug mb-1">

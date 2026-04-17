@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from '../components/Toast';
+import { RunningStatus } from '../components/RunningStatus';
 import {
   loadVideoHistory,
   removeVideoFromHistory,
@@ -734,6 +735,7 @@ export function History() {
           >
             {mergeBusy ? '合并处理中…' : '开始合并并写入本机历史'}
           </button>
+          <RunningStatus active={mergeBusy} label="正在合并视频片段" stallAfterSec={30} scene="fine-cut" />
         </section>
       )}
     </div>
