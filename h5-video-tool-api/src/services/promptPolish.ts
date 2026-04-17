@@ -246,10 +246,12 @@ export async function compassChatCompletionWithUsage(options: {
   maxTokens?: number;
   /** 约束模型输出格式，如 { type: 'json_object' } */
   responseFormat?: { type: string };
+  /** 覆盖默认模型（不传则用 COMPASS_GEMINI_MODEL / gemini-2.5-flash） */
+  model?: string;
 }): Promise<{ text: string; usage?: CompassChatUsage }> {
-  const { model } = getCompassLlmConfig();
+  const { model: defaultModel } = getCompassLlmConfig();
   const body: Record<string, unknown> = {
-    model,
+    model: options.model || defaultModel,
     messages: [
       { role: 'system', content: options.systemPrompt },
       { role: 'user', content: options.userText },
@@ -258,7 +260,7 @@ export async function compassChatCompletionWithUsage(options: {
   };
   if (options.maxTokens != null) body.max_tokens = options.maxTokens;
   if (options.responseFormat) body.response_format = options.responseFormat;
-  return postCompassChatCompletions(body, { logLabel: 'compassChatCompletion' });
+  return postCompassChatCompletions(body, { logLabel: `compassChat[${options.model || defaultModel}]` });
 }
 
 /** OpenAI 兼容多模态：user 为 content 数组（text + image_url data URL） */

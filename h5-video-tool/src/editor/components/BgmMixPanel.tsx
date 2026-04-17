@@ -104,13 +104,35 @@ interface BgmMixPanelProps {
   promptSync?: { prompt: string; negativePrompt: string; key: number } | null;
 }
 
-const QUICK_STYLES = [
-  { label: '🔥 高燃战斗', prompt: '高燃电影战斗配乐，器乐，强节奏' },
-  { label: '😢 情感催泪', prompt: '情感深沉，钢琴，弦乐，催泪' },
-  { label: '🎮 游戏冒险', prompt: '游戏冒险背景音乐，史诗感，器乐' },
-  { label: '✨ 轻快活泼', prompt: '轻快活泼，现代流行，积极向上' },
-  { label: '🌆 都市悬疑', prompt: '都市悬疑，电子，低沉，紧张氛围' },
+const MOOD_CATEGORIES = [
+  {
+    group: '情绪',
+    items: [
+      { label: '欢快', prompt: '轻快活泼，现代流行，积极向上，明亮的旋律' },
+      { label: '温馨', prompt: '温暖柔和，原声吉他，钢琴，治愈温馨' },
+      { label: '感动', prompt: '情感深沉，钢琴，弦乐，催泪' },
+      { label: '紧张', prompt: '紧张悬疑，低音脉冲，电子，暗色调氛围' },
+      { label: '史诗', prompt: '史诗磅礴，管弦乐队，鼓点，宏大壮阔' },
+      { label: '浪漫', prompt: '浪漫唯美，钢琴，弦乐四重奏，柔和' },
+    ],
+  },
+  {
+    group: '场景',
+    items: [
+      { label: '游戏战斗', prompt: '高燃电影战斗配乐，器乐，强节奏' },
+      { label: '游戏冒险', prompt: '游戏冒险背景音乐，史诗感，器乐' },
+      { label: '都市夜景', prompt: '都市悬疑，电子，低沉，紧张氛围' },
+      { label: '自然风光', prompt: '大自然纪录片，清新，环境音，木管乐器' },
+      { label: '科技未来', prompt: '科技感，合成器，电子脉冲，未来主义' },
+      { label: '复古怀旧', prompt: '复古爵士，萨克斯，温暖的模拟音色' },
+    ],
+  },
 ] as const;
+
+const _QUICK_STYLES = MOOD_CATEGORIES.flatMap((c) =>
+  c.items.map((item) => ({ ...item, group: c.group })),
+);
+void _QUICK_STYLES;
 
 export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptSync }: BgmMixPanelProps) {
   const [prompt, setPrompt] = useState('');
@@ -242,27 +264,29 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 space-y-3">
-        {/* 快速风格选择 */}
-        <div>
-          <p className="text-[10px] text-[var(--color-text-muted)] mb-1.5">快速选择风格</p>
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_STYLES.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                disabled={disabled}
-                onClick={() => setPrompt(s.prompt)}
-                className={`px-2 py-1 rounded-lg text-[10px] border transition-colors disabled:opacity-50 ${
-                  prompt === s.prompt
-                    ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/30'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+        {/* 情绪/场景选择器 */}
+        {MOOD_CATEGORIES.map((cat) => (
+          <div key={cat.group}>
+            <p className="text-[10px] text-[var(--color-text-muted)] mb-1.5">{cat.group === '情绪' ? '选择情绪' : '选择场景'}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {cat.items.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setPrompt(s.prompt)}
+                  className={`px-2 py-1 rounded-lg text-[10px] border transition-colors disabled:opacity-50 ${
+                    prompt === s.prompt
+                      ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/30'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* 自定义描述 */}
         <div>

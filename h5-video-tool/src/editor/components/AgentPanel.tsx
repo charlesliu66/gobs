@@ -182,6 +182,29 @@ export function AgentPanel({
         })}
       </div>
       <div className="border-t border-[var(--color-border)] p-2">
+        {!busy && logs.length === 0 && (
+          <div className="mb-2">
+            <p className="mb-1.5 text-[10px] text-[var(--color-text-muted)]">快捷指令</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: '战斗混剪 30s', text: '用已选素材做一个30秒的战斗混剪，节奏紧凑' },
+                { label: '角色展示', text: '用已选素材做一个角色技能展示视频，突出角色特色' },
+                { label: 'TikTok 预告', text: '做一个符合TikTok风格的15秒短预告，开头要抓眼球' },
+                { label: '高燃混剪+配乐', text: '做一个30秒高燃战斗混剪，配上史诗感的配乐' },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => void send(preset.text)}
+                  disabled={busy || (selectedCount === 0 && timelineAssetCount === 0)}
+                  className="rounded-md border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/8 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/18 disabled:opacity-40"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -192,7 +215,7 @@ export function AgentPanel({
             }
           }}
           placeholder="描述你想怎么剪…（Shift+Enter 换行）"
-          rows={4}
+          rows={3}
           disabled={busy}
           className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50"
         />

@@ -375,90 +375,124 @@ function findBgmAssetId(project: TimelineProject): string | null {
   return null;
 }
 
-function buildSystemPrompt(ctx: {
+// ─── 模型配置 ─────────────────────────────────────────────────────────────────
+
+function getEditorAgentModels() {
+  return {
+    plan: process.env.EDITOR_AGENT_PLAN_MODEL?.trim() || 'DeepSeek-R1',
+    build: process.env.EDITOR_AGENT_BUILD_MODEL?.trim() || 'gpt-4.1',
+    fallback: process.env.EDITOR_AGENT_FALLBACK_MODEL?.trim() || 'gpt-4o',
+  };
+}
+
+// ─── Plan 阶段 prompt（自然语言输出，不要求 JSON）──────────────────────────────
+
+function buildPlanSystemPrompt(ctx: {
+  targetTimelineSec: number;
+  combatLike: boolean;
+  narrativeTemplate?: NarrativeTemplate;
+  beatInfo?: BeatInfo | null;
+  userPreferenceSnippet?: string;
+}): string {
+  return `你是专业的「剪辑策划师」。根据用户指令和候选素材片段，输出一份**剪辑选段方案**。
+
+## 你的任务
+分析用户想要的视频风格和内容，从 candidateWindows 中挑选最合适的片段，规划成片结构。
+
+## 输出格式（纯文本，非 JSON）
+按以下结构回答，每行一条：
+
+SUMMARY: 一句话总结你的剪辑思路
+TOTAL_DURATION: 预计成片总时长（秒）
+CLIPS:
+1. [候选窗ID] [assetId] [sourceStart]-[sourceEnd] [时长s] [用途说明]
+2. [候选窗ID] [assetId] [sourceStart]-[sourceEnd] [时长s] [用途说明]
+...
+
+## 选段原则
+- 成片总时长目标 **${ctx.targetTimelineSec} 秒**（±2s 可接受）
+- 每个片段的 sourceStart/sourceEnd 必须在对应候选窗范围内
+- 开场选最抓眼球的片段（score 高或 isTurningPoint），收尾选高分片段
+- 混剪节奏：快切（1-3s）与中长镜（3-6s）交替，比例约 3:1
+${ctx.combatLike ? '- 战斗类内容：优先选 score 高的候选窗，战斗片段间穿插非战斗片段避免视觉疲劳' : ''}
+${ctx.narrativeTemplate ? `- 按「${ctx.narrativeTemplate.name}」叙事结构排片：${ctx.narrativeTemplate.slots.map((s) => `${s.role}(${s.durationHint})`).join(' → ')}` : ''}
+${ctx.beatInfo ? `- 有 BGM 节拍信息（BPM=${ctx.beatInfo.bpm}），片段切点尽量对齐节拍` : ''}
+${ctx.userPreferenceSnippet ? `\n${ctx.userPreferenceSnippet}` : ''}`;
+}
+
+// ─── Build 阶段 prompt（纯 JSON 输出，极简）───────────────────────────────────
+
+function buildBuildSystemPrompt(ctx: {
+  projectId: string;
+  fps: number;
+  aspectRatio: string;
+}): string {
+  return `你是 JSON 生成器。把用户给出的「剪辑选段方案」转换为 TimelineProject JSON。
+
+仅输出合法 JSON，不要 markdown 代码块，不要解释文字。
+
+输出格式：
+{
+  "summary": "从选段方案中复制 SUMMARY 内容",
+  "project": {
+    "id": "${ctx.projectId}",
+    "fps": ${ctx.fps},
+    "aspectRatio": "${ctx.aspectRatio}",
+    "durationSec": (最后一个 clip 的 timelineStart + 其时长),
+    "mix": { "sourceAudio": 1, "bgm": 0 },
+    "tracks": [
+      {
+        "id": "v1",
+        "kind": "video",
+        "clips": [
+          {
+            "id": "clip-1",
+            "assetId": "(素材 ID)",
+            "sourceStart": (秒),
+            "sourceEnd": (秒),
+            "timelineStart": (秒，首个=0，后续=前一个结束时间),
+            "speed": 1,
+            "shotIndex": 1,
+            "note": "(用途说明)"
+          }
+        ]
+      },
+      { "id": "a1", "kind": "audio", "clips": [] }
+    ]
+  }
+}
+
+规则：
+- clips 按 timelineStart 顺序排列，首尾衔接
+- sourceEnd > sourceStart，每段时长 = sourceEnd - sourceStart
+- durationSec = 最后一个 clip 的 timelineStart + 该 clip 时长
+- clip id 从 clip-1 递增`;
+}
+
+// ─── 旧版单阶段 prompt（作为 fallback 保留）───────────────────────────────────
+
+function buildLegacySystemPrompt(ctx: {
   targetTimelineSec: number;
   combatLike: boolean;
   hasCandidates: boolean;
   requestedRole?: string;
-  beatInfo?: BeatInfo | null;
-  contentManifest?: string;
   narrativeTemplate?: NarrativeTemplate;
-  userPreferenceSnippet?: string;
 }): string {
-  const cand = ctx.hasCandidates
-    ? `
-## 候选时间段（规则层已切好，你必须在此基础上选段）
-- 服务端已把每条素材**沿时间轴均分**为若干「候选窗」candidateWindows（见用户 JSON）。
-- **每一条 VideoClip 的 [sourceStart, sourceEnd] 必须完全落在某一个候选窗的范围内**（可取该窗内的子区间，不可跨窗、不可超出素材时长）。
-- ${ctx.combatLike ? '候选列表已把**更接近视频几何中段**的窗排在前面，请**优先**从前面的候选里挑选，以贴合常见游戏战斗节奏（仍为启发式，非真实画面识别）。' : '在候选中挑选最符合用户描述的若干段。'}
-- **成片总时长**：用户目标约 **${ctx.targetTimelineSec} 秒**（时间轴多段首尾相接时的总长）。请使总长接近该值（±2 秒可接受），并在 summary 写明选了哪些时间段/候选。
-`
-    : '';
-
   return `你是「剪辑 Agent」，根据用户指令从已选素材规划时间轴。
 
-## 诚实边界（summary 必须交代）
-- 若 candidateWindows 来自「音频能量 + 抽帧多模态」混合管线，则已含启发式高光候选；**并非**人工逐帧审片。
-- 若请求中带有 visionFocus（缩窗），则多模态仅在约 1 分钟左右的子区间内抽帧，候选应优先落在该时间附近。
-- 若仅有均匀切段候选，你能用的是：文件名、素材时长、以及 **candidateWindows**。
-${ctx.requestedRole ? `- 用户指定角色：${ctx.requestedRole}。仅当画面角色标签与该名称完全一致时才优先。` : ''}
+## 输出格式（仅 JSON，勿 markdown code block）
+{"summary": "中文：选段理由", "project": { ... TimelineProject ... }}
 
-## 输出格式（仅 JSON，勿 markdown）
-{
-  "summary": "中文：假设、目标时长、选段依据",
-  "project": { ... TimelineProject 完整对象 ... }
-}
-
-## project 结构要求
-- 保留与输入 currentProject 相同的 project.id、fps、aspectRatio（除非用户明确要求改画幅）。
-- tracks 须含 video 轨 v1 与 audio 轨 a1（a1 可为空）。
-- **仅可使用** selectedAssetIds 中的 asset id。
-- 每个 VideoClip：sourceStart、sourceEnd 在 [0, 该素材 durationSec] 内，sourceEnd > sourceStart。
-- timelineStart：多段通常顺序衔接。
-- clip id 唯一。
-- 可选：每个 VideoClip 可带 shotIndex（镜号，从 1 递增）与 note（一句中文说明该段取自原素材的哪类内容），便于用户微调时溯源。
-- durationSec = 最后一镜结束时间。
-${cand}
-## 目标成片长度（时间轴）
-- 用户目标总长约 **${ctx.targetTimelineSec} 秒**（若用户话里写了「20 秒」等，以解析为准）。
-
-## 内容多样性约束（必须遵守，不得跳过）
-- **行为重复**：同一 activity（一级行为）连续出现不得超过 3 次；连续 3 个战斗片段后必须穿插 ≥ 1 个非战斗片段（奔跑/探索/场景过渡等）
-- **钩子优先**：时间轴第一个片段，优先选 isTurningPoint=true 或 score≥8 的片段作为开场钩子
-- **收尾优先**：时间轴最后一个片段，优先选 score 最高的片段
-- **片段时长建议**：combat 类（打架/击杀）建议 0.8-4s（高能快切）；非 combat 类（奔跑/探索/撤退）建议 2-6s
-- **总节奏**：不要全程快切（<1s），建议混合快切与慢镜（3-5s），比例约 3:1
-${ctx.beatInfo ? formatBeatGuideBlock(ctx.beatInfo) : ''}
-## 切点质量规则（必须遵守）
-- **动作顶点切入**：优先在 isActionPeak=true 的帧附近切入（如击杀落地、技能命中瞬间），可带来强烈爆发感
-- **镜头运动多样性**：连续 5 个以上 cameraMotion=static 的片段需插入 ≥ 1 个运动镜头（pan/zoom/shake）
-- **动接动原则**：运动镜头（pan/zoom/shake）后面优先接运动镜头，视觉更流畅；避免 shake→static→shake 的跳切
-- **避免模糊帧作开头**：shake（抖动）帧不适合作片段起点，适合作切点本身
-
-## 画面-音乐情绪对齐规则
-*内容地图中每帧附有 tension（情绪张力 0-10）和 emotionTag（情绪标签），排片时须与 BGM 段落能量匹配：*
-- **BGM high energy 段（drop）**：优先选 tension ≥ 7 且 emotionTag 为 exciting / triumphant 的片段
-- **BGM mid energy 段（build）**：优先选 tension 4-6 且 emotionTag 为 tense 的片段
-- **BGM low energy 段（intro/outro）**：优先选 tension ≤ 3 且 emotionTag 为 calm / sad 的片段
-- **无 BGM 段落信息时**：根据叙事模板段落位置推断：高潮段 → tension ≥ 7，铺垫段 → tension 4-6，开场/收尾 → tension ≤ 4
-- **强制约束**：同一段 BGM 内，画面 tension 变化幅度应≤5（避免 high energy 段出现 tension=1 的静态画面）
-${ctx.narrativeTemplate ? `
-## 叙事模板：「${ctx.narrativeTemplate.name}」
-${ctx.narrativeTemplate.description}
-
-**请按以下叙事结构排片**（各段时长仅为参考，总长须接近目标时长）：
-${ctx.narrativeTemplate.slots.map((s, i) => `${i + 1}. **${s.role}**（${s.durationHint}）\n   内容：${s.contentHint}\n   强度：${s.intensityHint}`).join('\n')}
-
-> 注意：叙事结构是排片指导，候选窗仍是片段选取边界，不可超出候选窗范围。
-` : ''}
-${ctx.contentManifest ? `
-${ctx.contentManifest}
-
-> 上述内容地图为视觉分析结果，**请参考对应时间戳在候选窗中找到最接近的片段**，按叙事模板分配到各段落。
-` : ''}
-## 若选中素材为空
-- 在 summary 说明无法执行，project 可与 currentProject 相同或清空 v1 clips。
-${ctx.userPreferenceSnippet ? `\n${ctx.userPreferenceSnippet}\n` : ''}`;
+## project 结构
+- tracks 含 video 轨 v1（clips 数组）与 audio 轨 a1（空 clips）。
+- 仅可使用 selectedAssetIds 中的 asset id。
+- VideoClip 字段：id, assetId, sourceStart, sourceEnd, timelineStart, speed(=1), shotIndex, note。
+- sourceStart/sourceEnd 在 [0, 素材 durationSec] 内且必须落在某个 candidateWindow 范围内。
+- clips 按 timelineStart 顺序首尾衔接，durationSec = 最后 clip 结束时间。
+- 成片总时长目标约 ${ctx.targetTimelineSec} 秒（±2s）。
+${ctx.combatLike ? '- 战斗混剪：优先选 score 高的候选窗，快切（1-3s）为主，间插中长镜避免疲劳。' : ''}
+${ctx.requestedRole ? `- 用户指定角色：${ctx.requestedRole}。` : ''}
+${ctx.narrativeTemplate ? `- 叙事结构「${ctx.narrativeTemplate.name}」：${ctx.narrativeTemplate.slots.map((s) => `${s.role}(${s.durationHint})`).join(' → ')}` : ''}`;
 }
 
 function buildUserPayload(
@@ -763,83 +797,186 @@ export async function runEditorAgentApply(
 
   const prefUsername = options?.username || 'default';
   const userPreferenceSnippet = await buildPreferencePromptSnippet(prefUsername).catch(() => '');
+  const models = getEditorAgentModels();
 
-  const systemPrompt = buildSystemPrompt({
+  // 候选窗只传 top 20，减少 token 消耗
+  const topWindows = candidateWindows.slice(0, 20);
+
+  const userPayloadForPlan = JSON.stringify({
+    userMessage: effectiveUserMessage,
+    aspectRatio: input.aspectRatio,
+    selectedAssetIds: input.selectedAssetIds,
+    assets: input.assets,
+    candidateWindows: topWindows,
     targetTimelineSec,
-    combatLike,
-    hasCandidates: candidateWindows.length > 0,
+    combatLikeIntent: combatLike,
     requestedRole,
-    beatInfo,
-    contentManifest: contentManifest || undefined,
-    narrativeTemplate,
-    userPreferenceSnippet: userPreferenceSnippet || undefined,
-  });
+  }, null, 2);
 
-  const userText = buildUserPayload(
-    { ...input, userMessage: effectiveUserMessage },
-    {
-      candidateWindows,
-      targetTimelineSec,
-      combatLike,
-      analysisMode,
-      requestedRole,
-    },
-  );
+  // ─── 阶段 1: Plan（自然语言选段方案）────────────────────────────────────────
 
   report({
-    stage: 'llm',
+    stage: 'plan',
     percent: 48,
-    message: '正在调用剪辑模型生成时间轴（Compass）…',
+    message: `正在规划剪辑方案（${models.plan}）…`,
     etaSec: eta(48),
   });
 
-  const { text: rawText, usage: agentUsage } = await compassChatCompletionWithUsage({
-    systemPrompt,
-    userText,
-    temperature: 0.22,
-    maxTokens: 8192,
-    responseFormat: { type: 'json_object' },
+  const planSystemPrompt = buildPlanSystemPrompt({
+    targetTimelineSec,
+    combatLike,
+    narrativeTemplate,
+    beatInfo,
+    userPreferenceSnippet: userPreferenceSnippet || undefined,
   });
-  usageSink('editor_agent', agentUsage);
+
+  const { text: planText, usage: planUsage } = await compassChatCompletionWithUsage({
+    systemPrompt: planSystemPrompt,
+    userText: userPayloadForPlan,
+    temperature: 0.3,
+    maxTokens: 2048,
+    model: models.plan,
+  });
+  usageSink('editor_plan', planUsage);
+  console.log(`[editor agent] Plan complete (${models.plan}), length=${planText.length}`);
+
+  // ─── 阶段 2: Build（Plan → JSON）──────────────────────────────────────────
 
   report({
-    stage: 'llm',
-    percent: 82,
-    message: '正在解析模型输出…',
-    etaSec: eta(82),
+    stage: 'build',
+    percent: 70,
+    message: `正在生成时间轴 JSON（${models.build}）…`,
+    etaSec: eta(70),
   });
 
-  let parsed: { summary?: string; project?: TimelineProject };
-  const extracted = extractJson(rawText);
-  try {
-    parsed = JSON.parse(extracted) as { summary?: string; project?: TimelineProject };
-  } catch {
-    // 第二层：尝试修复常见 LLM JSON 缺陷后重新解析
+  const buildSystemPrompt = buildBuildSystemPrompt({
+    projectId: input.currentProject.id,
+    fps: input.currentProject.fps ?? 30,
+    aspectRatio: input.currentProject.aspectRatio ?? '16:9',
+  });
+
+  const buildUserText = `以下是剪辑策划师输出的选段方案，请转换为 TimelineProject JSON：
+
+${planText}`;
+
+  let parsed: { summary?: string; project?: TimelineProject } | null = null;
+
+  // Build 尝试：先用 build 模型，失败用 fallback 模型
+  const buildAttempts: Array<{ model: string; label: string }> = [
+    { model: models.build, label: 'build' },
+    { model: models.fallback, label: 'fallback' },
+  ];
+
+  for (const attempt of buildAttempts) {
     try {
-      parsed = JSON.parse(repairJson(extracted)) as { summary?: string; project?: TimelineProject };
-      console.warn('[editor agent] JSON repair succeeded (raw had defects)');
-    } catch {
-      const snippet = rawText.slice(0, 300).replace(/\n/g, '↵');
-      console.error('[editor agent] JSON parse failed, raw snippet:', snippet);
-      throw new Error(`模型返回不是合法 JSON（已尝试自动修复）。模型原始输出片段：${snippet}`);
+      const { text: rawText, usage: buildUsage } = await compassChatCompletionWithUsage({
+        systemPrompt: buildSystemPrompt,
+        userText: buildUserText,
+        temperature: 0.1,
+        maxTokens: 4096,
+        responseFormat: { type: 'json_object' },
+        model: attempt.model,
+      });
+      usageSink(`editor_build_${attempt.label}`, buildUsage);
+
+      const extracted = extractJson(rawText);
+      try {
+        parsed = JSON.parse(extracted) as { summary?: string; project?: TimelineProject };
+      } catch {
+        try {
+          parsed = JSON.parse(repairJson(extracted)) as { summary?: string; project?: TimelineProject };
+          console.warn(`[editor agent] JSON repair succeeded (${attempt.model})`);
+        } catch {
+          console.warn(`[editor agent] JSON parse failed (${attempt.model}), snippet: ${rawText.slice(0, 200).replace(/\n/g, '↵')}`);
+          parsed = null;
+        }
+      }
+
+      if (parsed?.project && typeof parsed.project === 'object') {
+        console.log(`[editor agent] Build succeeded with ${attempt.model}`);
+        break;
+      }
+      parsed = null;
+    } catch (e) {
+      console.warn(`[editor agent] Build attempt ${attempt.model} error: ${e instanceof Error ? e.message : String(e)}`);
+      parsed = null;
+    }
+
+    // 下一轮重试前报进度
+    if (attempt.label === 'build') {
+      report({
+        stage: 'build_retry',
+        percent: 80,
+        message: `JSON 生成失败，正在用备选模型（${models.fallback}）重试…`,
+        etaSec: eta(80),
+      });
     }
   }
 
-  if (!parsed.project || typeof parsed.project !== 'object') {
-    throw new Error('JSON 缺少 project 字段');
+  // 两个 Build 模型都失败 → 最后兜底：用 legacy 单阶段 prompt 直接生成
+  if (!parsed?.project) {
+    report({
+      stage: 'build_legacy',
+      percent: 85,
+      message: `两阶段失败，正在用兜底方案生成…`,
+      etaSec: eta(85),
+    });
+
+    const legacyPrompt = buildLegacySystemPrompt({
+      targetTimelineSec,
+      combatLike,
+      hasCandidates: candidateWindows.length > 0,
+      requestedRole,
+      narrativeTemplate,
+    });
+
+    const { text: legacyRaw, usage: legacyUsage } = await compassChatCompletionWithUsage({
+      systemPrompt: legacyPrompt,
+      userText: userPayloadForPlan,
+      temperature: 0.15,
+      maxTokens: 4096,
+      responseFormat: { type: 'json_object' },
+      model: models.fallback,
+    });
+    usageSink('editor_build_legacy', legacyUsage);
+
+    const legacyExtracted = extractJson(legacyRaw);
+    try {
+      parsed = JSON.parse(legacyExtracted) as { summary?: string; project?: TimelineProject };
+    } catch {
+      try {
+        parsed = JSON.parse(repairJson(legacyExtracted)) as { summary?: string; project?: TimelineProject };
+      } catch {
+        const snippet = legacyRaw.slice(0, 300).replace(/\n/g, '↵');
+        console.error('[editor agent] All 3 attempts failed, raw snippet:', snippet);
+        throw new Error(`剪辑模型三次生成均失败。最后一次输出片段：${snippet}`);
+      }
+    }
   }
 
+  report({
+    stage: 'parse',
+    percent: 88,
+    message: '正在解析模型输出…',
+    etaSec: eta(88),
+  });
+
+  if (!parsed!.project || typeof parsed!.project !== 'object') {
+    throw new Error('模型输出 JSON 缺少 project 字段');
+  }
+
+  const agentResult = parsed!;
   const summary =
-    typeof parsed.summary === 'string' && parsed.summary.trim()
-      ? parsed.summary.trim()
+    typeof agentResult.summary === 'string' && agentResult.summary.trim()
+      ? agentResult.summary.trim()
       : '已根据指令更新时间轴。';
 
   const merged: TimelineProject = {
     ...input.currentProject,
-    ...parsed.project,
+    ...agentResult.project!,
     id: input.currentProject.id,
-    aspectRatio: parsed.project.aspectRatio ?? input.currentProject.aspectRatio,
-    tracks: parsed.project.tracks?.length ? parsed.project.tracks : input.currentProject.tracks,
+    aspectRatio: agentResult.project!.aspectRatio ?? input.currentProject.aspectRatio,
+    tracks: agentResult.project!.tracks?.length ? agentResult.project!.tracks : input.currentProject.tracks,
   };
 
   report({

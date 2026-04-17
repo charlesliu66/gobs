@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   getVeoModels,
 } from '../api/video';
+import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
 import {
   emptyProductionProject,
   PRODUCTION_STORAGE_KEY,
@@ -110,6 +111,7 @@ export function ProductionWizard() {
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
   const urlProjectId = searchParams.get('projectId');
+  const urlAssetId = searchParams.get('assetId');
   const lastStoredId = (() => {
     try { return localStorage.getItem('gobs_last_project_id'); } catch { return null; }
   })();
@@ -830,6 +832,41 @@ export function ProductionWizard() {
       stylePreviewRevokeRef.current?.();
     };
   }, []);
+
+  // 从素材库跳转过来时：获取素材文件并设为风格参考
+  useEffect(() => {
+    if (!urlAssetId || isServerBootstrapping) return;
+    void (async () => {
+      try {
+        const fileUrl = buildAssetFileUrl(urlAssetId);
+        const resp = await fetch(fileUrl);
+        const blob = await resp.blob();
+        if (!blob.type.startsWith('image/')) {
+          toast.info('已选中素材（非图片类型），请在分镜步骤中使用');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          setStyleRefPreview(dataUrl);
+          setProject((p) => ({
+            ...p,
+            meta: { ...p.meta, styleRefImageDataUrl: dataUrl },
+          }));
+          toast.success('已将素材设为风格参考图');
+        };
+        reader.readAsDataURL(blob);
+        void recordUsage(urlAssetId, 'production');
+        // 清除 URL 中的 assetId 避免重复加载
+        const url = new URL(window.location.href);
+        url.searchParams.delete('assetId');
+        window.history.replaceState(null, '', url.toString());
+      } catch {
+        toast.error('素材加载失败');
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlAssetId, isServerBootstrapping]);
 
   /** 从草稿恢复立项参考图缩略（blob 仅内存，持久化靠 meta.styleRefImageDataUrl） */
   useEffect(() => {
@@ -1575,7 +1612,7 @@ export function ProductionWizard() {
     step === 0
       ? '填写立项信息后可生成剧本大纲'
       : step === 1
-        ? '确认故事摘要后可生成服化道并进入角色与场景'
+        ? '确认故事摘要后可生成角色与场景设定'
         : step === 2
           ? '角色与场景将用于分镜引用，建议补全后再继续'
           : step === 3
@@ -1620,6 +1657,12 @@ export function ProductionWizard() {
           onResetDraft={resetDraft}
           steps={STEPS}
           step={step}
+          maxReachableStep={
+            project.shots?.some((s) => (s as unknown as Record<string, unknown>).videoUrl || (s as unknown as Record<string, unknown>).videoPath || ((s as unknown as Record<string, unknown>).videoVersions as unknown[] | undefined)?.length) ? 4
+            : project.productionDesign ? 3
+            : project.story ? 2
+            : 1
+          }
           onStepChange={setStep}
           err={err}
           footerHint={footerHint}
@@ -1832,7 +1875,7 @@ export function ProductionWizard() {
           <p className="text-sm text-[var(--color-text-muted)]">请先在「输入」步骤生成剧本大纲。</p>
         )}
         {step === 2 && !project.productionDesign && (
-          <p className="text-sm text-[var(--color-text-muted)]">请先在「剧本大纲」步骤生成服化道。</p>
+          <p className="text-sm text-[var(--color-text-muted)]">请先在「剧本大纲」步骤生成角色与场景设定。</p>
         )}
         {step === 3 && !project.shots.length && (
           <p className="text-sm text-[var(--color-text-muted)]">请先在「角色与场景」中生成分镜表。</p>
