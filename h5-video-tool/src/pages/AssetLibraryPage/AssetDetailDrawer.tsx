@@ -182,10 +182,17 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
         <div className="px-5 py-4 border-t border-[var(--color-border)] space-y-2 shrink-0">
           <button
             type="button"
-            onClick={() => navigate(`/studio?assetId=${encodeURIComponent(asset.id)}`)}
+            onClick={() => navigate(`/studio/production?assetId=${encodeURIComponent(asset.id)}`)}
             className="w-full py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition flex items-center justify-center gap-2"
           >
-            <span>🚀</span> 用于生成
+            <span>🎬</span> 用于高级制片
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/studio?assetId=${encodeURIComponent(asset.id)}`)}
+            className="w-full py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-xl font-medium hover:bg-[var(--color-surface-hover)] transition flex items-center justify-center gap-2"
+          >
+            <span>🚀</span> 用于视频生成
           </button>
         </div>
       </div>

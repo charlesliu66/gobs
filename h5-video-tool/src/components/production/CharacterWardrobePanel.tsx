@@ -4,8 +4,8 @@ import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
 import { ensureCharacterLookTree, getCharacterLookImage, setCharacterLookNodeImage } from '../../studio/productionAssets';
 import { generateFrames, standardizeCharacterImage } from '../../api/storyboard';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
-import { fetchAssets, getAssetImage } from '../../api/assets';
-import type { Asset } from '../../api/assets';
+import { listAssets, buildAssetFileUrl } from '../../api/assetLibraryApi';
+import type { LibraryAsset } from '../../api/assetLibraryApi';
 import { RunningStatus } from '../RunningStatus';
 
 // 前端生成简单 id
@@ -34,8 +34,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [savedToLib, setSavedToLib] = useState(false);
   const uploadRefInputRef = useRef<HTMLInputElement>(null);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
-  const [assetList, setAssetList] = useState<Asset[]>([]);
-  const [assetImages, setAssetImages] = useState<Record<string, string>>({});
+  const [assetList, setAssetList] = useState<LibraryAsset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [expandedStateId, setExpandedStateId] = useState<string | null>(null);
 
@@ -97,43 +96,42 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     }
   }, [sheet]);
 
-  // 从素材库选择
+  // 从素材库选择（使用新素材中台 API）
   const handleOpenAssetPicker = useCallback(async () => {
     setShowAssetPicker(true);
     setLoadingAssets(true);
     try {
-      const index = await fetchAssets();
-      const characters = index.assets.filter((a) => a.type === 'character');
-      setAssetList(characters);
-      // Load images for all character assets
-      for (const asset of characters) {
-        if (!assetImages[asset.id]) {
-          getAssetImage(asset.id).then(({ imageDataUrl }) => {
-            setAssetImages((prev) => ({ ...prev, [asset.id]: imageDataUrl }));
-          }).catch(() => { /* ignore */ });
-        }
-      }
+      const result = await listAssets({ type: 'image', pageSize: '100' });
+      const images = result.assets.filter((a) => {
+        const mime = a.mimetype ?? a.mime_type ?? '';
+        return mime.startsWith('image/');
+      });
+      setAssetList(images);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '加载素材库失败');
       setShowAssetPicker(false);
     } finally {
       setLoadingAssets(false);
     }
-  }, [assetImages]);
+  }, []);
 
-  const handleSelectAsset = useCallback(async (asset: Asset) => {
+  const handleSelectAsset = useCallback(async (asset: LibraryAsset) => {
     try {
-      let imageUrl = assetImages[asset.id];
-      if (!imageUrl) {
-        const result = await getAssetImage(asset.id);
-        imageUrl = result.imageDataUrl;
-      }
-      onUpdate(buildSheetWithBaseImage(imageUrl));
+      const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
+      const resp = await fetch(fileUrl);
+      const blob = await resp.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      onUpdate(buildSheetWithBaseImage(dataUrl));
       setShowAssetPicker(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '获取素材图片失败');
     }
-  }, [assetImages, onUpdate, buildSheetWithBaseImage]);
+  }, [onUpdate, buildSheetWithBaseImage]);
 
   const states = sheet.states ?? [];
 
@@ -584,26 +582,29 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
                 <RunningStatus active={true} label="正在加载素材库" stallAfterSec={15} className="mx-auto" scene="props-room" />
               </div>
             ) : assetList.length === 0 ? (
-              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">素材库中没有角色类型的素材</div>
+              <div className="py-10 text-center text-xs text-[var(--color-text-muted)]">素材库中没有图片类型的素材，请先在「素材中台」导入</div>
             ) : (
               <div className="flex-1 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {assetList.map((asset) => (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    onClick={() => void handleSelectAsset(asset)}
-                    className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)] transition-all"
-                  >
-                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-[var(--color-surface-hover)] flex items-center justify-center">
-                      {assetImages[asset.id] ? (
-                        <img src={assetImages[asset.id]} alt={asset.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-2xl">👤</div>
+                {assetList.map((asset) => {
+                  const thumbUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
+                  const displayName = asset.filename?.replace(/\.[^.]+$/, '') ?? asset.id;
+                  return (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => void handleSelectAsset(asset)}
+                      className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-surface-hover)] transition-all"
+                    >
+                      <div className="w-full aspect-square rounded-lg overflow-hidden bg-[var(--color-surface-hover)] flex items-center justify-center">
+                        <img src={thumbUrl} alt={displayName} className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[10px] text-[var(--color-text-muted)] text-center truncate w-full">{displayName}</span>
+                      {asset.ai_category && (
+                        <span className="text-[9px] text-[var(--color-primary)]/70">{asset.ai_category}</span>
                       )}
-                    </div>
-                    <span className="text-[10px] text-[var(--color-text-muted)] text-center truncate w-full">{asset.name}</span>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
