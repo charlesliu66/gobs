@@ -25,7 +25,7 @@ export function RunningStatus({
   const [theaterCopy, setTheaterCopy] = useState('');
   const [theaterSpeaker, setTheaterSpeaker] = useState('');
   const [copyFading, setCopyFading] = useState(false);
-  const rotateTimer = useRef<ReturnType<typeof setInterval>>();
+  const rotateTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     if (!active) {
