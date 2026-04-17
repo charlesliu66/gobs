@@ -1,9 +1,8 @@
 import type { CharacterSheet, ProductionShot, SceneSheet } from '../productionTypes';
 import {
   characterMentionedInShotBlob,
-  ensureCharacterLookTree,
   extractAtImageContext,
-  getCharacterLookImage,
+  getCharacterShotImage,
 } from '../productionAssets';
 
 type MultimodalRefPack = {
@@ -90,7 +89,7 @@ export function StepStoryboardMultimodalRefPanel({
             <div className="font-medium text-[var(--color-text)]">角色</div>
             <div className="flex flex-wrap gap-1.5">
               {chSheets.map((ch) => {
-                const hasImg = !!getCharacterLookImage(ensureCharacterLookTree(ch));
+                const hasImg = !!getCharacterShotImage(ch, shot);
                 const overrides = shot.manualRefOverrides;
                 const autoSelected = characterMentionedInShotBlob(ch, shotBlob);
                 const manualIds = overrides?.characterIds;

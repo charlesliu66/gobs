@@ -34,6 +34,14 @@ interface LibraryCharacterState {
   notes?: string;
 }
 
+interface LibraryCharacterLookNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  imageDataUrl?: string;
+  note?: string;
+}
+
 interface LibraryCharacter {
   id: string;
   name: string;
@@ -44,6 +52,10 @@ interface LibraryCharacter {
   baseConfirmed?: boolean;
   /** 各状态 */
   states: LibraryCharacterState[];
+  /** 形象演化树 */
+  lookTree?: LibraryCharacterLookNode[];
+  /** 当前定稿形象 id */
+  activeLookId?: string;
   /** 来源项目名（可选） */
   sourceProject?: string;
   createdAt: string;
@@ -86,6 +98,8 @@ characterLibraryRouter.post('/save', async (req: Request, res: Response) => {
     baseImageDataUrl: body.baseImageDataUrl,
     baseConfirmed: body.baseConfirmed,
     states: Array.isArray(body.states) ? body.states : [],
+    lookTree: Array.isArray(body.lookTree) ? body.lookTree : undefined,
+    activeLookId: body.activeLookId?.trim() || undefined,
     sourceProject: body.sourceProject?.trim(),
     tags: Array.isArray(body.tags) ? body.tags : [],
     createdAt,

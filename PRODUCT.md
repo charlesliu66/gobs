@@ -35,7 +35,7 @@
 | Step | 名称 | 功能 |
 |---|---|---|
 | 1 | 脚本设定 | 输入故事弧、风格参考、角色设定 |
-| 2 | 制作清单 | AI 自动生成角色定妆、场景美术、道具清单 |
+| 2 | 制作清单 | AI 自动生成角色定妆、场景美术、道具清单；角色状态衣橱支持自定义 prompt 生成受伤/童年/换装等多状态变体图 |
 | 3 | 分镜表 | AI 自动生成逐镜分镜，可手动编辑 |
 | 4 | 分镜视频 | 每个分镜生成参考视频（支持即梦多模态、文生视频、图生视频）|
 | 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
@@ -56,7 +56,8 @@
 - **增量同步**（v0.46）：剪辑器顶栏「🔄 同步更新」按钮，对比制片端最新选定版本与剪辑器内版本，差异列表支持勾选批量替换；替换时自动调整时长和后续 clip 位移
 
 **即梦多模态（Dreamina Multimodal）：**
-- 最多 9 张参考图（角色定妆 + 场景 + 道具），自动压缩为 JPEG 768px 以内，避免 TOS 上传失败
+- 最多 9 张参考图（角色定妆/状态图 + 场景 + 道具），自动压缩为 JPEG 768px 以内，避免 TOS 上传失败
+- **角色状态感知（v0.54）**：分镜引用角色时自动匹配状态图（受伤/战斗/童年等），优先级：分镜手动覆盖 > 角色默认激活状态 > 定稿形象
 - 支持并发提交：多个分镜同时进入队列，并发数通过 `DREAMINA_MAX_CONCURRENT` 配置
 - **后端智能轮询 + SSE 推送（v0.35a+）**：即梦任务由服务端后台轮询，视频就绪后 SSE 实时通知前端；关闭浏览器也不丢失生成结果
 - 并发超限（ret=1310）自动等待 45s 重试，最终失败给出友好中文提示
@@ -214,6 +215,106 @@
 
 ## 二、Changelog
 
+### v0.54 — 2026-04-16
+
+**高级制片：角色状态变体优化 — 形象演化 & 状态衣橱功能打通**
+
+**Feature:**
+- **[frontend] 状态衣橱 statePrompt 编辑**：每个角色状态新增"差异描述"文本框（`statePrompt`），AI 生图时以此为核心差异描述（而非仅用 label），大幅提升受伤/童年/换装等状态图生成质量
+- **[frontend] 预设模板增强**：预设从纯 label 升级为 `StatePresetItem`（含 label + statePrompt），新增"年龄变化"预设组（童年/青年/中年/老年），每个预设自带详细差异描述
+- **[frontend] 自定义状态 UX 重构**："+ 自定义"面板同时输入名称和差异描述，添加后自动展开编辑面板；状态卡片显示 prompt 摘要预览，无描述的显示"+ 添加描述"引导
+- **[frontend] 分镜角色状态图接入**：`buildShotMultimodalRefPack` 及其异步版改用 `getCharacterShotImage()`，按优先级选取状态图（分镜手动覆盖 > 角色默认激活状态 > lookTree 定稿图），分镜侧栏缩略图和多模态引用面板同步切换
+- **[frontend] 统一状态模型**："+ 添加状态"按钮从在 lookTree 上创建子节点改为在 `states[]` 上创建 `CharacterState`，消除两套并行数据结构的概念混乱
+- **[api] 形象库 lookTree 持久化**：`/api/character-library/save` 和 import 接口扩展 `lookTree` + `activeLookId` 字段，跨项目导入时自动恢复形象演化树
+
+**Bugfix:**
+- **[api] 状态衣橱 AI 生图报 base64 padding 错误**：当 `baseImageDataUrl` 经过 `uploadProductionImage` 后变为 HTTP URL 时，`dataUrlToRawBase64()` 原样传给 Python 脚本导致 `binascii.Error: Incorrect padding`。新增 `resolveToRawBase64()` 异步函数，自动检测并 fetch HTTP URL 转为 base64，覆盖 `/frames`（首镜 + 非首镜）和 `/portrait` 路由
+
+---
+
+### v0.53 — 2026-04-16
+
+**素材库性能优化：缩略图 + ReviewQueue 分页 + 错误标签清理**
+
+**Feature:**
+- **[api] 缩略图服务** (`assetThumbnailService.ts`)：上传时自动生成 300×300 JPEG 缩略图（图片用 sharp、视频用 ffmpeg 取首帧），存放于原文件同目录 `.thumbs/` 子文件夹
+- **[api] `GET /assets/:id/thumb`** 端点：专门服务缩略图，支持 token query 认证，24h 浏览器缓存；缩略图不存在时触发异步生成并回退原文件
+- **[api] `POST /generate-thumbnails`** 端点：一键批量为所有存量素材补生成缩略图
+- **[api] `GET /pending-tags`** 端点：分页返回待确认标签（替代原来一次拉 100 条全量方案）
+- **[api] 全部 asset 列表 API** 返回 `thumbnail_url` 字段（assets/search/favorites/recent）
+- **[frontend] AssetCard** 网格视图使用缩略图渲染，视频素材仅 hover 时加载原始视频流
+- **[frontend] ReviewQueue** 分页化（每页 20 条），不再一次加载所有素材筛选 pending
+- **[data] 清理 28 个 ai_tag_error 错误标签**，从错误信息中恢复 9 个素材的 AI 分类
+
+---
+
+### v0.52 — 2026-04-16
+
+**H5 地牢主题 Loading 体验组件 & 资产生成工具**
+
+**Feature:**
+- **[frontend] Loading 组件体系新建**（`src/components/loading/`）：统一等待管理器 `useLoadingOrchestrator` Hook + 全屏主题化展示组件 `DungeonLoadingScreen`，支持 5 个场景（地牢入口/酒馆/铁匠铺/结算台/断线重连）、时长分级自动升级（0-1s/1-3s/3-8s/8-15s/15s+）、非线性进度条、角色化文案三段递进（守门人/酒馆老板/铁匠/结算吏/旁白）、彩蛋系统（敲门回嘴/火把点亮/今日命签/安抚礼包）
+- **[api] Loading 资产生成脚本**（`scripts/generate-loading-assets.ts`）：调用 Compass/Imagen 批量生成场景背景图（16:9，支持游戏原画画风参考锁定）+ 调用 SUNO 批量生成场景环境音效（纯器乐 MP3），已存在资产自动跳过，支持 `--images-only` / `--audio-only` 参数
+- **[frontend] shimmer 动画关键帧**：`index.css` 新增进度条光泽流动动画
+
+**资产清单（output/loading-assets/）：**
+- 5 张 16:9 场景背景图（Imagen + Gold And Glory 原画画风参考）
+- 10 首场景环境音效（SUNO V4.5 纯器乐，每场景 2 首备选）
+
+---
+
+### v0.51 — 2026-04-16
+
+**一键成片串行提交队列 + 批量取消**
+
+**Feature:**
+- **[api] QuickFilm 串行提交队列**：`POST /quickfilm/:jobId/confirm` 改为只提交第一个分镜到即梦，其余分镜以 `awaiting_submit` 状态存入 `batchJobsQueue`。当前一个任务完成或失败时，队列自动提交下一个。避免多分镜同时提交触发即梦并发超限（ret=1310 ExceedConcurrencyLimit）
+- **[api] `batchJobsQueue` 增强**：新增 `awaiting_submit` 状态和 `submitParams` 字段；新增 `submitNextQuickfilmShot()` 自动提交逻辑，由 `pollSingleJob` 在任务终态时触发；新增服务器重启恢复机制（poller tick 检测到无活跃任务但有 awaiting_submit 时自动续接）
+- **[api] 批量取消接口**：新增 `DELETE /api/batch-jobs/project/:projectId`，一次取消项目内所有未完成任务（pending / queuing / processing / awaiting_submit）
+- **[frontend] 批量任务看板增强**：新增「取消全部排队」按钮；状态汇总行新增「待提交 N」计数；`awaiting_submit` 状态显示为「🕐 排队待提交」并支持单独取消
+
+**设计对齐：** 复用高级制片（ProductionWizard）的串行提交思路——前一个完成才放行下一个。高级制片靠前端 Promise 链 + SSE 慢速模式实现；一键成片靠后端 batchJobsQueue 事件驱动实现，适配无前端长连接的场景。
+
+---
+
+### v0.50 — 2026-04-16
+
+**P1-G 外部依赖状态机标准化（第一阶段）**
+
+**Feature:**
+- **[api] `domain/job-status.ts` 增强**：新增 7 个服务适配函数 `fromBatchJobStatus`、`fromDreaminaPhase`、`fromKlingPhase`、`fromQuickFilmStatus`、`fromDreaminaHttpStatus`、`fromEditorExportStatus`、`fromRemixStatus`，将各服务原生状态映射到统一枚举 `queued | running | succeeded | failed | timeout | canceled`。新增 `isTerminalStatus()` 判断终态工具函数
+- **[api] Batch Jobs SSE 推送附加 `unifiedStatus`**：`GET /api/batch-jobs/stream` 和 `GET /api/batch-jobs` 响应中附加 `unifiedStatus` 字段（向后兼容，不改变原有 `status` 字段），前端可渐进式迁移
+- **[frontend] `types/jobStatus.ts` 新建**：前端统一任务状态类型定义，与后端 `domain/job-status.ts` 对齐，提供 `toUnifiedStatus()` 通用适配函数和 `isTerminalStatus()` 工具函数
+- **[frontend] `BatchJobDto.unifiedStatus` 可选字段**：前端类型定义中添加后端自动附加的统一状态字段
+
+**状态映射对照表：**
+| 原生状态 | 统一状态 |
+|---|---|
+| `pending` / `awaiting_submit` / `queued` | `queued` |
+| `running` / `processing` / `queuing` / `querying` / `rendering` | `running` |
+| `done` / `completed` / `succeeded` / `success` | `succeeded` |
+| `failed` / `error` | `failed` |
+| `cancelled` / `canceled` | `canceled` |
+
+---
+
+### v0.49 — 2026-04-16
+
+**巨石文件拆分第二阶段 — LLM 解析函数提取 + 前端 hooks 拆分**
+
+**Refactor:**
+- **[api] `riskSentimentParsing.ts` 新建**（747 行）：从 `riskSentimentService.ts` 提取 28 个 LLM 解析/归一化/快照补全函数，包括 `parseJsonRelaxed`、`extractJsonObject`、`normalizePct3`、`deriveOverviewScoreFromPcts`、`parseKeywordMatrix`、`normalizeCreators`、`rehydrateSnapshot` 等。主文件从 1744 行降至 1051 行（减少 693 行），跳过 Apify 采集相关函数
+- **[frontend] `useProductionShotReview.ts` 新建**（116 行）：AI 审片 + 分镜间一致性检查 hook，封装 `handleAiReview`、`handleApplySuggestion`、`handleApplyAllAndRegenerate`、`handleContinuityCheck` 四个回调及相关 state
+- **[frontend] `useProductionShotVersions.ts` 新建**（106 行）：分镜视频版本管理 hook，封装 `shotVideoVersions`、`selectShotVideoVersion`、`keepOnlyShotVideoVersion` 等版本选择/清理逻辑。`ProductionWizard.tsx` 从 1981 行降至 1851 行
+
+**后端文件拆分进度（riskSentimentService.ts）：**
+- `riskSentimentTypes.ts` → 140 行（类型定义，Phase 1）
+- `riskSentimentParsing.ts` → 747 行（解析/归一化，Phase 2）
+- `riskSentimentService.ts` → 1051 行（业务逻辑 + Apify 采集）
+- 原始行数：1889 行 → 拆分后主文件：1051 行（减少 44%）
+
+---
+
 ### v0.48 — 2026-04-16
 
 **素材库 AI 一键整理 + 文件夹视图 + 性能优化**
@@ -224,6 +325,25 @@
 - **[asset-library] IntersectionObserver 懒加载**：素材卡片只在进入视口 200px 范围内才开始加载图片/视频，大幅减少首屏请求量
 - **[asset-library] 文件夹导入**：上传面板新增「选择文件夹」按钮，支持 webkitdirectory 整个文件夹导入 + 拖拽文件夹自动递归扫描
 - **[api] POST /auto-organize**：后端自动整理接口，策略 A（AI 分类）+ 策略 B（文件名前缀）叠加
+
+---
+
+### v0.48a — 2026-04-16
+
+**AI 剪辑智能优化 · 方向7 用户反馈学习（基础版）**
+
+**Feature:**
+- **[api] `userPreferenceService.ts` 新建**：轻量级用户偏好画像服务——导出时收集行为统计（片段 activity 类型、平均时长、数量），使用 EMA（指数移动平均，α=0.3）平滑更新，避免单次导出覆盖历史偏好
+- **[api] `POST /api/editor/preference/report`**：接收前端导出时的行为报告，更新用户偏好 JSON 文件（按用户名隔离存储）
+- **[api] `GET /api/editor/preference`**：查看当前用户偏好画像（调试用）
+- **[api] `buildPreferencePromptSnippet`**：根据用户历史偏好生成 LLM prompt 片段（如"偏好的内容类型：击杀瞬间、团战"、"平均片段时长 2.1秒（偏好快切）"），自动注入剪辑 Agent 排片时的 system prompt
+- **[editor-agent] 偏好注入**：`editorAgentService.ts` 的 `buildSystemPrompt` 新增 `userPreferenceSnippet` 参数，排片调用时自动加载当前用户偏好；`runEditorAgentApply` 通过 `options.username` 传入用户身份
+- **[frontend] 导出行为静默上报**：`ExportPanel` 导出成功后 fire-and-forget 调用 preference/report，收集视频轨 clips 的 activity、时长、meta 数据
+
+**设计要点：**
+- 偏好数据为纯 JSON 文件（`{DATA_DIR}/.data/preferences/{username}.json`），不依赖数据库
+- LLM prompt 中明确标注"用户当前指令优先级高于历史偏好"，避免偏好干扰显式需求
+- 首次导出即建立画像，无需用户额外操作
 
 ---
 
@@ -249,6 +369,16 @@
 
 ---
 
+### v0.47a — 2026-04-16
+
+**巨石文件拆分第一阶段：riskSentimentService 类型提取**
+
+**Refactor:**
+- **[api] `riskSentimentTypes.ts` 新建**：从 `riskSentimentService.ts`（1744行）提取全部类型定义（`RiskVideo`、`RiskCreator`、`CommentTask`、`RiskSnapshot`、`RiskStrategyBlock` 等 12 个类型，128行），主文件通过 `export type` 重导出，消费方零改动
+- 主文件行数 1744 → 1626（-118行），后续阶段将继续提取 Apify 数据采集和 LLM 解析函数
+
+---
+
 ### v0.46 — 2026-04-16
 
 **高级制片 → 剪辑器 增量同步（Phase 3）**
@@ -266,36 +396,7 @@
 
 ---
 
-### v0.48 — 2026-04-16
-
-**AI 剪辑智能优化 · 方向7 用户反馈学习（基础版）**
-
-**Feature:**
-- **[api] `userPreferenceService.ts` 新建**：轻量级用户偏好画像服务——导出时收集行为统计（片段 activity 类型、平均时长、数量），使用 EMA（指数移动平均，α=0.3）平滑更新，避免单次导出覆盖历史偏好
-- **[api] `POST /api/editor/preference/report`**：接收前端导出时的行为报告，更新用户偏好 JSON 文件（按用户名隔离存储）
-- **[api] `GET /api/editor/preference`**：查看当前用户偏好画像（调试用）
-- **[api] `buildPreferencePromptSnippet`**：根据用户历史偏好生成 LLM prompt 片段（如"偏好的内容类型：击杀瞬间、团战"、"平均片段时长 2.1秒（偏好快切）"），自动注入剪辑 Agent 排片时的 system prompt
-- **[editor-agent] 偏好注入**：`editorAgentService.ts` 的 `buildSystemPrompt` 新增 `userPreferenceSnippet` 参数，排片调用时自动加载当前用户偏好；`runEditorAgentApply` 通过 `options.username` 传入用户身份
-- **[frontend] 导出行为静默上报**：`ExportPanel` 导出成功后 fire-and-forget 调用 preference/report，收集视频轨 clips 的 activity、时长、meta 数据
-
-**设计要点：**
-- 偏好数据为纯 JSON 文件（`{DATA_DIR}/.data/preferences/{username}.json`），不依赖数据库
-- LLM prompt 中明确标注"用户当前指令优先级高于历史偏好"，避免偏好干扰显式需求
-- 首次导出即建立画像，无需用户额外操作
-
----
-
-### v0.47 — 2026-04-16
-
-**巨石文件拆分第一阶段：riskSentimentService 类型提取**
-
-**Refactor:**
-- **[api] `riskSentimentTypes.ts` 新建**：从 `riskSentimentService.ts`（1744行）提取全部类型定义（`RiskVideo`、`RiskCreator`、`CommentTask`、`RiskSnapshot`、`RiskStrategyBlock` 等 12 个类型，128行），主文件通过 `export type` 重导出，消费方零改动
-- 主文件行数 1744 → 1626（-118行），后续阶段将继续提取 Apify 数据采集和 LLM 解析函数
-
----
-
-### v0.46 — 2026-04-16
+### v0.46a — 2026-04-16
 
 **镜头版本历史完整实现（版本切换 API + 版本清理 + 上限提示）**
 
@@ -387,7 +488,7 @@
 
 ---
 
-### v0.42 — 2026-04-15
+### v0.42a — 2026-04-15
 
 **高级制片——分镜工作台体验优化（6 项新功能）**
 
@@ -961,87 +1062,4 @@
 
 ---
 
-### v0.49 — 2026-04-16
-
-**巨石文件拆分第二阶段 — LLM 解析函数提取 + 前端 hooks 拆分**
-
-**Refactor:**
-- **[api] `riskSentimentParsing.ts` 新建**（747 行）：从 `riskSentimentService.ts` 提取 28 个 LLM 解析/归一化/快照补全函数，包括 `parseJsonRelaxed`、`extractJsonObject`、`normalizePct3`、`deriveOverviewScoreFromPcts`、`parseKeywordMatrix`、`normalizeCreators`、`rehydrateSnapshot` 等。主文件从 1744 行降至 1051 行（减少 693 行），跳过 Apify 采集相关函数
-- **[frontend] `useProductionShotReview.ts` 新建**（116 行）：AI 审片 + 分镜间一致性检查 hook，封装 `handleAiReview`、`handleApplySuggestion`、`handleApplyAllAndRegenerate`、`handleContinuityCheck` 四个回调及相关 state
-- **[frontend] `useProductionShotVersions.ts` 新建**（106 行）：分镜视频版本管理 hook，封装 `shotVideoVersions`、`selectShotVideoVersion`、`keepOnlyShotVideoVersion` 等版本选择/清理逻辑。`ProductionWizard.tsx` 从 1981 行降至 1851 行
-
-**后端文件拆分进度（riskSentimentService.ts）：**
-- `riskSentimentTypes.ts` → 140 行（类型定义，Phase 1）
-- `riskSentimentParsing.ts` → 747 行（解析/归一化，Phase 2）
-- `riskSentimentService.ts` → 1051 行（业务逻辑 + Apify 采集）
-- 原始行数：1889 行 → 拆分后主文件：1051 行（减少 44%）
-
----
-
-### v0.50 — 2026-04-16
-
-**P1-G 外部依赖状态机标准化（第一阶段）**
-
-**Feature:**
-- **[api] `domain/job-status.ts` 增强**：新增 7 个服务适配函数 `fromBatchJobStatus`、`fromDreaminaPhase`、`fromKlingPhase`、`fromQuickFilmStatus`、`fromDreaminaHttpStatus`、`fromEditorExportStatus`、`fromRemixStatus`，将各服务原生状态映射到统一枚举 `queued | running | succeeded | failed | timeout | canceled`。新增 `isTerminalStatus()` 判断终态工具函数
-- **[api] Batch Jobs SSE 推送附加 `unifiedStatus`**：`GET /api/batch-jobs/stream` 和 `GET /api/batch-jobs` 响应中附加 `unifiedStatus` 字段（向后兼容，不改变原有 `status` 字段），前端可渐进式迁移
-- **[frontend] `types/jobStatus.ts` 新建**：前端统一任务状态类型定义，与后端 `domain/job-status.ts` 对齐，提供 `toUnifiedStatus()` 通用适配函数和 `isTerminalStatus()` 工具函数
-- **[frontend] `BatchJobDto.unifiedStatus` 可选字段**：前端类型定义中添加后端自动附加的统一状态字段
-
-**状态映射对照表：**
-| 原生状态 | 统一状态 |
-|---|---|
-| `pending` / `awaiting_submit` / `queued` | `queued` |
-| `running` / `processing` / `queuing` / `querying` / `rendering` | `running` |
-| `done` / `completed` / `succeeded` / `success` | `succeeded` |
-| `failed` / `error` | `failed` |
-| `cancelled` / `canceled` | `canceled` |
-
----
-
-### v0.51 — 2026-04-16
-
-**一键成片串行提交队列 + 批量取消**
-
-**Feature:**
-- **[api] QuickFilm 串行提交队列**：`POST /quickfilm/:jobId/confirm` 改为只提交第一个分镜到即梦，其余分镜以 `awaiting_submit` 状态存入 `batchJobsQueue`。当前一个任务完成或失败时，队列自动提交下一个。避免多分镜同时提交触发即梦并发超限（ret=1310 ExceedConcurrencyLimit）
-- **[api] `batchJobsQueue` 增强**：新增 `awaiting_submit` 状态和 `submitParams` 字段；新增 `submitNextQuickfilmShot()` 自动提交逻辑，由 `pollSingleJob` 在任务终态时触发；新增服务器重启恢复机制（poller tick 检测到无活跃任务但有 awaiting_submit 时自动续接）
-- **[api] 批量取消接口**：新增 `DELETE /api/batch-jobs/project/:projectId`，一次取消项目内所有未完成任务（pending / queuing / processing / awaiting_submit）
-- **[frontend] 批量任务看板增强**：新增「取消全部排队」按钮；状态汇总行新增「待提交 N」计数；`awaiting_submit` 状态显示为「🕐 排队待提交」并支持单独取消
-
-**设计对齐：** 复用高级制片（ProductionWizard）的串行提交思路——前一个完成才放行下一个。高级制片靠前端 Promise 链 + SSE 慢速模式实现；一键成片靠后端 batchJobsQueue 事件驱动实现，适配无前端长连接的场景。
-
----
-
-### v0.52 — 2026-04-16
-
-**H5 地牢主题 Loading 体验组件 & 资产生成工具**
-
-**Feature:**
-- **[frontend] Loading 组件体系新建**（`src/components/loading/`）：统一等待管理器 `useLoadingOrchestrator` Hook + 全屏主题化展示组件 `DungeonLoadingScreen`，支持 5 个场景（地牢入口/酒馆/铁匠铺/结算台/断线重连）、时长分级自动升级（0-1s/1-3s/3-8s/8-15s/15s+）、非线性进度条、角色化文案三段递进（守门人/酒馆老板/铁匠/结算吏/旁白）、彩蛋系统（敲门回嘴/火把点亮/今日命签/安抚礼包）
-- **[api] Loading 资产生成脚本**（`scripts/generate-loading-assets.ts`）：调用 Compass/Imagen 批量生成场景背景图（16:9，支持游戏原画画风参考锁定）+ 调用 SUNO 批量生成场景环境音效（纯器乐 MP3），已存在资产自动跳过，支持 `--images-only` / `--audio-only` 参数
-- **[frontend] shimmer 动画关键帧**：`index.css` 新增进度条光泽流动动画
-
-**资产清单（output/loading-assets/）：**
-- 5 张 16:9 场景背景图（Imagen + Gold And Glory 原画画风参考）
-- 10 首场景环境音效（SUNO V4.5 纯器乐，每场景 2 首备选）
-
----
-
-### v0.53 — 2026-04-16
-
-**素材库性能优化：缩略图 + ReviewQueue 分页 + 错误标签清理**
-
-**Feature:**
-- **[api] 缩略图服务** (`assetThumbnailService.ts`)：上传时自动生成 300×300 JPEG 缩略图（图片用 sharp、视频用 ffmpeg 取首帧），存放于原文件同目录 `.thumbs/` 子文件夹
-- **[api] `GET /assets/:id/thumb`** 端点：专门服务缩略图，支持 token query 认证，24h 浏览器缓存；缩略图不存在时触发异步生成并回退原文件
-- **[api] `POST /generate-thumbnails`** 端点：一键批量为所有存量素材补生成缩略图
-- **[api] `GET /pending-tags`** 端点：分页返回待确认标签（替代原来一次拉 100 条全量方案）
-- **[api] 全部 asset 列表 API** 返回 `thumbnail_url` 字段（assets/search/favorites/recent）
-- **[frontend] AssetCard** 网格视图使用缩略图渲染，视频素材仅 hover 时加载原始视频流
-- **[frontend] ReviewQueue** 分页化（每页 20 条），不再一次加载所有素材筛选 pending
-- **[data] 清理 28 个 ai_tag_error 错误标签**，从错误信息中恢复 9 个素材的 AI 分类
-
----
-
-*最后更新：2026-04-16（v0.53）*
+*最后更新：2026-04-16（v0.54）*

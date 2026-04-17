@@ -1,5 +1,5 @@
 import type { CharacterSheet, ProductionShot, SceneSheet } from '../productionTypes';
-import { ensureCharacterLookTree, getCharacterLookImage } from '../productionAssets';
+import { getCharacterShotImage } from '../productionAssets';
 
 export function StepStoryboardAssetsSidebar({
   chSheets,
@@ -21,11 +21,11 @@ export function StepStoryboardAssetsSidebar({
       <div className="text-xs font-semibold text-[var(--color-text)]">角色</div>
       <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
         {chSheets.map((ch) => {
-          const thumb = getCharacterLookImage(ensureCharacterLookTree(ch));
           const autoMatchId = getAutoMatchStateId(ch, shot);
           const effectiveStateId = shot.characterStateOverrides?.[ch.id] ?? autoMatchId;
           const effectiveState = ch.states?.find((s) => s.id === effectiveStateId);
           const isManual = !!shot.characterStateOverrides?.[ch.id];
+          const thumb = getCharacterShotImage(ch, shot);
           return (
             <div key={ch.id} className="w-16 text-center">
               <div className="mx-auto h-14 w-14 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface-hover)]">

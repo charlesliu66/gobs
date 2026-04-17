@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { CharacterSheet, CharacterState } from '../../studio/productionTypes';
+import type { CharacterSheet, CharacterState, StatePresetItem } from '../../studio/productionTypes';
 import { CHARACTER_STATE_PRESETS } from '../../studio/productionTypes';
 import { ensureCharacterLookTree, getCharacterLookImage, setCharacterLookNodeImage } from '../../studio/productionAssets';
 import { generateFrames, standardizeCharacterImage } from '../../api/storyboard';
@@ -29,6 +29,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [customLabelInput, setCustomLabelInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customPromptInput, setCustomPromptInput] = useState('');
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
   const uploadRefInputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +37,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const [assetList, setAssetList] = useState<Asset[]>([]);
   const [assetImages, setAssetImages] = useState<Record<string, string>>({});
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [expandedStateId, setExpandedStateId] = useState<string | null>(null);
 
   const buildSheetWithBaseImage = useCallback((imageUrl: string): CharacterSheet => {
     const ensured = ensureCharacterLookTree(sheet);
@@ -64,6 +66,7 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   const handleSaveToLibrary = useCallback(async () => {
     setSavingToLib(true);
     try {
+      const ensured = ensureCharacterLookTree(sheet);
       await saveCharacterToLibrary({
         name: sheet.name,
         isProtagonist: sheet.isProtagonist,
@@ -76,6 +79,14 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
           statePrompt: s.statePrompt,
           notes: s.notes,
         })),
+        lookTree: ensured.lookTree?.map((n) => ({
+          id: n.id,
+          parentId: n.parentId,
+          label: n.label,
+          imageDataUrl: n.imageDataUrl,
+          note: n.note,
+        })),
+        activeLookId: ensured.activeLookId,
       });
       setSavedToLib(true);
       setTimeout(() => setSavedToLib(false), 3000);
@@ -178,13 +189,20 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     reader.readAsDataURL(file);
   }, [sheet, styleRef, onUpdate, buildSheetWithBaseImage]);
 
-  // 生成某个状态
+  // 生成某个状态（statePrompt 为核心差异描述，label 为辅助）
   const handleGenState = useCallback(async (state: CharacterState) => {
     if (!sheet.baseImageDataUrl) { setErr('请先生成并确认基础形象'); return; }
     setGenningId(state.id);
     setErr(null);
     try {
-      const prompt = `${styleRef}\n角色：${sheet.name}，保持与基础形象完全一致的面部特征和体型。状态：${state.label}。${state.statePrompt ?? ''}`;
+      const diffDesc = state.statePrompt?.trim() || state.label;
+      const prompt = [
+        styleRef,
+        `角色：${sheet.name}${sheet.isProtagonist ? '（主角）' : ''}。`,
+        '【一致性要求】必须保持与参考图完全一致的面部五官、发型发色、体型比例。',
+        `【状态变化】${state.label}：${diffDesc}`,
+        '全身正面，白色简洁背景，电影感，高清，无文字。',
+      ].filter(Boolean).join('\n');
       const res = await generateFrames({
         prompt,
         aspectRatio,
@@ -204,17 +222,38 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
   }, [sheet, states, styleRef, aspectRatio, onUpdate]);
 
   // 添加状态
-  const addState = (label: string) => {
-    const newState: CharacterState = { id: genId(), label };
+  const addState = (label: string, statePrompt?: string) => {
+    const newState: CharacterState = { id: genId(), label, statePrompt };
     onUpdate({ ...sheet, states: [...states, newState] });
   };
 
-  // 应用预设
-  const applyPreset = (preset: string[]) => {
-    const newStates: CharacterState[] = preset.map((label) => ({ id: genId(), label }));
+  // 应用预设（带 statePrompt），展开第一个状态供查看/编辑
+  const applyPreset = (preset: StatePresetItem[]) => {
+    const newStates: CharacterState[] = preset.map((p) => ({
+      id: genId(),
+      label: p.label,
+      statePrompt: p.statePrompt,
+    }));
     onUpdate({ ...sheet, states: newStates });
     setShowPresetPicker(false);
+    if (newStates.length > 0) setExpandedStateId(newStates[0]!.id);
   };
+
+  // 更新单个状态的 statePrompt
+  const updateStatePrompt = useCallback((stateId: string, prompt: string) => {
+    onUpdate({
+      ...sheet,
+      states: states.map((s) => s.id === stateId ? { ...s, statePrompt: prompt } : s),
+    });
+  }, [sheet, states, onUpdate]);
+
+  // 更新单个状态的 label
+  const updateStateLabel = useCallback((stateId: string, label: string) => {
+    onUpdate({
+      ...sheet,
+      states: states.map((s) => s.id === stateId ? { ...s, label } : s),
+    });
+  }, [sheet, states, onUpdate]);
 
   return (
     <div className="space-y-4">
@@ -334,49 +373,61 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
         {/* 预设选择器 */}
         {showPresetPicker && (
           <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3 space-y-1.5">
-            {Object.entries(CHARACTER_STATE_PRESETS).map(([name, labels]) => labels.length > 0 && (
+            {Object.entries(CHARACTER_STATE_PRESETS).map(([name, items]) => items.length > 0 && (
               <button
                 key={name}
                 type="button"
-                onClick={() => applyPreset(labels)}
+                onClick={() => applyPreset(items)}
                 className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[var(--color-surface-hover)] transition-colors"
               >
                 <span className="font-medium text-[var(--color-text)]">{name}</span>
-                <span className="ml-2 text-[var(--color-text-muted)]">{labels.join(' · ')}</span>
+                <span className="ml-2 text-[var(--color-text-muted)]">{items.map((i) => i.label).join(' · ')}</span>
               </button>
             ))}
           </div>
         )}
 
         {showCustomInput && (
-          <div className="mb-3 flex gap-2">
+          <div className="mb-3 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface-elevated)] p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--color-text)]">添加自定义状态</span>
+              <button type="button" onClick={() => setShowCustomInput(false)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs">✕</button>
+            </div>
             <input
               autoFocus
               value={customLabelInput}
               onChange={(e) => setCustomLabelInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && customLabelInput.trim()) {
-                  addState(customLabelInput.trim());
-                  setCustomLabelInput('');
-                  setShowCustomInput(false);
-                }
-                if (e.key === 'Escape') setShowCustomInput(false);
-              }}
-              placeholder="状态名称，如：战斗装束"
-              className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+              placeholder="状态名称，如：童年形象、穿红色旗袍"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+            />
+            <textarea
+              value={customPromptInput}
+              onChange={(e) => setCustomPromptInput(e.target.value)}
+              placeholder="描述与基础形象的差异（AI 生成核心依据），如：同一角色的幼年版本，身材矮小，面容稚嫩，穿着简单的布衣"
+              rows={3}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)]/50 focus:outline-none resize-none"
             />
             <button
               type="button"
               onClick={() => {
                 if (customLabelInput.trim()) {
-                  addState(customLabelInput.trim());
+                  const newId = genId();
+                  const newState: CharacterState = {
+                    id: newId,
+                    label: customLabelInput.trim(),
+                    statePrompt: customPromptInput.trim() || undefined,
+                  };
+                  onUpdate({ ...sheet, states: [...states, newState] });
+                  setExpandedStateId(newId);
                   setCustomLabelInput('');
+                  setCustomPromptInput('');
                   setShowCustomInput(false);
                 }
               }}
-              className="px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+              disabled={!customLabelInput.trim()}
+              className="w-full px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition-colors"
             >
-              添加
+              添加状态{customPromptInput.trim() && sheet.baseConfirmed ? '并 AI 生成' : ''}
             </button>
           </div>
         )}
@@ -386,78 +437,140 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
             选择预设模板或点「+ 自定义」添加状态
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            {states.map((state) => (
-              <div key={state.id} className="flex flex-col items-center gap-1.5 w-20">
-                {/* 状态图 */}
-                <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
-                  {state.imageDataUrl ? (
-                    <img src={state.imageDataUrl} alt={state.label} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[var(--color-text-subtle)]">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <polyline points="21 15 16 10 5 21"/>
-                      </svg>
-                    </div>
-                  )}
-                  {/* 生成中遮罩 */}
-                  {genningId === state.id && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    </div>
-                  )}
-                  {/* 已选激活标记 */}
-                  {sheet.activeStateId === state.id && (
-                    <div className="absolute top-1 left-1 w-3 h-3 rounded-full bg-[var(--color-primary)]" />
-                  )}
-                  {/* 删除按钮 */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-3">
+              {states.map((state) => (
+                <div key={state.id} className="flex flex-col items-center gap-1.5 w-20">
+                  {/* 状态图 */}
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
+                    {state.imageDataUrl ? (
+                      <img src={state.imageDataUrl} alt={state.label} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--color-text-subtle)]">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="3" y="3" width="18" height="18" rx="2"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                      </div>
+                    )}
+                    {genningId === state.id && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      </div>
+                    )}
+                    {sheet.activeStateId === state.id && (
+                      <div className="absolute top-1 left-1 w-3 h-3 rounded-full bg-[var(--color-primary)]" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = { ...sheet, states: (sheet.states ?? []).filter((s) => s.id !== state.id) };
+                        if (expandedStateId === state.id) setExpandedStateId(null);
+                        onUpdate(next);
+                      }}
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-error)]/15 hover:text-[var(--color-error)]"
+                      title="删除此状态"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {/* 状态名 + prompt 摘要（点击展开编辑） */}
                   <button
                     type="button"
-                    onClick={() => {
-                      const next = { ...sheet, states: (sheet.states ?? []).filter((s) => s.id !== state.id) };
-                      onUpdate(next);
-                    }}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-error)]/15 hover:text-[var(--color-error)]"
-                    title="删除此状态"
-                  >
-                    ✕
-                  </button>
-                </div>
-                {/* 状态名 */}
-                <span className="text-[10px] text-[var(--color-text-muted)] text-center leading-tight">{state.label}</span>
-                {/* 操作按钮 */}
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void handleGenState(state)}
-                    disabled={!sheet.baseConfirmed || genningId !== null}
-                    title={!sheet.baseConfirmed ? '请先确认基础形象' : 'AI 生成'}
-                    className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-primary)]/15 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {genningId === state.id ? '…' : 'AI'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdate({ ...sheet, activeStateId: state.id })}
-                    title="设为分镜默认引用"
-                    className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${
-                      sheet.activeStateId === state.id
-                        ? 'bg-[var(--color-primary)] text-white'
-                        : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    onClick={() => setExpandedStateId(expandedStateId === state.id ? null : state.id)}
+                    className={`w-full text-[10px] text-center leading-tight transition-colors ${
+                      expandedStateId === state.id ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                     }`}
+                    title="点击编辑状态描述"
                   >
-                    ★
+                    <div className="font-medium">{state.label}</div>
+                    {state.statePrompt ? (
+                      <div className="text-[9px] text-[var(--color-text-subtle)] truncate mt-0.5 max-w-[80px]">
+                        {state.statePrompt.slice(0, 20)}{state.statePrompt.length > 20 ? '…' : ''}
+                      </div>
+                    ) : (
+                      <div className="text-[9px] text-[var(--color-primary)]/60 mt-0.5">+ 添加描述</div>
+                    )}
+                  </button>
+                  {/* 操作按钮 */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleGenState(state)}
+                      disabled={!sheet.baseConfirmed || genningId !== null}
+                      title={!sheet.baseConfirmed ? '请先确认基础形象' : `AI 生成「${state.label}」`}
+                      className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-primary)]/15 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {genningId === state.id ? '…' : 'AI'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdate({ ...sheet, activeStateId: state.id })}
+                      title="设为分镜默认引用"
+                      className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${
+                        sheet.activeStateId === state.id
+                          ? 'bg-[var(--color-primary)] text-white'
+                          : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                      }`}
+                    >
+                      ★
+                    </button>
+                  </div>
+                  <RunningStatus
+                    active={genningId === state.id}
+                    label={`正在生成状态：${state.label}`}
+                    stallAfterSec={25}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* 展开的状态编辑面板 */}
+            {expandedStateId && (() => {
+              const st = states.find((s) => s.id === expandedStateId);
+              if (!st) return null;
+              return (
+                <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface-elevated)] p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[var(--color-text)]">编辑「{st.label}」</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedStateId(null)}
+                      className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs"
+                    >✕</button>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--color-text-muted)] mb-1">状态名称</label>
+                    <input
+                      value={st.label}
+                      onChange={(e) => updateStateLabel(st.id, e.target.value)}
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-primary)]/50 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--color-text-muted)] mb-1">
+                      差异描述 <span className="text-[var(--color-primary)]">（AI 生成核心依据）</span>
+                    </label>
+                    <textarea
+                      value={st.statePrompt ?? ''}
+                      onChange={(e) => updateStatePrompt(st.id, e.target.value)}
+                      placeholder="详细描述此状态与基础形象的差异，如：身上有明显伤痕和血迹，衣物破损，表情虚弱痛苦"
+                      rows={3}
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)]/50 focus:outline-none resize-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenState(st)}
+                    disabled={!sheet.baseConfirmed || genningId !== null}
+                    className="w-full px-3 py-1.5 rounded-lg text-xs bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition-colors"
+                  >
+                    {genningId === st.id ? '生成中…' : `AI 生成「${st.label}」形象`}
                   </button>
                 </div>
-                <RunningStatus
-                  active={genningId === state.id}
-                  label={`正在生成状态：${state.label}`}
-                  stallAfterSec={25}
-                />
-              </div>
-            ))}
+              );
+            })()}
           </div>
         )}
       </div>

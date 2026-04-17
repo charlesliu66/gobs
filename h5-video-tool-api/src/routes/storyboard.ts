@@ -18,11 +18,31 @@ function getStoryboardTimeoutMs(): number {
 
 const STORYBOARD_IMAGE_TIMEOUT_MS = getStoryboardTimeoutMs();
 
-/** 从 data URL 或纯 base64 取出 raw base64 */
+/** 从 data URL 或纯 base64 取出 raw base64（同步，不处理 HTTP URL） */
 function dataUrlToRawBase64(dataUrlOrB64: string): string {
   const s = dataUrlOrB64.trim();
   const m = /^data:image\/[^;]+;base64,(.+)$/i.exec(s);
   return m ? m[1] : s;
+}
+
+function isHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s.trim()) || s.trim().startsWith('/api/');
+}
+
+/**
+ * 将 data URL、HTTP URL 或纯 base64 统一转为 raw base64。
+ * HTTP URL 会被 fetch 并转换，避免把 URL 字符串当 base64 传给 Python。
+ */
+async function resolveToRawBase64(input: string, req: Request): Promise<string> {
+  const s = input.trim();
+  const dm = /^data:image\/[^;]+;base64,(.+)$/i.exec(s);
+  if (dm) return dm[1]!;
+  if (!isHttpUrl(s)) return s;
+  const url = s.startsWith('/') ? `${req.protocol}://${req.get('host')}${s}` : s;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`获取参考图失败: ${resp.status} ${resp.statusText}`);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  return buf.toString('base64');
 }
 
 /** 保证返回带前缀的 data URL */
@@ -121,9 +141,10 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
   const ar = aspectRatio ?? '16:9';
 
   const globalStyleRaw = globalStyleReferenceFrame?.trim();
-  const globalB64 = globalStyleRaw ? dataUrlToRawBase64(globalStyleRaw) : undefined;
 
   try {
+    const globalB64 = globalStyleRaw ? await resolveToRawBase64(globalStyleRaw, req) : undefined;
+
     if (idx <= 0) {
       const { first: firstPrompt, last: lastPrompt } = buildFramePrompts(text, !!globalB64);
       const styleOpts = globalB64 ? { styleReferenceBase64: globalB64 } : {};
@@ -185,7 +206,7 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
     }
 
     const firstFrame = toPngDataUrl(prev);
-    const styleB64 = dataUrlToRawBase64(styleLockSrc);
+    const styleB64NonFirst = await resolveToRawBase64(styleLockSrc, req);
     const useGlobalBaseline = !!globalStyleRaw;
 
     const middlePrompt = buildContinuationPrompts(text, 'middle', useGlobalBaseline);
@@ -195,13 +216,13 @@ storyboardRouter.post('/frames', async (req: Request, res: Response) => {
       generateImageWithPython({
         prompt: middlePrompt,
         aspectRatio: ar,
-        styleReferenceBase64: styleB64,
+        styleReferenceBase64: styleB64NonFirst,
         timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       }),
       generateImageWithPython({
         prompt: lastPrompt,
         aspectRatio: ar,
-        styleReferenceBase64: styleB64,
+        styleReferenceBase64: styleB64NonFirst,
         timeoutMs: STORYBOARD_IMAGE_TIMEOUT_MS,
       }),
     ]);
@@ -246,11 +267,19 @@ storyboardRouter.post('/portrait', async (req: Request, res: Response) => {
 
   const ar = typeof aspectRatio === 'string' && aspectRatio.trim() ? aspectRatio.trim() : '9:16';
   const refRaw = referenceImage?.trim();
-  const refB64 = refRaw ? dataUrlToRawBase64(refRaw) : undefined;
   const globalStyleRaw = globalStyleReferenceFrame?.trim();
-  const styleB64 = globalStyleRaw ? dataUrlToRawBase64(globalStyleRaw) : undefined;
   const keyOverride =
     typeof compassApiKey === 'string' && compassApiKey.trim() ? compassApiKey.trim() : undefined;
+
+  let refB64: string | undefined;
+  let styleB64: string | undefined;
+  try {
+    refB64 = refRaw ? await resolveToRawBase64(refRaw, req) : undefined;
+    styleB64 = globalStyleRaw ? await resolveToRawBase64(globalStyleRaw, req) : undefined;
+  } catch (e) {
+    res.status(400).json({ error: `参考图解析失败: ${e instanceof Error ? e.message : String(e)}` });
+    return;
+  }
 
   /**
    * 用户上传了角色参考图时：不再传立项 globalStyleReferenceFrame 给 Python（避免与角色参考争用多模态槽位；

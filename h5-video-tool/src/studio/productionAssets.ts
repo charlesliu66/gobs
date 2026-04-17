@@ -390,6 +390,26 @@ export function layoutCharacterLookTree(nodes: CharacterLookNode[]): {
   };
 }
 
+/**
+ * 获取角色在特定分镜中应使用的参考图。
+ * 优先级：分镜手动覆盖状态图 > 角色默认激活状态图 > lookTree 定稿图
+ */
+export function getCharacterShotImage(
+  ch: CharacterSheet,
+  shot?: { characterStateOverrides?: Record<string, string> },
+): string | undefined {
+  const overrideStateId = shot?.characterStateOverrides?.[ch.id];
+  if (overrideStateId) {
+    const st = ch.states?.find((s) => s.id === overrideStateId);
+    if (st?.imageDataUrl) return st.imageDataUrl;
+  }
+  if (ch.activeStateId) {
+    const st = ch.states?.find((s) => s.id === ch.activeStateId);
+    if (st?.imageDataUrl) return st.imageDataUrl;
+  }
+  return getCharacterLookImage(ensureCharacterLookTree(ch));
+}
+
 function dataUrlToBase64Mime(dataUrl: string): { base64: string; mimeType: string } | null {
   const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl.trim());
   if (!m) return null;
@@ -605,15 +625,19 @@ export function buildShotMultimodalRefPack(
   const entries: Entry[] = [];
 
   for (const ch of pickedChars) {
-    const url = getCharacterLookImage(ensureCharacterLookTree(ch));
+    const url = getCharacterShotImage(ch, shot);
     if (!url) continue;
     const parsed = dataUrlToBase64Mime(url);
     if (!parsed) continue;
     const nm = ch.name!.trim();
+    const overrideStateId = shot.characterStateOverrides?.[ch.id];
+    const effectiveStateId = overrideStateId || ch.activeStateId;
+    const effectiveState = effectiveStateId ? ch.states?.find((s) => s.id === effectiveStateId) : null;
+    const stateLabel = effectiveState?.imageDataUrl ? effectiveState.label : null;
     entries.push({
       base64: parsed.base64,
       mimeType: parsed.mimeType || 'image/png',
-      label: `角色「${nm}」`,
+      label: stateLabel ? `角色「${nm}」(${stateLabel})` : `角色「${nm}」`,
       injectNames: nm ? [nm] : [],
     });
   }
@@ -809,16 +833,20 @@ export async function buildShotMultimodalRefPackAsync(
   const entries: Entry[] = [];
 
   for (const ch of pickedChars) {
-    const url = getCharacterLookImage(ensureCharacterLookTree(ch));
+    const url = getCharacterShotImage(ch, shot);
     if (!url) continue;
     const raw = await fetchImageAsBase64(url);
     if (!raw) continue;
     const parsed = await compressImageToJpeg(raw.base64, raw.mimeType || 'image/png');
     const nm = ch.name!.trim();
+    const overrideStateId = shot.characterStateOverrides?.[ch.id];
+    const effectiveStateId = overrideStateId || ch.activeStateId;
+    const effectiveState = effectiveStateId ? ch.states?.find((s) => s.id === effectiveStateId) : null;
+    const stateLabel = effectiveState?.imageDataUrl ? effectiveState.label : null;
     entries.push({
       base64: parsed.base64,
       mimeType: parsed.mimeType,
-      label: `角色「${nm}」`,
+      label: stateLabel ? `角色「${nm}」(${stateLabel})` : `角色「${nm}」`,
       injectNames: nm ? [nm] : [],
     });
   }

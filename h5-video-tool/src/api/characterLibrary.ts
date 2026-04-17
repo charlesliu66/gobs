@@ -11,6 +11,14 @@ export interface LibraryCharacterState {
   notes?: string;
 }
 
+export interface LibraryCharacterLookNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  imageDataUrl?: string;
+  note?: string;
+}
+
 export interface LibraryCharacter {
   id: string;
   name: string;
@@ -19,6 +27,8 @@ export interface LibraryCharacter {
   baseImageDataUrl?: string;
   baseConfirmed?: boolean;
   states: LibraryCharacterState[];
+  lookTree?: LibraryCharacterLookNode[];
+  activeLookId?: string;
   sourceProject?: string;
   tags?: string[];
   createdAt: string;

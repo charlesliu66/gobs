@@ -17,6 +17,7 @@ import type {
   AssetVariant,
   CharacterLookNode,
   CharacterSheet,
+  CharacterState,
   ProductionProject,
   PropSheet,
   SceneSheet,
@@ -158,23 +159,14 @@ export function useProductionStep2Handlers({
       const sheets = [...(p.characterAssets ?? [])];
       const i = sheets.findIndex((s) => s.id === sheetId);
       if (i < 0) return p;
-      const sh = ensureCharacterLookTree(sheets[i]!);
-      const root = sh.lookTree!.find((n) => n.parentId === null) ?? sh.lookTree![0];
-      if (!root) return p;
-      const siblings = sh.lookTree!.filter((n) => n.parentId === root.id);
-      const newId = `look-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const node: CharacterLookNode = {
+      const sh = sheets[i]!;
+      const existingStates = sh.states ?? [];
+      const newId = `state_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const newState: CharacterState = {
         id: newId,
-        parentId: root.id,
-        label: `状态 ${siblings.length + 1}`,
+        label: `状态 ${existingStates.length + 1}`,
       };
-      const lookTree = [...sh.lookTree!, node];
-      sheets[i] = {
-        ...sh,
-        lookTree,
-        variants: flattenLookTreeToVariants(lookTree),
-        activeLookId: newId,
-      };
+      sheets[i] = { ...sh, states: [...existingStates, newState] };
       return { ...p, characterAssets: sheets };
     });
   }, [setProject]);
@@ -285,51 +277,71 @@ export function useProductionStep2Handlers({
 
   const handleImportFromLibrary = useCallback((libChar: LibraryCharacter) => {
     const normalize = (v: string) => v.trim().toLowerCase();
+    const mapStates = (raw: LibraryCharacter['states'] | undefined) =>
+      raw?.map((s) => ({
+        id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        label: s.label,
+        imageDataUrl: s.imageDataUrl,
+        statePrompt: s.statePrompt ?? '',
+        notes: s.notes ?? '',
+      })) ?? [];
+
     setProject((p) => {
       const list = [...(p.characterAssets ?? [])];
       const existingIdx = list.findIndex((c) => normalize(c.name) === normalize(libChar.name));
       if (existingIdx >= 0) {
         const existing = list[existingIdx]!;
-        const ensured = ensureCharacterLookTree(existing);
-        const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
-        const merged = root && libChar.baseImageDataUrl
-          ? setCharacterLookNodeImage(ensured, root.id, libChar.baseImageDataUrl)
-          : ensured;
+        // 优先用库里保存的 lookTree，否则从 base 图重建
+        let merged: CharacterSheet;
+        if (libChar.lookTree?.length) {
+          merged = {
+            ...existing,
+            lookTree: libChar.lookTree,
+            activeLookId: libChar.activeLookId ?? libChar.lookTree.find((n) => n.parentId === null)?.id,
+            variants: flattenLookTreeToVariants(libChar.lookTree),
+          };
+        } else {
+          const ensured = ensureCharacterLookTree(existing);
+          const root = ensured.lookTree?.find((n) => n.parentId === null) ?? ensured.lookTree?.[0];
+          merged = root && libChar.baseImageDataUrl
+            ? setCharacterLookNodeImage(ensured, root.id, libChar.baseImageDataUrl)
+            : ensured;
+        }
         list[existingIdx] = {
           ...merged,
           baseImageDataUrl: libChar.baseImageDataUrl,
           baseConfirmed: libChar.baseConfirmed ?? true,
           isProtagonist: existing.isProtagonist,
-          states: libChar.states?.map((s) => ({
-            id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            label: s.label,
-            imageDataUrl: s.imageDataUrl,
-            statePrompt: s.statePrompt ?? '',
-            notes: s.notes ?? '',
-          })) ?? existing.states,
+          states: mapStates(libChar.states).length > 0 ? mapStates(libChar.states) : existing.states,
         };
         return { ...p, characterAssets: list };
       }
 
       const id = `ch-lib-${Date.now()}`;
-      const rootId = `${id}-v0`;
       const hasProtagonist = list.some((c) => c.isProtagonist);
+      let lookTree: CharacterLookNode[];
+      let activeLookId: string;
+      let variants: AssetVariant[];
+      if (libChar.lookTree?.length) {
+        lookTree = libChar.lookTree as CharacterLookNode[];
+        activeLookId = libChar.activeLookId ?? lookTree.find((n) => n.parentId === null)?.id ?? lookTree[0]!.id;
+        variants = flattenLookTreeToVariants(lookTree);
+      } else {
+        const rootId = `${id}-v0`;
+        lookTree = [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }];
+        activeLookId = rootId;
+        variants = [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }];
+      }
       const newChar: CharacterSheet = {
         id,
         name: libChar.name,
         isProtagonist: hasProtagonist ? false : (libChar.isProtagonist ?? false),
-        variants: [{ id: rootId, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-        lookTree: [{ id: rootId, parentId: null, label: '基础形象', imageDataUrl: libChar.baseImageDataUrl }],
-        activeLookId: rootId,
+        variants,
+        lookTree,
+        activeLookId,
         baseImageDataUrl: libChar.baseImageDataUrl,
         baseConfirmed: libChar.baseConfirmed ?? false,
-        states: libChar.states?.map((s) => ({
-          id: s.id ?? `state_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          label: s.label,
-          imageDataUrl: s.imageDataUrl,
-          statePrompt: s.statePrompt ?? '',
-          notes: s.notes ?? '',
-        })) ?? [],
+        states: mapStates(libChar.states),
       };
       return {
         ...p,

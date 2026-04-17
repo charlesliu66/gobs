@@ -267,11 +267,38 @@ export interface CharacterState {
   notes?: string;
 }
 
-/** 预设状态模板 */
-export const CHARACTER_STATE_PRESETS: Record<string, string[]> = {
-  短剧古装: ['日常装束', '正式场合', '战斗装束', '哭戏状态', '受伤状态'],
-  现代都市: ['日常装束', '职场着装', '约会造型', '运动装束'],
-  游戏角色: ['普通状态', '技能释放', '受击状态', '胜利姿态'],
+/** 预设状态模板（带默认 statePrompt 差异描述，提升 AI 生成质量） */
+export interface StatePresetItem {
+  label: string;
+  statePrompt: string;
+}
+
+export const CHARACTER_STATE_PRESETS: Record<string, StatePresetItem[]> = {
+  短剧古装: [
+    { label: '日常装束', statePrompt: '穿着朴素日常服饰，神态放松自然，站在日常场景中' },
+    { label: '正式场合', statePrompt: '身着华丽正式礼服，头饰精致，仪态端庄，气场隆重' },
+    { label: '战斗装束', statePrompt: '身着轻甲或战斗服饰，手持武器，动态战斗姿势，表情坚毅' },
+    { label: '哭戏状态', statePrompt: '面部悲伤，眼含泪水或泪痕，表情痛苦，情绪崩溃' },
+    { label: '受伤状态', statePrompt: '身上有明显伤痕和血迹，衣物破损，表情虚弱痛苦，姿态不稳' },
+  ],
+  现代都市: [
+    { label: '日常装束', statePrompt: '穿着休闲T恤牛仔裤，放松自然的站姿' },
+    { label: '职场着装', statePrompt: '身着正式职业装/西装，干练专业形象，自信姿态' },
+    { label: '约会造型', statePrompt: '精心打扮，时尚造型，表情愉悦，散发魅力' },
+    { label: '运动装束', statePrompt: '穿着运动服/健身服，动感姿势，充满活力' },
+  ],
+  游戏角色: [
+    { label: '普通状态', statePrompt: '标准站立姿态，装备齐全，表情平静' },
+    { label: '技能释放', statePrompt: '释放技能的动态姿势，身体周围有能量光效，表情专注' },
+    { label: '受击状态', statePrompt: '被击中后的受伤姿态，身上有伤痕，表情痛苦，防御姿势' },
+    { label: '胜利姿态', statePrompt: '胜利庆祝姿势，表情自信骄傲，姿态张扬' },
+  ],
+  年龄变化: [
+    { label: '童年形象', statePrompt: '同一角色的幼年/童年版本，身材矮小，面容稚嫩，大眼睛，保持相同的发色和瞳色特征' },
+    { label: '青年形象', statePrompt: '同一角色的青年版本，面容年轻有朝气，身材匀称' },
+    { label: '中年形象', statePrompt: '同一角色的中年版本，面部有岁月痕迹，身材略显沧桑，眼神沉稳' },
+    { label: '老年形象', statePrompt: '同一角色的老年版本，白发苍苍，面部皱纹明显，但保持同样的五官特征和气质' },
+  ],
   自定义: [],
 };
 
