@@ -221,12 +221,6 @@ export function CharacterWardrobePanel({ sheet, styleRef, styleRefImage, aspectR
     }
   }, [sheet, states, styleRef, aspectRatio, onUpdate]);
 
-  // 添加状态
-  const addState = (label: string, statePrompt?: string) => {
-    const newState: CharacterState = { id: genId(), label, statePrompt };
-    onUpdate({ ...sheet, states: [...states, newState] });
-  };
-
   // 应用预设（带 statePrompt），展开第一个状态供查看/编辑
   const applyPreset = (preset: StatePresetItem[]) => {
     const newStates: CharacterState[] = preset.map((p) => ({
