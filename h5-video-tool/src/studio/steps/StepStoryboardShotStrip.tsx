@@ -16,6 +16,7 @@ export function StepStoryboardShotStrip({
   shotBusyMap,
   shotQueuedMap,
   shotJobStatusMap,
+  shotJobQueueInfoMap,
   onSelectShot,
 }: {
   shots: ProductionShot[];
@@ -24,8 +25,20 @@ export function StepStoryboardShotStrip({
   shotBusyMap: Record<string, 'frame' | 'video'>;
   shotQueuedMap?: Record<string, boolean>;
   shotJobStatusMap?: Record<string, ShotJobStatus>;
+  /** 即梦队列位置，用于 tooltip 展示"即梦队列 #N/M" */
+  shotJobQueueInfoMap?: Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }>;
   onSelectShot: (idx: number) => void;
 }) {
+  const formatQueueTip = (key: string, base: string): string => {
+    const q = shotJobQueueInfoMap?.[key];
+    if (!q) return base;
+    const idx = typeof q.queue_idx === 'number' ? q.queue_idx + 1 : null;
+    const len = typeof q.queue_length === 'number' ? q.queue_length : null;
+    if (idx && len) return `${base}（即梦队列 #${idx}/${len}）`;
+    if (idx) return `${base}（即梦队列 #${idx}）`;
+    if (q.queue_status) return `${base}（${q.queue_status}）`;
+    return base;
+  };
   return (
     <div className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
       <div className="flex min-w-min gap-2">
@@ -77,17 +90,26 @@ export function StepStoryboardShotStrip({
                   <span className="px-1 text-[8px] font-medium text-amber-100">提交中</span>
                 </div>
               ) : jobStatus === 'processing' ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50">
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50"
+                  title={formatQueueTip(shotKey, '即梦正在生成')}
+                >
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-green-400" />
                   <span className="px-1 text-[8px] font-medium text-green-200">即梦生成</span>
                 </div>
               ) : jobStatus === 'queuing' ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45">
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45"
+                  title={formatQueueTip(shotKey, '即梦服务端队列排队中')}
+                >
                   <span className="h-4 w-4 rounded-full border-2 border-white/20 border-t-sky-400 animate-pulse" />
                   <span className="px-1 text-[8px] font-medium text-sky-200">即梦排队</span>
                 </div>
               ) : s.pendingVideoSubmitId ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50">
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50"
+                  title={formatQueueTip(shotKey, '已提交即梦，等待最新状态')}
+                >
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-green-400" style={{ animationDuration: '2s' }} />
                   <span className="px-1 text-[8px] font-medium text-green-200">即梦生成</span>
                 </div>

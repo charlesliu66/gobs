@@ -34,6 +34,7 @@ export function StepStoryboardWorkspace({
   shotBusyMap,
   shotQueuedMap,
   shotJobStatusMap,
+  shotJobQueueInfoMap,
   storySceneCoverage,
   styleRefSummary,
   shotVideoDreaminaModel,
@@ -80,6 +81,8 @@ export function StepStoryboardWorkspace({
   shotQueuedMap?: Record<string, boolean>;
   /** shot.shotIndex(string) → 即梦 batch-job 实时状态，用于渲染四态徽标（含失败）*/
   shotJobStatusMap?: Record<string, 'queuing' | 'processing' | 'failed'>;
+  /** shot.shotIndex(string) → 即梦队列位置（queue_idx/queue_length），用于徽标 tooltip */
+  shotJobQueueInfoMap?: Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }>;
   storySceneCoverage: StorySceneCoverage;
   styleRefSummary: string;
   shotVideoDreaminaModel?: string;
@@ -295,6 +298,7 @@ export function StepStoryboardWorkspace({
         shotBusyMap={shotBusyMap}
         shotQueuedMap={shotQueuedMap}
         shotJobStatusMap={shotJobStatusMap}
+        shotJobQueueInfoMap={shotJobQueueInfoMap}
         onSelectShot={setSelectedShotIdx}
       />
 

@@ -158,6 +158,36 @@
 
 <!-- NEXT_VERSION: v0.65 -->
 
+### v0.64.2 — 2026-04-20（hotfix）
+
+**修复 v0.64 前端 recovery effect 误把"已提交即梦"当作"本地提交中" + 暴露即梦队列位置**
+
+v0.64 上线后用户反馈：同时点镜 10/11 生成，镜 10 显示"即梦生成"、镜 11 显示"即梦排队"（符合预期，反映即梦服务端 GPU 调度顺序），**但镜 7/8 一直卡在金色"提交中"且"手动检查进度"按钮消失**。排查发现 `ProductionWizard` 刷新恢复 effect 错把「有 `pendingVideoSubmitId` 的 shot」强行写入 `shotBusyMap='video'`，而 `shotBusyMap='video'` 语义应严格限定为「本会话正在调 `/api/video/submit` 的那几秒」。混用导致：
+
+1. ShotStrip 里 `isThisShotBusy==='video'` 优先级高于 `jobStatus`，SSE 推来的"即梦排队/即梦生成"徽标被覆盖，**永远只看到"提交中"**。
+2. `StepStoryboardGenerateActions` 的「手动检查进度」按钮条件 `hasPendingBackend = pendingVideoSubmitId && !isSubmitting` 因 `shotBusyMap='video'` 导致 `isSubmitting=true`，按钮消失，用户没法主动触发一次 poll。
+
+**修复（一次性到位）：**
+- **[frontend] `ProductionWizard.tsx` recovery effect**：不再给带 `pendingVideoSubmitId` 的 shot 写 `shotBusyMap='video'`。保留「shot 同时有 `pendingVideoSubmitId` 和已成片视频」时清 stale pending 的兜底逻辑（这部分是对的）。刷新后该 shot 由 ShotStrip 默认分支 + SSE `jobStatus` 共同渲染：后端立刻能推到 queuing/processing/failed 时显示对应的蓝/绿/红徽标。
+- **[frontend] `StepStoryboardGenerateActions.tsx`**：
+  - `hasPendingBackend` 从 `pendingVideoSubmitId && !isSubmitting` 改为 `!!pendingVideoSubmitId`，并把「手动检查进度」按钮条件显式改为 `hasPendingBackend && shotMediaBusy !== 'video'`（即：只在真·HTTP submit 进行中才屏蔽；已提交即梦就随时能点）。
+  - 按钮文案/主按钮 label 区分开「正在调 submit」「本地队列排队」「已提交即梦」三种状态。
+- **[frontend] `ProductionWizard.tsx` 新增 `shotJobQueueInfoMap`**：从 `useGlobalJobs` 里挑每个 shot 最新一条 active job 的 `queueInfo`（后端本来就传了，来自 Dreamina `query_result.py` 的 `queue_info.queue_idx/queue_length`），透传到 ShotStrip。
+- **[frontend] `StepStoryboardShotStrip.tsx`**：徽标 tooltip 展示「即梦队列 #N/M」，用户 hover 到蓝色"即梦排队"徽标即可看到即梦服务端真实的队列位置，不再猜"是不是卡住了"。
+
+**原理背景（为什么会有"即梦生成"vs"即梦排队"两种态）：**
+- 后端 `pollDreaminaTask` 调 `query_result.py` 拿回即梦侧的 `gen_status`：
+  - `generate` → 即梦 GPU 正在渲染这一帧 → job.status = `processing` → 前端绿色"即梦生成"
+  - `queue`/`wait` 等 → 在即梦账号的 GPU 队列中排队 → job.status = `queuing` → 前端蓝色"即梦排队"
+- 同时提交两个任务时，即梦账号的服务端并发槽位（通常 1-2 个）决定了谁先被 GPU 接走。先点击不保证先被调度，这是即梦的调度逻辑，不是我们后端在排队。
+
+**效果：**
+- 镜 7/8 刷新后不再卡"提交中"，会按 SSE 立即切到"即梦排队"（蓝）或"即梦生成"（绿），确实失败才显示红叉。
+- 「手动检查进度」按钮在"已提交即梦"态始终可用。
+- 鼠标悬停蓝色徽标能看到「即梦队列 #3/12」这样的真实位置。
+
+---
+
 ### v0.64.1 — 2026-04-20（hotfix）
 
 **修复 v0.64 副作用：瞬时 CLI 错误被误判为"生成失败"**
@@ -1044,5 +1074,5 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-20（v0.64.1）*
+*最后更新：2026-04-20（v0.64.2）*
 

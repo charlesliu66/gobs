@@ -22,13 +22,16 @@ export function StepStoryboardGenerateActions({
   onGenerateShotVideo: () => void;
   onCheckVideoProgress?: () => void;
 }) {
+  // `shotMediaBusy === 'video'` = 正在调 /api/video/submit 的那几秒（本地真·busy）
+  // `isQueued` = 本地提交队列在排（等前面的 shot 发 submit）
+  // `pendingVideoSubmitId` = 已经提交给即梦、在即梦侧排队或生成 —— 两者互斥
   const isSubmitting = shotMediaBusy === 'video' || isQueued;
-  const hasPendingBackend = !!pendingVideoSubmitId && !isSubmitting;
+  const hasPendingBackend = !!pendingVideoSubmitId;
   const videoButtonDisabled = isSubmitting || hasPendingBackend;
 
   function videoButtonLabel() {
     if (isQueued && queueDepth && queueDepth > 0) return `排队等待中…（前方 ${queueDepth} 个）`;
-    if (isSubmitting) return '即梦提交中…';
+    if (shotMediaBusy === 'video') return '即梦提交中…';
     if (hasPendingBackend) return '后台生成中（等待即梦出片）';
     return '生成分镜视频';
   }
@@ -52,7 +55,7 @@ export function StepStoryboardGenerateActions({
         >
           {videoButtonLabel()}
         </button>
-        {hasPendingBackend && onCheckVideoProgress && (
+        {hasPendingBackend && shotMediaBusy !== 'video' && onCheckVideoProgress && (
           <button
             type="button"
             disabled={checkingProgress}

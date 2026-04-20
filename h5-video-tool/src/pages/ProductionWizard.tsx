@@ -294,6 +294,33 @@ export function ProductionWizard() {
     return out;
   }, [globalJobs, serverProjectId]);
 
+  /**
+   * 每个 shot 挑"最新一条活跃 job"的即梦队列信息（queue_idx / queue_length），
+   * 给 ShotStrip 做 tooltip 展示。done/failed 的 job 不参与，processing 时一般没有 queueInfo
+   * 但如果有（即梦偶尔附带）也一并带上。
+   */
+  const shotJobQueueInfoMap = useMemo<Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }>>(() => {
+    if (!serverProjectId) return {};
+    const out: Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }> = {};
+    const relevant = globalJobs.filter((j) =>
+      j.projectId === serverProjectId &&
+      (j.status === 'queuing' || j.status === 'processing' || j.status === 'pending') &&
+      j.queueInfo,
+    );
+    const latestByShot = new Map<number, typeof relevant[number]>();
+    for (const j of relevant) {
+      if (typeof j.shotIndex !== 'number') continue;
+      const prev = latestByShot.get(j.shotIndex);
+      if (!prev || new Date(j.updatedAt).getTime() > new Date(prev.updatedAt).getTime()) {
+        latestByShot.set(j.shotIndex, j);
+      }
+    }
+    for (const [idx, j] of latestByShot) {
+      if (j.queueInfo) out[String(idx)] = j.queueInfo;
+    }
+    return out;
+  }, [globalJobs, serverProjectId]);
+
   const handleSyncBatchJobsNow = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
@@ -1614,7 +1641,14 @@ export function ProductionWizard() {
     }
   }, [project.shots, serverProjectId, generateVideoForShotIdx]);
 
-  // ── 刷新恢复：还原 pending 分镜的"生成中"展示 + 自动续接批量队列 ───────────
+  // ── 刷新恢复：清理 stale pending + 自动续接批量队列 ──────────────────────
+  // 注意：这里**不再**把带 pendingVideoSubmitId 的 shot 标成 shotBusyMap='video'。
+  // `shotBusyMap='video'` 严格语义是「正在本地调 /api/video/submit 的那几秒」，
+  // 跟「已提交给即梦、正在即梦侧排队/生成」是两回事。混为一谈会导致：
+  //   1) 徽标永远卡"提交中"，覆盖掉 SSE 推过来的"即梦排队/即梦生成"实时状态；
+  //   2) `StepStoryboardGenerateActions` 的「手动检查进度」按钮因 isSubmitting=true 被隐藏。
+  // 有 pendingVideoSubmitId 时交给 ShotStrip 默认分支渲染"即梦生成/排队"即可，
+  // SSE 推到 queuing/processing/failed 时自动切对应徽标。
   const batchResumedRef = useRef(false);
   useEffect(() => {
     if (isServerBootstrapping || batchResumedRef.current) return;
@@ -1624,15 +1658,10 @@ export function ProductionWizard() {
     // 兜底：历史遗留的 shot 可能同时带 pendingVideoSubmitId 和已生成的 previewVideoUrl/Path/versions
     //（即梦回写失败或 batch-job 未写回），这种情况下不应再显示"提交中"。直接清 pending 并标记为已完成。
     const staleIdxs: number[] = [];
-    const pendingIds: string[] = [];
     project.shots.forEach((s, idx) => {
       const hasVideo = Boolean(s.previewVideoUrl || s.previewVideoPath || s.previewVideoVersions?.length);
-      if (s.pendingVideoSubmitId) {
-        if (hasVideo) {
-          staleIdxs.push(idx);
-        } else {
-          pendingIds.push(String(s.shotIndex));
-        }
+      if (s.pendingVideoSubmitId && hasVideo) {
+        staleIdxs.push(idx);
       }
     });
     if (staleIdxs.length) {
@@ -1644,13 +1673,6 @@ export function ProductionWizard() {
           shots[i] = { ...cur, pendingVideoSubmitId: undefined };
         }
         return { ...p, shots };
-      });
-    }
-    if (pendingIds.length) {
-      setShotBusyMap((prev) => {
-        const next = { ...prev };
-        for (const id of pendingIds) next[id] = 'video';
-        return next;
       });
     }
 
@@ -1979,6 +2001,7 @@ export function ProductionWizard() {
             shotBusyMap={shotBusyMap}
             shotQueuedMap={shotQueuedMap}
             shotJobStatusMap={shotJobStatusMap}
+            shotJobQueueInfoMap={shotJobQueueInfoMap}
             onSyncBatchJobs={handleSyncBatchJobsNow}
             syncingBatchJobs={syncing}
             storySceneCoverage={storySceneCoverage}
