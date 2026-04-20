@@ -156,7 +156,19 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.62 -->
+<!-- NEXT_VERSION: v0.63 -->
+
+### v0.62 — 2026-04-20
+
+**即梦孤儿任务自动恢复**
+
+当即梦后台已经开了任务但前端/后端因网络抖动、CLI 超时或服务重启等原因没拿到 `submit_id` 时，之前会变成永远飞不回 H5 的"孤儿任务"。本版加入完整恢复链路：
+
+- **[api] 提交意图预登记**：`/api/video/dreamina/submit` 在进入 CLI 前先把提交意图（`projectId + shotIndex + 最终 prompt + submittedAt`）持久化到 `<API_DATA_DIR>/output/batch-jobs/dreamina-intents.json`。拿到 `submit_id` 后立即标 resolved；任意失败路径也保留 intent 为 pending，以便后台兜底。
+- **[api] 后台 scanner**：服务启动后每 2 分钟自动跑一次 `runRecoveryScan()`——调用 `list_task.py --limit 50` 拉即梦账号近 50 条任务，对每个 pending intent 按 (1) prompt fingerprint 精确匹配、(2) prompt 前缀双向包含、(3) 时间窗 + 任务类型兜底 的顺序反查候选 submit_id；命中后自动 `addJob` 注册进 batch-jobs 队列，现有 poller 会把成片落盘并经 SSE 推回 H5。pending 超过 30 分钟标 expired 不再扫。
+- **[api] 诊断/手动接口**：新增 `GET /api/video/dreamina/recover/pending` 查看待恢复 intent、`POST /api/video/dreamina/recover/scan` 立即触发一次扫描。
+- **[frontend] submit body 字段补全**：`ProductionWizard` 的即梦提交 body 新增 `projectId / shotIndex / shotDescription`，给后端 intent 登记提供必要锚点。
+- **[infra]** `h5-video-tool-api/src/services/dreaminaRecovery.ts`（新文件，~300 行）+ `dreaminaVideo.ts` 导出 `listDreaminaTasks()` + `index.ts` 启动时 `startRecoveryScanner()`。
 
 ### v0.61 — 2026-04-20
 
@@ -955,5 +967,5 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*鏈€鍚庢洿鏂帮細2026-04-20锛坴0.60锛?
+*最后更新：2026-04-20（v0.62）*
 

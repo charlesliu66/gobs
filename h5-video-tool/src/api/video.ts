@@ -65,6 +65,12 @@ export interface VideoGenerateRequest {
   };
   /** 来源标记：production 源在后端提交后立即释放信号量 slot */
   source?: 'production' | 'quickfilm';
+  /** 高级制片项目 id；用于孤儿 submitId 恢复时重建 batch-job */
+  projectId?: string;
+  /** 0-based 分镜序号；孤儿恢复时回写到对应 shot */
+  shotIndex?: number;
+  /** 分镜描述文案，仅用于 batch-job 展示 */
+  shotDescription?: string;
 }
 
 export interface VeoModelsResponse {

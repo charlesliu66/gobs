@@ -1415,6 +1415,11 @@ export function ProductionWizard() {
         aspectRatio: ar,
         model,
         source: 'production' as const,
+        // 孤儿 submitId 恢复用：即使 submit 响应丢失，后端 scanner 也能通过
+        // projectId + shotIndex + prompt 从 list_task 反查并重建 batch-job
+        ...(serverProjectId ? { projectId: serverProjectId } : {}),
+        shotIndex: s.shotIndex,
+        shotDescription: storyboardText.slice(0, 120),
         ...(mv ? { dreaminaModelVersion: mv } : {}),
         ...extraBody,
       };

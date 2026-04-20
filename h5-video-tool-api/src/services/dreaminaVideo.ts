@@ -285,6 +285,80 @@ async function runWrapper(script: string, args: string[], timeoutMs = 0): Promis
   }
 }
 
+/**
+ * 调 list_task.py，拉当前登录账号最近 N 条任务。
+ * 用于孤儿 submitId 恢复：当 H5 没拿到 submit_id 时，通过 prompt+时间窗反查。
+ *
+ * 字段命名在不同 dreamina-cli 版本间有差异，调用方请使用 {@link DreaminaListedTask}
+ * 的规范化字段；`raw` 保留原始对象以备扩展调试。
+ */
+export async function listDreaminaTasks(params: {
+  limit?: number;
+  genStatus?: 'querying' | 'success' | 'fail';
+  genTaskType?: string;
+} = {}): Promise<DreaminaListedTask[]> {
+  if (!isDreaminaEnabled()) return [];
+  const args: string[] = [];
+  const lim = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  args.push('--limit', String(lim));
+  if (params.genStatus) args.push('--gen-status', params.genStatus);
+  if (params.genTaskType) args.push('--gen-task-type', params.genTaskType);
+  const wrap = await runWrapper('list_task.py', args, 30_000);
+  if (!wrap.ok) {
+    const msg = wrap.error || '即梦 list_task 失败';
+    throw new Error(dreaminaFailureMessage(msg));
+  }
+  const data = wrap.data;
+  // list_task 返回结构在不同 CLI 版本之间差异较大：
+  //   { list: [...] } / { tasks: [...] } / { data: [...] } / 直接数组
+  let raws: unknown[] = [];
+  if (Array.isArray(data)) raws = data;
+  else if (data && typeof data === 'object') {
+    const d = data as Record<string, unknown>;
+    for (const k of ['list', 'tasks', 'data', 'items', 'result']) {
+      const v = d[k];
+      if (Array.isArray(v)) { raws = v; break; }
+    }
+  }
+  const out: DreaminaListedTask[] = [];
+  for (const r of raws) {
+    if (!r || typeof r !== 'object') continue;
+    const rec = r as Record<string, unknown>;
+    const submitId = String(rec.submit_id ?? rec.submitId ?? '').trim();
+    if (!submitId) continue;
+    const genStatus = String(rec.gen_status ?? rec.genStatus ?? '').trim().toLowerCase();
+    const taskType = String(rec.gen_task_type ?? rec.genTaskType ?? rec.task_type ?? '').trim();
+    const promptText = String(rec.prompt ?? rec.text_prompt ?? rec.user_prompt ?? '').trim();
+    // create_time 可能是 epoch(秒/毫秒) 或 ISO 字符串
+    const ct = rec.create_time ?? rec.createTime ?? rec.created_at ?? rec.createdAt;
+    let createMs: number | undefined;
+    if (typeof ct === 'number' && Number.isFinite(ct)) {
+      createMs = ct < 1e12 ? ct * 1000 : ct;
+    } else if (typeof ct === 'string' && ct) {
+      const parsed = Date.parse(ct);
+      createMs = Number.isFinite(parsed) ? parsed : undefined;
+    }
+    out.push({
+      submitId,
+      genStatus: genStatus || undefined,
+      taskType: taskType || undefined,
+      prompt: promptText || undefined,
+      createMs,
+      raw: rec,
+    });
+  }
+  return out;
+}
+
+export interface DreaminaListedTask {
+  submitId: string;
+  genStatus?: string;
+  taskType?: string;
+  prompt?: string;
+  createMs?: number;
+  raw: Record<string, unknown>;
+}
+
 export async function checkDreaminaAuth(): Promise<{
   loggedIn: boolean;
   username?: string;

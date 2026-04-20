@@ -12,6 +12,13 @@ import { composeDreaminaPrompt, type DreaminaPromptHints } from '../services/dre
 import { persistVideoUrlToOutput } from '../services/videoUtils.js';
 import { resolveFirstDriveImageIfMissing } from '../services/videoReferenceUtils.js';
 import { classifyError, classifyDreaminaFailReason } from '../domain/job-status.js';
+import {
+  recordSubmitIntent,
+  resolveIntentWithSubmitId,
+  markIntentFailed,
+  listPendingIntents,
+  runRecoveryScan,
+} from '../services/dreaminaRecovery.js';
 
 const dreaminaRouter = Router();
 
@@ -143,6 +150,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     autoComposePrompt,
     dreaminaPromptHints,
     source,
+    projectId,
+    shotIndex,
+    shotDescription,
   } = req.body as {
     storyboardText?: string;
     materials?: { id: string; name: string; mimeType?: string }[];
@@ -159,6 +169,12 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     autoComposePrompt?: boolean;
     dreaminaPromptHints?: DreaminaPromptHints;
     source?: 'production' | 'quickfilm';
+    /** 高级制片项目 id，用于孤儿任务恢复时重建 batch-job（可选，仅 source=production 时使用） */
+    projectId?: string;
+    /** 0-based 分镜序号，用于恢复后回写到对应 shot */
+    shotIndex?: number;
+    /** 分镜描述文案，仅用于 batch-job 展示 */
+    shotDescription?: string;
   };
   const isProductionSource = source === 'production';
 
@@ -178,6 +194,10 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
   if (!(await ensureDreaminaAuthOrRespond(res))) {
     return;
   }
+
+  // 孤儿恢复 intent：出于诊断和 scanner 兜底，只对 production 源 + 已带 projectId 的提交才登记。
+  // 实际 id 在各分支把 resolvedPrompt 算出来后再赋值。
+  let intentId: string | undefined;
 
   try {
     if (isDreaminaMultimodalModel(modelTrim)) {
@@ -199,6 +219,21 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
         typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
           ? dreaminaModelVersion.trim()
           : undefined;
+      // 孤儿恢复：提交前先落 intent（若 CLI/网络挂了，scanner 会通过 list_task 反查回来）
+      if (isProductionSource && projectId) {
+        intentId = await recordSubmitIntent({
+          username: req.user?.username,
+          projectId,
+          shotIndex,
+          shotDescription,
+          model: modelTrim!,
+          taskType: 'video',
+          prompt: resolvedPrompt,
+        }).catch((e) => {
+          console.warn('[dreamina] recordSubmitIntent failed:', (e as Error).message);
+          return undefined;
+        });
+      }
       // Acquire the global Dreamina slot — blocks until any previous task is done.
       // This prevents ExceedConcurrencyLimit (ret=1310) from concurrent users.
       const { waitForSlot, release: releaseSlot } = acquireDreaminaSlot();
@@ -262,6 +297,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       }
       if (!mmResult) { releaseSlot(); throw mmLastErr ?? new Error('multimodal submit failed'); }
       const { submitId, taskId } = mmResult;
+      if (intentId) {
+        await resolveIntentWithSubmitId(intentId, submitId).catch(() => void 0);
+      }
       if (isProductionSource) {
         releaseSlot();
       } else {
@@ -281,6 +319,22 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       typeof dreaminaModelVersion === 'string' && dreaminaModelVersion.trim()
         ? dreaminaModelVersion.trim()
         : undefined;
+    // 孤儿恢复：非 multimodal 的 prompt 就是 storyboardText.trim()
+    const nonMmPrompt = storyboardText.trim();
+    if (isProductionSource && projectId) {
+      intentId = await recordSubmitIntent({
+        username: req.user?.username,
+        projectId,
+        shotIndex,
+        shotDescription,
+        model: modelTrim!,
+        taskType: 'video',
+        prompt: nonMmPrompt,
+      }).catch((e) => {
+        console.warn('[dreamina] recordSubmitIntent failed:', (e as Error).message);
+        return undefined;
+      });
+    }
     // Non-multimodal Dreamina (text2video / image2video) also shares the same account slot.
     const { waitForSlot: waitNonMm, release: releaseNonMm } = acquireDreaminaSlot();
     await waitNonMm;
@@ -327,6 +381,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       }
     }
     if (!nonMmResult) { releaseNonMm(); throw nonMmLastErr ?? new Error('submit failed'); }
+    if (intentId) {
+      await resolveIntentWithSubmitId(intentId, nonMmResult.submitId).catch(() => void 0);
+    }
     if (isProductionSource) {
       releaseNonMm();
     } else {
@@ -335,8 +392,36 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     res.json({ submitId: nonMmResult.submitId, taskId: nonMmResult.taskId, status: 'pending' as const });
   } catch (err) {
     console.error('[video/dreamina/submit]', err);
+    // 保留 intent 为 pending 让 scanner 兜底；只在 error 字段打上原因方便排查。
+    if (intentId) {
+      const reason = err instanceof Error ? err.message : String(err);
+      await markIntentFailed(intentId, reason).catch(() => void 0);
+    }
     const { errorCode, errorMessage } = classifyError(err);
     res.status(500).json({ error: errorMessage, errorCode });
+  }
+});
+
+// ── 孤儿恢复：诊断 + 手动触发 ───────────────────────────────────────────
+
+/** GET /api/video/dreamina/recover/pending — 查看当前所有 pending intent */
+dreaminaRouter.get('/recover/pending', async (req: Request, res: Response) => {
+  try {
+    const uname = req.user?.username;
+    const list = await listPendingIntents(uname);
+    res.json({ count: list.length, intents: list });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'list pending failed' });
+  }
+});
+
+/** POST /api/video/dreamina/recover/scan — 手动触发一次扫描，返回命中的 intentId */
+dreaminaRouter.post('/recover/scan', async (_req: Request, res: Response) => {
+  try {
+    const result = await runRecoveryScan();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'scan failed' });
   }
 });
 

@@ -37,6 +37,7 @@ import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 import { runWithRequestContext } from './services/requestContext.js';
 import { resetInterruptedJobs } from './services/assetIngestService.js';
 import { recoverMultishotJobsOnBoot } from './routes/videoMultishot.js';
+import { startRecoveryScanner } from './services/dreaminaRecovery.js';
 import systemRouter from './routes/system.js';
 
 const app = express();
@@ -109,4 +110,5 @@ app.listen(Number(PORT), '127.0.0.1', () => {
   startBatchJobsPoller();
   resetInterruptedJobs();
   void recoverMultishotJobsOnBoot();
+  startRecoveryScanner();
 });
