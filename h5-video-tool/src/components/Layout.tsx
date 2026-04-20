@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, type JSX } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
+import { GlobalJobsContext, useGlobalJobsProvider } from '../hooks/useGlobalJobs';
+import { GlobalJobsPanel, GlobalJobsTrigger } from './GlobalJobsPanel';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
@@ -199,6 +201,7 @@ export function Layout() {
   const isProductionWizard = pathname === '/studio/production';
   const isTiktokMatrix = pathname === '/tiktok-matrix';
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const globalJobs = useGlobalJobsProvider();
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -332,58 +335,62 @@ export function Layout() {
   );
 
   return (
-    <div
-      className={`flex bg-[var(--color-surface)] ${
-        isEditor || isProductionWizard || isTiktokMatrix ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
-      }`}
-    >
-      {sidebarOpen && (
-        <div
-          role="presentation"
-          className="fixed inset-0 z-[190] bg-black/60 backdrop-blur-sm sm:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      <aside
-        className={`
-          fixed sm:relative inset-y-0 left-0 z-[200]
-          w-60 flex-shrink-0 border-r border-[var(--color-border)]/50
-          bg-[var(--color-surface-elevated)]/90 backdrop-blur-xl
-          transition-transform duration-300 ease-in-out
-          sm:translate-x-0
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-        `}
-      >
-        {sidebar}
-      </aside>
-      <main
-        className={`flex-1 min-w-0 flex flex-col ${
-          isEditor || isProductionWizard || isTiktokMatrix
-            ? `min-h-0 overflow-hidden bg-[var(--color-surface)] p-0 ${
-                isTiktokMatrix ? 'h-full max-h-[100dvh] [&>*]:min-h-0 [&>*]:min-w-0 [&>*]:flex-1' : ''
-              }`
-            : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
+    <GlobalJobsContext.Provider value={globalJobs}>
+      <div
+        className={`flex bg-[var(--color-surface)] ${
+          isEditor || isProductionWizard || isTiktokMatrix ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen'
         }`}
       >
-        {!isEditor && !isProductionWizard && !isTiktokMatrix && (
-          <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="打开菜单"
-              className="p-2 rounded-lg border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="15" y2="12" />
-                <line x1="3" y1="18" x2="18" y2="18" />
-              </svg>
-            </button>
-            <span className="text-sm font-semibold text-[var(--color-text)] tracking-tight">GOBS</span>
-          </div>
+        {sidebarOpen && (
+          <div
+            role="presentation"
+            className="fixed inset-0 z-[190] bg-black/60 backdrop-blur-sm sm:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
-        <Outlet />
-      </main>
-    </div>
+        <aside
+          className={`
+            fixed sm:relative inset-y-0 left-0 z-[200]
+            w-60 flex-shrink-0 border-r border-[var(--color-border)]/50
+            bg-[var(--color-surface-elevated)]/90 backdrop-blur-xl
+            transition-transform duration-300 ease-in-out
+            sm:translate-x-0
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
+          `}
+        >
+          {sidebar}
+        </aside>
+        <main
+          className={`flex-1 min-w-0 flex flex-col ${
+            isEditor || isProductionWizard || isTiktokMatrix
+              ? `min-h-0 overflow-hidden bg-[var(--color-surface)] p-0 ${
+                  isTiktokMatrix ? 'h-full max-h-[100dvh] [&>*]:min-h-0 [&>*]:min-w-0 [&>*]:flex-1' : ''
+                }`
+              : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
+          }`}
+        >
+          {!isEditor && !isProductionWizard && !isTiktokMatrix && (
+            <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="打开菜单"
+                className="p-2 rounded-lg border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="15" y2="12" />
+                  <line x1="3" y1="18" x2="18" y2="18" />
+                </svg>
+              </button>
+              <span className="text-sm font-semibold text-[var(--color-text)] tracking-tight">GOBS</span>
+            </div>
+          )}
+          <Outlet />
+        </main>
+        <GlobalJobsTrigger />
+        <GlobalJobsPanel />
+      </div>
+    </GlobalJobsContext.Provider>
   );
 }

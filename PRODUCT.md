@@ -156,7 +156,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.61 -->
+<!-- NEXT_VERSION: v0.62 -->
+
+### v0.61 — 2026-04-20
+
+**全局生成队列看板 + 版本历史时间线**
+
+- **[frontend] 全局生成队列看板**：新增 useGlobalJobs hook 通过 SSE 实时订阅所有 batch-jobs 状态，在 Layout 右下角添加浮动触发按钮（显示进行中任务数量徽标），点击展开 GlobalJobsPanel 面板，分「进行中」和「最近完成」两组展示任务列表，支持按来源（高级制片/一键成片）分类显示
+- **[frontend] 版本历史时间线**：新增 VersionTimeline 可视化时间轴组件，替换 StepStoryboardPreviewPanel 中的简单版本列表，以垂直时间线形式展示每个视频版本的生成时间、来源类型（批量生成/即梦生成/手动上传）、持久化状态，支持折叠/展开、一键保留当前版本
+
 
 ### v0.60 — 2026-04-20
 

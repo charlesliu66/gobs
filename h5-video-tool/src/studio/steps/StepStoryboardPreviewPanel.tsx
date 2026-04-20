@@ -1,4 +1,5 @@
 import type { ProductionShot, ProductionShotVideoVersion } from '../productionTypes';
+import { VersionTimeline } from '../components/VersionTimeline';
 
 export function StepStoryboardPreviewPanel({
   shot,
@@ -87,49 +88,12 @@ export function StepStoryboardPreviewPanel({
         ) : (
           <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">暂无成片，点击左侧「生成分镜视频」。</p>
         )}
-        {shotVideoVersions.length > 0 ? (
-          <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
-            {shotVideoVersions.length >= 5 && (
-              <div className="rounded border border-amber-500/30 bg-amber-950/20 px-2 py-1.5 text-[10px] text-amber-200/90">
-                版本已达 {shotVideoVersions.length} 个，建议点击「仅保留当前」清理旧版本以节省磁盘空间
-              </div>
-            )}
-            <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
-              <span>版本记录（{shotVideoVersions.length}）</span>
-              {selectedShotVideoVersion ? (
-                <button
-                  type="button"
-                  onClick={() => onKeepOnlyCurrentVersion(selectedShotVideoVersion.id)}
-                  className="rounded border border-[var(--color-border)] px-1.5 py-0.5 hover:bg-[var(--color-surface-hover)]"
-                >
-                  仅保留当前
-                </button>
-              ) : null}
-            </div>
-            <div className="max-h-28 space-y-1 overflow-y-auto">
-              {shotVideoVersions.map((v, idx) => {
-                const active = selectedShotVideoVersion?.id === v.id;
-                const ts = new Date(v.createdAt || Date.now()).toLocaleString('zh-CN');
-                return (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => onSelectVideoVersion(v.id)}
-                    className={`flex w-full items-center justify-between rounded border px-2 py-1 text-left text-[10px] ${
-                      active
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                        : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                    }`}
-                  >
-                    <span>V{shotVideoVersions.length - idx}</span>
-                    <span>{v.videoPath ? '云端文件' : '临时地址'}</span>
-                    <span className="truncate pl-2">{ts}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
+        <VersionTimeline
+          versions={shotVideoVersions}
+          selectedVersionId={selectedShotVideoVersion?.id}
+          onSelect={onSelectVideoVersion}
+          onKeepOnly={onKeepOnlyCurrentVersion}
+        />
       </div>
     </aside>
   );
