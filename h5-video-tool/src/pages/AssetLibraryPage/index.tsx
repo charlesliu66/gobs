@@ -37,6 +37,8 @@ export function AssetLibraryPage() {
   function handleImportComplete() {
     setUploadOpen(false);
     setGalleryKey((k) => k + 1);
+    // 上传完成后滚动到顶部，让用户看到新上传的素材
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   }
 
   function handleReviewClose() {

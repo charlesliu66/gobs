@@ -155,6 +155,33 @@
 
 ## 浜屻€丆hangelog
 
+
+<!-- NEXT_VERSION: v0.60 -->
+
+### v0.59 — 2026-04-17
+
+**三大核心功能 UX 全面优化（高级制片 + 视频剪辑 + 素材库）**
+
+**Feature:**
+- **[frontend] App.tsx 路由懒加载**：所有页面组件改为 React.lazy + Suspense 动态导入，首屏加载体积大幅减少
+- **[frontend] 全局 Error Boundary**：新增 AppErrorBoundary 包裹整个路由，子组件渲染崩溃时展示友好错误页而非白屏
+- **[frontend] 素材库删除功能**：素材卡片 hover 显示删除按钮，批量选中后支持批量删除；AssetGallery 新增浮动操作栏（移动到文件夹 / 批量删除 / 取消选择）
+- **[api] 素材软删除 API**：新增 DELETE /assets/:id 单个软删除 + POST /assets/batch-delete 批量软删除（单次最多 200）；ssets 表新增 deleted_at 列，所有查询自动过滤已删除素材
+- **[frontend] 素材库 → 高级制片/视频生成深度链接**：素材详情抽屉新增「用于高级制片」按钮跳转 /studio/production?assetId=...；Studio 和 ProductionWizard 自动接收素材并设为参考图
+- **[frontend] 素材中台 → 即梦多模态引用打通**：DreaminaMultimodalRefs 新增「从素材库选择」按钮，打开 AssetPicker 选择素材后自动转换为多模态引用项
+- **[frontend] 素材中台 → 剪辑器素材库打通**：MediaLibrary 添加素材时自动记录使用日志（ecordUsage），支持视频和图片两种类型
+- **[frontend] 高级制片术语优化**：「服化道」改为「角色场景」、「故事弧」改为「故事构思」、「Seedance 块」改为「AI 视频描述」等，降低专业门槛
+- **[frontend] 剪辑器引导弹窗**：首次进入剪辑工作台弹出 onboarding 引导；视频源切换时新增 CSS 淡入动画
+- **[frontend] BGM 生成 UI 重构**：快捷风格按钮替换为「情绪分类」（Mood Categories）选择器，更直观
+- **[frontend] 高级制片导出页 Tab 化**：导出工作区拆分为「审片与剪辑」和「AI 视频描述」两个 Tab，各司其职
+- **[frontend] 素材上传后自动滚顶 + 新素材高亮**：上传完成后页面自动滚到顶部，新上传素材 3 秒高亮闪烁提示
+- **[api] 素材匹配增强**：matchAssetsForShot 同时搜索 legacy JSON 资产和 SQLite 素材中台数据，提升匹配覆盖率
+- **[frontend] React key 警告修复**：AssetDetailDrawer 和 TemplateMarket 中修复非唯一 key 导致的 console 警告
+- **[frontend] Layout 可访问性**：侧边栏按钮新增 ria-label，backdrop 新增 ole="presentation"
+- **[frontend] 导出提示优化**：Mock 模式导出完成提示改为「导出完成！文件正在后台处理中，请稍后在历史记录查看」
+- **[frontend] 高级制片导出去重增强**：「在剪辑器中打开」优先使用 sourceProductionProjectId 进行项目去重匹配
+- **[frontend] 制片向导步骤可达性**：根据项目完成度动态计算最大可达步骤，未解锁步骤显示禁用态
+
 ### v0.58 鈥?2026-04-17
 
 **鍓緫 Agent 鏅鸿兘鍖栧崌绾э細澶氭ā鍨?Plan鈫払uild 涓ら樁娈?+ 涓夌骇瀹归敊**

@@ -231,6 +231,16 @@ export function buildAssetFileUrl(assetId: string): string {
   return `/api/asset-library/assets/${encodeURIComponent(assetId)}/file?token=${encodeURIComponent(token)}`;
 }
 
+// ── 删除素材 ────────────────────────────────────────────────────────────────
+
+export async function deleteAsset(id: string): Promise<void> {
+  await apiDelete(`${BASE}/assets/${encodeURIComponent(id)}`);
+}
+
+export async function batchDeleteAssets(ids: string[]): Promise<{ deleted: number; ids: string[] }> {
+  return apiPost(`${BASE}/assets/batch-delete`, { ids });
+}
+
 // ── 收藏 ────────────────────────────────────────────────────────────────────
 
 export async function addFavorite(assetId: string): Promise<void> {

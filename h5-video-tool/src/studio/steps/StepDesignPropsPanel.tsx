@@ -34,7 +34,7 @@ export function StepDesignPropsPanel({
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
       {propSheets.length === 0 ? (
         <p className="col-span-full text-sm text-[var(--color-text-muted)]">
-          暂无道具卡。请先生成服化道（L2），制作清单中的 props 会同步为道具卡。
+          暂无道具卡。请先在「剧本大纲」步骤生成角色与场景设定，道具清单会自动同步。
         </p>
       ) : null}
       {propSheets.map((pr) => {

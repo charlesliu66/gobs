@@ -179,7 +179,7 @@ export function StepStoryArc({
         onClick={() => void onGenerateL2()}
         className="rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
       >
-        {busyL2 ? '生成中…' : '生成服化道并进入角色与场景'}
+        {busyL2 ? '生成中…' : '生成角色与场景设定'}
       </button>
     </div>
   );

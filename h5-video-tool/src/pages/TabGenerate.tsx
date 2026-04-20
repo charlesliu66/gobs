@@ -23,7 +23,7 @@ import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
 import { AssetPicker } from '../components/AssetPicker';
 import { RunningStatus } from '../components/RunningStatus';
-import type { LibraryAsset } from '../api/assetLibraryApi';
+import { recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
 
 function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
   const { summary, scriptContent } = r;
@@ -390,6 +390,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       const asset = assets[0];
       const mime = asset.mimetype ?? asset.mime_type ?? '';
       const fileUrl = asset.file_url ?? '';
+      // 记录素材使用，更新「最近使用」
+      for (const a of assets) void recordUsage(a.id, 'generate');
 
       if (mime.startsWith('video/') || assetPickerMode === 'video') {
         // 视频参考：直接设置 URL（用于 viralDanceReferenceVideoUrl）

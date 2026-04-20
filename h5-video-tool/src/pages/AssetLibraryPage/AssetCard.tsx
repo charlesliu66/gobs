@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
-import { buildAssetFileUrl, addFavorite, removeFavorite } from '../../api/assetLibraryApi';
+import { buildAssetFileUrl, addFavorite, removeFavorite, deleteAsset } from '../../api/assetLibraryApi';
 
 const CATEGORY_COLORS: Record<string, string> = {
   '角色': 'bg-blue-500/80',
@@ -15,14 +15,16 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface Props {
   asset: LibraryAsset;
   selected: boolean;
+  highlighted?: boolean;
   onSelect: (id: string) => void;
   onClick: (asset: LibraryAsset) => void;
   onUseForGenerate: (asset: LibraryAsset) => void;
   onFavoriteChange?: (assetId: string, isFav: boolean) => void;
+  onDelete?: (assetId: string) => void;
   draggable?: boolean;
 }
 
-export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate, onFavoriteChange, draggable = true }: Props) {
+export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onUseForGenerate, onFavoriteChange, onDelete, draggable = true }: Props) {
   const [imgError, setImgError] = useState(false);
   const [isFav, setIsFav] = useState(asset.is_favorite ?? false);
   const [hovering, setHovering] = useState(false);
@@ -97,7 +99,9 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
         draggable={draggable}
         onDragStart={handleDragStart}
         className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-150 ${
-          selected
+          highlighted
+            ? 'ring-2 ring-green-400 ring-offset-1 ring-offset-[var(--color-surface)] animate-pulse'
+            : selected
             ? 'ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-surface)]'
             : 'hover:ring-2 hover:ring-[var(--color-primary)]/40 hover:ring-offset-1 hover:ring-offset-[var(--color-surface)]'
         }`}
@@ -191,15 +195,31 @@ export function AssetCard({ asset, selected, onSelect, onClick, onUseForGenerate
             </span>
           </div>
 
-          {/* "用于生成" bottom overlay on hover */}
+          {/* Bottom overlay on hover */}
           <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onUseForGenerate(asset); }}
-              className="w-full py-2 bg-gradient-to-t from-black/85 via-black/60 to-transparent text-white text-xs font-semibold text-center hover:from-black/95 transition-colors pt-6"
-            >
-              用于生成
-            </button>
+            <div className="flex bg-gradient-to-t from-black/85 via-black/60 to-transparent pt-6">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onUseForGenerate(asset); }}
+                className="flex-1 py-2 text-white text-xs font-semibold text-center hover:bg-white/10 transition-colors"
+              >
+                用于生成
+              </button>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm(`确认删除「${asset.filename}」？`)) return;
+                    void deleteAsset(asset.id).then(() => onDelete(asset.id)).catch(() => {});
+                  }}
+                  className="px-3 py-2 text-red-400 text-xs font-semibold text-center hover:bg-red-500/20 transition-colors"
+                  title="删除"
+                >
+                  🗑
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

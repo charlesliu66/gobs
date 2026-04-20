@@ -152,8 +152,8 @@ export function TemplateMarket({ onUseTemplate }: TemplateMarketProps) {
                   {t.description && <p className="text-xs text-[var(--color-text-muted)] mb-2">{t.description}</p>}
                   <p className="text-sm text-[var(--color-text-muted)] line-clamp-3 mb-3 flex-1">{t.prompt}</p>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {t.tags.map((tag) => (
-                      <span key={tag} className="px-2 py-0.5 rounded text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
+                    {t.tags.map((tag, idx) => (
+                      <span key={`${tag}-${idx}`} className="px-2 py-0.5 rounded text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
                         {tag}
                       </span>
                     ))}
@@ -219,8 +219,8 @@ export function TemplateMarket({ onUseTemplate }: TemplateMarketProps) {
                   <h3 className="font-medium text-[var(--color-text)] mb-2">{t.title}</h3>
                   <p className="text-sm text-[var(--color-text-muted)] line-clamp-3 mb-3 flex-1">{t.prompt}</p>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {t.tags.map((tag) => (
-                      <span key={tag} className="px-2 py-0.5 rounded text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
+                    {t.tags.map((tag, idx) => (
+                      <span key={`${tag}-${idx}`} className="px-2 py-0.5 rounded text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
                         {tag}
                       </span>
                     ))}

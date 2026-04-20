@@ -22,7 +22,7 @@ function handleUnauthorized(res: Response): void {
 export interface EditorAssetDto {
   id: string;
   url: string;
-  kind: 'video';
+  kind: 'video' | 'image';
   originalName: string;
   mime?: string;
   size?: number;
@@ -149,7 +149,7 @@ export interface EditorProjectRecord {
   assets: Record<string, MediaAsset>;
 }
 
-export async function listEditorProjects(): Promise<{ projects: Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>> }> {
+export async function listEditorProjects(): Promise<{ projects: Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'> & { sourceProductionProjectId?: string }> }> {
   return apiGet('/api/editor/projects');
 }
 

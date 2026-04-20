@@ -115,9 +115,16 @@ try {
   db.exec(`ALTER TABLE assets ADD COLUMN folder_id TEXT`);
 } catch { /* column already exists */ }
 
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN deleted_at TEXT`);
+} catch { /* column already exists */ }
+
 // 依赖新列的索引放在迁移之后
 try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(ai_category)`);
+} catch { /* index or column issue */ }
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_deleted ON assets(deleted_at)`);
 } catch { /* index or column issue */ }
 
 export default db;

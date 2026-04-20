@@ -56,7 +56,6 @@ export function ErrorFallback({ error, resetErrorBoundary }: Props) {
   );
 }
 
-/** 可包裹任意子组件，捕获渲染错误并显示 ErrorFallback */
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
@@ -66,6 +65,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
+/** 可包裹任意子组件，捕获渲染错误并显示 ErrorFallback */
 export class StudioErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null };
 
@@ -75,6 +75,30 @@ export class StudioErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Studio 子组件渲染错误:', error, info.componentStack);
+  }
+
+  reset = () => this.setState({ error: null });
+
+  render() {
+    if (this.state.error) {
+      return this.props.fallback ?? (
+        <ErrorFallback error={this.state.error} resetErrorBoundary={this.reset} />
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** 全局级错误边界，包裹整个 App 路由 */
+export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[AppErrorBoundary]', error, info.componentStack);
   }
 
   reset = () => this.setState({ error: null });

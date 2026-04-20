@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { listProjects, createProject, deleteProject, renameProject, type ProjectListItem } from '../api/projectsStorage';
 import { RunningStatus } from '../components/RunningStatus';
 
-const STEP_LABELS = ['剧本', '服化道', '分镜', '完成'] as const;
+const STEP_LABELS = ['剧本', '角色场景', '分镜', '完成'] as const;
 
 export function ProjectList() {
   const navigate = useNavigate();

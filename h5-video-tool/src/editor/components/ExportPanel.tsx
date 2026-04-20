@@ -139,8 +139,8 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
             void listExportFiles().then(({ files }) => setHistoryFiles(files)).catch(() => {});
             reportExportBehavior(project);
           } else {
-            toast.info('导出完成（Mock 模式，暂无真实文件）');
-            onPushLog('导出完成（Mock）');
+            toast.success('导出完成！文件正在后台处理中，请稍后在历史记录查看');
+            onPushLog('导出完成（后台处理中）');
           }
           break;
         }
@@ -172,14 +172,16 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
   return (
     <div ref={panelRef} className="relative flex items-center gap-2">
       {busy && (
-        <div className="flex flex-col gap-1 min-w-[120px]">
+        <div className="flex flex-col gap-1 min-w-[140px]">
           <div className="flex items-center justify-between">
-            <span className="text-[9px] text-[var(--color-text-muted)] truncate max-w-[100px]">{exportMsg || '合成中…'}</span>
-            <span className="text-[9px] text-[var(--color-text-muted)]">{exportProgress}%</span>
+            <span className="text-[9px] text-[var(--color-text-muted)] truncate max-w-[110px]">
+              {exportMsg || (exportProgress < 30 ? '准备素材…' : exportProgress < 70 ? '合成视频…' : exportProgress < 95 ? '混音与字幕…' : '收尾中…')}
+            </span>
+            <span className="text-[10px] font-mono font-semibold text-[var(--color-primary)]">{exportProgress}%</span>
           </div>
-          <div className="h-1 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
             <div
-              className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-success)] transition-all duration-500"
               style={{ width: `${exportProgress}%` }}
             />
           </div>

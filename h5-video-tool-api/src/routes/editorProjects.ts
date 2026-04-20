@@ -72,16 +72,18 @@ router.get('/projects', async (req: Request, res: Response) => {
   try {
     await fs.mkdir(dir, { recursive: true });
     const files = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'));
-    const list: Array<Pick<EditorProjectDoc, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>> = [];
+    const list: Array<Pick<EditorProjectDoc, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'> & { sourceProductionProjectId?: string }> = [];
     for (const file of files) {
       try {
         const raw = JSON.parse(await fs.readFile(path.join(dir, file), 'utf-8')) as Partial<EditorProjectDoc>;
+        const project = raw.project as Record<string, unknown> | undefined;
         list.push({
           id: String(raw.id ?? file.replace(/\.json$/, '')),
           name: String(raw.name ?? '未命名剪辑项目'),
           createdAt: String(raw.createdAt ?? ''),
           updatedAt: String(raw.updatedAt ?? ''),
           aspectRatio: String(raw.aspectRatio ?? '9:16'),
+          sourceProductionProjectId: project?.sourceProductionProjectId as string | undefined,
         });
       } catch {
         // ignore broken file

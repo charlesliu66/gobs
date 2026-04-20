@@ -1,5 +1,8 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { DreaminaMultimodalItem } from '../context/CreateFlowContext';
+import { AssetPicker } from './AssetPicker';
+import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
+import type { LibraryAsset } from '../api/assetLibraryApi';
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,6 +44,7 @@ export interface DreaminaMultimodalRefsProps {
  */
 export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRefsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const imageCount = items.filter((x) => x.kind === 'image').length;
   const videoCount = items.filter((x) => x.kind === 'video').length;
@@ -72,6 +76,50 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
         });
       }
       onChange(next);
+    },
+    [items, onChange],
+  );
+
+  const handleLibrarySelect = useCallback(
+    async (assets: LibraryAsset[]) => {
+      const next = [...items];
+      for (const asset of assets) {
+        const mime = asset.mimetype ?? asset.mime_type ?? '';
+        const kind = mime.startsWith('image/') ? 'image' as const
+          : mime.startsWith('video/') ? 'video' as const
+          : mime.startsWith('audio/') ? 'audio' as const : null;
+        if (!kind) continue;
+        const ic = next.filter((x) => x.kind === 'image').length;
+        const vc = next.filter((x) => x.kind === 'video').length;
+        const ac = next.filter((x) => x.kind === 'audio').length;
+        if (kind === 'image' && ic >= 9) continue;
+        if (kind === 'video' && vc >= 3) continue;
+        if (kind === 'audio' && ac >= 3) continue;
+        if (next.length >= 12) break;
+        try {
+          const url = asset.file_url ?? buildAssetFileUrl(asset.id);
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          const base64 = await new Promise<string>((resolve) => {
+            const r = new FileReader();
+            r.onloadend = () => {
+              const s = typeof r.result === 'string' ? r.result : '';
+              resolve(s.includes(',') ? s.split(',')[1] ?? '' : s);
+            };
+            r.readAsDataURL(blob);
+          });
+          next.push({
+            id: `lib-${asset.id}-${Date.now()}`,
+            kind,
+            base64,
+            mimeType: blob.type || mime,
+            fileName: asset.filename,
+          });
+          void recordUsage(asset.id, 'multimodal-ref');
+        } catch { /* skip failed asset */ }
+      }
+      onChange(next);
+      setPickerOpen(false);
     },
     [items, onChange],
   );
@@ -135,13 +183,28 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
         className="hidden"
         onChange={(e) => void addFiles(e.target.files)}
       />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="text-sm px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
-      >
-        添加参考文件…
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="text-sm px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+        >
+          上传文件…
+        </button>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="text-sm px-3 py-1.5 rounded-lg border border-[var(--color-primary)]/50 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+        >
+          从素材库选择
+        </button>
+      </div>
+      {pickerOpen && (
+        <AssetPicker
+          onSelect={(assets) => void handleLibrarySelect(assets)}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
       <p className="text-xs text-[var(--color-text-muted)]">
         当前：图 {imageCount}/9 · 视频 {videoCount}/3 · 音频 {audioCount}/3 · 共 {items.length}/12
       </p>

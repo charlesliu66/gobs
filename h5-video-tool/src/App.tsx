@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { CreateFlowProvider } from './context/CreateFlowContext';
 import { MaterialsProvider } from './context/MaterialsContext';
@@ -5,27 +6,37 @@ import { ThemeProvider } from './context/ThemeContext';
 import { PlatformMemoryProvider } from './context/PlatformMemoryContext';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/Toast';
-import { Login } from './pages/Login';
-import { Home } from './pages/Home';
-import { Studio } from './pages/Studio';
-import { ProductionWizard } from './pages/ProductionWizard';
-import { ProjectList } from './pages/ProjectList';
-import { History } from './pages/History';
-import { TabDistribute } from './pages/TabDistribute';
-import { Result } from './pages/Result';
-import { EditorWorkbench } from './pages/EditorWorkbench';
-import { QuickFilm } from './pages/QuickFilm';
-import { AssetLibrary } from './pages/AssetLibrary';
-import { AssetLibraryPage } from './pages/AssetLibraryPage';
-import { Gallery } from './pages/Gallery';
-import { RiskMasterPanel } from './pages/RiskSentimentEmbed';
-import { SettingsAccounts } from './pages/SettingsAccounts';
-import { SettingsUsageMonitor } from './pages/SettingsUsageMonitor';
-import { PlatformFramework } from './pages/PlatformFramework';
-import { PlatformMemory } from './pages/PlatformMemory';
-import { PlatformLearningLab } from './pages/PlatformLearningLab';
-import { PlatformOpsCenter } from './pages/PlatformOpsCenter';
+import { AppErrorBoundary } from './components/ErrorFallback';
 import './index.css';
+
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Studio = lazy(() => import('./pages/Studio').then(m => ({ default: m.Studio })));
+const ProductionWizard = lazy(() => import('./pages/ProductionWizard').then(m => ({ default: m.ProductionWizard })));
+const ProjectList = lazy(() => import('./pages/ProjectList').then(m => ({ default: m.ProjectList })));
+const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
+const TabDistribute = lazy(() => import('./pages/TabDistribute').then(m => ({ default: m.TabDistribute })));
+const Result = lazy(() => import('./pages/Result').then(m => ({ default: m.Result })));
+const EditorWorkbench = lazy(() => import('./pages/EditorWorkbench').then(m => ({ default: m.EditorWorkbench })));
+const QuickFilm = lazy(() => import('./pages/QuickFilm').then(m => ({ default: m.QuickFilm })));
+const AssetLibrary = lazy(() => import('./pages/AssetLibrary').then(m => ({ default: m.AssetLibrary })));
+const AssetLibraryPage = lazy(() => import('./pages/AssetLibraryPage').then(m => ({ default: m.AssetLibraryPage })));
+const Gallery = lazy(() => import('./pages/Gallery').then(m => ({ default: m.Gallery })));
+const RiskMasterPanel = lazy(() => import('./pages/RiskSentimentEmbed').then(m => ({ default: m.RiskMasterPanel })));
+const SettingsAccounts = lazy(() => import('./pages/SettingsAccounts').then(m => ({ default: m.SettingsAccounts })));
+const SettingsUsageMonitor = lazy(() => import('./pages/SettingsUsageMonitor').then(m => ({ default: m.SettingsUsageMonitor })));
+const PlatformFramework = lazy(() => import('./pages/PlatformFramework').then(m => ({ default: m.PlatformFramework })));
+const PlatformMemory = lazy(() => import('./pages/PlatformMemory').then(m => ({ default: m.PlatformMemory })));
+const PlatformLearningLab = lazy(() => import('./pages/PlatformLearningLab').then(m => ({ default: m.PlatformLearningLab })));
+const PlatformOpsCenter = lazy(() => import('./pages/PlatformOpsCenter').then(m => ({ default: m.PlatformOpsCenter })));
+
+function PageSpinner() {
+  return (
+    <div className="flex items-center justify-center h-[60vh]">
+      <div className="w-8 h-8 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 /** 简单 JWT 路由守卫：检查 localStorage 有 token 即放行 */
 function RequireAuth() {
@@ -44,6 +55,8 @@ function App() {
         <CreateFlowProvider>
           <MaterialsProvider>
             <BrowserRouter>
+            <AppErrorBoundary>
+            <Suspense fallback={<PageSpinner />}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route element={<RequireAuth />}>
@@ -77,6 +90,8 @@ function App() {
                 </Route>
               </Route>
             </Routes>
+            </Suspense>
+            </AppErrorBoundary>
             </BrowserRouter>
             <ToastContainer />
           </MaterialsProvider>

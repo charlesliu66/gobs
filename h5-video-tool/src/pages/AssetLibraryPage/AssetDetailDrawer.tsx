@@ -139,8 +139,8 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
               <div>
                 <p className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">基础属性</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {ruleTags.map((t, i) => (
-                    <TagChip key={i} tag={t} variant="rule" />
+                  {ruleTags.map((t) => (
+                    <TagChip key={`${t.key}:${t.value}`} tag={t} variant="rule" />
                   ))}
                 </div>
               </div>
@@ -150,8 +150,8 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
               <div>
                 <p className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">AI 标签</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {aiTags.map((t, i) => (
-                    <TagChip key={i} tag={t} variant="ai" />
+                  {aiTags.map((t) => (
+                    <TagChip key={`${t.key}:${t.value}`} tag={t} variant="ai" />
                   ))}
                 </div>
               </div>
@@ -163,8 +163,8 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
                   ⚠ {pendingTags.length} 个 AI 标签待确认
                 </p>
                 <div className="flex flex-wrap gap-1">
-                  {pendingTags.map((t, i) => (
-                    <span key={i} className="text-[10px] bg-orange-500/10 text-orange-400 rounded px-1.5 py-0.5">
+                  {pendingTags.map((t) => (
+                    <span key={`${t.key}:${t.value}`} className="text-[10px] bg-orange-500/10 text-orange-400 rounded px-1.5 py-0.5">
                       {t.key}: {t.value}
                     </span>
                   ))}

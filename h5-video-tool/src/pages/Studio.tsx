@@ -5,6 +5,7 @@ import { TemplatePicker } from '../components/TemplatePicker';
 import { TemplateMarket } from '../components/TemplateMarket';
 import { StudioErrorBoundary } from '../components/ErrorFallback';
 import { useCreateFlow } from '../context/CreateFlowContext';
+import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
 
 type HomeStudioState = { autoSelectCustom?: boolean; seedPrompt?: string };
 
@@ -15,11 +16,13 @@ export function Studio() {
     setVideoDuration,
     setVideoAspectRatio,
     setPrompt,
+    setDreaminaMultimodalItems,
   } = useCreateFlow();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as string | null;
+  const urlAssetId = searchParams.get('assetId');
 
   // 主 tab：create | templates
   const [activeTab, setActiveTab] = useState<'create' | 'templates'>(
@@ -58,6 +61,43 @@ export function Studio() {
     setVideoAspectRatio,
     setPrompt,
   ]);
+
+  // 从素材库跳转过来时：自动进入创作模式并加载素材为参考图
+  useEffect(() => {
+    if (!urlAssetId) return;
+    setTemplateId('custom');
+    setVideoDuration(8);
+    setVideoAspectRatio('9:16');
+    setActiveTab('create');
+    void (async () => {
+      try {
+        const fileUrl = buildAssetFileUrl(urlAssetId);
+        const resp = await fetch(fileUrl);
+        const blob = await resp.blob();
+        if (blob.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1] ?? dataUrl;
+            setDreaminaMultimodalItems([{
+              id: `asset-${urlAssetId}`,
+              kind: 'image' as const,
+              base64,
+              mimeType: blob.type || 'image/jpeg',
+              fileName: `asset-${urlAssetId}`,
+            }]);
+          };
+          reader.readAsDataURL(blob);
+        }
+        void recordUsage(urlAssetId, 'generate');
+      } catch { /* ignore */ }
+    })();
+    // 清除 URL 中的 assetId 避免重复加载
+    const url = new URL(window.location.href);
+    url.searchParams.delete('assetId');
+    window.history.replaceState(null, '', url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlAssetId]);
 
   const handleUseTemplate = useCallback(
     (template: { prompt: string; aspectRatio?: string }) => {

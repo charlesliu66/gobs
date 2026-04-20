@@ -14,7 +14,7 @@ export function StepDesignChecklistPanel({
       <div className="flex flex-wrap gap-2">
         {(
           [
-            { id: 'wardrobe' as const, label: '服化道·服装 (wardrobe)' },
+            { id: 'wardrobe' as const, label: '角色造型·服装' },
             { id: 'props' as const, label: '道具 (props)' },
             { id: 'raw' as const, label: '完整 JSON' },
           ] as const
@@ -49,7 +49,7 @@ export function StepDesignChecklistPanel({
         </pre>
       )}
       <p className="text-[11px] text-[var(--color-text-muted)]">
-        默认展示服化道服装清单；道具清单与「全部道具」卡一致，可在道具页上传/生图以保证成片一致。
+        默认展示角色造型服装清单；道具清单与「全部道具」卡一致，可在道具页上传/生图以保证成片一致。
       </p>
     </div>
   );

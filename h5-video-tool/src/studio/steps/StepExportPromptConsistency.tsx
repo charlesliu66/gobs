@@ -28,7 +28,7 @@ export function StepExportPromptConsistency({
     <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
       <h2 className="text-sm font-semibold">Prompt 与一致性</h2>
       <p className="text-xs text-[var(--color-text-muted)]">
-        可选：上传一张主角参考图提取视觉特征；再组装各镜 Seedance 块。
+        可选：上传一张主角参考图提取视觉特征；再组装各镜头的 AI 视频描述。
       </p>
       <input
         type="file"
@@ -59,7 +59,7 @@ export function StepExportPromptConsistency({
             onClick={onCopyAllSeedance}
             className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm"
           >
-            复制全部 Seedance 块
+            复制全部 AI 视频描述
           </button>
           <div className="max-h-96 overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs">
             {assembledShots.map((s) => (

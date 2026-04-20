@@ -562,7 +562,7 @@ router.get('/categories', (req: Request, res: Response) => {
 
   const rows = db.prepare(`
     SELECT COALESCE(ai_category, '未分类') as category, COUNT(*) as count
-    FROM assets WHERE username = @username
+    FROM assets WHERE username = @username AND deleted_at IS NULL
     GROUP BY ai_category
     ORDER BY count DESC
   `).all({ username }) as Array<{ category: string; count: number }>;
@@ -592,6 +592,60 @@ router.post('/favorites/:assetId', (req: Request, res: Response) => {
   `).run({ user_id: username, asset_id: assetId });
 
   res.json({ ok: true });
+});
+
+// ── DELETE /assets/:id ──────────────────────────────────────────────────────
+// 软删除单个素材（标记 deleted_at，不物理删文件）
+
+router.delete('/assets/:id', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id } = req.params;
+  const asset = db.prepare(`SELECT id, username FROM assets WHERE id = @id`)
+    .get({ id }) as { id: string; username: string } | undefined;
+
+  if (!asset) { res.status(404).json({ error: '素材不存在' }); return; }
+  if (asset.username !== username) { res.status(403).json({ error: '无权操作' }); return; }
+
+  db.prepare(`UPDATE assets SET deleted_at = datetime('now') WHERE id = @id`).run({ id });
+  db.prepare(`DELETE FROM asset_favorites WHERE asset_id = @id`).run({ id });
+
+  res.json({ ok: true });
+});
+
+// ── POST /assets/batch-delete ──────────────────────────────────────────────
+// 批量软删除素材
+
+router.post('/assets/batch-delete', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { ids } = req.body as { ids?: string[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: '请提供要删除的素材 ID 列表' });
+    return;
+  }
+  if (ids.length > 200) {
+    res.status(400).json({ error: '单次最多删除 200 个素材' });
+    return;
+  }
+
+  const deletedIds: string[] = [];
+  const txn = db.transaction(() => {
+    for (const id of ids) {
+      const asset = db.prepare(`SELECT id, username FROM assets WHERE id = @id AND deleted_at IS NULL`)
+        .get({ id }) as { id: string; username: string } | undefined;
+      if (!asset || asset.username !== username) continue;
+
+      db.prepare(`UPDATE assets SET deleted_at = datetime('now') WHERE id = @id`).run({ id });
+      db.prepare(`DELETE FROM asset_favorites WHERE asset_id = @id`).run({ id });
+      deletedIds.push(id);
+    }
+  });
+  txn();
+
+  res.json({ ok: true, deleted: deletedIds.length, ids: deletedIds });
 });
 
 // ── DELETE /favorites/:assetId ──────────────────────────────────────────────

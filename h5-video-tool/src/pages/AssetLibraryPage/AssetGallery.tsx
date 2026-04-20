@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   listAssets, searchAssets, listFavorites, listRecent, getCategories,
   listFolders, createFolder, renameFolder, deleteFolder, moveAssetsToFolder,
+  batchDeleteAssets,
 } from '../../api/assetLibraryApi';
 import type { LibraryAsset, CategoryCount, AssetFolder } from '../../api/assetLibraryApi';
 import { AssetCard } from './AssetCard';
@@ -54,6 +55,8 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set());
+  const prevAssetIdsRef = useRef<Set<string>>(new Set());
 
   const queryRef = useRef(query);
   const filtersRef = useRef(filters);
@@ -205,6 +208,17 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
       }
 
       if (reset) {
+        // 检测新上传的素材并高亮
+        const newIds = new Set(
+          result.assets
+            .filter((a) => !prevAssetIdsRef.current.has(a.id))
+            .map((a) => a.id),
+        );
+        if (newIds.size > 0 && prevAssetIdsRef.current.size > 0) {
+          setHighlightIds(newIds);
+          setTimeout(() => setHighlightIds(new Set()), 3000);
+        }
+        prevAssetIdsRef.current = new Set(result.assets.map((a) => a.id));
         setAssets(result.assets);
         setPage(2);
       } else {
@@ -625,9 +639,17 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
                     key={asset.id}
                     asset={asset}
                     selected={selectedIds.has(asset.id)}
+                    highlighted={highlightIds.has(asset.id)}
                     onSelect={handleSelect}
                     onClick={onAssetClick}
                     onUseForGenerate={onUseForGenerate}
+                    onDelete={(id) => {
+                      setAssets((prev) => prev.filter((a) => a.id !== id));
+                      setTotal((prev) => Math.max(0, prev - 1));
+                      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+                      toast.success('已删除');
+                      void loadCategories();
+                    }}
                   />
                 ))}
               </div>
@@ -651,6 +673,65 @@ export function AssetGallery({ refreshKey, onAssetClick, onUseForGenerate }: Pro
           </>
         ) : null}
       </div>
+
+      {/* 批量操作浮动栏 */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl shadow-2xl px-5 py-3">
+          <span className="text-sm font-medium text-[var(--color-text)]">
+            已选 <strong className="text-[var(--color-primary)]">{selectedIds.size}</strong> 个素材
+          </span>
+          <div className="h-5 w-px bg-[var(--color-border)]" />
+          {folders.length > 0 && (
+            <div className="relative group">
+              <button
+                type="button"
+                className="text-xs px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition"
+              >
+                移动到文件夹
+              </button>
+              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block min-w-[160px] bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl shadow-xl p-1.5 space-y-0.5">
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => void handleDropOnFolder(f.id, Array.from(selectedIds))}
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition truncate"
+                  >
+                    📁 {f.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={async () => {
+              const ids = Array.from(selectedIds);
+              if (!confirm(`确认删除 ${ids.length} 个素材？此操作可恢复。`)) return;
+              try {
+                const result = await batchDeleteAssets(ids);
+                toast.success(`已删除 ${result.deleted} 个素材`);
+                setSelectedIds(new Set());
+                setAssets((prev) => prev.filter((a) => !ids.includes(a.id)));
+                setTotal((prev) => Math.max(0, prev - result.deleted));
+                void loadCategories();
+              } catch (e) {
+                toast.error(`删除失败：${e instanceof Error ? e.message : String(e)}`);
+              }
+            }}
+            className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition"
+          >
+            删除
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs px-3 py-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition"
+          >
+            取消选择
+          </button>
+        </div>
+      )}
     </div>
   );
 }

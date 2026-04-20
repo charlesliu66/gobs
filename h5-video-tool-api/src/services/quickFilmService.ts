@@ -147,12 +147,54 @@ export function runJobAsync(jobId: string, extras?: {
       updateStep(job, '生成角色设定', true, extras?.username);
 
       // Step 3: 生成分镜
-      const shots = await generateStoryboardTable({
+      // studioPipeline 要求分镜覆盖 scenePlan 全部场景，LLM 有时做不到。
+      // 策略：先尝试原始 storyArc，失败后精简 scenePlan 再试一次。
+      let shots: Awaited<ReturnType<typeof generateStoryboardTable>> | undefined;
+      const storyboardInput = {
         story: storyArc,
         productionDesign,
         maxTotalDurationSec: 60,
         extraNotes: extras?.styleImageBase64 ? '使用了风格参考图，请保持画面风格统一' : undefined,
-      });
+      };
+      try {
+        shots = await generateStoryboardTable(storyboardInput);
+      } catch (err1) {
+        const msg1 = err1 instanceof Error ? err1.message : '';
+        if (msg1.includes('scenePlan') || msg1.includes('分镜表')) {
+          console.warn('[quickfilm] storyboard failed (scenePlan coverage), trimming scenePlan and retrying...', msg1);
+          const trimmedArc = { ...storyArc };
+          if (Array.isArray(trimmedArc.scenePlan) && trimmedArc.scenePlan.length > 0) {
+            // Extract the missing scene IDs from the error message and remove them
+            const missingMatch = msg1.match(/sceneRef：(.+?)。/);
+            if (missingMatch) {
+              const missingIds = new Set(missingMatch[1].split('、').map((s: string) => s.trim()));
+              trimmedArc.scenePlan = trimmedArc.scenePlan.filter(
+                (s: { id?: string }) => !missingIds.has(String(s.id ?? '').trim()),
+              );
+              console.warn(`[quickfilm] removed ${missingIds.size} unreachable scenes, ${trimmedArc.scenePlan.length} remaining`);
+            }
+            // If still problematic or couldn't parse, clear scenePlan entirely to bypass the strict check
+            if (!trimmedArc.scenePlan.length) {
+              trimmedArc.scenePlan = [];
+            }
+          }
+          try {
+            shots = await generateStoryboardTable({ ...storyboardInput, story: trimmedArc });
+          } catch (err2) {
+            const msg2 = err2 instanceof Error ? err2.message : '';
+            if (msg2.includes('scenePlan') || msg2.includes('分镜表')) {
+              console.warn('[quickfilm] storyboard still failing after trim, clearing scenePlan entirely...');
+              const cleanArc = { ...storyArc, scenePlan: [] as typeof storyArc.scenePlan };
+              shots = await generateStoryboardTable({ ...storyboardInput, story: cleanArc });
+            } else {
+              throw err2;
+            }
+          }
+        } else {
+          throw err1;
+        }
+      }
+      if (!shots?.length) throw new Error('分镜表为空');
       updateStep(job, '生成分镜脚本', true, extras?.username);
 
       // Step 4: 匹配素材

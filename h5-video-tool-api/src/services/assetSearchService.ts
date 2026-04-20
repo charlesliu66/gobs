@@ -27,7 +27,7 @@ export function listAssets(query: SearchQuery): PagedResult {
 
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  const conditions: string[] = ['a.username = @username'];
+  const conditions: string[] = ['a.username = @username', 'a.deleted_at IS NULL'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, limit: pageSize, offset };
 
@@ -80,7 +80,7 @@ export function searchAssets(query: SearchQuery): PagedResult {
 
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  const conditions: string[] = ['a.username = @username'];
+  const conditions: string[] = ['a.username = @username', 'a.deleted_at IS NULL'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, q: likeQ, limit: pageSize, offset };
 
@@ -136,7 +136,7 @@ export function getFacets(username: string): FacetResult {
     SELECT t.key, t.value, COUNT(*) as cnt
     FROM asset_tags t
     JOIN assets a ON t.asset_id = a.id
-    WHERE a.username = @username AND t.status != 'rejected'
+    WHERE a.username = @username AND a.deleted_at IS NULL AND t.status != 'rejected'
     GROUP BY t.key, t.value
     ORDER BY t.key, cnt DESC
   `).all({ username }) as Array<{ key: string; value: string; cnt: number }>;

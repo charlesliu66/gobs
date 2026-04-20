@@ -9,7 +9,7 @@ import {
 } from '../../api/editor';
 import { toast } from '../../components/Toast';
 import { EDITOR_UPLOAD_MAX_MB_FALLBACK } from '../../config/editorUpload';
-import { listAssets, buildAssetFileUrl } from '../../api/assetLibraryApi';
+import { listAssets, buildAssetFileUrl, recordUsage } from '../../api/assetLibraryApi';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
 
 interface BatchFileStatus {
@@ -131,16 +131,19 @@ function ProjectAssetLibrary({
   const handleAdd = useCallback(
     (asset: LibraryAsset) => {
       const mime = asset.mimetype ?? asset.mime_type ?? '';
-      if (!mime.startsWith('video/')) return; // 仅支持视频
+      const isVideo = mime.startsWith('video/');
+      const isImage = mime.startsWith('image/');
+      if (!isVideo && !isImage) return;
       const url = asset.file_url ?? buildAssetFileUrl(asset.id);
       const editorAsset: EditorAssetDto = {
         id: `lib-${asset.id}`,
         url,
-        kind: 'video',
+        kind: isVideo ? 'video' : 'image',
         originalName: asset.filename,
-        durationSec: asset.duration ?? 10,
+        durationSec: isVideo ? (asset.duration ?? 10) : 5,
       };
       onAddToTimeline(editorAsset);
+      void recordUsage(asset.id, 'editor');
     },
     [onAddToTimeline],
   );

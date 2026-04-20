@@ -200,6 +200,9 @@ export function EditorWorkbench() {
   const [showImportGuide, setShowImportGuide] = useState(false);
   const importGuideInfoRef = useRef<{ shots: number; dur: number; title: string; bgmHint: string } | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try { return !localStorage.getItem('gobs_editor_onboarded'); } catch { return true; }
+  });
 
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
@@ -968,6 +971,7 @@ export function EditorWorkbench() {
 
   return (
     <>
+    <style>{`@keyframes editorFadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <EditorShell
         aspectRatio={aspectRatio}
@@ -1031,6 +1035,7 @@ export function EditorWorkbench() {
                     ref={videoRef}
                     src={activeVideoUrl}
                     className="h-full w-full object-cover object-center"
+                    style={{ animation: 'editorFadeIn 0.3s ease-in both' }}
                     playsInline
                     muted={false}
                     onLoadedMetadata={(e) => {
@@ -1420,6 +1425,44 @@ export function EditorWorkbench() {
           </div>
         </div>
       </div>
+    )}
+
+    {/* 新手引导 */}
+    {showOnboarding && (
+      <>
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" />
+        <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-6 shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-[var(--color-text)]">
+              欢迎使用剪辑工作台
+            </h2>
+            <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">1</span>
+                <p><strong className="text-[var(--color-text)]">告诉 AI 你想怎么剪</strong> — 右侧「AI 助手」面板支持自然语言指令，例如"帮我把第 2 段移到开头"、"加一段欢快的 BGM"。</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">2</span>
+                <p><strong className="text-[var(--color-text)]">左侧添加素材</strong> — 上传视频或从素材库选择，点击即可加入时间轴。</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">3</span>
+                <p><strong className="text-[var(--color-text)]">一键导出</strong> — 满意后点击导出，AI 自动合成高清视频。</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowOnboarding(false);
+                try { localStorage.setItem('gobs_editor_onboarded', '1'); } catch { /* ignore */ }
+              }}
+              className="w-full py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition"
+            >
+              开始剪辑
+            </button>
+          </div>
+        </div>
+      </>
     )}
     </>
   );

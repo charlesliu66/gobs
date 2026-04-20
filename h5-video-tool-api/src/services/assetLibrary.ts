@@ -283,13 +283,55 @@ export async function semanticMatch(
   }
 }
 
+/** AI 分类 → 旧版 AssetType 映射 */
+const CATEGORY_TO_TYPE: Record<string, AssetType> = {
+  '角色': 'character',
+  '武器道具': 'prop',
+  '场景': 'scene',
+  'UI素材': 'style',
+  '宣传图': 'style',
+  '视频片段': 'scene',
+};
+
+/** 从 SQLite 素材中台加载资产并转换为 Asset 格式 */
+async function loadAssetsFromSqlite(username?: string): Promise<Asset[]> {
+  try {
+    // 复用已有的 assetDb 单例
+    const db = (await import('../db/assetDb.js')).default;
+    const query = username
+      ? `SELECT id, filename, filepath, mimetype, ai_category, ai_description FROM assets WHERE status != 'deleted' AND username = ? ORDER BY updated_at DESC LIMIT 500`
+      : `SELECT id, filename, filepath, mimetype, ai_category, ai_description FROM assets WHERE status != 'deleted' ORDER BY updated_at DESC LIMIT 500`;
+    const rows = (username ? db.prepare(query).all(username) : db.prepare(query).all()) as Array<{
+      id: string; filename: string; filepath: string; mimetype: string;
+      ai_category: string | null; ai_description: string | null;
+    }>;
+    return rows.map((r) => ({
+      id: `sqlite-${r.id}`,
+      file: r.filepath,
+      localPath: r.filepath,
+      type: CATEGORY_TO_TYPE[r.ai_category ?? ''] ?? ('scene' as AssetType),
+      name: r.filename.replace(/\.[^.]+$/, ''),
+      tags: [r.ai_category ?? '未分类'],
+      gameVersion: 'all',
+      description: r.ai_description ?? r.filename,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** 为单个分镜匹配最合适的素材 */
 export async function matchAssetsForShot(
   shot: ProductionShot,
   gameVersion?: string,
+  username?: string,
 ): Promise<MatchedAssets> {
-  const index = await loadAssetIndex();
-  const allAssets = index.assets;
+  // 同时从两个数据源加载：SQLite 素材中台 + 旧版 asset-index.json
+  const [index, sqliteAssets] = await Promise.all([
+    loadAssetIndex(),
+    loadAssetsFromSqlite(username),
+  ]);
+  const allAssets = [...sqliteAssets, ...index.assets];
 
   if (allAssets.length === 0) {
     return { characterRefs: [], propRefs: [] };

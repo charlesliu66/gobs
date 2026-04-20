@@ -92,11 +92,12 @@ export function StepExportStoryboardOverview({
       };
       project = syncSourceAudioClipsFromVideo(project);
 
-      // 去重检查：如果已有关联该制片项目的剪辑项目，直接打开
+      // 去重检查：优先按 sourceProductionProjectId 匹配，其次按名字
       if (productionProjectId) {
         try {
           const { projects } = await listEditorProjects();
-          const existing = projects.find((p) => p.name === `${projectTitle}-剪辑`);
+          const existing = projects.find((p) => p.sourceProductionProjectId === productionProjectId)
+            ?? projects.find((p) => p.name === `${projectTitle}-剪辑`);
           if (existing) {
             const confirmCreate = window.confirm(
               `已存在关联的剪辑项目「${existing.name}」（${new Date(existing.updatedAt).toLocaleString('zh-CN')}）。\n\n点击「确定」创建新项目，点击「取消」打开已有项目。`,
