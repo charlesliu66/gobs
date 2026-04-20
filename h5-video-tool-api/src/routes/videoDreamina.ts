@@ -18,6 +18,7 @@ import {
   markIntentFailed,
   listPendingIntents,
   runRecoveryScan,
+  kickScanner,
 } from '../services/dreaminaRecovery.js';
 
 const dreaminaRouter = Router();
@@ -245,7 +246,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       // this handles the common case where a previous server session's task is
       // still running on the Dreamina account when the backend restarts.
       const MAX_MM_RETRIES = 2;
-      const MAX_1310_RETRIES = 1; // wait 45s then retry once before giving up
+      // 批量生成时即梦经常 1310，做到最多 5 次 × 45s = ~4 分钟自然排队
+      // （以前只重试 1 次，批量用户极易看到假失败）
+      const MAX_1310_RETRIES = 5;
       let mm1310Attempts = 0;
       let mmResult: { submitId: string; taskId: string } | null = null;
       let mmLastErr: Error | null = null;
@@ -339,8 +342,8 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
     const { waitForSlot: waitNonMm, release: releaseNonMm } = acquireDreaminaSlot();
     await waitNonMm;
 
-    // For non-multimodal: also retry once after 45s on ret=1310.
-    const MAX_NMM_1310_RETRIES = 1;
+    // For non-multimodal: retry up to 5 times (45s each) on ret=1310.
+    const MAX_NMM_1310_RETRIES = 5;
     let nonMm1310Attempts = 0;
     let nonMmResult: { submitId: string; taskId: string } | null = null;
     let nonMmLastErr: Error | null = null;
@@ -397,6 +400,9 @@ dreaminaRouter.post('/submit', async (req: Request, res: Response) => {
       const reason = err instanceof Error ? err.message : String(err);
       await markIntentFailed(intentId, reason).catch(() => void 0);
     }
+    // submit 失败的瞬间，很可能 CLI 已经把任务提交到即梦但我们丢了响应：
+    // 立刻 kick 一次 scanner 扫 list_task，3-10s 内就能找回 submitId 而不必等下一轮（30s）
+    kickScanner();
     const { errorCode, errorMessage } = classifyError(err);
     res.status(500).json({ error: errorMessage, errorCode });
   }

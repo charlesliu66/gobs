@@ -47,6 +47,10 @@ export interface BatchJob {
   videoUrl?: string;       // 成功后的 API 路径（/api/batch-jobs/video/xxx）
   videoFilePath?: string;  // 本地 MP4 绝对路径
   failReason?: string;
+  /** CLI 偶发错误累计次数；达到 MAX_TRANSIENT_ERRORS 才真正标 failed */
+  transientErrorCount?: number;
+  /** 最近一次临时错误信息（用于 UI 调试） */
+  lastTransientError?: string;
   queueInfo?: {
     queue_idx?: number;
     queue_length?: number;
@@ -130,6 +134,7 @@ export async function cancelJob(id: string): Promise<boolean> {
 const TICK_INTERVAL_MS = 30_000;              // 主循环 tick 间隔（30s）
 const PRODUCTION_DELAY_MS = 45_000;           // production: 提交后 45s 开始首轮轮询
 const MAX_JOB_AGE_MS = 4 * 3600_000;          // 4 小时 TTL，超过标记失败
+const MAX_TRANSIENT_ERRORS = 3;               // CLI 偶发错误最多容忍 3 次
 
 /**
  * 高级制片任务的轮询间隔：指数退避
@@ -212,6 +217,8 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
       videoFilePath: filePath,
       videoUrl: `/api/batch-jobs/video/${job.id}`,
       lastPolledAt: new Date().toISOString(),
+      transientErrorCount: 0,
+      lastTransientError: undefined,
     });
     console.log(`[batch-jobs] ${job.id} done → ${filePath}`);
     // 如果是高级制片任务，自动回写到项目 JSON
@@ -229,11 +236,36 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
     return updated;
   }
   if (result.phase === 'failed') {
+    // 临时错误（CLI 解析失败/exit1/网络抖动）：累计 3 次才真正标 failed
+    if (result.retriable) {
+      const prev = job.transientErrorCount ?? 0;
+      const next = prev + 1;
+      if (next < MAX_TRANSIENT_ERRORS) {
+        console.log(
+          `[batch-jobs] ${job.id} transient error ${next}/${MAX_TRANSIENT_ERRORS}: ${result.failReason} (will retry)`,
+        );
+        return updateJob(job.id, {
+          status: 'queuing',
+          transientErrorCount: next,
+          lastTransientError: result.failReason ?? '临时错误',
+          lastPolledAt: new Date().toISOString(),
+        });
+      }
+      console.warn(
+        `[batch-jobs] ${job.id} transient errors exhausted (${next}/${MAX_TRANSIENT_ERRORS}), marking failed`,
+      );
+    }
     const updated = await updateJob(job.id, {
       status: 'failed',
       failReason: result.failReason ?? '生成失败',
       lastPolledAt: new Date().toISOString(),
     });
+    // 如果是高级制片任务，且同 project+shot 下已无活跃兄弟 job，清理 ghost pending
+    if (job.source === 'production' && job.username && job.projectId) {
+      void clearGhostPendingIfAllFailed(job).catch((e) =>
+        console.warn(`[batch-jobs] clear ghost pending failed:`, e),
+      );
+    }
     // QuickFilm：即使前一个失败，也继续提交下一个
     if (job.source === 'quickfilm') {
       void submitNextQuickfilmShot(job).catch((e) =>
@@ -242,11 +274,13 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
     }
     return updated;
   }
-  // 还在排队/生成中
+  // 还在排队/生成中：收到正常响应说明前面的偶发错误不算数，重置计数
   return updateJob(job.id, {
     status: result.genStatus === 'generate' ? 'processing' : 'queuing',
     queueInfo: result.queueInfo,
     lastPolledAt: new Date().toISOString(),
+    transientErrorCount: 0,
+    lastTransientError: undefined,
   });
 }
 
@@ -398,4 +432,131 @@ async function writeBackToProject(job: BatchJob, videoApiUrl: string): Promise<v
   } catch { /* sidecar missing is OK */ }
 
   console.log(`[batch-jobs] write-back: shot ${job.shotIndex} of project ${job.projectId} updated`);
+}
+
+/**
+ * 幽灵 pending 清理：
+ *   production.json 里 shot.pendingVideoSubmitId 存在，但其对应 submit_id 下的所有 batch-job
+ *   都已处于 failed/cancelled 且没有 previewVideoUrl —— 此时把 pending 字段清空并写入 lastSubmitError，
+ *   UI 可立刻显示"失败，可重试"而不再显示"生成中"。
+ *
+ *   仅当触发清理的 job 是 failed 且同 project+shot 下没有 active job（pending/queuing/processing）时执行。
+ */
+async function clearGhostPendingIfAllFailed(failedJob: BatchJob): Promise<void> {
+  const username = sanitizeUsername(failedJob.username);
+  const projDir = path.join(getDefaultVideoOutputDir(), 'production', 'projects', username);
+  const filePath = path.join(projDir, `${failedJob.projectId}.json`);
+
+  let raw: string;
+  try {
+    raw = await fs.readFile(filePath, 'utf8');
+  } catch {
+    return;
+  }
+
+  const data = JSON.parse(raw) as Record<string, unknown>;
+  const project = data.project as Record<string, unknown> | undefined;
+  if (!project) return;
+  const shots = project.shots as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(shots)) return;
+
+  const shot = shots.find((s) => s.shotIndex === failedJob.shotIndex);
+  if (!shot) return;
+
+  // 已有成片则无需清理
+  if (shot.previewVideoUrl || shot.previewVideoPath || (Array.isArray(shot.previewVideoVersions) && shot.previewVideoVersions.length > 0)) {
+    return;
+  }
+
+  // 同 project+shot 下是否还有活跃 job
+  const siblings = Array.from(_jobs.values()).filter(
+    (j) => j.projectId === failedJob.projectId && j.shotIndex === failedJob.shotIndex,
+  );
+  const hasActive = siblings.some(
+    (j) => j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit',
+  );
+  if (hasActive) return;
+
+  // 所有兄弟 job 都已 failed/cancelled，清 pending + 写错误
+  const lastFailReason = siblings
+    .filter((j) => j.status === 'failed')
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0]?.failReason || '生成失败';
+
+  if (shot.pendingVideoSubmitId) {
+    shot.pendingVideoSubmitId = undefined;
+    shot.lastSubmitError = lastFailReason;
+    shot.lastSubmitErrorAt = new Date().toISOString();
+    data.updatedAt = new Date().toISOString();
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    console.log(
+      `[batch-jobs] cleared ghost pending: project=${failedJob.projectId} shot=${failedJob.shotIndex} reason=${lastFailReason}`,
+    );
+  }
+}
+
+/**
+ * 启动时/定期全量清理：扫所有 production 项目 JSON，清理所有 ghost pending。
+ * 用于兜底：如果某次 job failed 时 clearGhostPendingIfAllFailed 漏调（例如重启），下次启动能一次性修正。
+ */
+export async function sweepGhostPendings(): Promise<number> {
+  await loadJobs();
+  const productionRoot = path.join(getDefaultVideoOutputDir(), 'production', 'projects');
+  let fixed = 0;
+  try {
+    const users = await fs.readdir(productionRoot);
+    for (const user of users) {
+      const userDir = path.join(productionRoot, user);
+      let files: string[] = [];
+      try {
+        files = await fs.readdir(userDir);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.endsWith('.json') || f.endsWith('.meta.json')) continue;
+        const filePath = path.join(userDir, f);
+        try {
+          const raw = await fs.readFile(filePath, 'utf8');
+          const data = JSON.parse(raw) as Record<string, unknown>;
+          const project = data.project as Record<string, unknown> | undefined;
+          const projectId = (data.id || (project as { id?: string } | undefined)?.id || f.replace(/\.json$/, '')) as string;
+          const shots = project?.shots as Array<Record<string, unknown>> | undefined;
+          if (!Array.isArray(shots)) continue;
+
+          let mutated = false;
+          for (const shot of shots) {
+            if (!shot.pendingVideoSubmitId) continue;
+            if (shot.previewVideoUrl || shot.previewVideoPath || (Array.isArray(shot.previewVideoVersions) && shot.previewVideoVersions.length > 0)) continue;
+            const siblings = Array.from(_jobs.values()).filter(
+              (j) => j.projectId === projectId && j.shotIndex === shot.shotIndex,
+            );
+            if (siblings.length === 0) continue; // 没有任何 job 记录，留给 scanner 处理
+            const hasActive = siblings.some(
+              (j) => j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit',
+            );
+            if (hasActive) continue;
+            const lastFailReason = siblings
+              .filter((j) => j.status === 'failed')
+              .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0]?.failReason || '生成失败';
+            shot.pendingVideoSubmitId = undefined;
+            shot.lastSubmitError = lastFailReason;
+            shot.lastSubmitErrorAt = new Date().toISOString();
+            mutated = true;
+            fixed++;
+          }
+          if (mutated) {
+            data.updatedAt = new Date().toISOString();
+            await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+            console.log(`[batch-jobs] sweepGhostPendings: ${filePath} updated`);
+          }
+        } catch (e) {
+          console.warn(`[batch-jobs] sweepGhostPendings: skip ${filePath}`, e);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[batch-jobs] sweepGhostPendings: production root not readable', e);
+  }
+  if (fixed > 0) console.log(`[batch-jobs] sweepGhostPendings: cleared ${fixed} ghost pendings`);
+  return fixed;
 }

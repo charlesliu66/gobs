@@ -447,6 +447,12 @@ export interface DreaminaTaskStatusResult {
   failReason?: string;
   /** gen_status=success 且已下载时返回 */
   videoUrl?: string;
+  /**
+   * 是否为临时错误（CLI 偶发失败、网络抖动、响应解析异常）。
+   * 调用方收到 phase='failed' && retriable=true 时应继续轮询而非立即标 failed。
+   * 明确来自即梦 gen_status=fail 的情况 retriable 为 false/undefined。
+   */
+  retriable?: boolean;
 }
 
 /**
@@ -463,11 +469,12 @@ export async function pollDreaminaTask(submitId: string): Promise<DreaminaTaskSt
       submitId: sid,
       phase: 'failed',
       failReason: dreaminaFailureMessage(wrap.error || '即梦 query_result 失败'),
+      retriable: true,
     };
   }
   const data = wrap.data as Record<string, unknown> | undefined;
   if (!data || typeof data !== 'object') {
-    return { submitId: sid, phase: 'failed', failReason: '即梦未返回任务数据' };
+    return { submitId: sid, phase: 'failed', failReason: '即梦未返回任务数据', retriable: true };
   }
   const genStatus = String(data.gen_status ?? data.genStatus ?? '').toLowerCase();
   const qiRaw = data.queue_info ?? data.queueInfo;
@@ -503,6 +510,7 @@ export async function pollDreaminaTask(submitId: string): Promise<DreaminaTaskSt
           phase: 'failed',
           genStatus,
           failReason: e instanceof Error ? e.message : '下载成片失败',
+          retriable: true,
         };
       }
     }

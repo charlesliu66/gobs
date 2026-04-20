@@ -123,8 +123,70 @@ export function StepStoryboardWorkspace({
 
   if (!shot) return null;
 
+  // ── 分镜视频批量状态：基于 shot 数据实时派生，无需单独存储 ────────────────
+  const shotStatsTotal = shots.length;
+  const shotHasVideo = (s: ProductionShot) =>
+    Boolean(s.previewVideoUrl || s.previewVideoPath || (s.previewVideoVersions && s.previewVideoVersions.length > 0));
+  const done = shots.filter(shotHasVideo).length;
+  const inFlight = shots.filter((s) => !shotHasVideo(s) && s.pendingVideoSubmitId).length;
+  const failedShots = shots.filter((s) => !shotHasVideo(s) && !s.pendingVideoSubmitId && s.lastSubmitError);
+  const failed = failedShots.length;
+  const showBanner = shotStatsTotal > 0 && (done < shotStatsTotal || failed > 0);
+
   return (
     <div className="flex flex-col gap-4">
+      {showBanner ? (
+        <div
+          className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 text-xs ${
+            failed > 0
+              ? 'border-red-500/35 bg-red-500/10 text-red-200'
+              : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+          }`}
+        >
+          <span className="font-medium">
+            分镜视频：<span className="text-green-300">{done}</span>
+            <span className="opacity-60">/{shotStatsTotal}</span> 已完成
+            {inFlight > 0 && (
+              <> · <span className="text-amber-200">{inFlight}</span> 生成中</>
+            )}
+            {failed > 0 && (
+              <> · <span className="text-red-300">{failed}</span> 失败</>
+            )}
+          </span>
+          {failed > 0 && (
+            <>
+              <span className="text-[var(--color-text-muted)]">
+                失败镜：
+                {failedShots.slice(0, 8).map((s) => {
+                  const idx = shots.findIndex((x) => x.shotIndex === s.shotIndex);
+                  return (
+                    <button
+                      key={s.shotIndex}
+                      type="button"
+                      onClick={() => setSelectedShotIdx(idx)}
+                      className="ml-1 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-500/20"
+                      title={s.lastSubmitError || ''}
+                    >
+                      #{s.shotIndex}
+                    </button>
+                  );
+                })}
+                {failedShots.length > 8 && <span className="ml-1 opacity-60">… 共 {failedShots.length} 个</span>}
+              </span>
+              {onBatchGenerateAllVideos && (
+                <button
+                  type="button"
+                  onClick={onBatchGenerateAllVideos}
+                  className="ml-auto rounded-md border border-red-400/50 bg-red-500/20 px-3 py-1 text-[11px] font-medium text-red-100 hover:bg-red-500/30"
+                >
+                  ↻ 重试全部失败项
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex min-h-[480px] flex-col gap-4 lg:flex-row">
         <StepStoryboardAssetsSidebar
           chSheets={chSheets}
@@ -235,6 +297,7 @@ export function StepStoryboardWorkspace({
           onOpenLightbox={setLightboxSrc}
           onKeepOnlyCurrentVersion={onKeepOnlyCurrentVersion}
           onSelectVideoVersion={onSelectVideoVersion}
+          onRetryShotVideo={onGenerateShotVideo}
         />
       </div>
 

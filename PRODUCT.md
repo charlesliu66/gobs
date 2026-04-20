@@ -156,7 +156,25 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.64 -->
+<!-- NEXT_VERSION: v0.65 -->
+
+### v0.64 — 2026-04-20
+
+**高级制片视频生成体验大修：不再"假失败"、不再"幽灵生成中"**
+
+针对批量生成分镜视频时反复出现的体验痛点（CLI 偶发失败被当永久失败、即梦后台已完成但 H5 永远显示"生成中"、1310 并发错误让后续分镜被阻塞），在本版做系统性重写：
+
+- **[api] CLI 偶发错误不再误判为永久失败**（`dreaminaVideo.ts` · `batchJobsQueue.ts`）：`pollDreaminaTask` 在 `query_result.py` 返回非 JSON / exit 1 / 下载失败等场景下，现在返回 `{phase:'failed', retriable:true}`。`batchJobsQueue.pollSingleJob` 识别到 retriable 错误后把 job 保持在 `queuing` 并累计 `transientErrorCount`，**连续 3 次**才真正标 failed（收到任一正常响应立即重置计数）。从根上消除"CLI did not return parseable JSON / exit code 1"这一大类假 failed。
+- **[api] 幽灵 pending 自动清理**（`batchJobsQueue.ts` · `clearGhostPendingIfAllFailed` + `sweepGhostPendings`）：当某个 shot 对应的所有 batch-job 都已 failed/cancelled 且项目仍有 `pendingVideoSubmitId` 时，后端立刻把 `pendingVideoSubmitId` 清空并写入 `lastSubmitError`/`lastSubmitErrorAt`。服务启动时还会全量 `sweepGhostPendings()` 扫一遍所有项目 JSON 做历史数据自愈。H5 因此能真实反映失败状态。
+- **[api] 1310 重试从 1 次提到 5 次**（`videoDreamina.ts`）：即梦 `ExceedConcurrencyLimit` 从「45s × 1 次」扩展到「45s × 5 次 ≈ 4 分钟」，同时仍由 `DREAMINA_CONCURRENCY` 错误码透传给前端区分处理，批量提交 10 个镜头时不再被第 2 个就挡死。
+- **[api] scanner 周期 120s → 30s + submit 失败即时 kick**（`dreaminaRecovery.ts` · `kickScanner()`）：孤儿任务恢复周期缩短到 30s（可由 `DREAMINA_SCAN_INTERVAL_MS` 覆盖，下限 10s）；`videoDreamina /submit` 5xx 错误路径增加 `kickScanner()` 调用，带 5s 冷却防抖，3-10s 内就能捞回 submit_id 而非等下一轮。
+- **[frontend] ApiError 类透传 errorCode**（`api/client.ts`）：`apiPost` / `apiGet` 失败时改为抛 `ApiError(message, { errorCode, status })`，上层可用 `err instanceof ApiError && err.errorCode === 'DREAMINA_CONCURRENCY'` 精确区分错误而非脆弱的字符串匹配。
+- **[frontend] 失败态清晰化**（`productionTypes.ts` · `StepStoryboardShotStrip.tsx` · `StepStoryboardPreviewPanel.tsx`）：`ProductionShot` 新增 `lastSubmitError` / `lastSubmitErrorAt` 字段，ShotStrip 缩略图在无视频 + 无 pending + 有 lastSubmitError 时直接显示红色「✕ 失败 · 点击重试」，右侧 PreviewPanel 显示带具体原因 + 失败时间 + 「↻ 重新生成本镜视频」大按钮。
+- **[frontend] 顶部批量进度 banner**（`StepStoryboardWorkspace.tsx`）：所有分镜实时统计「已完成 N/M · 生成中 X · 失败 Y」，失败镜号以小徽章列出可点击跳转，一键「↻ 重试全部失败项」直接复用已有的 `onBatchGenerateAllVideos`。
+- **[frontend] 重新提交时清理上次失败残留**（`ProductionWizard.tsx`）：`runShotVideo` 在写入新 `pendingVideoSubmitId` 时同时把 `lastSubmitError` / `lastSubmitErrorAt` 置空，避免 UI 同时显示"生成中"和"失败"的自相矛盾状态。
+
+**三端一统：** `tsc --noEmit` 通过 → `npm run build` 通过 → `git push origin main` → SFTP 上传 `dist/` → `pm2 restart qas-api`。
+
 
 ### v0.63 — 2026-04-20
 
@@ -995,5 +1013,5 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-20（v0.63）*
+*最后更新：2026-04-20（v0.64）*
 

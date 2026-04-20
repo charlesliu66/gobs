@@ -85,6 +85,31 @@ function wrapFetchError(e: unknown): never {
   throw e instanceof Error ? e : new Error(msg);
 }
 
+/**
+ * 带 errorCode 的 API 错误：后端 { error, errorCode } 的错误响应会被封装成该类。
+ * 前端可用 `err instanceof ApiError && err.errorCode === 'DREAMINA_CONCURRENCY'`
+ * 精确区分"并发排队"等可重试错误，而不依赖脆弱的字符串匹配。
+ */
+export class ApiError extends Error {
+  errorCode?: string;
+  status?: number;
+  constructor(message: string, opts?: { errorCode?: string; status?: number }) {
+    super(message);
+    this.name = 'ApiError';
+    this.errorCode = opts?.errorCode;
+    this.status = opts?.status;
+  }
+}
+
+async function throwApiError(res: Response): Promise<never> {
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  const b = body as { error?: string; errorCode?: string };
+  throw new ApiError(b.error || res.statusText || '请求失败', {
+    errorCode: b.errorCode,
+    status: res.status,
+  });
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   let res: Response;
   try {
@@ -101,8 +126,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   }
   handleUnauthorized(res);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error || res.statusText);
+    await throwApiError(res);
   }
   return res.json() as Promise<T>;
 }
@@ -118,8 +142,7 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
   handleUnauthorized(res);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error || res.statusText);
+    await throwApiError(res);
   }
   return res.json() as Promise<T>;
 }

@@ -155,6 +155,13 @@ export interface ProductionShot {
    */
   pendingVideoSubmitId?: string;
   /**
+   * 最近一次生成失败的原因（由后端 batchJobsQueue.clearGhostPendingIfAllFailed 写入）。
+   * 当 pendingVideoSubmitId 为空且 previewVideoUrl 为空时，UI 用此字段显示"生成失败，可重试"。
+   */
+  lastSubmitError?: string;
+  /** 最近一次失败时间 ISO8601 */
+  lastSubmitErrorAt?: string;
+  /**
    * 仅当分镜视频模式为「全能参考 dreamina-multimodal」时有效：覆盖发给接口的 storyboardText。
    * 未设置时使用自动拼接（结构化叙事 + @图片 说明行）。
    */

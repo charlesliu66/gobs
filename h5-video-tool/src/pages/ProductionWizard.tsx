@@ -1425,6 +1425,11 @@ export function ProductionWizard() {
       };
 
       const is1310Error = (err: unknown): boolean => {
+        // 优先使用后端返回的 errorCode；历史版本/网络中断 fallback 到字符串匹配
+        if (err && typeof err === 'object' && 'errorCode' in err) {
+          const code = (err as { errorCode?: string }).errorCode;
+          if (code === 'DREAMINA_CONCURRENCY') return true;
+        }
         const msg = err instanceof Error ? err.message : String(err);
         return /排队|1310|ExceedConcurrency/i.test(msg);
       };
@@ -1466,7 +1471,8 @@ export function ProductionWizard() {
         const shots = [...p.shots];
         const cur = shots[shotIdx];
         if (!cur) return p;
-        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
+        // 清除上次失败残留，否则 UI 会同时显示"生成中"和"失败"
+        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId, lastSubmitError: undefined, lastSubmitErrorAt: undefined };
         return { ...p, shots };
       });
 
@@ -1500,9 +1506,9 @@ export function ProductionWizard() {
       if (registered) {
         toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
       } else {
-        console.warn('[production] batch-job 注册失败，视频可能在即梦后台已生成但未回传', lastRegisterErr);
-        toast.error(
-          `分镜 #${s.shotIndex} 已提交到即梦，但后台任务注册失败；请稍后点「检查进度」手动同步`,
+        console.warn('[production] batch-job 注册失败，后端 scanner 会自动兜底恢复', lastRegisterErr);
+        toast.info(
+          `分镜 #${s.shotIndex} 已提交，后台 30s 内自动恢复（如仍未出现可点「检查进度」）`,
         );
       }
 

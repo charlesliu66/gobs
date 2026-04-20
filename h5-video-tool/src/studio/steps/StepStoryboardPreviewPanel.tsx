@@ -11,6 +11,7 @@ export function StepStoryboardPreviewPanel({
   onOpenLightbox,
   onKeepOnlyCurrentVersion,
   onSelectVideoVersion,
+  onRetryShotVideo,
 }: {
   shot: ProductionShot;
   shotMediaBusy: 'frame' | 'video' | null;
@@ -21,7 +22,14 @@ export function StepStoryboardPreviewPanel({
   onOpenLightbox: (src: string) => void;
   onKeepOnlyCurrentVersion: (id: string) => void;
   onSelectVideoVersion: (id: string) => void;
+  /** 本镜失败时点击"重新生成"：由父组件复用 onGenerateShotVideo 逻辑 */
+  onRetryShotVideo?: () => void;
 }) {
+  // 失败态判定：无成片、无待处理 submit、但有 lastSubmitError
+  const hasAnyVideo = Boolean(
+    shot.previewVideoUrl || shot.previewVideoPath || (shot.previewVideoVersions && shot.previewVideoVersions.length > 0),
+  );
+  const shotFailed = !hasAnyVideo && !shot.pendingVideoSubmitId && shotMediaBusy !== 'video' && Boolean(shot.lastSubmitError);
   return (
     <aside className="w-full shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 lg:w-72">
       <div className="text-xs font-medium text-[var(--color-text)]">本镜预览</div>
@@ -49,7 +57,33 @@ export function StepStoryboardPreviewPanel({
       )}
       <div className="mt-3">
         <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜视频</div>
-        {(shotMediaBusy === 'video' || (!shotPreviewPlaySrc && shot.pendingVideoSubmitId)) ? (
+        {shotFailed ? (
+          <div className="mt-1.5 overflow-hidden rounded-xl border border-red-500/40 bg-red-900/25">
+            <div className="flex items-center gap-2 border-b border-red-500/25 px-3 py-2">
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              <span className="text-[11px] font-semibold tracking-wide text-red-100">生成失败</span>
+            </div>
+            <div className="space-y-2 px-3 py-3">
+              <p className="text-[11px] leading-relaxed text-red-100/85 break-words">
+                {shot.lastSubmitError || '未知错误'}
+              </p>
+              {shot.lastSubmitErrorAt && (
+                <p className="text-[10px] text-red-200/60">
+                  失败时间：{new Date(shot.lastSubmitErrorAt).toLocaleString('zh-CN')}
+                </p>
+              )}
+              {onRetryShotVideo && (
+                <button
+                  type="button"
+                  onClick={onRetryShotVideo}
+                  className="w-full rounded-lg border border-red-400/50 bg-red-500/25 px-3 py-1.5 text-[11px] font-medium text-red-100 hover:bg-red-500/35"
+                >
+                  ↻ 重新生成本镜视频
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (shotMediaBusy === 'video' || (!shotPreviewPlaySrc && shot.pendingVideoSubmitId)) ? (
           <div className="mt-1.5 overflow-hidden rounded-xl border border-amber-500/35 bg-[linear-gradient(145deg,rgba(120,80,20,0.22),rgba(20,20,28,0.95))] shadow-inner">
             <div className="flex items-center gap-2 border-b border-amber-500/20 px-3 py-2">
               <span className="relative flex h-2 w-2 shrink-0">

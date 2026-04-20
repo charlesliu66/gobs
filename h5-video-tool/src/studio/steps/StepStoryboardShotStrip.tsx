@@ -58,6 +58,11 @@ export function StepStoryboardShotStrip({
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-green-400" style={{ animationDuration: '2s' }} />
                   <span className="px-1 text-[8px] font-medium text-green-200">即梦生成</span>
                 </div>
+              ) : s.lastSubmitError && !s.previewVideoUrl && !s.previewVideoPath && !(s.previewVideoVersions && s.previewVideoVersions.length > 0) ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-red-900/70 backdrop-blur-[1px]" title={s.lastSubmitError}>
+                  <span className="px-1 text-[10px] font-bold text-red-200">✕ 失败</span>
+                  <span className="px-1 text-[8px] font-medium text-red-200">点击重试</span>
+                </div>
               ) : null}
 
               {isThisShotBusy === 'frame' ? (

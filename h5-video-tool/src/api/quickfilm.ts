@@ -98,6 +98,7 @@ export interface DraftMeta {
   name: string;
   updatedAt: string;
   createdAt: string;
+  hasStoryboard?: boolean;
 }
 
 export interface DraftData {
@@ -110,6 +111,10 @@ export interface DraftData {
   customStyle: string;
   styleImageBase64?: string;
   assetFiles: Array<{ name: string; base64: string }>;
+  storyboard?: ShotWithAssets[];
+  logline?: string;
+  jobId?: string;
+  projectId?: string;
   updatedAt: string;
   createdAt: string;
 }
