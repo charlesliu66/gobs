@@ -846,7 +846,12 @@ export async function runEditorAgentApply(
           }
         }
       } catch (e) {
-        console.warn('[editor agent] analyzeSingleAssetVideo', a.id, e);
+        const code = (e as { code?: string } | undefined)?.code;
+        if (code === 'NO_AUDIO_STREAM') {
+          console.info(`[editor agent] analyzeSingleAssetVideo ${a.id}: 素材无音频轨，已降级为视觉分析`);
+        } else {
+          console.warn('[editor agent] analyzeSingleAssetVideo', a.id, e);
+        }
       }
     }
     if (wins.length === 0) {
@@ -928,15 +933,34 @@ export async function runEditorAgentApply(
     currentClipsMetaBlock,
   });
 
-  const { text: planText, usage: planUsage } = await compassChatCompletionWithUsage({
-    systemPrompt: planSystemPrompt,
-    userText: userPayloadForPlan,
-    temperature: 0.3,
-    maxTokens: 2048,
-    model: models.plan,
-  });
-  usageSink('editor_plan', planUsage);
-  console.log(`[editor agent] Plan complete (${models.plan}), length=${planText.length}`);
+  /**
+   * Plan 阶段失败不再直接抛出，改为"跳过 Build，直接走 Legacy 单阶段兜底"，
+   * 保证 Agent 在 Gemini 返回空 / safety filter / 偶发网关异常时依然能出结果，
+   * 避免前端看到 "network error" / "Compass Gemini 返回内容为空"。
+   */
+  let planText = '';
+  let planFailed = false;
+  try {
+    const planCall = await compassChatCompletionWithUsage({
+      systemPrompt: planSystemPrompt,
+      userText: userPayloadForPlan,
+      temperature: 0.3,
+      maxTokens: 2048,
+      model: models.plan,
+    });
+    planText = planCall.text;
+    usageSink('editor_plan', planCall.usage);
+    console.log(`[editor agent] Plan complete (${models.plan}), length=${planText.length}`);
+  } catch (e) {
+    planFailed = true;
+    console.warn(`[editor agent] Plan 阶段失败，将跳过 Build 直接走 Legacy 兜底: ${e instanceof Error ? e.message : String(e)}`);
+    report({
+      stage: 'plan_fallback',
+      percent: 65,
+      message: '规划模型暂时不可用，切换到兜底剪辑方案…',
+      etaSec: eta(65),
+    });
+  }
 
   // ─── 阶段 2: Build（Plan → JSON）──────────────────────────────────────────
 
@@ -959,11 +983,13 @@ ${planText}`;
 
   let parsed: { summary?: string; project?: TimelineProject } | null = null;
 
-  // Build 尝试：先用 build 模型，失败用 fallback 模型
-  const buildAttempts: Array<{ model: string; label: string }> = [
-    { model: models.build, label: 'build' },
-    { model: models.fallback, label: 'fallback' },
-  ];
+  // Plan 失败时跳过 Build 两次尝试，直接进入 Legacy 兜底，节省 1-2 次无谓调用。
+  const buildAttempts: Array<{ model: string; label: string }> = planFailed
+    ? []
+    : [
+        { model: models.build, label: 'build' },
+        { model: models.fallback, label: 'fallback' },
+      ];
 
   for (const attempt of buildAttempts) {
     try {

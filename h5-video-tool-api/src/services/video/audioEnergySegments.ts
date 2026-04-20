@@ -68,12 +68,24 @@ export async function extractMonoPcmS16leHead(
     });
     ff.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`ffmpeg 抽取音频失败 (code ${code}): ${errBuf.slice(-400)}`));
+        // 源视频没有音频流时 ffmpeg 常返回 code 234，stderr 会出现
+        // "Output file does not contain any stream" 或 "does not contain any stream"。
+        // 这是正常情况（无背景音的素材），用可识别的错误类型抛出，上层可以静默跳过。
+        const errSnippet = errBuf.slice(-400);
+        if (/does not contain any stream|Invalid argument/i.test(errSnippet) && code === 234) {
+          const err = new Error('素材无音频轨，已跳过音频分析');
+          (err as Error & { code?: string }).code = 'NO_AUDIO_STREAM';
+          reject(err);
+          return;
+        }
+        reject(new Error(`ffmpeg 抽取音频失败 (code ${code}): ${errSnippet}`));
         return;
       }
       const pcm = Buffer.concat(chunks);
       if (pcm.length < 256) {
-        reject(new Error(`音频数据过短或无声道：${errBuf.slice(-200)}`));
+        const err = new Error('音频数据过短或无有效声道，已跳过音频分析');
+        (err as Error & { code?: string }).code = 'NO_AUDIO_STREAM';
+        reject(err);
         return;
       }
       resolve();

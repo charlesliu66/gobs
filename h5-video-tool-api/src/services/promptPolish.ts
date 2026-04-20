@@ -208,7 +208,10 @@ async function postCompassChatCompletions(
         }
       } else if (e instanceof Error) {
         msg = e.message || msg;
-        const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        // "返回内容为空" 常见于 Gemini safety filter / finish_reason=length / 网关瞬时异常，
+        // 视为可重试：下一次会自动走备用 KEY（见上方 useKey 选择），也给后端一次"空→非空"的机会。
+        const emptyResponse = /返回内容为空|empty.*content|no content/i.test(msg);
+        const transient = emptyResponse || /ECONNRESET|timeout|socket hang up|network/i.test(msg);
         await recordKeyUsage({ success: false });
         if (!isLast && transient) {
           console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
