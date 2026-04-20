@@ -1,4 +1,5 @@
 import type { MediaAsset, TimelineProject, VideoClip } from '../types/timeline';
+import { timelineDurationOf } from '../types/timeline';
 
 function fmt(n: number): string {
   if (!Number.isFinite(n)) return '—';
@@ -29,11 +30,13 @@ export function formatAgentDeliverableMarkdown(
 
   clips.forEach((vc, i) => {
     const name = escapeCell(resolveAssetName(vc.assetId));
-    const segLen = vc.sourceEnd - vc.sourceStart;
+    // 成片段长：若有 speed 变速，按时间轴占用秒展示（源秒 / speed）
+    const segLen = timelineDurationOf(vc);
     const shot = vc.shotIndex != null ? String(vc.shotIndex) : '—';
     const note = escapeCell(vc.note ?? '');
+    const speedSuffix = vc.speed && vc.speed !== 1 ? ` @${vc.speed}x` : '';
     lines.push(
-      `| ${i + 1} | ${shot} | ${name} | ${fmt(vc.sourceStart)}→${fmt(vc.sourceEnd)} | ${fmt(vc.timelineStart)} | ${fmt(segLen)}s | ${note || '—'} |`,
+      `| ${i + 1} | ${shot} | ${name}${speedSuffix} | ${fmt(vc.sourceStart)}→${fmt(vc.sourceEnd)} | ${fmt(vc.timelineStart)} | ${fmt(segLen)}s | ${note || '—'} |`,
     );
   });
 

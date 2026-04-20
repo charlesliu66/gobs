@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AspectRatioPreset, MediaAsset, TimelineProject, VideoClip } from '../types/timeline';
-import { computeDurationSec, emptyTimelineProject, normalizeTimelineProject } from '../types/timeline';
+import {
+  computeDurationSec,
+  emptyTimelineProject,
+  normalizeTimelineProject,
+  timelineDurationOf,
+  toSourceSec,
+} from '../types/timeline';
 import { useUndoRedo } from './useUndoRedo';
 import {
   deleteEditorProject,
@@ -180,8 +186,7 @@ export function useTimelineState() {
     /** 多段同时满足时取时间轴更靠后的片段（衔接点优先显示后一段） */
     let best: VideoClip | null = null;
     for (const vc of clips) {
-      const clipLen = vc.sourceEnd - vc.sourceStart;
-      const end = vc.timelineStart + clipLen;
+      const end = vc.timelineStart + timelineDurationOf(vc);
       if (currentTime + eps >= vc.timelineStart && currentTime <= end + eps) {
         best = vc;
       }
@@ -197,7 +202,8 @@ export function useTimelineState() {
 
   const sourceTimeForPreview = useMemo(() => {
     if (!activeVideoClip) return 0;
-    const raw = activeVideoClip.sourceStart + (currentTime - activeVideoClip.timelineStart);
+    // 时间轴偏移 → 源秒（由 clipSpeed 决定比例），供 <video>.currentTime 赋值
+    const raw = toSourceSec(activeVideoClip, currentTime - activeVideoClip.timelineStart);
     const { sourceStart, sourceEnd, assetId } = activeVideoClip;
     let upper = sourceEnd;
     const fileDur = assets[assetId]?.durationSec;
@@ -211,6 +217,17 @@ export function useTimelineState() {
     const max = Math.max(durationSec, 0.001);
     setCurrentTime(Math.max(0, Math.min(t, max)));
   }, [durationSec]);
+
+  /**
+   * Undo/Redo/删除片段后 durationSec 可能缩短，而 currentTime 仍指向旧位置（越界）。
+   * 用 effect 统一 clamp，这样所有变更源都自动处理。
+   */
+  useEffect(() => {
+    const max = Math.max(durationSec, 0);
+    if (currentTime > max + 1e-3) {
+      setCurrentTime(max);
+    }
+  }, [durationSec, currentTime]);
 
   return {
     aspectRatio,

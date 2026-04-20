@@ -64,6 +64,19 @@ export async function uploadEditorAsset(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<{ asset: EditorAssetDto }> {
+  // 前置单文件上限校验，失败给出含 MB 的可读提示（优于服务端 413 默默失败）
+  try {
+    const cfg = await getEditorUploadConfig();
+    if (file.size > cfg.maxBytes) {
+      const fileMb = (file.size / 1024 / 1024).toFixed(1);
+      throw new Error(
+        `文件 ${fileMb} MB 超过单文件上限 ${cfg.maxMb} MB，请裁剪或提高 EDITOR_UPLOAD_MAX_MB 后重试。`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('超过单文件上限')) throw e;
+  }
+
   const fd = new FormData();
   fd.append('file', file);
   fd.append('originalName', file.name);
@@ -526,17 +539,51 @@ async function assembleChunks(
   return res.json() as Promise<{ asset: EditorAssetDto }>;
 }
 
+/** 分片上传（并发池 3），大文件上传整体时长由串行 N 片缩短为 ceil(N/3) 倍时间 */
 export async function uploadEditorAssetChunked(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<{ asset: EditorAssetDto }> {
   const uploadId = generateUUID();
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  for (let i = 0; i < totalChunks; i++) {
-    const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-    await uploadChunk(uploadId, i, totalChunks, chunk);
-    onProgress?.(Math.round(((i + 1) / totalChunks) * 90)); // 0-90% for chunk phase
+
+  // 前置大小校验：超出单文件上限直接抛友好错误，避免分片全传完后才被服务端拒绝
+  try {
+    const cfg = await getEditorUploadConfig();
+    if (file.size > cfg.maxBytes) {
+      const fileMb = (file.size / 1024 / 1024).toFixed(1);
+      throw new Error(
+        `文件 ${fileMb} MB 超过单文件上限 ${cfg.maxMb} MB，请裁剪或提高 EDITOR_UPLOAD_MAX_MB 后重试。`,
+      );
+    }
+  } catch (e) {
+    // 仅当真正抛出"超出上限"文案时才阻断，其它探测失败不影响继续
+    if (e instanceof Error && e.message.includes('超过单文件上限')) throw e;
   }
+
+  const CONCURRENCY = 3;
+  let nextIndex = 0;
+  let done = 0;
+  const updateProgress = () => {
+    onProgress?.(Math.min(90, Math.round((done / totalChunks) * 90)));
+  };
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = nextIndex;
+      if (i >= totalChunks) return;
+      nextIndex += 1;
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      await uploadChunk(uploadId, i, totalChunks, chunk);
+      done += 1;
+      updateProgress();
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, totalChunks) }, () => worker()),
+  );
+
   const result = await assembleChunks(uploadId, file.name, file.size);
   onProgress?.(100);
   return result;
@@ -578,6 +625,8 @@ export interface GenerateEditorMusicBody {
   style?: string;
   /** Suno customMode 曲目标题（可选） */
   title?: string;
+  /** 显式指定引擎：auto(默认) | suno | lyria */
+  provider?: 'auto' | 'suno' | 'lyria';
 }
 
 export interface GenerateEditorMusicResponse {

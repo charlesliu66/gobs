@@ -86,6 +86,14 @@ router.post('/music/generate', async (req, res) => {
     sampleCount?: number;
     style?: string;
     title?: string;
+    /**
+     * 显式指定生成引擎：
+     *   'auto'  = 自动（有 Suno 配置走 Suno，失败 fallback Lyria）
+     *   'suno'  = 强制 Suno（未配置则 400）
+     *   'lyria' = 强制 Lyria（跳过 Suno）
+     * 前端用于"生成失败后切换引擎重试"。
+     */
+    provider?: 'auto' | 'suno' | 'lyria';
   };
 
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
@@ -99,8 +107,16 @@ router.post('/music/generate', async (req, res) => {
       ? body.sampleCount
       : 1;
 
+  const forcedProvider: 'auto' | 'suno' | 'lyria' = body.provider ?? 'auto';
+  if (forcedProvider === 'suno' && !isSunoConfigured()) {
+    res.status(400).json({ error: 'Suno 未配置（缺少 SUNO_API_KEY），请改用 lyria' });
+    return;
+  }
+
+  const shouldTrySuno = forcedProvider === 'suno' || (forcedProvider === 'auto' && isSunoConfigured());
+
   // -------- 尝试 Suno --------
-  if (isSunoConfigured()) {
+  if (shouldTrySuno) {
     try {
       const tracks = await generateSunoMusic({
         prompt,
@@ -133,15 +149,21 @@ router.post('/music/generate', async (req, res) => {
         return;
       }
 
+      // 显式强制 Suno 时直接报错，不 fallback
+      if (forcedProvider === 'suno') {
+        res.status(502).json({ error: err instanceof Error ? err.message : 'Suno 生成失败' });
+        return;
+      }
+
       if (isSunoFallbackError(err)) {
         const reason = err instanceof Error ? err.message : String(err);
         console.warn(`[editorMusic] Suno 失败，fallback 到 Lyria：${reason}`);
-        // 继续执行 Lyria 逻辑
       } else {
         console.error('[editorMusic] Suno 未知错误：', err);
-        // fallback 到 Lyria
       }
     }
+  } else if (forcedProvider === 'lyria') {
+    console.log('[editorMusic] 显式选择 Lyria 引擎');
   } else {
     console.log('[editorMusic] SUNO_API_KEY 未配置，直接使用 Lyria');
   }

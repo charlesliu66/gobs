@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import { getApiDataDir } from '../config/apiDataDir.js';
@@ -320,25 +321,65 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
     let totalShift = 0;
     let appliedCount = 0;
 
+    const skippedReasons: Array<{ shotIndex: number; reason: string }> = [];
+
     for (const rep of requested) {
       const shot = prodShots.find((s) => s.shotIndex === rep.shotIndex);
-      if (!shot) continue;
+      if (!shot) {
+        skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'shot_not_found' });
+        continue;
+      }
       const version = (shot.previewVideoVersions ?? []).find((v) => v.id === rep.newVersionId);
-      if (!version) continue;
+      if (!version) {
+        skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'version_not_found' });
+        continue;
+      }
+
+      /**
+       * 视频版本回退：制片历史版本的源文件有可能被 GC 清理。
+       * 未经落盘校验就写回，会让时间轴里出现 404 URL（预览黑屏、导出失败）。
+       * 这里统一按 videoPath 做一次 fs.existsSync，不存在则跳过并记录原因。
+       */
+      if (version.videoPath) {
+        try {
+          if (!fsSync.existsSync(version.videoPath)) {
+            skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'file_missing' });
+            continue;
+          }
+        } catch {
+          skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'file_check_failed' });
+          continue;
+        }
+      } else if (!version.videoUrl) {
+        skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'no_source' });
+        continue;
+      }
 
       const clipIdx = clips.findIndex((c) => c.shotIndex === rep.shotIndex);
-      if (clipIdx < 0) continue;
+      if (clipIdx < 0) {
+        skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'clip_not_in_timeline' });
+        continue;
+      }
       const clip = clips[clipIdx]!;
 
       /** 服务端自己构造 URL，防止客户端注入 */
       const newVideoUrl = version.videoPath
         ? `/api/video/file?path=${encodeURIComponent(version.videoPath)}`
         : (version.videoUrl ?? '');
-      if (!newVideoUrl) continue;
+      if (!newVideoUrl) {
+        skippedReasons.push({ shotIndex: rep.shotIndex, reason: 'no_url' });
+        continue;
+      }
       const newDur = shot.durationSec ?? 5;
 
-      const oldDur = ((clip.sourceEnd as number) ?? 5) - ((clip.sourceStart as number) ?? 0);
-      const durDelta = newDur - oldDur;
+      // 旧/新时间轴占用时长都要考虑 speed，下游片段位移才会一致
+      const clipSpeed = typeof clip.speed === 'number' && (clip.speed as number) > 0
+        ? (clip.speed as number)
+        : 1;
+      const oldSrcDur = ((clip.sourceEnd as number) ?? 5) - ((clip.sourceStart as number) ?? 0);
+      const oldTimelineDur = oldSrcDur / clipSpeed;
+      const newTimelineDur = newDur / clipSpeed;
+      const durDelta = newTimelineDur - oldTimelineDur;
 
       const assetId = clip.assetId as string;
       if (assets[assetId]) {
@@ -368,20 +409,25 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
     }
 
     if (appliedCount === 0) {
-      res.status(400).json({ error: '没有可应用的替换（版本不存在或分镜不匹配）' });
+      res.status(400).json({
+        error: '没有可应用的替换（版本不存在、分镜不匹配或源文件已失效）',
+        skipped: skippedReasons,
+      });
       return;
     }
 
     let maxEnd = 0;
     for (const c of clips) {
-      const end = (c.timelineStart as number) + ((c.sourceEnd as number) - (c.sourceStart as number));
+      const speed = typeof c.speed === 'number' && (c.speed as number) > 0 ? (c.speed as number) : 1;
+      const srcDur = (c.sourceEnd as number) - (c.sourceStart as number);
+      const end = (c.timelineStart as number) + srcDur / speed;
       if (end > maxEnd) maxEnd = end;
     }
     project.durationSec = maxEnd;
 
     doc.updatedAt = new Date().toISOString();
     await fs.writeFile(file, JSON.stringify(doc, null, 2), 'utf-8');
-    res.json({ success: true, data: doc, appliedCount });
+    res.json({ success: true, data: doc, appliedCount, skipped: skippedReasons });
   } catch (err) {
     console.error('[apply-sync]', err);
     res.status(500).json({ error: '应用同步失败' });

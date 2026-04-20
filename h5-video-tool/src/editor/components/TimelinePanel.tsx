@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TimelineProject, VideoClip, AudioClip, TextClip } from '../types/timeline';
-import { computeDurationSec, getAllTextClips } from '../types/timeline';
+import { computeDurationSec, getAllTextClips, timelineDurationOf, clipSpeed } from '../types/timeline';
 import { getTextPreset } from '../textPresets';
 import { formatTimelineTime } from '../utils/formatTimelineTime';
 
@@ -254,6 +254,8 @@ export function TimelinePanel({
     startClientX: number;
     origSourceStart: number;
     origSourceEnd: number;
+    /** 片段当前速度；像素 → 时间轴秒 → 源秒 时的换算因子 */
+    speed: number;
   } | null>(null);
   const [trimOverlay, setTrimOverlay] = useState<{ clipId: string; text: string } | null>(null);
 
@@ -269,20 +271,30 @@ export function TimelinePanel({
         startClientX: e.clientX,
         origSourceStart: clip.sourceStart,
         origSourceEnd: clip.sourceEnd,
+        speed: clipSpeed(clip),
       };
       const onMove = (ev: MouseEvent) => {
         const tr = trimRef.current;
         if (!tr) return;
-        const dSec = (ev.clientX - tr.startClientX) / pxPerSec;
+        /**
+         * 像素 → 时间轴秒 → 源秒：
+         *   dTimelineSec = (clientX - startX) / pxPerSec
+         *   dSourceSec   = dTimelineSec * speed
+         * 这样变速片段的 trim 手柄拖动感与画面帧前进对齐。
+         */
+        const dTimeline = (ev.clientX - tr.startClientX) / pxPerSec;
+        const dSec = dTimeline * tr.speed;
         if (tr.side === 'left') {
           const newStart = Math.max(0, tr.origSourceStart + dSec);
-          const dur = Math.max(0, tr.origSourceEnd - newStart);
-          setTrimOverlay({ clipId: tr.clipId, text: `入点 ${newStart.toFixed(2)}s · 时长 ${dur.toFixed(2)}s` });
+          const durSrc = Math.max(0, tr.origSourceEnd - newStart);
+          const durTimeline = durSrc / tr.speed;
+          setTrimOverlay({ clipId: tr.clipId, text: `入点 ${newStart.toFixed(2)}s · 时长 ${durTimeline.toFixed(2)}s` });
           onTrimClip(tr.clipId, { sourceStart: newStart });
         } else {
           const newEnd = Math.max(tr.origSourceStart + 0.1, tr.origSourceEnd + dSec);
-          const dur = newEnd - tr.origSourceStart;
-          setTrimOverlay({ clipId: tr.clipId, text: `时长 ${dur.toFixed(2)}s · 出点 ${newEnd.toFixed(2)}s` });
+          const durSrc = newEnd - tr.origSourceStart;
+          const durTimeline = durSrc / tr.speed;
+          setTrimOverlay({ clipId: tr.clipId, text: `时长 ${durTimeline.toFixed(2)}s · 出点 ${newEnd.toFixed(2)}s` });
           onTrimClip(tr.clipId, { sourceEnd: newEnd });
         }
       };
@@ -606,7 +618,10 @@ export function TimelinePanel({
                         const isVideo = track.type === 'video';
                         const vc = c as VideoClip;
                         const ac = c as AudioClip;
-                        const len = isVideo ? vc.sourceEnd - vc.sourceStart : ac.sourceEnd - ac.sourceStart;
+                        // 时间轴显示宽度 = 源秒 / speed（无 speed 则默认 1）
+                        const len = isVideo
+                          ? timelineDurationOf(vc)
+                          : timelineDurationOf(ac as unknown as VideoClip);
                         const left = c.timelineStart * pxPerSec;
                         const w = len * pxPerSec;
 

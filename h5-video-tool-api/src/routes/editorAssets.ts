@@ -3,7 +3,7 @@ import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
 import os from 'os';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { spawn } from 'child_process';
 import multer from 'multer';
 import { decodeMultipartFilename } from '../utils/multipartFilename.js';
@@ -30,6 +30,35 @@ export interface StoredEditorAsset {
   mime: string;
   size: number;
   createdAt: string;
+  /** 文件内容 SHA-256，用于"同用户上传相同文件仅存一份" */
+  sha256?: string;
+}
+
+/** 流式计算文件的 SHA-256，不把文件整体读入内存 */
+function computeFileSha256(absPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = fs.createReadStream(absPath, { highWaterMark: 1024 * 1024 });
+    stream.on('error', reject);
+    stream.on('data', (buf) => hash.update(buf));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+/**
+ * 查找当前用户是否已有同 sha256 + size 的素材；命中则返回该素材。
+ * 用于 upload / upload-assemble 之后的去重，避免同一文件被重复落盘。
+ */
+function findDuplicateBySha(
+  username: string,
+  sha256: string,
+  size: number,
+): StoredEditorAsset | null {
+  const store = getStore(username);
+  for (const rec of store.assetsById.values()) {
+    if (rec.sha256 === sha256 && rec.size === size) return rec;
+  }
+  return null;
 }
 
 type UserAssetStore = {
@@ -193,7 +222,7 @@ function resolveOriginalName(req: Request, multerOriginal: string): string {
 
 /** POST multipart：字段 file；可选 originalName（浏览器端 UTF-8 真名，避免 multer 乱码） */
 router.post('/assets/upload', (req, res) => {
-  upload.single('file')(req, res, (err: unknown) => {
+  upload.single('file')(req, res, async (err: unknown) => {
     const username = resolveUsername(req as Request);
     loadAssetsRegistry(username);
     const store = getStore(username);
@@ -220,6 +249,40 @@ router.post('/assets/upload', (req, res) => {
     }
     const id = path.parse(f.filename).name;
     const originalName = resolveOriginalName(req, f.originalname);
+    const userDir = getUserUploadDir(username);
+    const absNew = path.join(userDir, f.filename);
+
+    /**
+     * 去重：文件已经落盘在 multer 的目标目录，流式计算 sha256；
+     * 若当前用户下已有同 sha256+size 的素材，则立即删除新文件并返回已有引用。
+     * 避免同一视频重复占用磁盘空间。
+     */
+    let sha: string | undefined;
+    try {
+      sha = await computeFileSha256(absNew);
+    } catch (hashErr) {
+      console.warn('[editor upload sha256 failed]', hashErr);
+    }
+    if (sha) {
+      const dup = findDuplicateBySha(username, sha, f.size);
+      if (dup && dup.id !== id) {
+        try { await fsp.unlink(absNew); } catch { /* ignore */ }
+        res.json({
+          asset: {
+            id: dup.id,
+            url: `/api/editor/assets/files/${dup.id}`,
+            kind: 'video' as const,
+            originalName: dup.originalName,
+            mime: dup.mime,
+            size: dup.size,
+            createdAt: dup.createdAt,
+          },
+          deduped: true,
+        });
+        return;
+      }
+    }
+
     const rec: StoredEditorAsset = {
       id,
       filename: f.filename,
@@ -227,6 +290,7 @@ router.post('/assets/upload', (req, res) => {
       mime: f.mimetype,
       size: f.size,
       createdAt: new Date().toISOString(),
+      sha256: sha,
     };
     store.assetsById.set(id, rec);
     saveAssetsRegistry(username);
@@ -528,6 +592,33 @@ router.post('/assets/upload-assemble', async (req, res) => {
   };
   const mime = mimeMap[extLower] ?? 'video/mp4';
 
+  // 去重：与 /assets/upload 同口径
+  let sha: string | undefined;
+  try {
+    sha = await computeFileSha256(destPath);
+  } catch (hashErr) {
+    console.warn('[editor assemble sha256 failed]', hashErr);
+  }
+  if (sha) {
+    const dup = findDuplicateBySha(username, sha, stat.size);
+    if (dup && dup.id !== id) {
+      try { fs.unlinkSync(destPath); } catch { /* ignore */ }
+      res.json({
+        asset: {
+          id: dup.id,
+          url: `/api/editor/assets/files/${dup.id}`,
+          kind: 'video' as const,
+          originalName: dup.originalName,
+          mime: dup.mime,
+          size: dup.size,
+          createdAt: dup.createdAt,
+        },
+        deduped: true,
+      });
+      return;
+    }
+  }
+
   const rec: StoredEditorAsset = {
     id,
     filename,
@@ -535,6 +626,7 @@ router.post('/assets/upload-assemble', async (req, res) => {
     mime,
     size: stat.size,
     createdAt: new Date().toISOString(),
+    sha256: sha,
   };
   store.assetsById.set(id, rec);
   saveAssetsRegistry(username);

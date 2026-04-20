@@ -25,9 +25,13 @@ export const localUploadRouter = Router();
 const UPLOAD_ROOT = resolvePath('uploads');
 fsSync.mkdirSync(UPLOAD_ROOT, { recursive: true });
 
+/**
+ * 与 editorAssets.ts 统一默认值（2048MB），避免"剪辑工作台能上传、制片工作台不能上传"
+ * 的体验割裂。两处都读同一个环境变量 EDITOR_UPLOAD_MAX_MB。
+ */
 const MAX_MB = Math.min(
   4096,
-  Math.max(64, parseInt(process.env.EDITOR_UPLOAD_MAX_MB || '500', 10) || 500),
+  Math.max(64, parseInt(process.env.EDITOR_UPLOAD_MAX_MB || '2048', 10) || 2048),
 );
 
 function getUserDir(username: string): string {

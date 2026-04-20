@@ -65,6 +65,8 @@ export interface AudioClip {
   sourceEnd: number;
   timelineStart: number;
   gainDb?: number;
+  /** A1 原声镜像轨会跟随视频 speed；A2 (BGM) 正常不设此字段（默认 1） */
+  speed?: number;
 }
 
 /** 文字/字幕/片头片尾 版式样式 ID */
@@ -199,6 +201,44 @@ export const BGM_CLIP_DURATION_SEC = 32.8;
 /**
  * 在 BGM 轨放置/替换一段配乐（从时间 0 对齐；长度取工程时长与 BGM 文件长较小者）
  */
+/**
+ * ─── Speed / 时间轴 ↔ 源时间 统一工具 ─────────────────────────────────────────
+ *
+ * 一个 video clip 的 `speed` 字段表示该片段播放倍速（0.25–4）。
+ * 时间轴时长（在预览与时间轴 UI 上占的秒数） = (sourceEnd - sourceStart) / speed。
+ * 与 <video> 元素互动时：`<video>.currentTime` 是"源秒"，而时间轴时间是"墙钟秒"。
+ *
+ * 之前项目里这两套时间被多处混用：UI 宽度、activeClip 判定、trim/split 都按 1:1
+ * 映射，在 speed ≠ 1 时预览 / 时长 / 切片 边界错乱。此处统一为三个 helper：
+ *
+ *   - timelineDurationOf(clip)  → 时间轴秒
+ *   - toSourceSec(clip, offsetInTimeline) → 源秒
+ *   - toTimelineOffset(clip, sourceSec) → 时间轴偏移秒（相对 clip 起点）
+ *
+ * 所有需要换算的地方统一调这三个，而不再手写 `sourceEnd - sourceStart`。
+ */
+export function clipSpeed(clip: Pick<VideoClip, 'speed'>): number {
+  return clip.speed && clip.speed > 0 ? clip.speed : 1;
+}
+export function timelineDurationOf(clip: Pick<VideoClip, 'sourceStart' | 'sourceEnd' | 'speed'>): number {
+  const src = Math.max(0, clip.sourceEnd - clip.sourceStart);
+  return src / clipSpeed(clip);
+}
+/** 传入 clip 与"相对 clip 起点的时间轴秒"，返回对应的源秒（给 <video>.currentTime 设值用） */
+export function toSourceSec(
+  clip: Pick<VideoClip, 'sourceStart' | 'speed'>,
+  timelineOffsetSec: number,
+): number {
+  return clip.sourceStart + Math.max(0, timelineOffsetSec) * clipSpeed(clip);
+}
+/** 反向：源秒 → 时间轴相对偏移 */
+export function toTimelineOffset(
+  clip: Pick<VideoClip, 'sourceStart' | 'speed'>,
+  sourceSec: number,
+): number {
+  return (sourceSec - clip.sourceStart) / clipSpeed(clip);
+}
+
 export function getActiveAudioClipAtTime(
   project: TimelineProject,
   trackId: string,
@@ -208,7 +248,12 @@ export function getActiveAudioClipAtTime(
   if (!tr || tr.type !== 'audio') return null;
   for (const c of tr.clips) {
     const ac = c as AudioClip;
-    const end = ac.timelineStart + (ac.sourceEnd - ac.sourceStart);
+    /**
+     * A1 原声镜像轨的音频片段跟 V1 同步（sourceEnd/sourceStart 为源秒，但 timelineStart
+     * 已经是变速后的位置）。这里同样按"时间轴占用秒 = 源秒 / speed"处理；A2 (BGM) 的
+     * speed 通常未设，默认为 1，自动兼容。
+     */
+    const end = ac.timelineStart + timelineDurationOf(ac);
     if (t + 1e-4 >= ac.timelineStart && t < end - 1e-4) return ac;
   }
   return null;
@@ -245,9 +290,14 @@ export function computeDurationSec(project: TimelineProject): number {
   let max = 0;
   for (const track of project.tracks) {
     for (const c of track.clips) {
-      const end = 'timelineEnd' in c
-        ? c.timelineEnd
-        : c.timelineStart + (c.sourceEnd - c.sourceStart);
+      let end: number;
+      if ('timelineEnd' in c) {
+        end = c.timelineEnd;
+      } else if (track.type === 'video') {
+        end = c.timelineStart + timelineDurationOf(c as VideoClip);
+      } else {
+        end = c.timelineStart + timelineDurationOf(c as unknown as VideoClip);
+      }
       if (end > max) max = end;
     }
   }
@@ -281,6 +331,7 @@ export function syncSourceAudioClipsFromVideo(project: TimelineProject): Timelin
     sourceEnd: vc.sourceEnd,
     timelineStart: vc.timelineStart,
     gainDb: 0,
+    speed: vc.speed && vc.speed > 0 ? vc.speed : 1,
   }));
   const tracks = p.tracks.map((t) => (t.id === 'a1' ? { ...t, clips: audioClips } : t));
   const next: TimelineProject = { ...p, tracks };
@@ -325,7 +376,7 @@ export function appendVideoClipToProject(
     let lastEnd = 0;
     for (const c of t.clips) {
       const vc = c as VideoClip;
-      const end = vc.timelineStart + (vc.sourceEnd - vc.sourceStart);
+      const end = vc.timelineStart + timelineDurationOf(vc);
       if (end > lastEnd) lastEnd = end;
     }
     const clip: VideoClip = {
@@ -526,14 +577,16 @@ export function splitVideoClipAtPlayhead(
   const clips = vTrack.clips as VideoClip[];
   const vc = clips.find((c) => c.id === clipId);
   if (!vc) return null;
-  const len = vc.sourceEnd - vc.sourceStart;
-  const tEnd = vc.timelineStart + len;
+  const tEnd = vc.timelineStart + timelineDurationOf(vc);
   const eps = 1e-3;
   if (playheadT <= vc.timelineStart + eps || playheadT >= tEnd - eps) return null;
-  const srcAt = vc.sourceStart + (playheadT - vc.timelineStart);
+  // 时间轴偏移 → 源秒（考虑 speed）
+  const srcAt = toSourceSec(vc, playheadT - vc.timelineStart);
+  // 两侧最小长度按"源秒"判定（避免 speed 导致的误差）
+  const minSrc = MIN_CLIP_PART_SEC * clipSpeed(vc);
   if (
-    srcAt <= vc.sourceStart + MIN_CLIP_PART_SEC ||
-    srcAt >= vc.sourceEnd - MIN_CLIP_PART_SEC
+    srcAt <= vc.sourceStart + minSrc ||
+    srcAt >= vc.sourceEnd - minSrc
   ) {
     return null;
   }
@@ -573,11 +626,11 @@ export function trimVideoClipHeadToPlayhead(
   if (!vTrack) return null;
   const vc = (vTrack.clips as VideoClip[]).find((c) => c.id === clipId);
   if (!vc) return null;
-  const tEnd = vc.timelineStart + (vc.sourceEnd - vc.sourceStart);
+  const tEnd = vc.timelineStart + timelineDurationOf(vc);
   const eps = 1e-3;
   if (playheadT <= vc.timelineStart + eps || playheadT >= tEnd - eps) return null;
-  const newSourceStart = vc.sourceStart + (playheadT - vc.timelineStart);
-  if (vc.sourceEnd - newSourceStart < MIN_CLIP_PART_SEC) return null;
+  const newSourceStart = toSourceSec(vc, playheadT - vc.timelineStart);
+  if (vc.sourceEnd - newSourceStart < MIN_CLIP_PART_SEC * clipSpeed(vc)) return null;
   const updated: VideoClip = {
     ...vc,
     sourceStart: newSourceStart,
@@ -599,11 +652,11 @@ export function trimVideoClipTailToPlayhead(
   if (!vTrack) return null;
   const vc = (vTrack.clips as VideoClip[]).find((c) => c.id === clipId);
   if (!vc) return null;
-  const tEnd = vc.timelineStart + (vc.sourceEnd - vc.sourceStart);
+  const tEnd = vc.timelineStart + timelineDurationOf(vc);
   const eps = 1e-3;
   if (playheadT <= vc.timelineStart + eps || playheadT >= tEnd - eps) return null;
-  const newSourceEnd = vc.sourceStart + (playheadT - vc.timelineStart);
-  if (newSourceEnd - vc.sourceStart < MIN_CLIP_PART_SEC) return null;
+  const newSourceEnd = toSourceSec(vc, playheadT - vc.timelineStart);
+  if (newSourceEnd - vc.sourceStart < MIN_CLIP_PART_SEC * clipSpeed(vc)) return null;
   const updated: VideoClip = { ...vc, sourceEnd: newSourceEnd };
   const clips = (vTrack.clips as VideoClip[]).map((c) => (c.id === clipId ? updated : c));
   const tracks = p.tracks.map((t) => (t.id === 'v1' ? { ...t, clips } : t));
@@ -660,9 +713,9 @@ export function getActiveTextClips(
 ): TextClip[] {
   const t = getTextTrack(project);
   if (!t) return [];
-  return (t.clips as TextClip[]).filter(
-    (c) => timeSec >= c.timelineStart && timeSec < c.timelineEnd,
-  );
+  return (t.clips as TextClip[])
+    .filter((c) => timeSec >= c.timelineStart && timeSec < c.timelineEnd)
+    .sort((a, b) => (a.timelineStart - b.timelineStart) || a.id.localeCompare(b.id));
 }
 
 /** 获取时间轴所有文字片段（排序） */

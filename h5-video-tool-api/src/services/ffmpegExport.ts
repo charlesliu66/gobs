@@ -176,6 +176,45 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
   const { w, h } = resolveSize(resolution, aspectRatio);
   const fps = project.fps ?? 30;
 
+  /**
+   * 磁盘空间预检：大导出（几分钟 1080p）很容易把临时盘或输出盘写满，
+   * ffmpeg 挂到一半产生半截 mp4 + 前端表现为「卡在 85%」。在开工前先估算：
+   *
+   *   需要字节 ≈ 总时长(s) × 经验码率(1080p~2MB/s, 2160p~8MB/s) × 3 (临时段 + concat + 输出留余量)
+   *
+   * 同时检查 tmp 目录和输出目录所在分区，取较严。
+   */
+  const totalDurSec = Math.max(project.durationSec ?? 0, 1);
+  const baseRateBytesPerSec = resolution === '2160p'
+    ? 8 * 1024 * 1024
+    : resolution === '720p'
+      ? 1.0 * 1024 * 1024
+      : 2 * 1024 * 1024; // 默认 1080p 档
+  const estimatedBytesNeeded = Math.floor(totalDurSec * baseRateBytesPerSec * 3);
+
+  const outDir = path.dirname(outputPath);
+  try { fs.mkdirSync(outDir, { recursive: true }); } catch { /* ignore */ }
+  const tmpRoot = os.tmpdir();
+  const checkFree = async (p: string): Promise<number | null> => {
+    try {
+      const st = await (fs.promises as unknown as { statfs: (p: string) => Promise<{ bavail: number; bsize: number }> }).statfs(p);
+      return Number(st.bavail) * Number(st.bsize);
+    } catch {
+      return null;
+    }
+  };
+  const [freeOut, freeTmp] = await Promise.all([checkFree(outDir), checkFree(tmpRoot)]);
+  const freeBudget = freeOut != null && freeTmp != null
+    ? Math.min(freeOut, freeTmp)
+    : (freeOut ?? freeTmp ?? null);
+  if (freeBudget != null && freeBudget < estimatedBytesNeeded) {
+    const neededMB = (estimatedBytesNeeded / 1024 / 1024).toFixed(0);
+    const freeMB = (freeBudget / 1024 / 1024).toFixed(0);
+    throw new Error(
+      `磁盘空间不足：导出估算至少需要 ${neededMB} MB，当前可用仅 ${freeMB} MB（输出盘或临时盘）。请清理后重试或调整输出分辨率。`,
+    );
+  }
+
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gobs-export-'));
   const log = (pct: number, msg: string) => {
     console.log(`[ffmpeg-export] ${pct}% ${msg}`);

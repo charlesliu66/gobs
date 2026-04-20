@@ -42,6 +42,10 @@ import {
   getAllTextClips,
   addIntroTextClip,
   addOutroTextClip,
+  timelineDurationOf,
+  toSourceSec,
+  toTimelineOffset,
+  clipSpeed,
 } from '../editor/types/timeline';
 import { getNextVideoClipAfter } from '../editor/timelinePlayback';
 import {
@@ -730,16 +734,17 @@ export function EditorWorkbench() {
       };
     }
     const vc = selectedVideoClip;
-    const len = vc.sourceEnd - vc.sourceStart;
-    const tEnd = vc.timelineStart + len;
+    const tEnd = vc.timelineStart + timelineDurationOf(vc);
     const t = currentTime;
     const eps = 0.02;
     const inside = t > vc.timelineStart + eps && t < tEnd - eps;
-    const srcAt = vc.sourceStart + (t - vc.timelineStart);
+    // 切分最小段长以"源秒"判断，与 splitVideoClipAtPlayhead 内部口径一致
+    const srcAt = toSourceSec(vc, t - vc.timelineStart);
+    const minSrc = MIN_EDIT_SEC * clipSpeed(vc);
     const canSplit =
       inside &&
-      srcAt >= vc.sourceStart + MIN_EDIT_SEC &&
-      srcAt <= vc.sourceEnd - MIN_EDIT_SEC;
+      srcAt >= vc.sourceStart + minSrc &&
+      srcAt <= vc.sourceEnd - minSrc;
     const canTrimHead = inside && tEnd - t >= MIN_EDIT_SEC;
     const canTrimTail = inside && t - vc.timelineStart >= MIN_EDIT_SEC;
 
@@ -926,12 +931,13 @@ export function EditorWorkbench() {
     if (!el || !bgmUrl || !bgmClip) return;
     const m = project.mix ?? { sourceAudio: 1, bgm: 0.85 };
     el.volume = m.bgm;
-    const clipEnd = bgmClip.timelineStart + (bgmClip.sourceEnd - bgmClip.sourceStart);
+    // BGM 一般无 speed 字段，用通用 helper 保留未来扩展可能
+    const clipEnd = bgmClip.timelineStart + timelineDurationOf(bgmClip as unknown as VideoClip);
     if (currentTime < bgmClip.timelineStart || currentTime >= clipEnd - 0.03) {
       el.pause();
       return;
     }
-    const local = bgmClip.sourceStart + (currentTime - bgmClip.timelineStart);
+    const local = toSourceSec(bgmClip as unknown as VideoClip, currentTime - bgmClip.timelineStart);
     if (Math.abs(el.currentTime - local) > 0.25) el.currentTime = local;
     if (isPlaying) void el.play();
     else el.pause();
@@ -1081,9 +1087,10 @@ export function EditorWorkbench() {
                       if (el.currentTime > vc.sourceEnd - 0.001) {
                         el.currentTime = vc.sourceEnd;
                       }
-                      const t = vc.timelineStart + (el.currentTime - vc.sourceStart);
+                      // 源秒 → 时间轴秒：考虑 speed，防止变速时轴时间异常漂移
+                      const t = vc.timelineStart + toTimelineOffset(vc, el.currentTime);
                       setCurrentTime(t);
-                      const clipEnd = vc.timelineStart + (vc.sourceEnd - vc.sourceStart);
+                      const clipEnd = vc.timelineStart + timelineDurationOf(vc);
                       if (t < clipEnd - 0.08) return;
                       el.pause();
                       const next = getNextVideoClipAfter(projectRef.current, vc);
@@ -1099,7 +1106,7 @@ export function EditorWorkbench() {
                       el?.pause();
                       const vc = activeVideoClipRef.current;
                       if (!vc) return;
-                      const clipEnd = vc.timelineStart + (vc.sourceEnd - vc.sourceStart);
+                      const clipEnd = vc.timelineStart + timelineDurationOf(vc);
                       setIsPlaying(false);
                       seek(clipEnd);
                     }}

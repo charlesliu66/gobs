@@ -62,6 +62,7 @@ async function generateAndTileMusic(
   setAssets: Dispatch<SetStateAction<Record<string, MediaAsset>>>,
   setProject: Dispatch<SetStateAction<TimelineProject>>,
   onPushLog?: (s: string) => void,
+  provider?: 'auto' | 'suno' | 'lyria',
 ): Promise<MusicProvider> {
   const segmentsNeeded = Math.max(1, Math.ceil(totalSec / LYRIA_CLIP_SEC));
   onPushLog?.(`正在生成配乐，请稍候…`);
@@ -70,10 +71,11 @@ async function generateAndTileMusic(
     prompt,
     negativePrompt: negativePrompt.trim() || undefined,
     sampleCount: Math.min(segmentsNeeded, 3),
+    provider,
   });
 
-  const provider: MusicProvider = (res.provider === 'suno' || res.provider === 'lyria') ? res.provider : 'lyria';
-  const providerLabel = PROVIDER_LABEL[provider];
+  const usedProvider: MusicProvider = (res.provider === 'suno' || res.provider === 'lyria') ? res.provider : 'lyria';
+  const providerLabel = PROVIDER_LABEL[usedProvider];
 
   let tileStart = 0;
   for (let i = 0; i < segmentsNeeded; i++) {
@@ -93,7 +95,7 @@ async function generateAndTileMusic(
 
   const totalGenSec = Math.round(res.items.reduce((s, it) => s + it.durationSec, 0));
   onPushLog?.(`✅ 配乐完成（引擎：${providerLabel} · 时长：${totalGenSec}s · ${res.items.length} 首）`);
-  return provider;
+  return usedProvider;
 }
 
 interface BgmMixPanelProps {
@@ -140,6 +142,17 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
   const [busy, setBusy] = useState(false);
   const [polishBusy, setPolishBusy] = useState(false);
   const [lastProvider, setLastProvider] = useState<MusicProvider | null>(null);
+  /**
+   * 最近一次 BGM 生成失败信息。失败时在 UI 上显示红色卡片，
+   * 提供三个恢复动作：重试 / 切换引擎 / 跳过（清空错误继续工作）。
+   * 相比原先仅把错误塞进 log，用户不需要滚动日志也能自己决定下一步。
+   */
+  const [lastError, setLastError] = useState<{
+    message: string;
+    lastPrompt: string;
+    lastNegative: string;
+    triedProvider: 'auto' | 'suno' | 'lyria';
+  } | null>(null);
 
   const totalSec = computeDurationSec(project);
 
@@ -184,9 +197,10 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
       ? `视频内容：${contentSummary}\n\n配乐要求：${userDesc}`
       : userDesc;
     setBusy(true);
+    setLastError(null);
+    let finalPrompt = raw;
+    let finalNegative = negativePrompt;
     try {
-      let finalPrompt = raw;
-      let finalNegative = negativePrompt;
       onPushLog?.(`正在优化配乐风格…${contentSummary ? '（已读取视频内容）' : ''}`);
       try {
         const out = await withTimeout(
@@ -204,7 +218,7 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
         );
       }
       const provider = await withTimeout(
-        generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog),
+        generateAndTileMusic(finalPrompt, finalNegative, totalSec, setAssets, setProject, onPushLog, 'auto'),
         210_000,
         '配乐生成超时（3.5分钟），请重试',
       );
@@ -213,30 +227,57 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
       const msg = e instanceof Error ? e.message : String(e);
       const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
       onPushLog?.(`配乐失败：${msg}${hint}`);
+      setLastError({
+        message: msg + hint,
+        lastPrompt: finalPrompt,
+        lastNegative: finalNegative,
+        triedProvider: 'auto',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [prompt, negativePrompt, busy, totalSec, project, setAssets, setProject, onPushLog]);
+
+  const runGenerate = useCallback(async (opts?: { provider?: 'auto' | 'suno' | 'lyria'; promptOverride?: string; negativeOverride?: string }) => {
+    const t = (opts?.promptOverride ?? prompt).trim();
+    if (!t || busy) return;
+    const neg = opts?.negativeOverride ?? negativePrompt;
+    const pv = opts?.provider ?? 'auto';
+    setBusy(true);
+    setLastError(null);
+    try {
+      const provider = await withTimeout(
+        generateAndTileMusic(t, neg, totalSec, setAssets, setProject, onPushLog, pv),
+        210_000,
+        '配乐生成超时（3.5分钟），请重试',
+      );
+      setLastProvider(provider);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
+      onPushLog?.(`配乐失败：${msg}${hint}`);
+      setLastError({
+        message: msg + hint,
+        lastPrompt: t,
+        lastNegative: neg,
+        triedProvider: pv,
+      });
     } finally {
       setBusy(false);
     }
   }, [prompt, negativePrompt, busy, totalSec, setAssets, setProject, onPushLog]);
 
-  const runGenerate = useCallback(async () => {
-    const t = prompt.trim();
-    if (!t || busy) return;
-    setBusy(true);
-    try {
-      const provider = await withTimeout(
-        generateAndTileMusic(t, negativePrompt, totalSec, setAssets, setProject, onPushLog),
-        210_000,
-        '配乐生成超时（3.5分钟），请重试',
-      );
-      setLastProvider(provider);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
-      onPushLog?.(`配乐失败：${msg}${hint}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [prompt, negativePrompt, busy, totalSec, setAssets, setProject, onPushLog]);
+  /** 失败恢复：切换引擎重跑（auto → 显式 lyria / suno） */
+  const runSwitchProvider = useCallback(() => {
+    if (!lastError) return;
+    const next: 'suno' | 'lyria' = lastError.triedProvider === 'suno' ? 'lyria' : 'suno';
+    onPushLog?.(`切换到 ${next === 'suno' ? 'Suno' : 'Lyria'} 引擎重新生成…`);
+    void runGenerate({
+      provider: next,
+      promptOverride: lastError.lastPrompt,
+      negativeOverride: lastError.lastNegative,
+    });
+  }, [lastError, runGenerate, onPushLog]);
 
   const disabled = polishBusy || busy;
 
@@ -372,6 +413,43 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
             {busy ? '…' : '仅生成'}
           </button>
         </div>
+
+        {/* 失败恢复卡片：不使用 toast 以便用户慢慢决策 */}
+        {lastError && !busy && (
+          <div className="rounded-lg border border-red-400/50 bg-red-500/10 p-2 space-y-1.5">
+            <div className="text-[10px] font-semibold text-red-400">配乐生成失败</div>
+            <div className="text-[10px] leading-snug text-red-300/80 break-all">{lastError.message}</div>
+            <div className="grid grid-cols-3 gap-1">
+              <button
+                type="button"
+                onClick={() => void runGenerate({
+                  provider: lastError.triedProvider,
+                  promptOverride: lastError.lastPrompt,
+                  negativeOverride: lastError.lastNegative,
+                })}
+                className="rounded bg-red-500/20 px-1.5 py-1 text-[10px] text-red-300 hover:bg-red-500/30 transition-colors"
+              >
+                重试
+              </button>
+              <button
+                type="button"
+                onClick={runSwitchProvider}
+                className="rounded bg-purple-500/20 px-1.5 py-1 text-[10px] text-purple-300 hover:bg-purple-500/30 transition-colors"
+                title={`切换到 ${lastError.triedProvider === 'suno' ? 'Lyria' : 'Suno'} 引擎`}
+              >
+                切{lastError.triedProvider === 'suno' ? 'Lyria' : 'Suno'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLastError(null)}
+                className="rounded bg-[var(--color-surface-elevated)] px-1.5 py-1 text-[10px] text-[var(--color-text-muted)] ring-1 ring-[var(--color-border)] hover:text-[var(--color-text)]"
+              >
+                跳过
+              </button>
+            </div>
+          </div>
+        )}
+
         <RunningStatus
           active={busy || polishBusy}
           label={polishBusy ? '正在优化配乐提示词' : '正在生成配乐'}

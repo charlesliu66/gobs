@@ -156,7 +156,35 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.63 -->
+<!-- NEXT_VERSION: v0.64 -->
+
+### v0.63 — 2026-04-20
+
+**剪辑器一次性到位优化（speed 统一 + 上传体验 + Agent 上下文 + BGM 容灾 + 导出预检）**
+
+按"不要折中版本、一次性到位"的标准，系统性修掉上一轮 review 遗留的 P1/P2 及其衍生问题。
+
+**Feature / 核心改造：**
+- **[frontend] 倍速(speed)时间轴统一**（`editor/types/timeline.ts` + 全部调用点）：新增 `clipSpeed()` / `timelineDurationOf()` / `toSourceSec()` / `toTimelineOffset()` 四个公共帮助函数，所有 VideoClip / AudioClip 的「源秒 ↔ 时间轴秒」换算全部走这套。修复 `speed≠1` 时预览、分割、trim、BGM 对齐、Agent 交付表、时间轴渲染宽度、音频镜像轨时长各算各的导致的错位；`AudioClip` 新增可选 `speed`，`syncSourceAudioClipsFromVideo` 会把视频倍速同步到镜像音频轨。
+- **[frontend] 分片上传并发 3 片**（`api/editor.ts` → `uploadEditorAssetChunked`）：改用固定 3 worker 的工作池并发上传分片，大文件上传速度成倍提升；保留原有"单片失败重试 2 次 + 指数退避"和 `expectedTotalSize` 总大小校验。
+- **[frontend] 上传前置大小校验 + 友好 413**（`api/editor.ts`）：`uploadEditorAsset` / `uploadEditorAssetChunked` 在请求发出前读取 `getEditorUploadConfig().maxBytes`，超限直接抛"该文件 XX MB，超过上限 XXX MB"，不再让用户等服务器 413 才知道被拒。
+- **[api] 素材 SHA256 去重**（`editorAssets.ts`）：`StoredEditorAsset` 新增 `sha256` 字段；单文件与分片合并两条上传路径落盘后均会流式计算哈希，同用户 `(sha256, size)` 命中则删除新文件、直接复用旧素材并返回 `deduped:true`，重复上传不再占磁盘。
+- **[api] 上传上限统一**（`localUpload.ts`）：默认 `EDITOR_UPLOAD_MAX_MB` 从 500 提到 2048，与 `editorAssets.ts` 对齐，消除"制片侧能传、剪辑侧传不进"的割裂。
+- **[api] 导出磁盘空间预检**（`ffmpegExport.ts`）：`runFfmpegExport` 开始前按「时长 × 分辨率 × 3 倍安全系数」估算所需空间，用 `fs.promises.statfs` 分别检查输出目录和 `os.tmpdir()` 两个分区剩余空间，不足则立刻以友好错误中止，避免转码到 95% 才因写盘失败前功尽弃。
+- **[api] apply-sync 源文件存在性校验**（`editorProjects.ts`）：同步新版本前对 `version.videoPath` 做 `fs.existsSync` 检查，文件缺失 / stat 失败的 shot 不写入素材库，响应体新增 `skipped: [{shotIndex, reason}]`，避免把已被 GC 的源路径写进 clip 导致时间轴大面积黑屏；`oldDur / durDelta / maxEnd` 也改为按 `speed` 折算真实时间轴时长。
+- **[api] Agent 轨合并「空填满、有则留」**（`editorAgentService.ts`）：在上一轮只保留 `mix` 的基础上进一步细化：`a2`（BGM）/ `t1`（文字）/ `subtitles` 三条轨现在按「当前工程为空才由 Agent 填充，已有内容则保留」策略合并，兼顾「首次生成自动配字幕/BGM」和「手动调过之后不再被覆盖」两种诉求。
+- **[api] Agent Plan Prompt 上下文增强**（`editorAgentService.ts` → `buildPlanSystemPrompt`）：系统 Prompt 固定注入三段新上下文——`## 素材内容总览`（contentManifest）、`## BGM 节拍结构`（启用 `EDITOR_BEAT_ANALYSIS` 时提供精确节拍时间点）、`## 当前工程已有片段`（从 VideoClip 抽取 `shotIndex / characters / note / sourceStart~sourceEnd` 形成 Markdown 表）。Agent 不再需要完全重建时间轴，改动可以对齐用户已有的分镜号/角色/备注。
+- **[frontend+api] BGM 生成「重试 / 切引擎 / 跳过」三按钮**（`BgmMixPanel.tsx` + `editorMusic.ts` + `api/editor.ts`）：`POST /api/editor/music/generate` 新增可选 `provider: 'auto'|'suno'|'lyria'`，显式指定 `suno` 时若无 API Key 立即 400、失败也不再自动降级；前端配乐失败后在面板里显示红色失败卡片，提供「重试 / 切 Lyria↔Suno / 跳过」三个恢复动作，用户无需刷新或翻日志。
+- **[frontend] Undo/Redo 自动钳制 currentTime**（`useTimelineState.ts`）：监听 `durationSec` 变化，若 `currentTime` 超过新时长自动 clamp 回边界，修复撤销删除片段后播放头停在空白区域导致画面黑屏的问题。
+- **[frontend] getActiveTextClips 稳定排序**（`timeline.ts`）：文字片段先按 `timelineStart` 再按 `id` 排序，修复「同一时刻多条字幕随 React 重渲染偶发交换顺序」的显示闪烁。
+
+**Bug fix:**
+- 修复倍速片段拖拽 trim 时像素距离没乘以 speed，视觉上拖 10px 实际改动 20px 源时长的错位。
+- 修复 apply-sync 计算 `durDelta` 忘记除 `speed`，同步倍速片段后续 clip 会被额外平移。
+- 修复 `AssetImportPanel.tsx` 中 `ImportJob` 漏 `skipped: 0` 导致的前端构建报错（顺带修好）。
+
+**三端一统：** 本地 `tsc --noEmit` 通过 → `git push origin main` → SFTP 上传 `dist/` → `pm2 restart qas-api`。
+
 
 ### v0.62 — 2026-04-20
 
@@ -967,5 +995,5 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-20（v0.62）*
+*最后更新：2026-04-20（v0.63）*
 

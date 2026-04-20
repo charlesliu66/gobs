@@ -427,8 +427,12 @@ function buildPlanSystemPrompt(ctx: {
   narrativeTemplate?: NarrativeTemplate;
   beatInfo?: BeatInfo | null;
   userPreferenceSnippet?: string;
+  contentManifest?: string;
+  beatGuide?: string;
+  currentClipsMetaBlock?: string;
 }): string {
-  return `你是专业的「剪辑策划师」。根据用户指令和候选素材片段，输出一份**剪辑选段方案**。
+  const sections: string[] = [];
+  sections.push(`你是专业的「剪辑策划师」。根据用户指令和候选素材片段，输出一份**剪辑选段方案**。
 
 ## 你的任务
 分析用户想要的视频风格和内容，从 candidateWindows 中挑选最合适的片段，规划成片结构。
@@ -449,9 +453,63 @@ CLIPS:
 - 开场选最抓眼球的片段（score 高或 isTurningPoint），收尾选高分片段
 - 混剪节奏：快切（1-3s）与中长镜（3-6s）交替，比例约 3:1
 ${ctx.combatLike ? '- 战斗类内容：优先选 score 高的候选窗，战斗片段间穿插非战斗片段避免视觉疲劳' : ''}
-${ctx.narrativeTemplate ? `- 按「${ctx.narrativeTemplate.name}」叙事结构排片：${ctx.narrativeTemplate.slots.map((s) => `${s.role}(${s.durationHint})`).join(' → ')}` : ''}
-${ctx.beatInfo ? `- 有 BGM 节拍信息（BPM=${ctx.beatInfo.bpm}），片段切点尽量对齐节拍` : ''}
-${ctx.userPreferenceSnippet ? `\n${ctx.userPreferenceSnippet}` : ''}`;
+${ctx.narrativeTemplate ? `- 按「${ctx.narrativeTemplate.name}」叙事结构排片：${ctx.narrativeTemplate.slots.map((s) => `${s.role}(${s.durationHint})`).join(' → ')}` : ''}`);
+
+  if (ctx.contentManifest && ctx.contentManifest.trim()) {
+    sections.push(`## 素材内容总览（用于挑选角色/场景/情绪）
+${ctx.contentManifest.trim()}`);
+  }
+
+  if (ctx.beatGuide && ctx.beatGuide.trim()) {
+    sections.push(`## BGM 节拍结构（切点尽量对齐以下节拍时间）
+${ctx.beatGuide.trim()}`);
+  } else if (ctx.beatInfo) {
+    sections.push(`## BGM 节拍
+- 有 BGM 节拍信息（BPM=${ctx.beatInfo.bpm}），片段切点尽量对齐节拍。`);
+  }
+
+  if (ctx.currentClipsMetaBlock && ctx.currentClipsMetaBlock.trim()) {
+    sections.push(`## 当前工程已有片段（带分镜/角色/备注，供延续风格与顺序参考）
+${ctx.currentClipsMetaBlock.trim()}
+
+优先延续这些片段的叙事线索与角色出场顺序；若新需求明确冲突以新需求为准。`);
+  }
+
+  if (ctx.userPreferenceSnippet) {
+    sections.push(ctx.userPreferenceSnippet);
+  }
+
+  return sections.join('\n\n');
+}
+
+/** 把当前工程已有 VideoClip 的 meta（shotIndex/note/characters/productionShotId）格式化为 Markdown 表 */
+function formatCurrentClipsMetaBlock(project: TimelineProject): string {
+  const vTrack = project.tracks.find((t) => t.id === 'v1' && t.type === 'video');
+  if (!vTrack) return '';
+  const clips = vTrack.clips as unknown as Array<{
+    assetId: string;
+    shotIndex?: number;
+    note?: string;
+    sourceStart: number;
+    sourceEnd: number;
+    meta?: { characters?: string[]; productionShotId?: string; productionVersionId?: string };
+  }>;
+  if (clips.length === 0) return '';
+  const lines: string[] = [
+    '| # | 镜号 | 角色 | 素材 ID | 入→出 (s) | 备注 |',
+    '|:-:|:---:|:---|:---|:---:|:---|',
+  ];
+  clips.forEach((c, i) => {
+    const shot = c.shotIndex != null ? String(c.shotIndex) : '—';
+    const chars = Array.isArray(c.meta?.characters) && c.meta!.characters!.length > 0
+      ? c.meta!.characters!.join(',')
+      : '—';
+    const note = (c.note ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim() || '—';
+    lines.push(
+      `| ${i + 1} | ${shot} | ${chars} | ${c.assetId.slice(0, 12)} | ${c.sourceStart.toFixed(1)}→${c.sourceEnd.toFixed(1)} | ${note} |`,
+    );
+  });
+  return lines.join('\n');
 }
 
 // ─── Build 阶段 prompt（纯 JSON 输出，极简）───────────────────────────────────
@@ -856,12 +914,18 @@ export async function runEditorAgentApply(
     etaSec: eta(48),
   });
 
+  const beatGuideBlock = beatInfo ? formatBeatGuideBlock(beatInfo) : '';
+  const currentClipsMetaBlock = formatCurrentClipsMetaBlock(input.currentProject);
+
   const planSystemPrompt = buildPlanSystemPrompt({
     targetTimelineSec,
     combatLike,
     narrativeTemplate,
     beatInfo,
     userPreferenceSnippet: userPreferenceSnippet || undefined,
+    contentManifest,
+    beatGuide: beatGuideBlock,
+    currentClipsMetaBlock,
   });
 
   const { text: planText, usage: planUsage } = await compassChatCompletionWithUsage({
@@ -1006,22 +1070,51 @@ ${planText}`;
       : '已根据指令更新时间轴。';
 
   /**
-   * 合并策略：Agent 只负责视频剪接（v1 + a1 镜像），其它轨（a2 BGM / t1 文字 / subtitles / mix）
-   * 属于用户自己配置的资产，绝不应被模型的部分输出覆盖。
+   * 合并策略（改进版）：
    *
-   * - 视频轨（v1）+ 原声镜像轨（a1）：用 Agent 的结果（若非空）
-   * - BGM（a2）、文字（t1）、字幕、mix：一律保留 currentProject
-   * - 其它未知轨：保留 currentProject
+   * Agent 主要负责视频剪接，但若用户工程里 BGM / 文字 / 字幕仍是空的，
+   * 接受 Agent 的补充是合理的；一旦用户亲手配了内容（任一非空），就必须保留。
+   *
+   * 轨道级规则：
+   *   - v1（视频）：Agent 非空 → 采用 Agent；否则保留
+   *   - a1（原声镜像）：Agent 存在即采用（与 v1 对齐，由下游 sanitize 再校正）
+   *   - a2（BGM）：当前为空 → Agent 非空则采用；当前非空 → 保留
+   *   - t1（文字）：当前为空 → Agent 非空则采用；当前非空 → 保留
+   *   - subtitles：当前为空 → Agent 非空则采用；当前非空 → 保留
+   *   - mix：始终保留用户的 mix（若 Agent 返回非空也不覆盖，避免破坏用户调过的音量比）
    */
   const agentTracks = agentResult.project!.tracks ?? [];
   const agentV1 = agentTracks.find((t) => t.type === 'video' && t.id === 'v1');
   const agentA1 = agentTracks.find((t) => t.type === 'audio' && t.id === 'a1');
+  const agentA2 = agentTracks.find((t) => t.type === 'audio' && t.id === 'a2');
+  const agentT1 = agentTracks.find((t) => t.type === 'text' && t.id === 't1');
 
   const mergedTracks = input.currentProject.tracks.map((t) => {
-    if (t.type === 'video' && t.id === 'v1' && agentV1 && agentV1.clips.length > 0) return agentV1;
-    if (t.type === 'audio' && t.id === 'a1' && agentA1) return agentA1;
+    if (t.type === 'video' && t.id === 'v1') {
+      if (agentV1 && agentV1.clips.length > 0) return agentV1;
+      return t;
+    }
+    if (t.type === 'audio' && t.id === 'a1') {
+      if (agentA1) return agentA1;
+      return t;
+    }
+    if (t.type === 'audio' && t.id === 'a2') {
+      // 用户 a2 为空 → 允许 Agent 填 BGM；用户已有 BGM → 保留
+      if ((t.clips?.length ?? 0) === 0 && agentA2 && agentA2.clips.length > 0) return agentA2;
+      return t;
+    }
+    if (t.type === 'text' && t.id === 't1') {
+      if ((t.clips?.length ?? 0) === 0 && agentT1 && agentT1.clips.length > 0) return agentT1;
+      return t;
+    }
     return t;
   });
+
+  const userHasSubtitles = (input.currentProject.subtitles?.length ?? 0) > 0;
+  const agentSubtitles = agentResult.project!.subtitles;
+  const mergedSubtitles = userHasSubtitles
+    ? input.currentProject.subtitles
+    : (agentSubtitles && agentSubtitles.length > 0 ? agentSubtitles : input.currentProject.subtitles);
 
   const merged: TimelineProject = {
     ...input.currentProject,
@@ -1030,9 +1123,8 @@ ${planText}`;
     durationSec: agentResult.project!.durationSec ?? input.currentProject.durationSec,
     fps: agentResult.project!.fps ?? input.currentProject.fps,
     tracks: mergedTracks,
-    /** 显式保留用户的 mix / subtitles / 来源制片元数据 */
     mix: input.currentProject.mix,
-    subtitles: input.currentProject.subtitles,
+    subtitles: mergedSubtitles,
     sourceProductionProjectId: input.currentProject.sourceProductionProjectId,
     sourceProductionTitle: input.currentProject.sourceProductionTitle,
   };
