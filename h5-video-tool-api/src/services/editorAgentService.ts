@@ -363,8 +363,42 @@ function repairJson(raw: string): string {
   return s;
 }
 
-/** 从时间轴项目中找到 audio 轨第一个 AudioClip 的 assetId（用于 BGM beat 分析） */
+/**
+ * 从时间轴项目中找 BGM 的 assetId，用于 beat 分析。
+ *
+ * 工程结构：`a1` 是视频原声镜像轨（与视频同 assetId），`a2` 才是用户配的 BGM。
+ * 以前实现遍历所有 audio 轨取「第一个命中」，会命中 a1 上的视频原声 → 节拍分析
+ * 实际跑在对白/游戏声上。这里改为：
+ *   1) 优先按 track.id 匹配 `a2` / `bgm` / `music`
+ *   2) 其次找「assetId 与 video 轨不同」的 audio clip
+ *   3) 再兜底任取一个（保持向后兼容）
+ */
 function findBgmAssetId(project: TimelineProject): string | null {
+  const videoAssetIds = new Set<string>();
+  for (const track of project.tracks) {
+    if (track.type !== 'video') continue;
+    for (const c of track.clips) {
+      const vid = (c as { assetId?: string }).assetId;
+      if (vid) videoAssetIds.add(vid);
+    }
+  }
+
+  const isBgmTrackId = (id: string): boolean => /^(a2|bgm|music)$/i.test(id);
+
+  for (const track of project.tracks) {
+    if (track.type !== 'audio' || !isBgmTrackId(track.id)) continue;
+    for (const clip of track.clips) {
+      const ac = clip as Partial<AudioClip>;
+      if (ac.assetId) return ac.assetId;
+    }
+  }
+  for (const track of project.tracks) {
+    if (track.type !== 'audio') continue;
+    for (const clip of track.clips) {
+      const ac = clip as Partial<AudioClip>;
+      if (ac.assetId && !videoAssetIds.has(ac.assetId)) return ac.assetId;
+    }
+  }
   for (const track of project.tracks) {
     if (track.type !== 'audio') continue;
     for (const clip of track.clips) {
@@ -971,12 +1005,36 @@ ${planText}`;
       ? agentResult.summary.trim()
       : '已根据指令更新时间轴。';
 
+  /**
+   * 合并策略：Agent 只负责视频剪接（v1 + a1 镜像），其它轨（a2 BGM / t1 文字 / subtitles / mix）
+   * 属于用户自己配置的资产，绝不应被模型的部分输出覆盖。
+   *
+   * - 视频轨（v1）+ 原声镜像轨（a1）：用 Agent 的结果（若非空）
+   * - BGM（a2）、文字（t1）、字幕、mix：一律保留 currentProject
+   * - 其它未知轨：保留 currentProject
+   */
+  const agentTracks = agentResult.project!.tracks ?? [];
+  const agentV1 = agentTracks.find((t) => t.type === 'video' && t.id === 'v1');
+  const agentA1 = agentTracks.find((t) => t.type === 'audio' && t.id === 'a1');
+
+  const mergedTracks = input.currentProject.tracks.map((t) => {
+    if (t.type === 'video' && t.id === 'v1' && agentV1 && agentV1.clips.length > 0) return agentV1;
+    if (t.type === 'audio' && t.id === 'a1' && agentA1) return agentA1;
+    return t;
+  });
+
   const merged: TimelineProject = {
     ...input.currentProject,
-    ...agentResult.project!,
     id: input.currentProject.id,
     aspectRatio: agentResult.project!.aspectRatio ?? input.currentProject.aspectRatio,
-    tracks: agentResult.project!.tracks?.length ? agentResult.project!.tracks : input.currentProject.tracks,
+    durationSec: agentResult.project!.durationSec ?? input.currentProject.durationSec,
+    fps: agentResult.project!.fps ?? input.currentProject.fps,
+    tracks: mergedTracks,
+    /** 显式保留用户的 mix / subtitles / 来源制片元数据 */
+    mix: input.currentProject.mix,
+    subtitles: input.currentProject.subtitles,
+    sourceProductionProjectId: input.currentProject.sourceProductionProjectId,
+    sourceProductionTitle: input.currentProject.sourceProductionTitle,
   };
 
   report({

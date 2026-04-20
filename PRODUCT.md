@@ -156,7 +156,47 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.60 -->
+<!-- NEXT_VERSION: v0.61 -->
+
+### v0.60 — 2026-04-20
+
+**高级制片全链路体检：P0 阻断修复 + P1 体验强化**
+
+**Bug Fix (P0 阻断点):**
+- **[frontend] A/B 对比视频 URL 错位**：`StepStoryboardAbCompare.resolveUrl` 误把 `videoPath` 拼成 `/api/batch-jobs/video/<id>`；统一改走 `getVideoFileUrl`，并补上 `<video onError/onLoadStart>` 失败反馈（P0-1）
+- **[frontend] AI 审片切镜数据串位**：`useProductionShotReview` 切换分镜时不再残留旧评审结果，`handleApplySuggestion` 校验 `reviewedShotIdx === selectedShotIdx` 才允许写回，避免"A 镜头建议落到 B 镜头"（P0-2 / P0-3）
+- **[api] batch-jobs 列表/SSE 跨用户泄漏**：`GET /api/batch-jobs` 和 SSE 流统一按 `req.user.username` 过滤，`GET /api/batch-jobs/video/:id` 新增所有权校验（P0-4 / P1-3）
+- **[api] /api/video/file 无 JWT 旁路**：新增 `fileAccessToken`（FAT，HMAC 签名短期 token），`/api/video/file` 与 `/api/batch-jobs/video/:id` 必须带 JWT 或 FAT，登录接口返回 FAT（P0-5）
+- **[api] Dreamina 提交与 batch-job 注册原子化**：注册失败 3 次指数退避重试，仍失败时清楚提示"请手动点「检查进度」"；production 轮询从 10 min/5 min 死等改为 45s/90s/180s 指数退避（P0-6 / P1-2）
+- **[api] asset-library 上传新增 fileFilter**：只允许 image/video/audio MIME 或白名单扩展名，阻断非预期文件类型（P0-7）
+- **[api] localUpload 用户隔离**：上传目录改为 `uploads/<username>/`，移除全局 `uploadRegistry`；所有接口强制 JWT 校验（P0-8）
+- **[frontend] 生成分镜表覆盖已有媒资**：`handleL3` 二次生成前弹确认，并按 `shotIndex` 合并保留 `previewStill*/previewVideo*/pendingVideoSubmitId` 等媒资字段（P0-9）
+
+**Feature / 优化 (P1):**
+- **[api] Compass LLM 429/5xx 退避与 Key 轮换**：`promptPolish.postCompassChatCompletions` 支持 429/5xx 重试、尊重 `Retry-After`，并在重试时自动切换到 `COMPASS_API_KEY2`（P1-11）
+- **[api] editorExport 反解补齐 /api/production/image 路径**：导出时的封面/首帧图也能被正确映射到本地文件（P1-12）
+- **[api] editorAssets 分片上传硬化**：`chunkUpload` 新增 `EDITOR_CHUNK_MAX_MB` 单片上限（默认 20 MB），校验 `totalChunks ≤ 推导上限`、`chunkIndex < totalChunks`；组装改为流式 pipe + 装配前总字节预检（P1-8 / P1-9）
+- **[api] sha256 流式计算**：`assetIngestService.sha256File` 不再 `readFileSync` 整个大视频，改为 `createReadStream` 分块 update（P1-10）
+- **[frontend] 风格参考图改存服务端 URL**：立项上传 styleRef 后并行 `uploadProductionImage` 拿回 `/api/production/image?path=...`，替换 `meta.styleRefImageDataUrl`，草稿 JSON 不再携带 MB 级 data: URL（P1-14）
+- **[api] videoMultishot Dreamina 并发闸门**：`runMultishotJob` 每一镜进入 Dreamina CLI 前 `acquireDreaminaSlot()`，与 `/dreamina/submit` 共用同一信号量，避免超配（P1-1）
+- **[api] videoMultishot 重启恢复**：新增 `recoverMultishotJobsOnBoot()`，启动时把残留 pending/running 任务落为 error，附带"服务重启"原因（P1-6）
+- **[frontend] 连续播放器 onError 可见**：`StepStoryboardContinuousPlay` 的 `play().catch` 不再静默，展示"当前分镜加载失败（code X），可跳过"（P1-4）
+- **[frontend] 本域 /api/ 视频 URL 统一基址**：`resolveProductionShotPreviewVideoSrc` 对 `/api/...` 也拼上 `VITE_API_BASE_URL`（P1-5）
+- **[frontend] 资产导入进度含 skipped**：ImportJob 暴露 `skipped`，进度条改为 (processed+failed+skipped)/total，UI 多出"跳过"统计（P1-7）
+- **[frontend] CharacterLookTree 失败层暴露 job.error**：`title` 展示后端错误原因，便于排障（P1-15）
+- **[api] editorExport 缺失片段容错**：单个素材找不到时跳过而非整条失败，至少还有一段可用即可导出（P1-18）
+- **[api] editorExport /export/:jobId 明确提示**：服务重启导致 job 丢失时返回 `EXPORT_JOB_NOT_FOUND` 和友好文案，提示用户去「历史导出」查看产物（P1-17）
+- **[api] productionPersist 注释修正**：把"去掉所有 data: URL"的错误注释修正为"仅白名单 previewStillDataUrl"，防止未来误伤 imageDataUrl / previewVideoUrl（P1-13）
+
+**Skipped / 后续优化（本轮未动）:**
+- P1-16：制片批量生图 CONCURRENCY=1 是刻意设置，需配套压测再放宽
+- P1-19：AI 审片版本历史属于新功能拓展
+
+**Changed:**
+- 登录响应体新增 `fileAccessToken` 字段
+- `.env.example` 建议新增 `FILE_ACCESS_TOKEN_SECRET`、`EDITOR_CHUNK_MAX_MB`
+
+---
 
 ### v0.59 — 2026-04-17
 
@@ -169,7 +209,8 @@
 - **[api] 素材软删除 API**：新增 DELETE /assets/:id 单个软删除 + POST /assets/batch-delete 批量软删除（单次最多 200）；ssets 表新增 deleted_at 列，所有查询自动过滤已删除素材
 - **[frontend] 素材库 → 高级制片/视频生成深度链接**：素材详情抽屉新增「用于高级制片」按钮跳转 /studio/production?assetId=...；Studio 和 ProductionWizard 自动接收素材并设为参考图
 - **[frontend] 素材中台 → 即梦多模态引用打通**：DreaminaMultimodalRefs 新增「从素材库选择」按钮，打开 AssetPicker 选择素材后自动转换为多模态引用项
-- **[frontend] 素材中台 → 剪辑器素材库打通**：MediaLibrary 添加素材时自动记录使用日志（ecordUsage），支持视频和图片两种类型
+- **[frontend] 素材中台 → 剪辑器素材库打通**：MediaLibrary 添加素材时自动记录使用日志（
+ecordUsage），支持视频和图片两种类型
 - **[frontend] 高级制片术语优化**：「服化道」改为「角色场景」、「故事弧」改为「故事构思」、「Seedance 块」改为「AI 视频描述」等，降低专业门槛
 - **[frontend] 剪辑器引导弹窗**：首次进入剪辑工作台弹出 onboarding 引导；视频源切换时新增 CSS 淡入动画
 - **[frontend] BGM 生成 UI 重构**：快捷风格按钮替换为「情绪分类」（Mood Categories）选择器，更直观
@@ -177,7 +218,8 @@
 - **[frontend] 素材上传后自动滚顶 + 新素材高亮**：上传完成后页面自动滚到顶部，新上传素材 3 秒高亮闪烁提示
 - **[api] 素材匹配增强**：matchAssetsForShot 同时搜索 legacy JSON 资产和 SQLite 素材中台数据，提升匹配覆盖率
 - **[frontend] React key 警告修复**：AssetDetailDrawer 和 TemplateMarket 中修复非唯一 key 导致的 console 警告
-- **[frontend] Layout 可访问性**：侧边栏按钮新增 ria-label，backdrop 新增 ole="presentation"
+- **[frontend] Layout 可访问性**：侧边栏按钮新增 ria-label，backdrop 新增 
+ole="presentation"
 - **[frontend] 导出提示优化**：Mock 模式导出完成提示改为「导出完成！文件正在后台处理中，请稍后在历史记录查看」
 - **[frontend] 高级制片导出去重增强**：「在剪辑器中打开」优先使用 sourceProductionProjectId 进行项目去重匹配
 - **[frontend] 制片向导步骤可达性**：根据项目完成度动态计算最大可达步骤，未解锁步骤显示禁用态
@@ -294,6 +336,30 @@
 | `done` / `completed` / `succeeded` / `success` | `succeeded` |
 | `failed` / `error` | `failed` |
 | `cancelled` / `canceled` | `canceled` |
+
+---
+
+### v0.50 — 2026-04-16
+
+**视频剪辑器 P0 安全加固 + P1 体验与稳定性优化**
+
+**Security / P0:**
+- **[api] apply-sync 接口加固**（`editorProjects.ts`）：服务端自己从源制片 JSON 构造 `newVideoUrl`，客户端仅能提交 `{ shotIndex, newVersionId }`，校验 `newVersionId` 确实存在于该 shot 的 `previewVideoVersions` 后才写入素材库，彻底消除任意 URL 注入到素材 `url` 字段的可能。
+- **[api] 导出路径反解加用户域白名单**（`editorExport.ts`）：`resolveLocalPathFromUrl` 对 `/api/video/file?path=...` 解析出的本地路径做「必须落在当前用户输出目录 / uploads/editor 之下」的校验，与 `routes/video.ts` 权限模型对齐，堵住「导出流程读任意文件」的理论风险。
+- **[api] 导出状态接口加所有权校验**（`editorExport.ts`）：`ExportJob` 持久化 `username` 字段，`GET /api/editor/export/:jobId` 只返回当前 caller 自己提交的 job 状态/下载 URL；另加 24h/500 条的内存 `jobs` Map 淘汰策略，避免长期运行泄漏。
+- **[api] BGM 节拍分析选轨修正**（`editorAgentService.ts` → `findBgmAssetId`）：优先按 `track.id = a2 / bgm / music` 匹配，其次找「assetId ≠ 视频轨」的音频片段，最后兜底，修复过去把视频原声镜像轨（a1）当成 BGM 去分析节拍的 bug。
+- **[api] Agent 轨合并策略改写**（`editorAgentService.ts`）：大模型返回的 `tracks` 只用于覆盖 `v1` / `a1`，用户配置的 `a2`（BGM）/ `t1`（文字）/ `subtitles` / `mix` 一律保留自当前工程，消除"调用 Agent 一次、BGM 混音配置全没"的回归。
+
+**Feature / P1:**
+- **[frontend] 拖拽 Undo 合并**（`useUndoRedo.ts` + `TimelinePanel.tsx`）：新增 `beginBatch` / `endBatch`，`mousedown` 开始批量会话、期间所有高频 `setState` 不入历史栈，`mouseup` 才作为单条变更提交。修复过去"拖一次 clip 把 Undo 栈占满 50 条"的问题，拖拽 / Trim 现在一次撤销即可完全恢复。
+- **[frontend] Agent 停止按钮**（`AgentPanel.tsx` + `EditorWorkbench.tsx`）：生成中进度条旁新增「停止」按钮，基于 `AbortController.signal` 中断 SSE 流式请求；前端识别 `AbortError` 后展示"Agent 任务已取消"而不是"错误：..."。
+- **[frontend+api] 分片上传重试 + 总大小校验**（`api/editor.ts` + `editorAssets.ts`）：单片失败自动重试 2 次（指数退避 0.5/1s），前端组装请求带上 `expectedTotalSize`，后端在拼接前校验"分片总大小 ≈ 客户端声明大小"，防止客户端通过多分片绕过 multer 单文件上限。
+- **[frontend] 视频时长边界 Toast 提示**（`EditorWorkbench.tsx`）：加素材到时间轴时，若 `probeVideoDuration` 失败（跨域 / 不支持）弹 warning Toast 提示"已使用 10s 占位"；若原始时长 > 300s 提示"超过 300s 上限，已截断"，用户不再踩坑。
+- **[frontend] 导出前端轮询超时延长**（`ExportPanel.tsx`）：从 90×2s=3min 提到 600×2s=20min，与后端 `ffmpegExport` 长视频实际耗时匹配；超时时仅 warn "前端已停止轮询，任务可能仍在后台运行，请刷新历史查看"，不再误报"导出超时"。
+- **[api] `.mov` 真·重封装**（`ffmpegExport.ts` Step 5）：原来中间产物总是 MP4（libx264+aac），导出 `.mov` 只是 `copyFile + 改扩展名`；改为 `ffmpeg -c copy -f mov -movflags +faststart` 真正重封装到 QuickTime 容器，避免部分播放器/剪辑软件识别不了"改过扩展名的 MP4"。
+
+**Bug fix:**
+- 无。（本次无回归修复，均为主动强化。）
 
 ---
 
@@ -881,5 +947,5 @@
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*鏈€鍚庢洿鏂帮細2026-04-17锛坴0.57锛?
+*鏈€鍚庢洿鏂帮細2026-04-20锛坴0.60锛?
 

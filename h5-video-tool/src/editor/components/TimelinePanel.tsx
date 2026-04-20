@@ -89,6 +89,12 @@ interface TimelinePanelProps {
   selectedTextClipId?: string | null;
   /** 双击文字片段时打开编辑面板 */
   onOpenTextEditor?: () => void;
+  /**
+   * 批量编辑会话开始/结束：拖拽 move / trim 之间的高频中间态不入 Undo 栈，
+   * mouseup 时作为单条历史提交，避免 Undo 栈被填满。
+   */
+  onBatchBegin?: () => void;
+  onBatchEnd?: () => void;
 }
 
 const CLIP_DRAG_SELECT_PX = 4;
@@ -167,6 +173,8 @@ export function TimelinePanel({
   onSelectTextClip,
   selectedTextClipId = null,
   onOpenTextEditor,
+  onBatchBegin,
+  onBatchEnd,
 }: TimelinePanelProps) {
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC_DEFAULT);
   /** 点击「原声」「BGM」轨标签展开音量条 */
@@ -254,6 +262,7 @@ export function TimelinePanel({
       if (!onTrimClip) return;
       e.stopPropagation();
       e.preventDefault();
+      onBatchBegin?.();
       trimRef.current = {
         clipId: clip.id,
         side,
@@ -282,11 +291,12 @@ export function TimelinePanel({
         setTrimOverlay(null);
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
+        onBatchEnd?.();
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [onTrimClip, pxPerSec],
+    [onTrimClip, pxPerSec, onBatchBegin, onBatchEnd],
   );
 
   const seekFromClientX = useCallback(
@@ -346,6 +356,7 @@ export function TimelinePanel({
       e.stopPropagation();
       e.preventDefault();
       const tr = project.tracks.find((t) => t.id === trackId);
+      onBatchBegin?.();
       dragRef.current = {
         trackId,
         clipId: clip.id,
@@ -379,11 +390,12 @@ export function TimelinePanel({
         }
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
+        onBatchEnd?.();
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [onMoveClip, pxPerSec, onVideoClipDragEnd, onSelectVideoClip, project.tracks],
+    [onMoveClip, pxPerSec, onVideoClipDragEnd, onSelectVideoClip, project.tracks, onBatchBegin, onBatchEnd],
   );
 
   /** 标尺区域可用宽度（随面板缩放变化） */

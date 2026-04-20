@@ -125,8 +125,14 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
     try {
       const { jobId } = await startEditorExport({ project, assets, aspectRatio, resolution, format, quality });
       onPushLog(`导出任务 ${jobId} 已提交 (${resolution} ${format} ${quality})`);
+      /**
+       * 长视频（≥1min、含 drawtext/BGM mix）后端耗时可能超过 3min。
+       * 过去设 90*2s=3min 超时，前端报错但后端还在跑，体验不一致。
+       * 改为 600*2s=20min，与后端 export 的实际上限匹配；长任务请继续在历史中查看。
+       */
       let tries = 0;
-      while (tries < 90) {
+      const MAX_TRIES = 600;
+      while (tries < MAX_TRIES) {
         await new Promise((r) => setTimeout(r, 2000));
         const st = await getEditorExportStatus(jobId);
         setExportProgress(st.progress ?? 0);
@@ -151,7 +157,7 @@ export function ExportPanel({ project, assets, aspectRatio, onPushLog }: ExportP
         }
         tries += 1;
       }
-      if (tries >= 90) toast.error('导出超时，请检查后端状态');
+      if (tries >= MAX_TRIES) toast.warning('前端已停止轮询（>20min），任务可能仍在后台运行，请刷新历史记录查看。');
     } catch (e) {
       toast.error(`导出请求失败：${e instanceof Error ? e.message : String(e)}`);
     } finally {

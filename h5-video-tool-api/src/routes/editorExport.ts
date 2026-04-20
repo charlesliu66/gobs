@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { EditorExportRequestBody } from '../editor/timelineSchema.js';
 import { runFfmpegExport } from '../services/ffmpegExport.js';
-import { getApiDataDir, getUploadsPath } from '../config/apiDataDir.js';
+import { getApiDataDir, getUploadsPath, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
@@ -12,6 +12,8 @@ type ExportJobStatus = 'queued' | 'processing' | 'done' | 'error';
 
 interface ExportJob {
   id: string;
+  /** 所属用户，用于状态/下载接口的权限校验 */
+  username: string;
   status: ExportJobStatus;
   progress: number;
   progressMsg: string;
@@ -21,6 +23,21 @@ interface ExportJob {
 }
 
 const jobs = new Map<string, ExportJob>();
+
+/** 内存 job 超过一定容量 / 一定时间后淘汰，避免长期运行泄漏 */
+const JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const JOB_MAX = 500;
+function pruneJobs() {
+  const now = Date.now();
+  for (const [id, j] of jobs) {
+    if (now - j.createdAt > JOB_TTL_MS) jobs.delete(id);
+  }
+  if (jobs.size > JOB_MAX) {
+    const sorted = [...jobs.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
+    const toDrop = sorted.length - JOB_MAX;
+    for (let i = 0; i < toDrop; i++) jobs.delete(sorted[i]![0]);
+  }
+}
 
 function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
   if (!body || typeof body !== 'object') return false;
@@ -37,8 +54,30 @@ function validateTimelineBody(body: unknown): body is EditorExportRequestBody {
  *   /api/batch-jobs/video/<jobId>
  *   /api/editor/music/files/<id>
  *   /api/editor/assets/files/<assetId>
+ *
+ * 安全：对 /api/video/file 路径做「用户域白名单校验」，保持与 video.ts 中 GET /api/video/file
+ * 的权限模型一致，避免导出任务被用来读取非本用户目录下的文件（例如通过伪造 asset URL）。
  */
 function resolveLocalPathFromUrl(url: string, username: string): string | null {
+  const safeUser = sanitizeUsername(username);
+  const outputRoot = getDefaultVideoOutputDir();
+  /** 允许的根目录集合（所有结果必须落在其一之下） */
+  const allowedRoots = [
+    path.resolve(outputRoot, safeUser),
+    path.resolve(outputRoot, 'multishot', safeUser),
+    path.resolve(outputRoot, 'production', 'projects', safeUser),
+    path.resolve(outputRoot, 'production', 'images', safeUser),
+    path.resolve(outputRoot, 'batch-jobs', 'videos'),
+    path.resolve(getApiDataDir(), 'output', safeUser),
+    path.resolve(getApiDataDir(), 'output', 'batch-jobs', 'videos'),
+    path.resolve(getUploadsPath('editor'), safeUser),
+    path.resolve(getUploadsPath('editor', 'music')),
+  ];
+  const inAllowedRoot = (p: string): boolean => {
+    const abs = path.resolve(p);
+    return allowedRoots.some((root) => abs === root || abs.startsWith(root + path.sep));
+  };
+
   try {
     const fakeBase = 'http://localhost';
     const parsed = new URL(url, fakeBase);
@@ -48,7 +87,10 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
       const relPath = parsed.searchParams.get('path');
       if (relPath) {
         const full = path.resolve(getApiDataDir(), path.normalize(relPath));
-        if (fs.existsSync(full)) return full;
+        if (fs.existsSync(full) && inAllowedRoot(full)) return full;
+        if (fs.existsSync(full)) {
+          console.warn('[export] /video/file path rejected by domain check:', full);
+        }
       }
     }
 
@@ -58,6 +100,19 @@ function resolveLocalPathFromUrl(url: string, username: string): string | null {
       const jobId = batchMatch[1];
       const full = path.join(getApiDataDir(), 'output', 'batch-jobs', 'videos', `${jobId}.mp4`);
       if (fs.existsSync(full)) return full;
+    }
+
+    // P1-12：/api/production/image?path=output/production/images/<user>/xxx.png
+    // 导出需要把分镜首帧图当作素材读回；旧实现缺这一分支会导致封面/首帧缺失。
+    if (parsed.pathname === '/api/production/image') {
+      const relPath = parsed.searchParams.get('path');
+      if (relPath) {
+        const full = path.resolve(getApiDataDir(), path.normalize(relPath));
+        if (fs.existsSync(full) && inAllowedRoot(full)) return full;
+        if (fs.existsSync(full)) {
+          console.warn('[export] /production/image path rejected by domain check:', full);
+        }
+      }
     }
 
     // /api/editor/music/files/<id> → uploads/editor/music/<id>.(wav|mp3)
@@ -172,6 +227,7 @@ router.post('/export', (req, res) => {
   const jobId = `exp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const job: ExportJob = {
     id: jobId,
+    username,
     status: 'queued',
     progress: 0,
     progressMsg: '已入队',
@@ -180,6 +236,7 @@ router.post('/export', (req, res) => {
     createdAt: Date.now(),
   };
   jobs.set(jobId, job);
+  pruneJobs();
 
   // 异步执行，不阻塞 HTTP 响应
   setImmediate(async () => {
@@ -281,11 +338,18 @@ router.delete('/export/files/:filename', (req, res) => {
   }
 });
 
-/** GET /api/editor/export/:jobId — 查询任务状态 */
+/** GET /api/editor/export/:jobId — 查询任务状态（仅允许查自己的 job） */
 router.get('/export/:jobId', (req, res) => {
+  const callerUser = sanitizeUsername(req.user?.username);
   const job = jobs.get(req.params.jobId);
-  if (!job) {
-    res.status(404).json({ error: 'Job not found' });
+  if (!job || job.username !== callerUser) {
+    // P1-17：export job 目前只保存在进程内存中，PM2 重启 / 进程切换会清空。
+    // 对于真实 404 与「PM2 重启后丢失」两种情形无法从返回值区分，
+    // 这里给前端一个明确提示：请改用 /export/files 查看历史产物。
+    res.status(404).json({
+      error: 'Job not found（可能是服务重启导致进度丢失，请在「历史导出」列表重试）',
+      errorCode: 'EXPORT_JOB_NOT_FOUND',
+    });
     return;
   }
   res.json({

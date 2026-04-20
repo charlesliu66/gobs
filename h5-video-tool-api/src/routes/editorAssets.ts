@@ -164,8 +164,23 @@ const upload = multer({
   },
 });
 
-// Separate multer instance using memoryStorage for chunk uploads
-const chunkUpload = multer({ storage: multer.memoryStorage() });
+// 分片上传：单个 chunk 限制（默认 20MB，允许 1–64MB 可调）
+const CHUNK_MAX_MB = Math.min(
+  64,
+  Math.max(1, Number.parseInt(process.env.EDITOR_CHUNK_MAX_MB || '20', 10) || 20),
+);
+const CHUNK_MAX_BYTES = CHUNK_MAX_MB * 1024 * 1024;
+// 分片数量上限，配合 UPLOAD_MAX_BYTES 防止装配后超过单文件上限
+const MAX_TOTAL_CHUNKS = Math.max(
+  1,
+  Math.ceil(UPLOAD_MAX_BYTES / (CHUNK_MAX_BYTES || 1)) + 2,
+);
+
+// 分片上传使用内存存储（单片小，便于直接落盘）；显式限制单片大小。
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CHUNK_MAX_BYTES },
+});
 
 function resolveOriginalName(req: Request, multerOriginal: string): string {
   const fromBody = req.body?.originalName;
@@ -310,6 +325,13 @@ router.get('/assets/files/:id', (req, res) => {
 router.post('/assets/upload-chunk', (req, res) => {
   chunkUpload.single('chunk')(req, res, (err: unknown) => {
     if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({
+          error: `分片过大，单分片最大 ${CHUNK_MAX_MB}MB。可通过 EDITOR_CHUNK_MAX_MB 环境变量调整（1–64）。`,
+          maxMb: CHUNK_MAX_MB,
+        });
+        return;
+      }
       res.status(400).json({ error: err instanceof Error ? err.message : '分片上传失败' });
       return;
     }
@@ -326,6 +348,16 @@ router.post('/assets/upload-chunk', (req, res) => {
     const total = Number.parseInt(totalChunks ?? '', 10);
     if (Number.isNaN(idx) || Number.isNaN(total) || idx < 0 || total < 1) {
       res.status(400).json({ error: '缺少或无效的 chunkIndex / totalChunks' });
+      return;
+    }
+    if (total > MAX_TOTAL_CHUNKS) {
+      res.status(413).json({
+        error: `分片数超限：${total} > ${MAX_TOTAL_CHUNKS}（对应单文件 ${UPLOAD_MAX_MB}MB 上限）`,
+      });
+      return;
+    }
+    if (idx >= total) {
+      res.status(400).json({ error: 'chunkIndex 超出 totalChunks 范围' });
       return;
     }
     const chunk = req.file;
@@ -349,7 +381,11 @@ router.post('/assets/upload-chunk', (req, res) => {
 
 /** POST JSON：组装已上传的分片为完整文件，然后写入素材注册表 */
 router.post('/assets/upload-assemble', async (req, res) => {
-  const { uploadId, originalName } = req.body as { uploadId?: unknown; originalName?: unknown };
+  const { uploadId, originalName, expectedTotalSize } = req.body as {
+    uploadId?: unknown;
+    originalName?: unknown;
+    expectedTotalSize?: unknown;
+  };
   if (
     typeof uploadId !== 'string' ||
     !uploadId ||
@@ -360,6 +396,18 @@ router.post('/assets/upload-assemble', async (req, res) => {
   }
   if (typeof originalName !== 'string' || !originalName.trim()) {
     res.status(400).json({ error: '缺少 originalName' });
+    return;
+  }
+  const expectedSize =
+    typeof expectedTotalSize === 'number' && Number.isFinite(expectedTotalSize) && expectedTotalSize > 0
+      ? Math.floor(expectedTotalSize)
+      : null;
+  if (expectedSize !== null && expectedSize > UPLOAD_MAX_BYTES) {
+    res.status(413).json({
+      error: `文件超出单文件上限（${UPLOAD_MAX_MB}MB）`,
+      maxMb: UPLOAD_MAX_MB,
+      size: expectedSize,
+    });
     return;
   }
   const chunkDir = path.join(UPLOAD_ROOT, 'chunks', uploadId);
@@ -408,24 +456,54 @@ router.post('/assets/upload-assemble', async (req, res) => {
   const filename = `${id}${ext}`;
   const destPath = path.join(userDir, filename);
 
+  // 预估总大小，提前拒绝超出单文件上限的组装请求
+  let sumSize = 0;
+  for (const f of chunkFiles) {
+    try {
+      sumSize += fs.statSync(path.join(chunkDir, f)).size;
+    } catch {
+      cleanup();
+      res.status(500).json({ error: '分片元信息读取失败' });
+      return;
+    }
+  }
+  if (sumSize > UPLOAD_MAX_BYTES) {
+    cleanup();
+    res.status(413).json({
+      error: `组装后的文件超出单文件上限（${UPLOAD_MAX_MB}MB）`,
+      maxMb: UPLOAD_MAX_MB,
+      size: sumSize,
+    });
+    return;
+  }
+  /** 与客户端声明的总大小做一致性校验（防止客户端声称 10MB 却传了 10GB 分片绕过 multer 限制） */
+  if (expectedSize !== null && Math.abs(sumSize - expectedSize) > 1024) {
+    cleanup();
+    res.status(400).json({
+      error: `分片总大小与客户端声明不一致（期望 ${expectedSize}，实际 ${sumSize}）`,
+    });
+    return;
+  }
+
+  // 流式拼接：依次 pipe 每个分片到目标文件，避免把整个 chunk 读进内存
   try {
     const out = fs.createWriteStream(destPath);
     await new Promise<void>((resolve, reject) => {
       out.on('error', reject);
-      const writeNext = (i: number) => {
+      const pipeNext = (i: number): void => {
         if (i >= chunkFiles.length) {
           out.end();
           return;
         }
-        const buf = fs.readFileSync(path.join(chunkDir, chunkFiles[i]));
-        if (!out.write(buf)) {
-          out.once('drain', () => writeNext(i + 1));
-        } else {
-          writeNext(i + 1);
-        }
+        const inStream = fs.createReadStream(path.join(chunkDir, chunkFiles[i]), {
+          highWaterMark: 1024 * 1024,
+        });
+        inStream.on('error', reject);
+        inStream.on('end', () => pipeNext(i + 1));
+        inStream.pipe(out, { end: false });
       };
       out.on('finish', resolve);
-      writeNext(0);
+      pipeNext(0);
     });
   } catch (assembleErr) {
     console.error('[editor assemble write]', assembleErr);

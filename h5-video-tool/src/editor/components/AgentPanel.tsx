@@ -42,6 +42,8 @@ interface AgentPanelProps {
   deliverableMarkdown?: string | null;
   /** 本次会话的对话历史（仅 chat 轮次） */
   chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** busy 期间可调用，请求中止当前 Agent 流式任务 */
+  onAbort?: () => void;
 }
 
 export function AgentPanel({
@@ -54,6 +56,7 @@ export function AgentPanel({
   timelineAssetCount,
   deliverableMarkdown,
   chatHistory,
+  onAbort,
 }: AgentPanelProps) {
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
@@ -66,6 +69,10 @@ export function AgentPanel({
     try {
       await onApply(t);
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        onPushLog('Agent 任务已取消');
+        return;
+      }
       onPushLog(`错误：${e instanceof Error ? e.message : String(e)}`);
     }
   };
@@ -134,9 +141,21 @@ export function AgentPanel({
         <div className="border-b border-[var(--color-border)] px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-medium text-amber-400/95">生成中</span>
-            <span className="font-mono text-[10px] tabular-nums text-[var(--color-text-muted)]">
-              {Math.round(jobProgress.percent)}%
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] tabular-nums text-[var(--color-text-muted)]">
+                {Math.round(jobProgress.percent)}%
+              </span>
+              {onAbort ? (
+                <button
+                  type="button"
+                  onClick={onAbort}
+                  className="rounded border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] text-red-300 hover:bg-red-500/25"
+                  title="停止当前 Agent 任务"
+                >
+                  停止
+                </button>
+              ) : null}
+            </div>
           </div>
           <div
             className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-border)]/60"

@@ -222,6 +222,8 @@ export function useTimelineState() {
     canUndo: undoRedo.canUndo,
     canRedo: undoRedo.canRedo,
     resetProjectHistory: undoRedo.reset,
+    beginProjectBatch: undoRedo.beginBatch,
+    endProjectBatch: undoRedo.endBatch,
     assets,
     setAssets,
     currentTime,

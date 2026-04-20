@@ -84,7 +84,7 @@ export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {
     stopPoll();
     try {
       const { jobId, total } = await importAssets(mediaFiles);
-      setJob({ jobId, username: '', total, processed: 0, failed: 0, status: 'running' });
+      setJob({ jobId, username: '', total, processed: 0, failed: 0, skipped: 0, status: 'running' });
       pollRef.current = setInterval(async () => {
         try {
           const status = await getJobStatus(jobId);
@@ -133,7 +133,7 @@ export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {
   }
 
   const progressPct = job && job.total > 0
-    ? Math.round((job.processed / job.total) * 100)
+    ? Math.round(((job.processed + job.failed + job.skipped) / job.total) * 100)
     : 0;
 
   return (
@@ -234,6 +234,9 @@ export function AssetImportPanel({ onImportComplete }: AssetImportPanelProps = {
             <span className="text-[var(--color-text-subtle)]">已处理 <strong className="text-green-500">{job.processed}</strong></span>
             {job.failed > 0 && (
               <span className="text-[var(--color-text-subtle)]">失败 <strong className="text-red-500">{job.failed}</strong></span>
+            )}
+            {job.skipped > 0 && (
+              <span className="text-[var(--color-text-subtle)]">跳过 <strong className="text-amber-500">{job.skipped}</strong></span>
             )}
             <span className="ml-auto font-medium text-[var(--color-text)]">{progressPct}%</span>
           </div>

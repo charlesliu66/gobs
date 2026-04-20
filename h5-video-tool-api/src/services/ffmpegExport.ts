@@ -191,11 +191,16 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
     const totalDur = project.durationSec ?? 0;
 
     const segmentPaths: string[] = [];
+    const skippedClips: string[] = [];
     for (let i = 0; i < videoClips.length; i++) {
       const vc = videoClips[i]!;
       const src = assets[vc.assetId];
       if (!src || !fs.existsSync(src)) {
-        throw new Error(`素材文件不存在: assetId=${vc.assetId}`);
+        // P1-18：单个素材缺失时整条导出都会失败，体验上"一片拖垮整部剧"。
+        // 允许跳过缺失片段（记录下来上报给前端），只要至少还有一段可用即可。
+        console.warn(`[export] 跳过缺失素材片段: assetId=${vc.assetId}`);
+        skippedClips.push(vc.assetId);
+        continue;
       }
       const segPath = path.join(tmpDir, `seg_${i}.mp4`);
       const speed = Math.min(4, Math.max(0.25, vc.speed ?? 1));
@@ -228,6 +233,20 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
       await runFfmpeg(segArgs);
       segmentPaths.push(segPath);
       log(Math.round(10 + (i / videoClips.length) * 40), `处理片段 ${i + 1}/${videoClips.length}`);
+    }
+
+    if (segmentPaths.length === 0) {
+      throw new Error(
+        skippedClips.length
+          ? `所有片段的素材都缺失（${skippedClips.length} 项），无法导出。请确认素材没有被误删。`
+          : '时间轴为空',
+      );
+    }
+    if (skippedClips.length > 0) {
+      log(
+        50,
+        `已跳过 ${skippedClips.length} 个缺失片段（可在导出完成后检查原素材）`,
+      );
     }
 
     // ── Step 2: 拼接片段（支持 crossfade xfade 转场）
@@ -415,7 +434,23 @@ export async function runFfmpegExport(opts: ExportOptions): Promise<void> {
 
     // ── Step 5: 输出 ─────────────────────────────────────────────────────────
     log(95, '写出最终文件…');
-    await fs.promises.copyFile(finalPath, outputPath);
+    /**
+     * 中间产物全部是 MP4（libx264 + aac）。如果用户选 MOV，用 -c copy -f mov 重封装
+     * 到正确的 QuickTime 容器，避免「改扩展名的 mp4」在某些播放器无法识别。
+     */
+    const outExt = path.extname(outputPath).toLowerCase();
+    if (outExt === '.mov') {
+      await runFfmpeg([
+        '-y',
+        '-i', finalPath,
+        '-c', 'copy',
+        '-f', 'mov',
+        '-movflags', '+faststart',
+        outputPath,
+      ]);
+    } else {
+      await fs.promises.copyFile(finalPath, outputPath);
+    }
     log(100, '导出完成');
 
   } finally {

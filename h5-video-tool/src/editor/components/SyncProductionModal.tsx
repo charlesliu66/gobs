@@ -52,8 +52,6 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
         .map((d) => ({
           shotIndex: d.shotIndex,
           newVersionId: d.latestVersionId,
-          newVideoUrl: d.latestVideoUrl,
-          newDurationSec: d.latestDurationSec,
         }));
       await applySyncReplacements(editorProjectId, replacements);
       toast.success(`已同步 ${replacements.length} 个分镜`);

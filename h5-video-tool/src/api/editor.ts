@@ -13,6 +13,7 @@ function handleUnauthorized(res: Response): void {
   if (res.status === 401) {
     localStorage.removeItem('gobs_token');
     localStorage.removeItem('gobs_user');
+    localStorage.removeItem('gobs_fat');
     if (!window.location.pathname.includes('/login')) {
       window.location.href = '/login';
     }
@@ -84,6 +85,7 @@ export async function uploadEditorAsset(
         if (xhr.status === 401) {
           localStorage.removeItem('gobs_token');
           localStorage.removeItem('gobs_user');
+          localStorage.removeItem('gobs_fat');
           if (!window.location.pathname.includes('/login')) {
             window.location.href = '/login';
           }
@@ -221,9 +223,6 @@ export async function syncProductionCheck(editorProjectId: string): Promise<Sync
 export interface ApplySyncReplacement {
   shotIndex: number;
   newVersionId: string;
-  newVideoUrl: string;
-  newDurationSec: number;
-  newMeta?: Record<string, unknown>;
 }
 
 export async function applySyncReplacements(
@@ -351,10 +350,13 @@ export type EditorAgentJobProgress = {
 
 /**
  * 剪辑任务流式接口：推送进度事件，结束时返回与 apply 相同结构。
+ * 第三个参数 signal 支持 AbortController 取消——中断后 fetch 会抛 AbortError，
+ * 调用方可据此展示"已取消"而不是"失败"。
  */
 export async function applyEditorAgentStream(
   body: ApplyEditorAgentBody,
   onProgress: (p: EditorAgentJobProgress) => void,
+  signal?: AbortSignal,
 ): Promise<ApplyEditorAgentResponse> {
   const res = await fetch(`${BASE}/api/editor/agent/apply-stream`, {
     method: 'POST',
@@ -364,6 +366,7 @@ export async function applyEditorAgentStream(
       ...getAuthHeaders(),
     },
     body: JSON.stringify(body),
+    signal,
   });
   handleUnauthorized(res);
   if (!res.ok) {
@@ -454,7 +457,7 @@ export async function chatEditorAgent(userMessage: string): Promise<{ reply: str
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
-async function uploadChunk(
+async function uploadChunkOnce(
   uploadId: string,
   chunkIndex: number,
   totalChunks: number,
@@ -477,7 +480,36 @@ async function uploadChunk(
   }
 }
 
-async function assembleChunks(uploadId: string, originalName: string): Promise<{ asset: EditorAssetDto }> {
+/**
+ * 分片上传 with 指数退避重试。大文件上传容易被网络抖动打断，
+ * 一片挂就全链路失败不友好。重试 2 次（总共 3 次尝试）。
+ */
+async function uploadChunk(
+  uploadId: string,
+  chunkIndex: number,
+  totalChunks: number,
+  chunk: Blob,
+): Promise<void> {
+  const maxRetries = 2;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await uploadChunkOnce(uploadId, chunkIndex, totalChunks, chunk);
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === maxRetries) break;
+      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+async function assembleChunks(
+  uploadId: string,
+  originalName: string,
+  expectedTotalSize: number,
+): Promise<{ asset: EditorAssetDto }> {
   const token = localStorage.getItem('gobs_token');
   const res = await fetch(`${BASE}/api/editor/assets/upload-assemble`, {
     method: 'POST',
@@ -485,7 +517,7 @@ async function assembleChunks(uploadId: string, originalName: string): Promise<{
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ uploadId, originalName }),
+    body: JSON.stringify({ uploadId, originalName, expectedTotalSize }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -505,7 +537,7 @@ export async function uploadEditorAssetChunked(
     await uploadChunk(uploadId, i, totalChunks, chunk);
     onProgress?.(Math.round(((i + 1) / totalChunks) * 90)); // 0-90% for chunk phase
   }
-  const result = await assembleChunks(uploadId, file.name);
+  const result = await assembleChunks(uploadId, file.name, file.size);
   onProgress?.(100);
   return result;
 }

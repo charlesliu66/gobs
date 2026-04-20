@@ -268,20 +268,23 @@ router.post('/projects/:id/sync-production', async (req: Request, res: Response)
   }
 });
 
-/** PATCH /api/editor/projects/:id/apply-sync — 执行替换 */
+/**
+ * PATCH /api/editor/projects/:id/apply-sync — 执行替换
+ *
+ * 安全设计：客户端仅能提交 { shotIndex, newVersionId }，
+ * 服务端自己读制片 JSON，校验 newVersionId 确实存在于该 shot 的 previewVideoVersions，
+ * 然后自己构造 newVideoUrl / newDurationSec。避免客户端注入任意 URL 到素材库。
+ */
 router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => {
   const editorId = req.params.id;
   if (!isSafeId(editorId)) { res.status(400).json({ error: '无效的项目 id' }); return; }
 
-  const replacements = req.body.replacements as Array<{
+  const requested = req.body.replacements as Array<{
     shotIndex: number;
     newVersionId: string;
-    newVideoUrl: string;
-    newDurationSec: number;
-    newMeta?: Record<string, unknown>;
   }> | undefined;
 
-  if (!replacements?.length) {
+  if (!requested?.length) {
     res.status(400).json({ error: '未指定替换内容' });
     return;
   }
@@ -291,6 +294,23 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
     const file = path.join(dir, `${editorId}.json`);
     const doc = JSON.parse(await fs.readFile(file, 'utf-8')) as EditorProjectDoc;
     const project = doc.project as Record<string, unknown>;
+    const prodProjectId = project.sourceProductionProjectId as string | undefined;
+    if (!prodProjectId) {
+      res.status(400).json({ error: '该剪辑项目不是从制片导入的，无法同步' });
+      return;
+    }
+
+    const username = sanitizeUsername(req.user?.username);
+    const prodFile = path.join(getProductionProjDir(username), `${prodProjectId}.json`);
+    let prodData: Record<string, unknown>;
+    try {
+      prodData = JSON.parse(await fs.readFile(prodFile, 'utf-8')) as Record<string, unknown>;
+    } catch {
+      res.status(404).json({ error: '源制片项目已删除或不存在' });
+      return;
+    }
+    const prodShots = (prodData.shots as ProductionShotLike[] | undefined) ?? [];
+
     const tracks = (project.tracks as Array<{ type: string; clips: Array<Record<string, unknown>> }>) ?? [];
     const videoTrack = tracks.find((t) => t.type === 'video');
     if (!videoTrack) { res.status(400).json({ error: '时间轴无视频轨' }); return; }
@@ -298,38 +318,45 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
     const clips = videoTrack.clips as Array<Record<string, unknown>>;
     const assets = doc.assets as Record<string, Record<string, unknown>>;
     let totalShift = 0;
+    let appliedCount = 0;
 
-    for (const rep of replacements) {
+    for (const rep of requested) {
+      const shot = prodShots.find((s) => s.shotIndex === rep.shotIndex);
+      if (!shot) continue;
+      const version = (shot.previewVideoVersions ?? []).find((v) => v.id === rep.newVersionId);
+      if (!version) continue;
+
       const clipIdx = clips.findIndex((c) => c.shotIndex === rep.shotIndex);
       if (clipIdx < 0) continue;
       const clip = clips[clipIdx]!;
 
+      /** 服务端自己构造 URL，防止客户端注入 */
+      const newVideoUrl = version.videoPath
+        ? `/api/video/file?path=${encodeURIComponent(version.videoPath)}`
+        : (version.videoUrl ?? '');
+      if (!newVideoUrl) continue;
+      const newDur = shot.durationSec ?? 5;
+
       const oldDur = ((clip.sourceEnd as number) ?? 5) - ((clip.sourceStart as number) ?? 0);
-      const newDur = rep.newDurationSec;
       const durDelta = newDur - oldDur;
 
-      // 更新素材 URL
       const assetId = clip.assetId as string;
       if (assets[assetId]) {
-        assets[assetId]!.url = rep.newVideoUrl;
+        assets[assetId]!.url = newVideoUrl;
         assets[assetId]!.durationSec = newDur;
       }
 
-      // 更新 clip：调整时间 + 记录版本
       clip.timelineStart = (clip.timelineStart as number) + totalShift;
       clip.sourceStart = 0;
       clip.sourceEnd = newDur;
 
-      // 更新 meta
       const oldMeta = (clip.meta ?? {}) as Record<string, unknown>;
       clip.meta = {
         ...oldMeta,
-        ...rep.newMeta,
         productionVersionId: rep.newVersionId,
         syncedAt: new Date().toISOString(),
       };
 
-      // 后续 clip 全部位移
       totalShift += durDelta;
       if (durDelta !== 0) {
         for (let i = clipIdx + 1; i < clips.length; i++) {
@@ -337,9 +364,14 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
             ((clips[i] as Record<string, unknown>).timelineStart as number) + durDelta;
         }
       }
+      appliedCount += 1;
     }
 
-    // 重算工程总时长
+    if (appliedCount === 0) {
+      res.status(400).json({ error: '没有可应用的替换（版本不存在或分镜不匹配）' });
+      return;
+    }
+
     let maxEnd = 0;
     for (const c of clips) {
       const end = (c.timelineStart as number) + ((c.sourceEnd as number) - (c.sourceStart as number));
@@ -349,7 +381,7 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
 
     doc.updatedAt = new Date().toISOString();
     await fs.writeFile(file, JSON.stringify(doc, null, 2), 'utf-8');
-    res.json({ success: true, data: doc });
+    res.json({ success: true, data: doc, appliedCount });
   } catch (err) {
     console.error('[apply-sync]', err);
     res.status(500).json({ error: '应用同步失败' });

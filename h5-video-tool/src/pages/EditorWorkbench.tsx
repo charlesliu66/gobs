@@ -150,6 +150,8 @@ export function EditorWorkbench() {
     redo,
     canUndo,
     canRedo,
+    beginProjectBatch,
+    endProjectBatch,
     projectId,
     projectName,
     setProjectName,
@@ -174,6 +176,8 @@ export function EditorWorkbench() {
   activeVideoClipRef.current = activeVideoClip;
   const [agentLogs, setAgentLogs] = useState<string[]>([]);
   const [agentBusy, setAgentBusy] = useState(false);
+  /** Agent 流式请求的 abort 控制器，用于前端取消按钮 */
+  const agentAbortRef = useRef<AbortController | null>(null);
   const [agentChatHistory, setAgentChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [libraryItems, setLibraryItems] = useState<EditorAssetDto[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
@@ -453,6 +457,8 @@ export function EditorWorkbench() {
           });
         }
 
+        const ctrl = new AbortController();
+        agentAbortRef.current = ctrl;
         const { summary, project: nextProject, llmUsage } = await applyEditorAgentStream(
           {
             userMessage,
@@ -462,6 +468,7 @@ export function EditorWorkbench() {
             currentProject: project,
           },
           (p) => setAgentJobProgress(p),
+          ctrl.signal,
         );
         const syncedProject = withSyncedDuration(
           snapVideoClipsSequential(normalizeTimelineProject(nextProject)),
@@ -485,6 +492,7 @@ export function EditorWorkbench() {
       } finally {
         setAgentJobProgress(null);
         setAgentBusy(false);
+        agentAbortRef.current = null;
       }
       if (agentOk && detectBgmIntent(userMessage)) {
         void runAutoBgmFromAgentMessage(userMessage);
@@ -508,12 +516,20 @@ export function EditorWorkbench() {
   const handleAddToTimeline = useCallback(
     async (asset: EditorAssetDto) => {
       let sourceLen = 10;
+      let probeFailed = false;
       try {
         sourceLen = await probeVideoDuration(asset.url);
       } catch {
-        pushLog('无法读取视频时长，使用默认 10s 片段。');
+        probeFailed = true;
+        pushLog('⚠️ 无法读取视频时长，使用默认 10s 片段（可能是跨域或浏览器不兼容）。');
+        toast.warning(`${asset.originalName}：视频时长读取失败，暂用 10s 占位，加入后请手动调整入出点。`);
       }
+      const rawLen = sourceLen;
       sourceLen = Math.min(Math.max(sourceLen, 0.5), 300);
+      if (!probeFailed && rawLen > 300) {
+        pushLog(`⚠️ 视频 ${rawLen.toFixed(1)}s 超过单片 300s 上限，已截断为 300s。`);
+        toast.warning(`${asset.originalName} 原始 ${rawLen.toFixed(0)}s 超过 300s 上限，时间轴上仅取前 300s。`);
+      }
       setAssets((prev) => ({
         ...prev,
         [asset.id]: {
@@ -1119,6 +1135,12 @@ export function EditorWorkbench() {
             onPushLog={pushLog}
             onApply={handleAgentApply}
             busy={agentBusy}
+            onAbort={() => {
+              if (agentAbortRef.current) {
+                agentAbortRef.current.abort();
+                pushLog('已取消 Agent 任务');
+              }
+            }}
             jobProgress={agentJobProgress}
             selectedCount={selectedAssetIds.length}
             timelineAssetCount={uniqueVideoAssetIds(project).length}
@@ -1144,6 +1166,8 @@ export function EditorWorkbench() {
             selectedTextClipId={selectedTextClipId}
             onSelectTextClip={setSelectedTextClipId}
             onOpenTextEditor={() => setShowTextPanel(true)}
+            onBatchBegin={beginProjectBatch}
+            onBatchEnd={endProjectBatch}
             onMixChange={(partial) => {
               setProject((p) => {
                 const n = normalizeTimelineProject(p);
