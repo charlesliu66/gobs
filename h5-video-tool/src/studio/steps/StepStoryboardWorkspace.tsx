@@ -3,8 +3,6 @@ import type {
   ProductionShot,
   ProductionShotVideoVersion,
   SceneSheet,
-  StructuredPromptStill,
-  StructuredPromptMotion,
 } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
 import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
