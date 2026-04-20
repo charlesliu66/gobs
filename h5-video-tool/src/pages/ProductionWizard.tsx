@@ -76,6 +76,8 @@ import { StepStoryboardContinuousPlay } from '../studio/steps/StepStoryboardCont
 import { StepStoryboardAbCompare } from '../studio/steps/StepStoryboardAbCompare';
 import { useProductionShotReview } from '../studio/useProductionShotReview';
 import { useProductionShotVersions } from '../studio/useProductionShotVersions';
+import { useGlobalJobs } from '../hooks/useGlobalJobs';
+import { apiPost } from '../api/client';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -261,6 +263,60 @@ export function ProductionWizard() {
   const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
   // Tracks shots waiting in the submission queue (before their turn to submit to Dreamina)
   const [shotQueuedMap, setShotQueuedMap] = useState<Record<string, boolean>>({});
+  // 全局 SSE 推送的 batch-job 列表
+  const { jobs: globalJobs } = useGlobalJobs();
+  // 正在点击"同步状态"按钮
+  const [syncing, setSyncing] = useState(false);
+
+  /**
+   * 依据 SSE 推送的 batch-job，派生当前项目每个 shot 的"最新一条 job 状态"。
+   * 同 shot 如果多次提交，优先级：done > processing > queuing > pending > failed/cancelled（done 意味着已完成）
+   * 只要有 done 就不展示任何 running/failed 态；否则按优先级挑一个活跃态。
+   */
+  const shotJobStatusMap = useMemo<Record<string, 'queuing' | 'processing' | 'failed'>>(() => {
+    if (!serverProjectId) return {};
+    const out: Record<string, 'queuing' | 'processing' | 'failed'> = {};
+    const relevant = globalJobs.filter((j) => j.projectId === serverProjectId);
+    const byShot = new Map<number, typeof relevant>();
+    for (const j of relevant) {
+      if (typeof j.shotIndex !== 'number') continue;
+      const arr = byShot.get(j.shotIndex) ?? [];
+      arr.push(j);
+      byShot.set(j.shotIndex, arr);
+    }
+    for (const [idx, arr] of byShot) {
+      if (arr.some((j) => j.status === 'done')) continue; // 已经有成功视频，不展示 running/fail
+      if (arr.some((j) => j.status === 'processing')) { out[String(idx)] = 'processing'; continue; }
+      if (arr.some((j) => j.status === 'queuing' || j.status === 'pending')) { out[String(idx)] = 'queuing'; continue; }
+      // 全部 failed/cancelled 才算失败（注意：shot.previewVideoUrl 存在时 Strip 会自动屏蔽失败徽标）
+      if (arr.every((j) => j.status === 'failed' || j.status === 'cancelled')) { out[String(idx)] = 'failed'; }
+    }
+    return out;
+  }, [globalJobs, serverProjectId]);
+
+  const handleSyncBatchJobsNow = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const data = await apiPost<{
+        polled: number;
+        results: Array<{ id: string; status: string; videoUrl?: string; failReason?: string }>;
+        scan: { matched: string[]; expired: string[]; skipped: number } | null;
+      }>('/api/batch-jobs/sync-now', {});
+      const doneCount = data.results.filter((r) => r.status === 'done').length;
+      const failCount = data.results.filter((r) => r.status === 'failed').length;
+      const parts: string[] = [];
+      if (doneCount) parts.push(`${doneCount} 条已完成`);
+      if (failCount) parts.push(`${failCount} 条失败`);
+      if (data.scan?.matched?.length) parts.push(`兜底恢复 ${data.scan.matched.length} 条`);
+      if (data.polled === 0 && !parts.length) parts.push('当前没有活跃任务');
+      toast.success(`同步完成：${parts.join('，') || `已检查 ${data.polled} 条`}`);
+    } catch (e) {
+      toast.error(`同步失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing]);
   // Per-shot cancel tokens (ref so mutations don't trigger re-render)
   const shotCancelMap = useRef<Record<string, { cancelled: boolean }>>({});
   // Serialize Dreamina submissions: each shot waits for the previous shot's submit_id to be
@@ -1425,11 +1481,6 @@ export function ProductionWizard() {
       };
 
       const is1310Error = (err: unknown): boolean => {
-        // 优先使用后端返回的 errorCode；历史版本/网络中断 fallback 到字符串匹配
-        if (err && typeof err === 'object' && 'errorCode' in err) {
-          const code = (err as { errorCode?: string }).errorCode;
-          if (code === 'DREAMINA_CONCURRENCY') return true;
-        }
         const msg = err instanceof Error ? err.message : String(err);
         return /排队|1310|ExceedConcurrency/i.test(msg);
       };
@@ -1471,8 +1522,7 @@ export function ProductionWizard() {
         const shots = [...p.shots];
         const cur = shots[shotIdx];
         if (!cur) return p;
-        // 清除上次失败残留，否则 UI 会同时显示"生成中"和"失败"
-        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId, lastSubmitError: undefined, lastSubmitErrorAt: undefined };
+        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
         return { ...p, shots };
       });
 
@@ -1506,9 +1556,9 @@ export function ProductionWizard() {
       if (registered) {
         toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
       } else {
-        console.warn('[production] batch-job 注册失败，后端 scanner 会自动兜底恢复', lastRegisterErr);
-        toast.info(
-          `分镜 #${s.shotIndex} 已提交，后台 30s 内自动恢复（如仍未出现可点「检查进度」）`,
+        console.warn('[production] batch-job 注册失败，视频可能在即梦后台已生成但未回传', lastRegisterErr);
+        toast.error(
+          `分镜 #${s.shotIndex} 已提交到即梦，但后台任务注册失败；请稍后点「检查进度」手动同步`,
         );
       }
 
@@ -1928,6 +1978,9 @@ export function ProductionWizard() {
             shotMediaBusy={shotBusyMap[String(shot?.shotIndex ?? '')] ?? null}
             shotBusyMap={shotBusyMap}
             shotQueuedMap={shotQueuedMap}
+            shotJobStatusMap={shotJobStatusMap}
+            onSyncBatchJobs={handleSyncBatchJobsNow}
+            syncingBatchJobs={syncing}
             storySceneCoverage={storySceneCoverage}
             styleRefSummary={project.meta.styleRefSummary}
             shotVideoDreaminaModel={project.meta.shotVideoDreaminaModel}

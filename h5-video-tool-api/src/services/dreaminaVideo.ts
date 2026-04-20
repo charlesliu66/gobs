@@ -448,11 +448,11 @@ export interface DreaminaTaskStatusResult {
   /** gen_status=success 且已下载时返回 */
   videoUrl?: string;
   /**
-   * 是否为临时错误（CLI 偶发失败、网络抖动、响应解析异常）。
-   * 调用方收到 phase='failed' && retriable=true 时应继续轮询而非立即标 failed。
-   * 明确来自即梦 gen_status=fail 的情况 retriable 为 false/undefined。
+   * 仅对 phase='querying' 有效：本次查询 CLI 本身出错（非业务失败）。
+   * 调用方应把 job 状态保留为 queuing，不要标 failed——否则会把即梦侧仍在运行的任务误杀。
+   * CLI 偶发 JSON 解析失败、exit code != 0、网络抖动都归这一类。
    */
-  retriable?: boolean;
+  transientError?: string;
 }
 
 /**
@@ -465,16 +465,17 @@ export async function pollDreaminaTask(submitId: string): Promise<DreaminaTaskSt
   }
   const wrap = await runWrapper('query_result.py', ['--submit-id', sid]);
   if (!wrap.ok) {
+    // CLI 本身出错（JSON 解析失败、exit code 非 0、pipe 断开）：不能算业务失败——
+    // 即梦侧任务可能仍在正常 querying，我们只要等下一次 tick 再查。
     return {
       submitId: sid,
-      phase: 'failed',
-      failReason: dreaminaFailureMessage(wrap.error || '即梦 query_result 失败'),
-      retriable: true,
+      phase: 'querying',
+      transientError: wrap.error || '即梦 CLI 查询出错',
     };
   }
   const data = wrap.data as Record<string, unknown> | undefined;
   if (!data || typeof data !== 'object') {
-    return { submitId: sid, phase: 'failed', failReason: '即梦未返回任务数据', retriable: true };
+    return { submitId: sid, phase: 'querying', transientError: '即梦未返回任务数据' };
   }
   const genStatus = String(data.gen_status ?? data.genStatus ?? '').toLowerCase();
   const qiRaw = data.queue_info ?? data.queueInfo;
@@ -505,12 +506,13 @@ export async function pollDreaminaTask(submitId: string): Promise<DreaminaTaskSt
       try {
         videoUrl = await queryResultDownload(sid);
       } catch (e) {
+        // 下载失败：任务已经成片，只是下载环节出错（磁盘/网络/格式），不能因此标业务失败。
+        // 保持 querying，下一 tick 再重试即可；日志里会留下 transientError 供排查。
         return {
           submitId: sid,
-          phase: 'failed',
+          phase: 'querying',
           genStatus,
-          failReason: e instanceof Error ? e.message : '下载成片失败',
-          retriable: true,
+          transientError: e instanceof Error ? e.message : '下载成片失败',
         };
       }
     }

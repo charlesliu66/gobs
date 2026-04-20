@@ -63,15 +63,8 @@ const MATCH_WINDOW_BEFORE_MS = 30_000;
 const MATCH_WINDOW_AFTER_MS = 10 * 60_000;
 /** 每次扫描最多拉多少条最近任务 */
 const SCAN_LIST_LIMIT = 50;
-/** scanner 轮询间隔（30s — 孤儿任务越快捞回体验越好；可由 DREAMINA_SCAN_INTERVAL_MS 覆盖） */
-const SCAN_INTERVAL_MS = Math.max(
-  10_000,
-  Number(process.env.DREAMINA_SCAN_INTERVAL_MS) || 30_000,
-);
-
-/** 单次扫描完成后短暂冷却，避免 submit 失败时 kickScanner 被反复触发 */
-let _lastScanAt = 0;
-const SCAN_COOLDOWN_MS = 5_000;
+/** scanner 轮询间隔（v0.63 从 120s 缩到 45s，让孤儿 submitId 更快被捞回） */
+const SCAN_INTERVAL_MS = 45_000;
 
 // ── 内存缓存 & IO ──────────────────────────────────────────────────────────
 
@@ -265,7 +258,6 @@ let _scanRunning = false;
 export async function runRecoveryScan(): Promise<{ matched: string[]; expired: string[]; skipped: number }> {
   if (_scanRunning) return { matched: [], expired: [], skipped: 0 };
   _scanRunning = true;
-  _lastScanAt = Date.now();
   try {
     const intents = await loadIntents();
     const now = Date.now();
@@ -370,18 +362,4 @@ export function startRecoveryScanner(): void {
 
 export function stopRecoveryScanner(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
-}
-
-/**
- * 外部触发一次扫描（冷却 5s 内重复调用直接丢弃）。
- * 用于 submit 失败瞬间立刻恢复：不必等下一轮 scanner tick。
- */
-export function kickScanner(): void {
-  if (Date.now() - _lastScanAt < SCAN_COOLDOWN_MS) return;
-  // 不等待，异步触发；失败只记日志不抛出
-  void runRecoveryScan()
-    .then((r) => {
-      if (r.matched.length) console.log(`[dreaminaRecovery] kick scan matched ${r.matched.length}`);
-    })
-    .catch((e) => console.warn('[dreaminaRecovery] kick scan failed:', (e as Error).message));
 }

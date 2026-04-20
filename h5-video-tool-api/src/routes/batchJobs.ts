@@ -104,6 +104,51 @@ router.post('/:id/poll-now', async (req, res) => {
   res.json({ job });
 });
 
+/**
+ * POST /api/batch-jobs/sync-now — "同步状态"按钮：
+ * 对当前用户所有 active (pending/queuing/processing) batch-job 立即触发一次 poll,
+ * 同时触发一次 recovery scanner 扫描孤儿 submitId。
+ * 用于 UI 长时间不更新时的一键兜底。
+ */
+router.post('/sync-now', async (req, res) => {
+  const username = req.user?.username;
+  if (!username) { res.status(401).json({ error: 'unauthorized' }); return; }
+
+  const all = await getAllJobs();
+  const targets = all.filter(
+    (j) => j.username === username &&
+      (j.status === 'pending' || j.status === 'queuing' || j.status === 'processing'),
+  );
+
+  const CONCURRENCY = 5;
+  const results: Array<{ id: string; status: string; videoUrl?: string; failReason?: string }> = [];
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY);
+    const pairs = await Promise.all(
+      batch.map(async (j) => {
+        try {
+          const u = await pollJobNow(j.id);
+          return u ? { id: u.id, status: u.status, videoUrl: u.videoUrl, failReason: u.failReason } : null;
+        } catch (e) {
+          return { id: j.id, status: 'error', failReason: e instanceof Error ? e.message : String(e) };
+        }
+      }),
+    );
+    for (const p of pairs) if (p) results.push(p);
+  }
+
+  // 同时触发一次孤儿 submitId 扫描
+  let scan: { matched: string[]; expired: string[]; skipped: number } | null = null;
+  try {
+    const mod = await import('../services/dreaminaRecovery.js');
+    scan = await mod.runRecoveryScan();
+  } catch (e) {
+    console.warn('[batch-jobs/sync-now] recovery scan skipped:', e);
+  }
+
+  res.json({ polled: results.length, results, scan });
+});
+
 /** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送（按用户过滤） */
 router.get('/stream', (req, res) => {
   const token = req.query['token'] as string | undefined;

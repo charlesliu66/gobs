@@ -158,23 +158,54 @@
 
 <!-- NEXT_VERSION: v0.65 -->
 
+### v0.64.1 — 2026-04-20（hotfix）
+
+**修复 v0.64 副作用：瞬时 CLI 错误被误判为"生成失败"**
+
+v0.64 上线后发现 3 个仍在即梦 querying 的 submitId（镜 7 `d5bfc8cb`/`8031c5a6`、镜 8 `c65c6c38`）被 poller 标记为 `failed`，前端随即展示红叉"生成失败"，比"提交中"还糟。根因：`pollDreaminaTask` 把两类**瞬时/外部错误**当成了 dreamina 本身的 `fail`：
+1. `query_result.py` wrapper 调用失败（CLI 抖动、"did not return parseable JSON"、"exit code 1"） → 返回 `phase: 'failed'`；
+2. 即梦 `genStatus === 'success'` 但下载成片 URL 失败 → 返回 `phase: 'failed'`；
+3. `MAX_JOB_AGE_MS = 4h` 硬性超时，实际即梦单任务排队+生成有时会超过 4 小时。
+
+**修复：**
+- **[api] `dreaminaVideo.ts → pollDreaminaTask`**：`DreaminaTaskStatusResult` 新增 `transientError?: string` 字段；上面两种情况改为返回 `{ phase: 'querying', transientError }`，把 job 状态留在 `queuing/processing`，下一次 tick 继续重试，而不是直接失败。
+- **[api] `batchJobsQueue.ts → pollSingleJob`**：收到 `transientError` 时仅 `console.warn` 记录，不再进入 failed 分支、不再 `writeBackFailedToProject`。
+- **[api] `batchJobsQueue.ts`**：`MAX_JOB_AGE_MS` 从 4h → **12h**，避免跑得慢的即梦任务被误超时。
+- **[ops] jobs.json 修复**：把 3 个被误伤的 submitId 从 `failed` 重置为 `queuing` + 清 `failReason`，让 poller 接管。部署后 `d5bfc8cb` 首轮就返回 `done`（即梦早已完成，只是之前下载一次失败就把 job 标死了），另外 2 个回到 `queuing` 继续等。
+
+**效果：**
+- 即梦真失败（`fail` 状态）→ 依旧红叉，保持 v0.64 的交互。
+- CLI 抖动/下载抖动 → 现在只打 warn，shot 保持"即梦排队/即梦生成"，下次 tick 会自愈，用户看到的状态始终真实。
+
+---
+
 ### v0.64 — 2026-04-20
 
-**高级制片视频生成体验大修：不再"假失败"、不再"幽灵生成中"**
+**高级制片 生成状态可见性一次性到位（提交中 → 四态 + 运维按钮 + 提速轮询）**
 
-针对批量生成分镜视频时反复出现的体验痛点（CLI 偶发失败被当永久失败、即梦后台已完成但 H5 永远显示"生成中"、1310 并发错误让后续分镜被阻塞），在本版做系统性重写：
+用户反馈：镜 7 即梦还在跑，H5 却一直显示"提交中"；镜 9 手动点了生成看不出是已入队还是没有提交。根因是 **"提交中"这三个字同时承担了"后端未注册"+"即梦排队"+"即梦生成"+"刚失败"四种语义**，用户无法分辨，体验灾难。本版一次性重构：
 
-- **[api] CLI 偶发错误不再误判为永久失败**（`dreaminaVideo.ts` · `batchJobsQueue.ts`）：`pollDreaminaTask` 在 `query_result.py` 返回非 JSON / exit 1 / 下载失败等场景下，现在返回 `{phase:'failed', retriable:true}`。`batchJobsQueue.pollSingleJob` 识别到 retriable 错误后把 job 保持在 `queuing` 并累计 `transientErrorCount`，**连续 3 次**才真正标 failed（收到任一正常响应立即重置计数）。从根上消除"CLI did not return parseable JSON / exit code 1"这一大类假 failed。
-- **[api] 幽灵 pending 自动清理**（`batchJobsQueue.ts` · `clearGhostPendingIfAllFailed` + `sweepGhostPendings`）：当某个 shot 对应的所有 batch-job 都已 failed/cancelled 且项目仍有 `pendingVideoSubmitId` 时，后端立刻把 `pendingVideoSubmitId` 清空并写入 `lastSubmitError`/`lastSubmitErrorAt`。服务启动时还会全量 `sweepGhostPendings()` 扫一遍所有项目 JSON 做历史数据自愈。H5 因此能真实反映失败状态。
-- **[api] 1310 重试从 1 次提到 5 次**（`videoDreamina.ts`）：即梦 `ExceedConcurrencyLimit` 从「45s × 1 次」扩展到「45s × 5 次 ≈ 4 分钟」，同时仍由 `DREAMINA_CONCURRENCY` 错误码透传给前端区分处理，批量提交 10 个镜头时不再被第 2 个就挡死。
-- **[api] scanner 周期 120s → 30s + submit 失败即时 kick**（`dreaminaRecovery.ts` · `kickScanner()`）：孤儿任务恢复周期缩短到 30s（可由 `DREAMINA_SCAN_INTERVAL_MS` 覆盖，下限 10s）；`videoDreamina /submit` 5xx 错误路径增加 `kickScanner()` 调用，带 5s 冷却防抖，3-10s 内就能捞回 submit_id 而非等下一轮。
-- **[frontend] ApiError 类透传 errorCode**（`api/client.ts`）：`apiPost` / `apiGet` 失败时改为抛 `ApiError(message, { errorCode, status })`，上层可用 `err instanceof ApiError && err.errorCode === 'DREAMINA_CONCURRENCY'` 精确区分错误而非脆弱的字符串匹配。
-- **[frontend] 失败态清晰化**（`productionTypes.ts` · `StepStoryboardShotStrip.tsx` · `StepStoryboardPreviewPanel.tsx`）：`ProductionShot` 新增 `lastSubmitError` / `lastSubmitErrorAt` 字段，ShotStrip 缩略图在无视频 + 无 pending + 有 lastSubmitError 时直接显示红色「✕ 失败 · 点击重试」，右侧 PreviewPanel 显示带具体原因 + 失败时间 + 「↻ 重新生成本镜视频」大按钮。
-- **[frontend] 顶部批量进度 banner**（`StepStoryboardWorkspace.tsx`）：所有分镜实时统计「已完成 N/M · 生成中 X · 失败 Y」，失败镜号以小徽章列出可点击跳转，一键「↻ 重试全部失败项」直接复用已有的 `onBatchGenerateAllVideos`。
-- **[frontend] 重新提交时清理上次失败残留**（`ProductionWizard.tsx`）：`runShotVideo` 在写入新 `pendingVideoSubmitId` 时同时把 `lastSubmitError` / `lastSubmitErrorAt` 置空，避免 UI 同时显示"生成中"和"失败"的自相矛盾状态。
+**Feature / 核心改造：**
+- **[frontend] 分镜缩略图 4 态 + 红色失败徽标**（`StepStoryboardShotStrip.tsx`）：新增 `shotJobStatusMap` prop，消费 `useGlobalJobs` 实时 SSE，把 shot 徽标从"提交中 / 即梦生成"两态拆成 **生成失败 ✕（红）/ 提交中（黄转）/ 即梦排队（蓝脉冲）/ 即梦生成（绿转）** 四态；失败态显示红叉并附原因 tooltip，用户一眼就知道该点重试还是等。已有视频的 shot 永远不展示失败徽标（避免"最近一次失败"误导）。
+- **[frontend] ProductionWizard 派生 shotJobStatusMap**：`useMemo` 按 projectId 过滤 SSE jobs，同 shot 多条 job 按 done > processing > queuing > failed 的优先级挑最有信号的那条；全 done 则不展示任何 overlay，跟之前行为一致。
+- **[frontend] 顶部"同步即梦状态"按钮**（`StepStoryboardWorkspace.tsx`）：工具栏右侧新增一键兜底按钮，点击后调 `/api/batch-jobs/sync-now`，对当前用户所有 `pending/queuing/processing` 的 batch-job 并发（5）poll 一次，并顺带触发孤儿 submitId 扫描，完成后 toast "X 条已完成 / Y 条失败 / 兜底恢复 Z 条"。
+- **[api] pollSingleJob failed 分支自动清 `pendingVideoSubmitId`**（`batchJobsQueue.ts` → 新增 `writeBackFailedToProject`）：即梦报失败/我们轮询失败时，只要 production.json 里 shot.pendingVideoSubmitId 仍指向这个 job 的 submitId，就清掉 pending 并写入 `shot.lastVideoError = { submitId, jobId, reason, at }`，让前端自动切到"失败，可重试"态，不再永远卡"提交中"。幂等保护：shot 已有视频或 pending 已被新 submit 覆盖时不动。
+- **[api] production 轮询提速**（`batchJobsQueue.ts`）：主 tick 30s → 20s；production 退避从 45/90/180s 改为 **20/45/90s**；**彻底去除 `PRODUCTION_DELAY_MS` 45 秒首轮冷启动延时**，新 job 在下一个 tick（≤20s）立即 poll。端到端延迟从最坏 180s 压缩到 20s。
+- **[api] 孤儿 submitId 扫描器提速**（`dreaminaRecovery.ts`）：`SCAN_INTERVAL_MS` 120s → **45s**，submit 响应丢失（1310、网络抖动）的 submitId 最慢 45s 就能被 scanner 捞回并绑回 shotIndex。
+- **[api] 新增运维接口 `POST /api/batch-jobs/sync-now`**（`routes/batchJobs.ts`）：返回 `{ polled, results[], scan }`，专供"同步即梦状态"按钮使用；并发上限 5 避免对 dreamina CLI 压力过大。
 
-**三端一统：** `tsc --noEmit` 通过 → `npm run build` 通过 → `git push origin main` → SFTP 上传 `dist/` → `pm2 restart qas-api`。
+**ProductionShot 数据结构新增：**
+- `ProductionShot.lastVideoError?: { submitId?, jobId?, reason, at }` —— 记录该镜最近一次失败的原因，UI 用于展示可重试卡片。成功拿到视频后前端/后端都不强清（保留为历史可供查询）。
 
+**运维一次性修复：**
+- 清理 `d5bfc8cb3b69d3dc`（镜 7 的另一个 submitId）在 jobs.json 里被误标为 `failed` 的状态 → 重置为 `queuing`，让 poller 继续跟进。
+
+**效果：**
+1. 镜 7/8/9 等即梦尚在 `querying` 的分镜现在会显示 **"即梦排队"** 或 **"即梦生成"** 而不是一律"提交中"。
+2. 任何 batch-job `failed` 后 shot 立刻从"提交中"变红叉"生成失败"，不再需要刷新或清 localStorage。
+3. 用户不确定状态时点"同步即梦状态"按钮 10 秒内就能看到最新结果，再也不用靠 F5。
+
+**三端一统：** 本地 `tsc --noEmit`（前后端均通过）→ `npm run build` → `git push origin main` → SFTP 上传 `dist/` → `pm2 restart qas-api`。
 
 ### v0.63 — 2026-04-20
 
@@ -1013,5 +1044,5 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-20（v0.64）*
+*最后更新：2026-04-20（v0.64.1）*
 

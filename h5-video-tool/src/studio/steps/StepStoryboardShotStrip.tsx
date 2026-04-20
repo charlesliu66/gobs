@@ -1,11 +1,21 @@
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 
+/**
+ * 每个分镜根据 batch-job 的实时状态映射成下列 UI 态（值越靠后优先级越高）。
+ * 由 ProductionWizard 从 useGlobalJobs 生成后传入。
+ *  - 'queuing'   即梦队列排队（绿色慢转）
+ *  - 'processing' 即梦正在生成
+ *  - 'failed'    该镜 pending 的 batch-job 失败（红色，可重试）
+ */
+export type ShotJobStatus = 'queuing' | 'processing' | 'failed';
+
 export function StepStoryboardShotStrip({
   shots,
   scSheets,
   selectedShotIdx,
   shotBusyMap,
   shotQueuedMap,
+  shotJobStatusMap,
   onSelectShot,
 }: {
   shots: ProductionShot[];
@@ -13,6 +23,7 @@ export function StepStoryboardShotStrip({
   selectedShotIdx: number;
   shotBusyMap: Record<string, 'frame' | 'video'>;
   shotQueuedMap?: Record<string, boolean>;
+  shotJobStatusMap?: Record<string, ShotJobStatus>;
   onSelectShot: (idx: number) => void;
 }) {
   return (
@@ -22,6 +33,10 @@ export function StepStoryboardShotStrip({
           const shotKey = String(s.shotIndex);
           const isThisShotBusy = shotBusyMap[shotKey];
           const isQueued = shotQueuedMap?.[shotKey] ?? false;
+          const jobStatus = shotJobStatusMap?.[shotKey];
+          const hasVideo = !!(s.previewVideoUrl || s.previewVideoPath || (s.previewVideoVersions && s.previewVideoVersions.length > 0));
+          // 仅当无视频时才展示失败，避免"已有视频但最近一次失败"误导
+          const showFailed = !hasVideo && (jobStatus === 'failed' || (!jobStatus && !s.pendingVideoSubmitId && !!s.lastVideoError));
           return (
           <button
             key={s.shotIndex}
@@ -43,7 +58,15 @@ export function StepStoryboardShotStrip({
                   className="h-full w-full object-cover"
                 />
               ) : null}
-              {isQueued ? (
+              {showFailed ? (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-red-950/60 backdrop-blur-[1px]"
+                  title={s.lastVideoError?.reason || '生成失败，点击可重试'}
+                >
+                  <span className="text-base leading-none text-red-300">✕</span>
+                  <span className="px-1 text-[8px] font-medium text-red-200">生成失败</span>
+                </div>
+              ) : isQueued ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/55 backdrop-blur-[1px]">
                   <span className="h-4 w-4 rounded-full border-2 border-white/25 border-t-amber-400 animate-pulse" />
                   <span className="px-1 text-[8px] font-medium text-amber-200">排队中</span>
@@ -53,15 +76,20 @@ export function StepStoryboardShotStrip({
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-amber-400" />
                   <span className="px-1 text-[8px] font-medium text-amber-100">提交中</span>
                 </div>
+              ) : jobStatus === 'processing' ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-green-400" />
+                  <span className="px-1 text-[8px] font-medium text-green-200">即梦生成</span>
+                </div>
+              ) : jobStatus === 'queuing' ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45">
+                  <span className="h-4 w-4 rounded-full border-2 border-white/20 border-t-sky-400 animate-pulse" />
+                  <span className="px-1 text-[8px] font-medium text-sky-200">即梦排队</span>
+                </div>
               ) : s.pendingVideoSubmitId ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-green-400" style={{ animationDuration: '2s' }} />
                   <span className="px-1 text-[8px] font-medium text-green-200">即梦生成</span>
-                </div>
-              ) : s.lastSubmitError && !s.previewVideoUrl && !s.previewVideoPath && !(s.previewVideoVersions && s.previewVideoVersions.length > 0) ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-red-900/70 backdrop-blur-[1px]" title={s.lastSubmitError}>
-                  <span className="px-1 text-[10px] font-bold text-red-200">✕ 失败</span>
-                  <span className="px-1 text-[8px] font-medium text-red-200">点击重试</span>
                 </div>
               ) : null}
 
