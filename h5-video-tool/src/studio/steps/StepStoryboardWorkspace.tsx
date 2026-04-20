@@ -196,11 +196,11 @@ export function StepStoryboardWorkspace({
               onPatchStructured={(patch) => {
                 const stillKeys = ['sp_subject','sp_environment','sp_style','sp_lighting','sp_camera','sp_composition','sp_continuity','sp_negative'] as const;
                 const motionKeys = ['mp_motion','mp_camera','mp_tempo','mp_transition','mp_audio'] as const;
-                const stillPatch: Partial<StructuredPromptStill> = {};
-                const motionPatch: Partial<StructuredPromptMotion> = {};
+                const stillPatch: Record<string, string> = {};
+                const motionPatch: Record<string, string> = {};
                 for (const [k, v] of Object.entries(patch)) {
-                  if ((stillKeys as readonly string[]).includes(k)) (stillPatch as any)[k] = v;
-                  if ((motionKeys as readonly string[]).includes(k)) (motionPatch as any)[k] = v;
+                  if ((stillKeys as readonly string[]).includes(k)) stillPatch[k] = v;
+                  if ((motionKeys as readonly string[]).includes(k)) motionPatch[k] = v;
                 }
                 const shotPatch: Partial<typeof shot> = {};
                 if (Object.keys(stillPatch).length) {

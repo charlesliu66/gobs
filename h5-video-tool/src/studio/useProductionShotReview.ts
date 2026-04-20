@@ -57,20 +57,20 @@ export function useProductionShotReview({
       if (group === 'structuredStill') {
         patchShot(selectedShotIdx, {
           structuredStill: {
-            ...(project.shots[selectedShotIdx]?.structuredStill ?? {} as any),
+            ...(project.shots[selectedShotIdx]?.structuredStill ?? ({} as Record<string, string>)),
             [key]: suggestion.suggestedValue,
           },
         });
       } else if (group === 'structuredMotion') {
         patchShot(selectedShotIdx, {
           structuredMotion: {
-            ...(project.shots[selectedShotIdx]?.structuredMotion ?? {} as any),
+            ...(project.shots[selectedShotIdx]?.structuredMotion ?? ({} as Record<string, string>)),
             [key]: suggestion.suggestedValue,
           },
         });
       }
     } else if (path.length === 1) {
-      patchShot(selectedShotIdx, { [path[0]]: suggestion.suggestedValue } as any);
+      patchShot(selectedShotIdx, { [path[0]]: suggestion.suggestedValue } as Partial<ProductionShot>);
     }
     toast.success(`已应用建议：${suggestion.field}`);
   }, [selectedShotIdx, project.shots, patchShot]);

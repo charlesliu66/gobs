@@ -58,7 +58,6 @@ driveRouter.post('/verify-folder', async (req: Request, res: Response) => {
     res.status(400).json({ error: '请提供有效的 folderId' });
     return;
   }
-  console.log('[drive/verify-folder] 请求已到达, folderId:', folderId);
   try {
     const { data } = await axios.get<{ id: string; name: string; mimeType: string }>(
       'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(folderId),
@@ -75,7 +74,6 @@ driveRouter.post('/verify-folder', async (req: Request, res: Response) => {
       res.status(400).json({ error: '该链接不是文件夹，请提供文件夹链接' });
       return;
     }
-    console.log('[drive/verify-folder] 成功, folderName:', data.name);
     res.json({ ok: true, folderId: data.id, folderName: data.name });
   } catch (err: unknown) {
     // 详细记录 Google API 返回，便于排查

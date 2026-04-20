@@ -392,7 +392,6 @@ export function StepVideo() {
     try {
       await submitBatchJobs(templateId || 'default', batchShots);
     } catch (e) {
-      console.log('batch submitted (fallback log):', batchShots.map((s) => s.submitId));
       console.warn('[BatchNight] submitBatchJobs failed', e);
     }
 

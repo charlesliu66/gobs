@@ -152,8 +152,6 @@ function resolveAssetPaths(
       if (!found) {
         const assetUrl = assetUrlMap?.[assetId]?.url;
         console.warn(`[export] ❌ asset not resolved: id=${assetId} track=${track.type} url=${assetUrl ?? '(none)'}`);
-      } else {
-        console.log(`[export] ✓ ${assetId} → ${map[assetId]}`);
       }
     }
   }
@@ -217,7 +215,6 @@ router.post('/export', (req, res) => {
       job.progress = 100;
       job.progressMsg = '完成';
       job.downloadUrl = `/api/editor/export/download/${jobId}.${format}`;
-      console.log('[editor/export] done', jobId, outputPath);
 
     } catch (e) {
       job.status = 'error';

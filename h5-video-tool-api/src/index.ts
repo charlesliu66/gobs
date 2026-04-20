@@ -44,8 +44,10 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// ── 请求日志中间件 ──────────────────────────────────────────────────────────
+// ── 请求日志中间件（设 LOG_REQUESTS=0 关闭逐请求日志）─────────────────────
+const _logRequests = process.env.LOG_REQUESTS !== '0';
 app.use((req, res, next) => {
+  if (!_logRequests) { next(); return; }
   const start = Date.now();
   res.on('finish', () => {
     const ms = Date.now() - start;
