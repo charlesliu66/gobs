@@ -1109,7 +1109,21 @@ ${planText}`;
    *   - subtitles：当前为空 → Agent 非空则采用；当前非空 → 保留
    *   - mix：始终保留用户的 mix（若 Agent 返回非空也不覆盖，避免破坏用户调过的音量比）
    */
-  const agentTracks = agentResult.project!.tracks ?? [];
+  /**
+   * Legacy 兜底模型偶发会把 tracks 生成成非数组形态（object / null / 字符串 JSON）。
+   * 这里做严格的形状校验，任何非数组都归一化为 []，避免 `tracks.find is not a function`。
+   * 每个 track 的 clips 也强制成数组。
+   */
+  const rawAgentTracks = agentResult.project!.tracks;
+  const agentTracks = Array.isArray(rawAgentTracks) ? rawAgentTracks : [];
+  for (const t of agentTracks) {
+    if (!Array.isArray((t as { clips?: unknown }).clips)) {
+      (t as { clips: unknown[] }).clips = [];
+    }
+  }
+  if (!Array.isArray(rawAgentTracks)) {
+    console.warn('[editor agent] agentResult.project.tracks 不是数组，已归一化为空数组。原值:', typeof rawAgentTracks);
+  }
   const agentV1 = agentTracks.find((t) => t.type === 'video' && t.id === 'v1');
   const agentA1 = agentTracks.find((t) => t.type === 'audio' && t.id === 'a1');
   const agentA2 = agentTracks.find((t) => t.type === 'audio' && t.id === 'a2');
@@ -1137,7 +1151,8 @@ ${planText}`;
   });
 
   const userHasSubtitles = (input.currentProject.subtitles?.length ?? 0) > 0;
-  const agentSubtitles = agentResult.project!.subtitles;
+  const rawAgentSubtitles = agentResult.project!.subtitles;
+  const agentSubtitles = Array.isArray(rawAgentSubtitles) ? rawAgentSubtitles : undefined;
   const mergedSubtitles = userHasSubtitles
     ? input.currentProject.subtitles
     : (agentSubtitles && agentSubtitles.length > 0 ? agentSubtitles : input.currentProject.subtitles);
