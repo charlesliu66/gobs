@@ -1,9 +1,15 @@
 /**
- * 本地文件上传 API
- * POST /api/upload/local   — 上传文件（图片/视频），返回 assetId + url
- * GET  /api/upload/file/:id — 读取已上传文件
- * GET  /api/upload/list     — 列出已上传文件
- * DELETE /api/upload/:id    — 删除文件
+ * 本地文件上传 API（按用户目录隔离）
+ * POST /api/upload/local      — 上传文件（图片/视频/音频），返回 assetId + url
+ * GET  /api/upload/file/:id   — 读取已上传文件（仅属主可读）
+ * GET  /api/upload/list       — 列出当前用户已上传文件
+ * DELETE /api/upload/:id      — 删除文件（仅属主可删）
+ *
+ * 该路由处于 JWT 鉴权白名单之外，因此所有请求都必须携带 Authorization: Bearer。
+ * 文件落盘位置：<dataRoot>/uploads/<sanitizedUsername>/<id>.<ext>
+ *
+ * 说明：历史版本使用全局扁平目录且内存 registry 未按用户隔离，存在跨用户读取风险。
+ * 本次改造强制按用户分桶；未迁移的旧文件在新目录下不可见（原文件仍在磁盘，安全，但对用户不可达）。
  */
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
@@ -12,20 +18,42 @@ import fsSync from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { resolvePath } from '../infra/storage/resolver.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export const localUploadRouter = Router();
 
-const UPLOAD_DIR = resolvePath('uploads');
-fsSync.mkdirSync(UPLOAD_DIR, { recursive: true });
+const UPLOAD_ROOT = resolvePath('uploads');
+fsSync.mkdirSync(UPLOAD_ROOT, { recursive: true });
 
 const MAX_MB = Math.min(
   4096,
   Math.max(64, parseInt(process.env.EDITOR_UPLOAD_MAX_MB || '500', 10) || 500),
 );
 
-// multer 配置
+function getUserDir(username: string): string {
+  const dir = path.join(UPLOAD_ROOT, sanitizeUsername(username));
+  fsSync.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function requireUser(req: Request, res: Response): string | null {
+  const username = req.user?.username?.trim();
+  if (!username) {
+    res.status(401).json({ error: '需要登录' });
+    return null;
+  }
+  return username;
+}
+
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  destination: (req, _file, cb) => {
+    const username = req.user?.username?.trim();
+    if (!username) {
+      cb(new Error('未登录'), '');
+      return;
+    }
+    cb(null, getUserDir(username));
+  },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase() || '';
     const id = `${Date.now()}_${randomBytes(4).toString('hex')}`;
@@ -43,51 +71,53 @@ const upload = multer({
   },
 });
 
-// 内存中维护上传记录（重启后丢失，但文件还在）
-interface UploadRecord {
-  id: string;
-  originalName: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  uploadedAt: string;
-  kind: 'image' | 'video' | 'audio' | 'other';
+type UploadKind = 'image' | 'video' | 'audio' | 'other';
+
+function classifyKind(ext: string): UploadKind {
+  if (/\.(jpe?g|png|webp|gif)$/i.test(ext)) return 'image';
+  if (/\.(mp4|mov|webm|mkv|avi)$/i.test(ext)) return 'video';
+  if (/\.(mp3|wav|m4a)$/i.test(ext)) return 'audio';
+  return 'other';
 }
 
-const uploadRegistry = new Map<string, UploadRecord>();
+function guessMime(kind: UploadKind, ext: string): string {
+  if (kind === 'image') {
+    if (/\.png$/i.test(ext)) return 'image/png';
+    if (/\.webp$/i.test(ext)) return 'image/webp';
+    if (/\.gif$/i.test(ext)) return 'image/gif';
+    return 'image/jpeg';
+  }
+  if (kind === 'video') {
+    if (/\.webm$/i.test(ext)) return 'video/webm';
+    if (/\.mov$/i.test(ext)) return 'video/quicktime';
+    if (/\.mkv$/i.test(ext)) return 'video/x-matroska';
+    return 'video/mp4';
+  }
+  if (kind === 'audio') {
+    if (/\.mp3$/i.test(ext)) return 'audio/mpeg';
+    if (/\.wav$/i.test(ext)) return 'audio/wav';
+    return 'audio/mp4';
+  }
+  return 'application/octet-stream';
+}
 
-// 启动时扫描已有文件，恢复 registry
-(async () => {
+async function findFileForUser(username: string, id: string): Promise<string | null> {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) return null;
+  const dir = getUserDir(username);
   try {
-    const files = await fs.readdir(UPLOAD_DIR);
-    for (const f of files) {
-      if (f.startsWith('.')) continue;
-      const ext = path.extname(f).toLowerCase();
-      const kind: UploadRecord['kind'] =
-        /\.(jpe?g|png|webp|gif)$/.test(ext) ? 'image'
-        : /\.(mp4|mov|webm|mkv|avi)$/.test(ext) ? 'video'
-        : /\.(mp3|wav|m4a)$/.test(ext) ? 'audio'
-        : 'other';
-      const id = f.replace(/\.[^.]+$/, '');
-      if (!uploadRegistry.has(id)) {
-        const stat = await fs.stat(path.join(UPLOAD_DIR, f)).catch(() => null);
-        uploadRegistry.set(id, {
-          id,
-          originalName: f,
-          filename: f,
-          mimeType: kind === 'image' ? 'image/jpeg' : kind === 'video' ? 'video/mp4' : 'application/octet-stream',
-          size: stat?.size ?? 0,
-          uploadedAt: stat?.birthtime.toISOString() ?? new Date().toISOString(),
-          kind,
-        });
-      }
-    }
-  } catch { /* ignore */ }
-})();
-
-// ── 上传 ─────────────────────────────────────────────────────────────────────
+    const files = await fs.readdir(dir);
+    const match = files.find((f) => f.startsWith(`${safeId}.`));
+    if (match) return path.join(dir, match);
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 localUploadRouter.post('/local', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
   upload.single('file')(req, res, (err) => {
     if (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : '上传失败' });
@@ -99,24 +129,8 @@ localUploadRouter.post('/local', (req: Request, res: Response) => {
     }
     const f = req.file;
     const ext = path.extname(f.originalname).toLowerCase();
-    const kind: UploadRecord['kind'] =
-      /\.(jpe?g|png|webp|gif)$/.test(ext) ? 'image'
-      : /\.(mp4|mov|webm|mkv|avi)$/.test(ext) ? 'video'
-      : /\.(mp3|wav|m4a)$/.test(ext) ? 'audio'
-      : 'other';
-
+    const kind = classifyKind(ext);
     const id = f.filename.replace(/\.[^.]+$/, '');
-    const record: UploadRecord = {
-      id,
-      originalName: f.originalname,
-      filename: f.filename,
-      mimeType: f.mimetype,
-      size: f.size,
-      uploadedAt: new Date().toISOString(),
-      kind,
-    };
-    uploadRegistry.set(id, record);
-
     res.json({
       id,
       originalName: f.originalname,
@@ -128,54 +142,70 @@ localUploadRouter.post('/local', (req: Request, res: Response) => {
   });
 });
 
-// ── 读取文件 ─────────────────────────────────────────────────────────────────
-
 localUploadRouter.get('/file/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const record = uploadRegistry.get(id);
-  if (!record) {
-    // 尝试扫描目录找文件
-    try {
-      const files = await fs.readdir(UPLOAD_DIR);
-      const match = files.find((f) => f.startsWith(id));
-      if (match) {
-        const abs = path.join(UPLOAD_DIR, match);
-        res.sendFile(abs);
-        return;
-      }
-    } catch { /* ignore */ }
+  const username = requireUser(req, res);
+  if (!username) return;
+  const abs = await findFileForUser(username, req.params.id);
+  if (!abs) {
     res.status(404).json({ error: '文件不存在' });
     return;
   }
-  const abs = path.join(UPLOAD_DIR, record.filename);
   try {
     await fs.access(abs);
-    res.setHeader('Content-Type', record.mimeType);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    const ext = path.extname(abs).toLowerCase();
+    const kind = classifyKind(ext);
+    res.setHeader('Content-Type', guessMime(kind, ext));
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     res.sendFile(abs);
   } catch {
     res.status(404).json({ error: '文件已丢失' });
   }
 });
 
-// ── 列出文件 ─────────────────────────────────────────────────────────────────
-
-localUploadRouter.get('/list', (_req: Request, res: Response) => {
-  const items = [...uploadRegistry.values()]
-    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
-    .map((r) => ({ ...r, url: `/api/upload/file/${r.id}` }));
-  res.json({ items, maxMb: MAX_MB });
+localUploadRouter.get('/list', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+  const dir = getUserDir(username);
+  try {
+    const files = await fs.readdir(dir);
+    const items = await Promise.all(
+      files
+        .filter((f) => !f.startsWith('.'))
+        .map(async (f) => {
+          const ext = path.extname(f).toLowerCase();
+          const kind = classifyKind(ext);
+          const abs = path.join(dir, f);
+          const stat = await fs.stat(abs).catch(() => null);
+          const id = f.replace(/\.[^.]+$/, '');
+          return {
+            id,
+            originalName: f,
+            filename: f,
+            mimeType: guessMime(kind, ext),
+            size: stat?.size ?? 0,
+            uploadedAt: stat?.mtime.toISOString() ?? new Date().toISOString(),
+            kind,
+            url: `/api/upload/file/${id}`,
+          };
+        }),
+    );
+    items.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+    res.json({ items, maxMb: MAX_MB });
+  } catch {
+    res.json({ items: [], maxMb: MAX_MB });
+  }
 });
 
-// ── 删除文件 ─────────────────────────────────────────────────────────────────
-
 localUploadRouter.delete('/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const record = uploadRegistry.get(id);
-  if (!record) { res.status(404).json({ error: '文件不存在' }); return; }
+  const username = requireUser(req, res);
+  if (!username) return;
+  const abs = await findFileForUser(username, req.params.id);
+  if (!abs) {
+    res.status(404).json({ error: '文件不存在' });
+    return;
+  }
   try {
-    await fs.unlink(path.join(UPLOAD_DIR, record.filename));
-    uploadRegistry.delete(id);
+    await fs.unlink(abs);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: '删除失败' });

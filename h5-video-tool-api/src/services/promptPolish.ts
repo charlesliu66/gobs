@@ -141,17 +141,20 @@ async function postCompassChatCompletions(
   opts?: { timeout?: number; logLabel?: string },
 ): Promise<{ text: string; usage?: CompassChatUsage }> {
   const { apiKey, baseURL } = getCompassLlmConfig();
+  const altKey = (process.env.COMPASS_API_KEY2?.trim() ?? '') || '';
   const client = createCompassHttpClient();
   const maxAttempts = 3;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // P1-11：429 / 5xx 场景下，若尚未尝试 KEY2 且它与主 KEY 不同，则做一次 Key 轮换。
+    const useKey = attempt > 1 && altKey && altKey !== apiKey ? altKey : apiKey;
     try {
       const { data } = await client.post<{
         choices?: Array<{ message?: { content?: string | null } }>;
         error?: { message?: string };
         usage?: CompassChatUsage;
       }>(`${baseURL}/chat/completions`, body, {
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { Authorization: `Bearer ${useKey}` },
         timeout: opts?.timeout,
       });
 
@@ -183,11 +186,24 @@ async function postCompassChatCompletions(
           (e.response?.data as { error?: { message?: string } })?.error?.message ||
           (typeof e.response?.data === 'string' ? e.response.data : e.message) ||
           msg;
-        const transient = /ECONNRESET|timeout|socket hang up|network/i.test(msg);
+        const status = e.response?.status ?? 0;
+        // 429 / 5xx 也视为可重试；保留原网络错误集合
+        const transient =
+          status === 429 ||
+          (status >= 500 && status < 600) ||
+          /ECONNRESET|timeout|socket hang up|network/i.test(msg);
         await recordKeyUsage({ success: false });
         if (!isLast && transient) {
-          console.warn(`[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed: ${msg}`);
-          await new Promise((r) => setTimeout(r, attempt * 1000));
+          // P1-11：优先使用 Retry-After，其次指数退避（1s, 3s, 6s）
+          const retryAfterSec = Number.parseFloat(String(e.response?.headers?.['retry-after'] ?? '0')) || 0;
+          const backoffMs =
+            retryAfterSec > 0
+              ? Math.min(15_000, retryAfterSec * 1000)
+              : Math.min(10_000, attempt * attempt * 1000);
+          console.warn(
+            `[Compass retry] ${opts?.logLabel ?? 'chat'} attempt ${attempt}/${maxAttempts} failed (status=${status || 'n/a'}): ${msg}; backoff=${backoffMs}ms`,
+          );
+          await new Promise((r) => setTimeout(r, backoffMs));
           continue;
         }
       } else if (e instanceof Error) {

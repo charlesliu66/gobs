@@ -47,11 +47,29 @@ const storage = multer.diskStorage({
   },
 });
 
+/**
+ * 与 assetIngestService 支持矩阵一致的 MIME + 扩展名白名单。
+ * 前端 AssetImportPanel.tsx accept 属性已做初筛；这里是服务器端兜底。
+ */
+const ASSET_ALLOWED_EXT = /\.(jpe?g|png|webp|gif|bmp|heic|heif|mp4|mov|mkv|avi|webm|ts|flv|wmv|m4v|3gp|ogv|mp3|wav|m4a|aac|ogg)$/i;
+function isAllowedAssetFile(file: Express.Multer.File): boolean {
+  const mt = (file.mimetype || '').toLowerCase();
+  if (mt.startsWith('image/') || mt.startsWith('video/') || mt.startsWith('audio/')) return true;
+  return ASSET_ALLOWED_EXT.test(file.originalname);
+}
+
 const upload = multer({
   storage,
   limits: {
     fileSize: parseInt(process.env.ASSET_UPLOAD_MAX_MB || '500', 10) * 1024 * 1024,
     files: 500,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedAssetFile(file)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error(`不支持的文件类型（${file.mimetype || path.extname(file.originalname) || '未知'}）`));
   },
 });
 

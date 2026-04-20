@@ -14,6 +14,7 @@ export function StepStoryboardContinuousPlay({
 }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [playError, setPlayError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const playableShots = shots
@@ -39,7 +40,16 @@ export function StepStoryboardContinuousPlay({
     const v = videoRef.current;
     if (!v || !current) return;
     v.src = current.src;
-    if (isPlaying) v.play().catch(() => {});
+    setPlayError(null);
+    if (isPlaying) {
+      // P1-4：当浏览器 autoplay 策略 / 404 / decode 失败时把错误展示出来，
+      // 避免静默卡住（旧实现是 catch(() => {})）。
+      v.play().catch((err: unknown) => {
+        console.warn('[continuous-play] play rejected', err);
+        setPlayError(err instanceof Error ? err.message : '播放失败');
+        setIsPlaying(false);
+      });
+    }
   }, [currentIdx, current?.src, isPlaying]);
 
   useEffect(() => {
@@ -93,10 +103,22 @@ export function StepStoryboardContinuousPlay({
           autoPlay={isPlaying}
           onEnded={goNext}
           onPause={() => setIsPlaying(false)}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={() => { setIsPlaying(true); setPlayError(null); }}
+          onError={() => {
+            const v = videoRef.current;
+            const code = v?.error?.code;
+            const detail = code ? `code ${code}` : '未知错误';
+            setPlayError(`当前分镜加载失败（${detail}），可点击下一镜跳过`);
+            setIsPlaying(false);
+          }}
           className="max-h-[70vh] max-w-full rounded-lg"
         />
       </div>
+      {playError ? (
+        <div className="mx-auto mb-2 max-w-xl rounded-md bg-red-500/15 px-3 py-2 text-center text-xs text-red-300">
+          {playError}
+        </div>
+      ) : null}
 
       {/* Controls */}
       <div className="flex items-center justify-center gap-3 pb-4">

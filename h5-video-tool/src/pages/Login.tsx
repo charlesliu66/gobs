@@ -25,6 +25,9 @@ export function Login() {
       if (!res.ok) throw new Error(data.error || '登录失败');
       localStorage.setItem('gobs_token', data.data.token);
       localStorage.setItem('gobs_user', JSON.stringify(data.data.user));
+      if (typeof data.data.fileAccessToken === 'string' && data.data.fileAccessToken) {
+        localStorage.setItem('gobs_fat', data.data.fileAccessToken);
+      }
       navigate(from, { replace: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : '登录失败');

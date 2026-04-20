@@ -306,6 +306,7 @@ export function Layout() {
             onClick={() => {
               localStorage.removeItem('gobs_token');
               localStorage.removeItem('gobs_user');
+              localStorage.removeItem('gobs_fat');
               localStorage.removeItem('gobs_last_project_id');
               localStorage.removeItem('h5-production-project-v1');
               localStorage.removeItem('production_compass_api_key');

@@ -34,8 +34,14 @@ function PortraitNodeOverlay({
     );
   }
   if (job.status === 'error') {
+    // P1-15：把后端返回的错误原因暴露在 hover title 中，便于排障；
+    // 叠加层仍保留短标签「失败」，空间有限不展示完整文案。
+    const detail = job.error?.trim() || '生成失败（未知原因）';
     return (
-      <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-950/70 p-1">
+      <div
+        className="absolute inset-0 z-10 flex items-center justify-center bg-red-950/70 p-1"
+        title={detail}
+      >
         <span className="text-center text-[8px] leading-tight text-red-100">失败</span>
       </div>
     );

@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { JwtUser } from '../middleware/auth.js';
+import { signFileAccessToken } from '../utils/fileAccessToken.js';
 
 const router = Router();
 
@@ -58,14 +59,32 @@ router.post('/login', (req: Request, res: Response) => {
   const secret = process.env.JWT_SECRET || 'gobs-secret-change-in-production';
   const payload: JwtUser = { username: user.username, displayName: user.displayName };
   const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+  /**
+   * fileAccessToken 用于 <video>/<img> 等无法携带 Bearer 的媒体 GET 接口。
+   * 与 JWT 生命周期一致；前端读取后附加到 media URL 的 ?fat= 参数。
+   */
+  const fileAccessToken = signFileAccessToken(user.username);
 
   res.json({
     success: true,
     data: {
       token,
+      fileAccessToken,
       user: payload,
     },
   });
+});
+
+/**
+ * GET /api/auth/file-access-token
+ * 已登录用户刷新 fileAccessToken。便于 JWT 未过期但 FAT 临近过期时续签。
+ */
+router.get('/file-access-token', (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: '未认证' });
+    return;
+  }
+  res.json({ success: true, data: { fileAccessToken: signFileAccessToken(req.user.username) } });
 });
 
 /**

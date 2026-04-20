@@ -50,6 +50,8 @@ export interface ImportJob {
   total: number;
   processed: number;
   failed: number;
+  /** 被跳过的文件数（通常是 sha256 去重命中的重复文件） */
+  skipped: number;
   status: 'running' | 'done' | 'error';
   errors?: string[];
 }
@@ -113,6 +115,7 @@ export async function getJobStatus(jobId: string): Promise<ImportJob> {
     total: raw.total,
     processed: raw.processed,
     failed: raw.failed,
+    skipped: raw.skipped ?? 0,
     status: normalizedStatus,
     errors: raw.error ? [raw.error] : undefined,
   };

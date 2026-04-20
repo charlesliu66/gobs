@@ -7,6 +7,7 @@ import { getApiDataDir } from '../config/apiDataDir.js';
 import {
   getAllJobs,
   getJobsByProject,
+  getJobById,
   addJob,
   cancelJob,
   pollJobNow,
@@ -14,6 +15,7 @@ import {
   type BatchJob,
 } from '../services/batchJobsQueue.js';
 import { fromBatchJobStatus } from '../domain/job-status.js';
+import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 
 const router = Router();
 
@@ -58,10 +60,16 @@ router.post('/', async (req, res) => {
   res.json({ added: added.length, jobs: added });
 });
 
-/** GET /api/batch-jobs?projectId=xxx — 查询项目的所有任务 */
+/** GET /api/batch-jobs?projectId=xxx — 查询项目的所有任务（仅返回当前登录用户的任务） */
 router.get('/', async (req, res) => {
+  const callerUsername = req.user?.username?.trim();
+  if (!callerUsername) {
+    res.status(401).json({ error: '需要登录' });
+    return;
+  }
   const { projectId } = req.query as { projectId?: string };
-  const jobs = projectId ? await getJobsByProject(projectId) : await getAllJobs();
+  const rawJobs = projectId ? await getJobsByProject(projectId) : await getAllJobs();
+  const jobs = rawJobs.filter((j) => j.username === callerUsername);
   const enriched = jobs.map((j) => ({ ...j, unifiedStatus: fromBatchJobStatus(j.status) }));
   res.json({ jobs: enriched });
 });
@@ -96,14 +104,20 @@ router.post('/:id/poll-now', async (req, res) => {
   res.json({ job });
 });
 
-/** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送 */
+/** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送（按用户过滤） */
 router.get('/stream', (req, res) => {
   const token = req.query['token'] as string | undefined;
   if (!token) { res.status(401).json({ error: 'token required' }); return; }
+  let streamUsername: string | null = null;
   try {
-    jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret');
+    const payload = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as { username?: string };
+    streamUsername = typeof payload.username === 'string' ? payload.username.trim() : null;
   } catch {
     res.status(401).json({ error: 'invalid token' }); return;
+  }
+  if (!streamUsername) {
+    res.status(401).json({ error: 'token missing username' });
+    return;
   }
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -113,13 +127,15 @@ router.get('/stream', (req, res) => {
   (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
 
   const send = (job: BatchJob) => {
+    // 仅推送属于当前登录用户的任务，防止跨用户元数据泄露
+    if (job.username !== streamUsername) return;
     const enriched = { ...job, unifiedStatus: fromBatchJobStatus(job.status) };
     res.write(`data: ${JSON.stringify(enriched)}\n\n`);
   };
 
   batchJobEvents.on('update', send);
 
-  // Send all current jobs immediately
+  // Send all current jobs immediately (post-filter)
   void getAllJobs().then((jobs) => jobs.forEach(send));
 
   req.on('close', () => {
@@ -128,9 +144,31 @@ router.get('/stream', (req, res) => {
   });
 });
 
-/** GET /api/batch-jobs/video/:id — 下载成品视频 */
-router.get('/video/:id', (req, res) => {
+/** GET /api/batch-jobs/video/:id — 下载成品视频
+ *
+ * 放行在 auth 中间件中（<video> 无法携带 Bearer），此处通过 JWT 或 ?fat= 校验调用者，
+ * 并对照 batch job 的 username 确保跨用户不可拉取。
+ */
+router.get('/video/:id', async (req, res) => {
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!id) {
+    res.status(400).json({ error: 'invalid id' });
+    return;
+  }
+  const callerUsername = resolveMediaRequestUsername(req);
+  if (!callerUsername) {
+    res.status(401).json({ error: '需要登录或有效的 fat 访问 token' });
+    return;
+  }
+  const job = await getJobById(id);
+  if (!job) {
+    res.status(404).json({ error: 'job not found' });
+    return;
+  }
+  if (job.username && job.username !== callerUsername) {
+    res.status(403).json({ error: '无权访问该任务视频' });
+    return;
+  }
   const filePath = path.join(getApiDataDir(), 'output', 'batch-jobs', 'videos', `${id}.mp4`);
   if (!fs.existsSync(filePath)) {
     res.status(404).json({ error: 'video not found' });

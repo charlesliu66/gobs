@@ -226,7 +226,9 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
     const title = (projectData.meta as Record<string, unknown> | undefined)?.title as string || '未命名项目';
     const step = typeof body.step === 'number' ? body.step : 0;
 
-    // 保存前去掉所有 data: URL，避免 base64 图片撑大 JSON（base64→null）
+    // P1-13：注释修正。实际只对 STRIP_BASE64_FIELDS 白名单（目前仅 previewStillDataUrl）
+    // 中的字段做置 null；其他 data: URL（如角色头像 imageDataUrl）照常保留，
+    // 以防止 feedback.md Rule 6 提到的「保存后整项目变灰」回退。
     const payload = stripBase64({
       ...body,
       id,

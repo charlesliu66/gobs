@@ -5,10 +5,32 @@ function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/**
+ * 返回用于 <video>/<img> 等无法携带 Bearer 的媒体接口的 file-access-token。
+ * 登录时由后端下发并缓存在 localStorage。
+ */
+export function getFileAccessToken(): string {
+  return localStorage.getItem('gobs_fat') ?? '';
+}
+
+/**
+ * 在任意 URL 上附加 ?fat=<token>，供 `<video src>` / `<img src>` 使用。
+ * 若 URL 已含 fat 查询参数或 token 不存在，则原样返回。
+ */
+export function appendFileAccessToken(url: string): string {
+  if (!url) return url;
+  const fat = getFileAccessToken();
+  if (!fat) return url;
+  if (url.includes('fat=') || url.includes('?u=')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}fat=${encodeURIComponent(fat)}`;
+}
+
 function handleUnauthorized(res: Response): void {
   if (res.status === 401) {
     localStorage.removeItem('gobs_token');
     localStorage.removeItem('gobs_user');
+    localStorage.removeItem('gobs_fat');
     // 避免登录页自身循环跳转
     if (!window.location.pathname.includes('/login')) {
       window.location.href = '/login';

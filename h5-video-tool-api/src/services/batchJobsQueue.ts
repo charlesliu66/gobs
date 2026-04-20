@@ -128,9 +128,20 @@ export async function cancelJob(id: string): Promise<boolean> {
 // ── 轮询策略常量 ─────────────────────────────────────────────────────────────
 
 const TICK_INTERVAL_MS = 30_000;              // 主循环 tick 间隔（30s）
-const PRODUCTION_DELAY_MS = 10 * 60_000;      // production: 提交后 10 分钟内不轮询
-const PRODUCTION_POLL_INTERVAL_MS = 5 * 60_000; // production: 10 分钟后每 5 分钟轮询
+const PRODUCTION_DELAY_MS = 45_000;           // production: 提交后 45s 开始首轮轮询
 const MAX_JOB_AGE_MS = 4 * 3600_000;          // 4 小时 TTL，超过标记失败
+
+/**
+ * 高级制片任务的轮询间隔：指数退避
+ * - 0-5 分钟：每 45s 轮询一次（即梦视频多数 1-5 分钟内完成）
+ * - 5-15 分钟：每 90s 轮询
+ * - 15 分钟以上：每 180s 轮询
+ */
+function getProductionPollInterval(ageMs: number): number {
+  if (ageMs < 5 * 60_000) return 45_000;
+  if (ageMs < 15 * 60_000) return 90_000;
+  return 180_000;
+}
 
 /** 判断某个 job 在本次 tick 中是否应该轮询 */
 function shouldPollJob(job: BatchJob): boolean {
@@ -138,7 +149,7 @@ function shouldPollJob(job: BatchJob): boolean {
   if (job.source === 'production') {
     if (ageMs < PRODUCTION_DELAY_MS) return false;
     const lastPoll = job.lastPolledAt ? new Date(job.lastPolledAt).getTime() : 0;
-    return Date.now() - lastPoll >= PRODUCTION_POLL_INTERVAL_MS;
+    return Date.now() - lastPoll >= getProductionPollInterval(ageMs);
   }
   // quickfilm / 其它来源：每次 tick 都轮询（30s 间隔由主循环保证）
   return true;

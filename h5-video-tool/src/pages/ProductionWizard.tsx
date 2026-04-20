@@ -849,11 +849,19 @@ export function ProductionWizard() {
         reader.onloadend = () => {
           const dataUrl = reader.result as string;
           setStyleRefPreview(dataUrl);
-          setProject((p) => ({
-            ...p,
-            meta: { ...p.meta, styleRefImageDataUrl: dataUrl },
-          }));
-          toast.success('已将素材设为风格参考图');
+          const mime = blob.type || 'image/jpeg';
+          // P1-14：风格参考图不直接落入项目 JSON（避免 data: URL 让 JSON 膨胀到 MB 级），
+          // 改为上传到 production/images 拿到服务端 URL 再存入 meta。
+          uploadProductionImage(dataUrl, mime, 'style-ref')
+            .then(({ url }) => {
+              setProject((p) => ({ ...p, meta: { ...p.meta, styleRefImageDataUrl: url } }));
+              toast.success('已将素材设为风格参考图');
+            })
+            .catch(() => {
+              // 退化：上传失败时仍存 data URL，至少功能可用
+              setProject((p) => ({ ...p, meta: { ...p.meta, styleRefImageDataUrl: dataUrl } }));
+              toast.warning('已设为风格参考图（服务端上传失败，将占用较多草稿空间）');
+            });
         };
         reader.readAsDataURL(blob);
         void recordUsage(urlAssetId, 'production');
@@ -868,10 +876,16 @@ export function ProductionWizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlAssetId, isServerBootstrapping]);
 
-  /** 从草稿恢复立项参考图缩略（blob 仅内存，持久化靠 meta.styleRefImageDataUrl） */
+  /**
+   * 从草稿恢复立项参考图缩略。
+   * 兼容两种存储形态：
+   *   - data:image/…（历史草稿 / 上传失败回退）
+   *   - /api/production/image?path=… 或 http(s):// URL（P1-14 新策略）
+   */
   useEffect(() => {
     const d = project.meta.styleRefImageDataUrl?.trim();
-    if (d?.startsWith('data:image/')) {
+    if (!d) return;
+    if (d.startsWith('data:image/') || d.startsWith('/api/') || /^https?:\/\//i.test(d)) {
       setStyleRefPreview((prev) => prev ?? d);
     }
   }, [project.meta.styleRefImageDataUrl]);
@@ -1000,6 +1014,23 @@ export function ProductionWizard() {
 
   const handleL3 = useCallback(async () => {
     if (!project.story || !project.productionDesign) return;
+    const existingShots = project.shots ?? [];
+    const hasExistingMedia = existingShots.some(
+      (s) =>
+        !!s.previewStillDataUrl ||
+        !!s.previewVideoUrl ||
+        !!s.previewVideoPath ||
+        (s.previewVideoVersions?.length ?? 0) > 0 ||
+        !!s.pendingVideoSubmitId,
+    );
+    if (hasExistingMedia) {
+      const ok = window.confirm(
+        '重新生成分镜表会用 LLM 重写每个镜头的文本字段（角度/运镜/动作等）。\n' +
+          '已生成的静帧、视频、版本记录将按分镜编号自动保留（不会丢）。\n' +
+          '是否继续？',
+      );
+      if (!ok) return;
+    }
     setErr(null);
     setBusyL3(true);
     try {
@@ -1008,7 +1039,43 @@ export function ProductionWizard() {
         productionDesign: project.productionDesign,
         maxTotalDurationSec,
       });
-      setProject((p) => ({ ...p, shots, assembled: null }));
+      setProject((p) => {
+        const mediaByIdx = new Map<
+          number,
+          Partial<
+            Pick<
+              ProductionShot,
+              | 'previewStillDataUrl'
+              | 'previewVideoUrl'
+              | 'previewVideoPath'
+              | 'previewVideoVersions'
+              | 'selectedPreviewVideoVersionId'
+              | 'pendingVideoSubmitId'
+              | 'videoStoryboardOverride'
+              | 'characterStateOverrides'
+              | 'manualRefOverrides'
+            >
+          >
+        >();
+        (p.shots ?? []).forEach((s) => {
+          mediaByIdx.set(s.shotIndex, {
+            previewStillDataUrl: s.previewStillDataUrl,
+            previewVideoUrl: s.previewVideoUrl,
+            previewVideoPath: s.previewVideoPath,
+            previewVideoVersions: s.previewVideoVersions,
+            selectedPreviewVideoVersionId: s.selectedPreviewVideoVersionId,
+            pendingVideoSubmitId: s.pendingVideoSubmitId,
+            videoStoryboardOverride: s.videoStoryboardOverride,
+            characterStateOverrides: s.characterStateOverrides,
+            manualRefOverrides: s.manualRefOverrides,
+          });
+        });
+        const merged = shots.map((ns) => {
+          const carry = mediaByIdx.get(ns.shotIndex);
+          return carry ? { ...ns, ...carry } : ns;
+        });
+        return { ...p, shots: merged, assembled: null };
+      });
       setStep(3);
       setSelectedShotIdx(0);
     } catch (e) {
@@ -1016,7 +1083,7 @@ export function ProductionWizard() {
     } finally {
       setBusyL3(false);
     }
-  }, [project.story, project.productionDesign, maxTotalDurationSec]);
+  }, [project.story, project.productionDesign, project.shots, maxTotalDurationSec]);
 
   const {
     runGenerateFrame,
@@ -1111,10 +1178,24 @@ export function ProductionWizard() {
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
+        // 立刻把 data URL 写入 meta，保证 UI 能马上使用参考图
         setProject((p) => ({
           ...p,
           meta: { ...p.meta, styleRefImageDataUrl: dataUrl },
         }));
+        // P1-14：并行把图片上传到服务端，拿到 URL 后再替换 meta，避免草稿 JSON 里长期携带 data:URL
+        void (async () => {
+          try {
+            const { url } = await uploadProductionImage(dataUrl, file.type || 'image/jpeg', 'style-ref');
+            setProject((p) =>
+              p.meta.styleRefImageDataUrl && !p.meta.styleRefImageDataUrl.startsWith('data:')
+                ? p
+                : { ...p, meta: { ...p.meta, styleRefImageDataUrl: url } },
+            );
+          } catch (e) {
+            console.warn('[styleRef upload]', e);
+          }
+        })();
         void (async () => {
           setErr(null);
           setBusyStyle(true);
@@ -1127,7 +1208,7 @@ export function ProductionWizard() {
               ...p,
               meta: {
                 ...p.meta,
-                styleRefImageDataUrl: dataUrl,
+                // 保留 styleRefImageDataUrl（可能已被上传协程替换为 URL，不覆盖）
                 styleRefSummary: styleReference.styleRefSummary,
                 styleRefAnalysis: styleReference,
               },
@@ -1385,19 +1466,40 @@ export function ProductionWizard() {
       });
 
       const desc = storyboardText.slice(0, 120);
-      try {
-        await submitBatchJobs(serverProjectId || 'default', [{
-          submitId: submit.submitId,
-          taskId: submit.taskId,
-          shotIndex: s.shotIndex,
-          shotDescription: desc,
-          model,
-        }]);
-      } catch (e) {
-        console.warn('[production] batch-job 注册失败，视频仍在即梦生成中', e);
+      /**
+       * 即梦提交成功后，必须把 submitId 注册到后台 batch-jobs 队列，后端 poller 才会
+       * 轮询并落盘。网络抖动时单次注册失败会导致「视频生成完成但 H5 看不到」，
+       * 因此这里做带退避的重试；三轮都失败时回滚 pendingVideoSubmitId，提示用户
+       * 改走手动「检查进度」。
+       */
+      let registered = false;
+      let lastRegisterErr: unknown = null;
+      for (let attempt = 0; attempt < 3 && !registered; attempt++) {
+        try {
+          await submitBatchJobs(serverProjectId || 'default', [{
+            submitId: submit.submitId,
+            taskId: submit.taskId,
+            shotIndex: s.shotIndex,
+            shotDescription: desc,
+            model,
+          }]);
+          registered = true;
+        } catch (e) {
+          lastRegisterErr = e;
+          if (attempt < 2) {
+            await new Promise<void>((r) => setTimeout(r, 1500 * (attempt + 1)));
+          }
+        }
       }
 
-      toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
+      if (registered) {
+        toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
+      } else {
+        console.warn('[production] batch-job 注册失败，视频可能在即梦后台已生成但未回传', lastRegisterErr);
+        toast.error(
+          `分镜 #${s.shotIndex} 已提交到即梦，但后台任务注册失败；请稍后点「检查进度」手动同步`,
+        );
+      }
 
       if (dreaminaSlowModeRef.current) {
         await waitForAnyJobCompletion();

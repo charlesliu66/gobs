@@ -42,10 +42,18 @@ function nowIso(): string {
 
 // ── sha256 ─────────────────────────────────────────────────────────────────────
 
-function sha256File(filepath: string): string {
-  const hash = crypto.createHash('sha256');
-  hash.update(fs.readFileSync(filepath));
-  return hash.digest('hex');
+/**
+ * 流式计算文件 sha256，避免一次性把整个文件读进内存。
+ * 大体量视频（数百 MB）走 readFileSync 会触发 OOM / GC 抖动。
+ */
+function sha256File(filepath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filepath, { highWaterMark: 1024 * 1024 });
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 // ── ffprobe 元数据提取 ──────────────────────────────────────────────────────────
@@ -212,8 +220,8 @@ async function processFile(
   }
 
   try {
-    // 1. sha256
-    const hash = sha256File(file.path);
+    // 1. sha256（流式，避免把整个文件加载进内存）
+    const hash = await sha256File(file.path);
 
     // 2. 去重：同一 username 下查 assets 表
     const existing = db.prepare(`

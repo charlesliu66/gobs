@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ShotReviewSuggestion, ShotReviewResult } from '../../api/shotReview';
 import type { ProductionShot } from '../productionTypes';
 
@@ -18,6 +18,11 @@ export function StepStoryboardAiReview({
   onApplyAllAndRegenerate: () => void;
 }) {
   const [appliedFields, setAppliedFields] = useState<Set<string>>(new Set());
+
+  // Clear applied marks whenever the shot changes or a new review arrives.
+  useEffect(() => {
+    setAppliedFields(new Set());
+  }, [shot.shotIndex, reviewResult]);
 
   const handleApply = (s: ShotReviewSuggestion) => {
     onApplySuggestion(s);

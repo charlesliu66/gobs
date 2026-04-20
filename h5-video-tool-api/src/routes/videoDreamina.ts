@@ -98,6 +98,12 @@ function acquireDreaminaSlot(): { waitForSlot: Promise<void>; release: () => voi
   return dreaminaSemaphore.acquire();
 }
 
+/**
+ * 对外暴露：在 videoMultishot 等其他路由里走同一个全局并发闸门，
+ * 避免绕过 /dreamina/submit 直接调用 generateDreaminaVideo 造成并发超配。
+ */
+export { acquireDreaminaSlot };
+
 
 async function ensureDreaminaAuthOrRespond(res: Response): Promise<boolean> {
   const status = await checkDreaminaAuth();

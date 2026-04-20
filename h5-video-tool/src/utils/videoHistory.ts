@@ -1,4 +1,5 @@
 import { klingVideoProxyUrl } from '../api/video';
+import { appendFileAccessToken } from '../api/client';
 
 /**
  * 生成视频历史 - localStorage 持久化
@@ -133,13 +134,25 @@ export function getRecentPromptForVideo(taskId?: string | null): string {
   return list[0]?.prompt?.trim() ?? '';
 }
 
-/** 构建视频播放 URL（通过 API 获取文件） */
+/** 构建视频播放 URL（通过 API 获取文件）
+ *
+ * 附加 ?fat=<fileAccessToken> 以便 <video> 无法携带 Bearer 时后端仍能识别用户。
+ */
 export function getVideoFileUrl(videoPath: string): string {
   const base = import.meta.env.VITE_API_BASE_URL || '';
-  return `${base}/api/video/file?path=${encodeURIComponent(videoPath)}`;
+  return appendFileAccessToken(`${base}/api/video/file?path=${encodeURIComponent(videoPath)}`);
 }
 
-/** 高级制片分镜预览：优先服务端落盘路径，刷新后仍可播放 */
+/** 构建 batch-jobs 视频 URL（附 fat） */
+export function getBatchJobVideoUrl(jobId: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL || '';
+  return appendFileAccessToken(`${base}/api/batch-jobs/video/${encodeURIComponent(jobId)}`);
+}
+
+/**
+ * 高级制片分镜预览：优先服务端落盘路径，刷新后仍可播放。
+ * P1-5：统一走 VITE_API_BASE_URL，避免本域 /api/ 前缀在跨域代理环境被前端 dev server 托管。
+ */
 export function resolveProductionShotPreviewVideoSrc(shot: {
   previewVideoPath?: string;
   previewVideoUrl?: string;
@@ -149,5 +162,9 @@ export function resolveProductionShotPreviewVideoSrc(shot: {
   const u = shot.previewVideoUrl?.trim();
   if (!u) return '';
   if (/^https?:\/\//i.test(u)) return klingVideoProxyUrl(u);
+  if (u.startsWith('/api/')) {
+    const base = import.meta.env.VITE_API_BASE_URL || '';
+    return appendFileAccessToken(`${base}${u}`);
+  }
   return u;
 }

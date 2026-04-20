@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ProductionShotVideoVersion } from '../productionTypes';
+import { getVideoFileUrl } from '../../utils/videoHistory';
 
 export function StepStoryboardAbCompare({
   versions,
@@ -11,6 +12,8 @@ export function StepStoryboardAbCompare({
   const [versionA, setVersionA] = useState<string>(versions[0]?.id ?? '');
   const [versionB, setVersionB] = useState<string>(versions[1]?.id ?? '');
   const [labels, setLabels] = useState<Record<string, string>>({});
+  const [errA, setErrA] = useState<string | null>(null);
+  const [errB, setErrB] = useState<string | null>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
 
@@ -19,8 +22,10 @@ export function StepStoryboardAbCompare({
 
   const resolveUrl = (v?: ProductionShotVideoVersion) => {
     if (!v) return '';
-    if (v.videoPath) return `/api/batch-jobs/video/${encodeURIComponent(v.id)}`;
-    return v.videoUrl ?? '';
+    const path = v.videoPath?.trim();
+    if (path) return getVideoFileUrl(path);
+    const u = v.videoUrl?.trim() ?? '';
+    return u;
   };
 
   const handleSyncPlay = () => {
@@ -78,7 +83,16 @@ export function StepStoryboardAbCompare({
               </option>
             ))}
           </select>
-          <video ref={videoARef} src={resolveUrl(srcA)} controls playsInline className="max-h-[55vh] w-full rounded-lg" />
+          <video
+            ref={videoARef}
+            src={resolveUrl(srcA)}
+            controls
+            playsInline
+            className="max-h-[55vh] w-full rounded-lg"
+            onLoadStart={() => setErrA(null)}
+            onError={() => setErrA('加载失败：视频路径不可用或已过期')}
+          />
+          {errA && <p className="w-full text-[11px] text-red-300">{errA}</p>}
           <input
             type="text"
             placeholder="版本 A 备注标签…"
@@ -101,7 +115,16 @@ export function StepStoryboardAbCompare({
               </option>
             ))}
           </select>
-          <video ref={videoBRef} src={resolveUrl(srcB)} controls playsInline className="max-h-[55vh] w-full rounded-lg" />
+          <video
+            ref={videoBRef}
+            src={resolveUrl(srcB)}
+            controls
+            playsInline
+            className="max-h-[55vh] w-full rounded-lg"
+            onLoadStart={() => setErrB(null)}
+            onError={() => setErrB('加载失败：视频路径不可用或已过期')}
+          />
+          {errB && <p className="w-full text-[11px] text-red-300">{errB}</p>}
           <input
             type="text"
             placeholder="版本 B 备注标签…"

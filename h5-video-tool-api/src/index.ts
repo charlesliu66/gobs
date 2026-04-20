@@ -36,6 +36,7 @@ import { shotReviewRouter } from './routes/shotReview.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 import { runWithRequestContext } from './services/requestContext.js';
 import { resetInterruptedJobs } from './services/assetIngestService.js';
+import { recoverMultishotJobsOnBoot } from './routes/videoMultishot.js';
 import systemRouter from './routes/system.js';
 
 const app = express();
@@ -107,4 +108,5 @@ app.listen(Number(PORT), '127.0.0.1', () => {
   console.log(`API server running at http://127.0.0.1:${PORT}`);
   startBatchJobsPoller();
   resetInterruptedJobs();
+  void recoverMultishotJobsOnBoot();
 });

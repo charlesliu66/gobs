@@ -26,6 +26,7 @@ import {
 } from '../services/klingVideo.js';
 import { fetchDriveImageAsBase64 } from '../services/videoReferenceUtils.js';
 import { resolvePath } from '../infra/storage/resolver.js';
+import { acquireDreaminaSlot } from './videoDreamina.js';
 
 export const multishotRouter = Router();
 
@@ -105,6 +106,64 @@ async function patchMultishotJob(
   return next;
 }
 
+/**
+ * 启动时扫描所有多镜头 job 目录。
+ *
+ * 多镜头任务依赖内存中的 `setImmediate(runMultishotJob)` 执行循环，PM2 重启后
+ * 未完成的 job.json 会留在 pending/running 状态，前端轮询永远看不到结果。
+ * 这里将它们标记为 error 并附提示，让用户感知到需要重新发起。
+ * （未来可扩展为从已完成的分镜继续执行，本次仅修复「僵尸任务」场景）
+ */
+export async function recoverMultishotJobsOnBoot(): Promise<void> {
+  try {
+    await fs.mkdir(MULTISHOT_JOBS_ROOT, { recursive: true });
+    const users = await fs.readdir(MULTISHOT_JOBS_ROOT);
+    let recovered = 0;
+    for (const user of users) {
+      const userDir = path.join(MULTISHOT_JOBS_ROOT, user);
+      let jobIds: string[] = [];
+      try {
+        jobIds = await fs.readdir(userDir);
+      } catch {
+        continue;
+      }
+      for (const jobId of jobIds) {
+        const file = path.join(userDir, jobId, 'job.json');
+        let job: MultishotJobRecord | null = null;
+        try {
+          const raw = await fs.readFile(file, 'utf-8');
+          job = JSON.parse(raw) as MultishotJobRecord;
+        } catch {
+          continue;
+        }
+        if (!job || (job.status !== 'pending' && job.status !== 'running')) continue;
+        const next: MultishotJobRecord = {
+          ...job,
+          status: 'error',
+          error: '服务器重启，任务未完成；请重新发起多镜头生成',
+          shots: job.shots.map((s) =>
+            s.status === 'pending' || s.status === 'running'
+              ? { ...s, status: 'error', error: '服务器重启，未完成' }
+              : s,
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          await fs.writeFile(file, JSON.stringify(next, null, 2), 'utf-8');
+          recovered++;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if (recovered > 0) {
+      console.log(`[multishot] recovered ${recovered} stalled jobs → status=error`);
+    }
+  } catch (e) {
+    console.warn('[multishot] recoverMultishotJobsOnBoot error:', e);
+  }
+}
+
 // ── ffmpeg 拼接 ───────────────────────────────────────────────────────────────
 
 async function concatVideos(videoPaths: string[], outputPath: string): Promise<void> {
@@ -167,7 +226,20 @@ async function runMultishotJob(args: {
       try {
         const refBase64 = shot.imageBase64?.replace(/^data:image\/\w+;base64,/, '') || materialsRefBase64;
         const shotDur = Math.max(4, Math.min(8, shot.durationSeconds || 5));
-        const { videoUrl } = isDreaminaModel(multishotModel)
+        /**
+         * P1-1：Dreamina 全局并发闸门。
+         * 走 /dreamina/submit 的单片任务会在 DreaminaSemaphore 下排队，
+         * 这里若直接 generateDreaminaVideo 会绕过闸门，并发超配导致 1310/空响应。
+         * 所以在每一镜进入 CLI 前先 acquireDreaminaSlot，完成后释放槽位。
+         */
+        let dreaminaSlot: { waitForSlot: Promise<void>; release: () => void } | null = null;
+        if (isDreaminaModel(multishotModel)) {
+          dreaminaSlot = acquireDreaminaSlot();
+          await dreaminaSlot.waitForSlot;
+        }
+        let shotResult: { videoUrl: string };
+        try {
+          shotResult = isDreaminaModel(multishotModel)
           ? await generateDreaminaVideo({
               prompt: shot.prompt.trim(),
               aspectRatio: aspectRatio ?? '16:9',
@@ -193,6 +265,10 @@ async function runMultishotJob(args: {
                 imageBase64: refBase64,
                 imageMimeType: refBase64 ? (shot.imageBase64 ? 'image/png' : materialsRefMime ?? 'image/png') : undefined,
               });
+        } finally {
+          dreaminaSlot?.release();
+        }
+        const { videoUrl } = shotResult;
         const buf = Buffer.from(videoUrl.replace(/^data:video\/\w+;base64,/, ''), 'base64');
         const absPath = path.join(jobDir, `shot_${i}.mp4`);
         await fs.writeFile(absPath, buf);
