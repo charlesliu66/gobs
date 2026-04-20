@@ -45,6 +45,8 @@ function RequireAuth() {
   if (!token) {
     return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   }
+  // v0.60 前登录的老用户没有 FAT，首次进入受保护页面时补拉一次。
+  void import('./api/client').then((m) => m.ensureFileAccessToken());
   return <Outlet />;
 }
 

@@ -71,17 +71,36 @@ export function verifyFileAccessToken(token: string | undefined | null): FileAcc
 /**
  * 统一解析视频/文件媒体请求的调用者身份：
  * 1. 有 JWT (req.user) 时直接返回；
- * 2. 否则尝试 ?fat=<token> 或 ?u=<token> 查询参数；
- * 3. 两者都没有返回 null。
+ * 2. 否则尝试 ?fat=<token> / ?u=<token> 查询参数（FAT 签名）；
+ * 3. 再次兜底：?token=<jwt> 查询参数（兼容 SSE/旧客户端）；
+ * 4. 都没有返回 null。
  */
+import jsonwebtoken from 'jsonwebtoken';
+
 export function resolveMediaRequestUsername(req: {
   user?: { username?: string | null };
   query?: Record<string, unknown>;
 }): string | null {
   const jwtName = req.user?.username?.trim();
   if (jwtName) return jwtName;
-  const raw = req.query?.['fat'] ?? req.query?.['u'];
-  if (typeof raw !== 'string') return null;
-  const payload = verifyFileAccessToken(raw);
-  return payload?.u ?? null;
+
+  const fatRaw = req.query?.['fat'] ?? req.query?.['u'];
+  if (typeof fatRaw === 'string') {
+    const payload = verifyFileAccessToken(fatRaw);
+    if (payload?.u) return payload.u;
+  }
+
+  // 兼容：?token=<jwt>（SSE 走的也是这一路，v0.60 前媒体 URL 也可能附带 jwt）
+  const tokenRaw = req.query?.['token'];
+  if (typeof tokenRaw === 'string' && tokenRaw) {
+    try {
+      const decoded = jsonwebtoken.verify(tokenRaw, getSecret()) as { username?: string };
+      const name = typeof decoded.username === 'string' ? decoded.username.trim() : '';
+      if (name) return name;
+    } catch {
+      /* fallthrough */
+    }
+  }
+
+  return null;
 }

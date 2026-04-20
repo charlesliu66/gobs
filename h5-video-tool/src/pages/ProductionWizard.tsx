@@ -1560,11 +1560,30 @@ export function ProductionWizard() {
     if (!project.shots.length) return;
     batchResumedRef.current = true;
 
+    // 兜底：历史遗留的 shot 可能同时带 pendingVideoSubmitId 和已生成的 previewVideoUrl/Path/versions
+    //（即梦回写失败或 batch-job 未写回），这种情况下不应再显示"提交中"。直接清 pending 并标记为已完成。
+    const staleIdxs: number[] = [];
     const pendingIds: string[] = [];
-    for (const s of project.shots) {
+    project.shots.forEach((s, idx) => {
+      const hasVideo = Boolean(s.previewVideoUrl || s.previewVideoPath || s.previewVideoVersions?.length);
       if (s.pendingVideoSubmitId) {
-        pendingIds.push(String(s.shotIndex));
+        if (hasVideo) {
+          staleIdxs.push(idx);
+        } else {
+          pendingIds.push(String(s.shotIndex));
+        }
       }
+    });
+    if (staleIdxs.length) {
+      setProject((p) => {
+        const shots = [...p.shots];
+        for (const i of staleIdxs) {
+          const cur = shots[i];
+          if (!cur) continue;
+          shots[i] = { ...cur, pendingVideoSubmitId: undefined };
+        }
+        return { ...p, shots };
+      });
     }
     if (pendingIds.length) {
       setShotBusyMap((prev) => {

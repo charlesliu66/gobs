@@ -7,10 +7,40 @@ function getAuthHeaders(): Record<string, string> {
 
 /**
  * 返回用于 <video>/<img> 等无法携带 Bearer 的媒体接口的 file-access-token。
- * 登录时由后端下发并缓存在 localStorage。
+ * 登录时由后端下发并缓存在 localStorage；若缺失（v0.60 之前登录的老用户）则懒加载补拉。
  */
 export function getFileAccessToken(): string {
   return localStorage.getItem('gobs_fat') ?? '';
+}
+
+/**
+ * 兼容：v0.60 前登录的用户 localStorage 里只有 gobs_token、没有 gobs_fat。
+ * 对已登录态但缺 FAT 的情况，启动时异步拉取一次并写回，避免后续所有媒体 URL 缺参数 401。
+ * 失败不抛错——后端已兼容 `?token=<jwt>` 旁路，老媒体 URL 仍可用。
+ */
+let _fatEnsurePromise: Promise<void> | null = null;
+export function ensureFileAccessToken(): Promise<void> {
+  if (_fatEnsurePromise) return _fatEnsurePromise;
+  const token = localStorage.getItem('gobs_token');
+  const existing = localStorage.getItem('gobs_fat');
+  if (!token || existing) {
+    _fatEnsurePromise = Promise.resolve();
+    return _fatEnsurePromise;
+  }
+  _fatEnsurePromise = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/file-access-token`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as { data?: { fileAccessToken?: string } };
+      const fat = body?.data?.fileAccessToken?.trim();
+      if (fat) localStorage.setItem('gobs_fat', fat);
+    } catch {
+      /* 后端已兼容 ?token=<jwt>，即使此处失败也能继续工作 */
+    }
+  })();
+  return _fatEnsurePromise;
 }
 
 /**
@@ -19,11 +49,20 @@ export function getFileAccessToken(): string {
  */
 export function appendFileAccessToken(url: string): string {
   if (!url) return url;
+  void ensureFileAccessToken();
   const fat = getFileAccessToken();
-  if (!fat) return url;
-  if (url.includes('fat=') || url.includes('?u=')) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}fat=${encodeURIComponent(fat)}`;
+  if (fat) {
+    if (url.includes('fat=') || url.includes('?u=') || url.includes('&u=')) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}fat=${encodeURIComponent(fat)}`;
+  }
+  // FAT 尚未就绪：用 JWT 作为兼容旁路（后端支持 ?token=<jwt>）
+  const jwt = localStorage.getItem('gobs_token');
+  if (jwt && !url.includes('token=')) {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}token=${encodeURIComponent(jwt)}`;
+  }
+  return url;
 }
 
 function handleUnauthorized(res: Response): void {
