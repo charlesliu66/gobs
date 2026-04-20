@@ -54,6 +54,17 @@
 - 数据风险：`TextClip.style` 字段为新增 optional，不会破坏旧工程。
 - `subtitles` 字段本就是数组，ASR 填充前会检查非空保护（和 v0.63 合并策略一致）。
 
+## 服务器已就绪（2026-04-20）
+
+- ✅ `fonts-noto-cjk` + `fonts-noto-color-emoji`（CJK 字幕渲染）
+- ✅ `cmake 3.28`（编译依赖）
+- ✅ `/home/ubuntu/whisper.cpp/build/bin/whisper-cli`（ASR 二进制）
+- ✅ `/home/ubuntu/whisper.cpp/models/ggml-base.bin`（142MB 多语种模型）
+- ✅ JFK 11s 冒烟测试：2.4s 完成，结果正确
+- ✅ `.env.example` 已登记 Sprint 1 全部新变量
+- ✅ `docs/brand-kit.example.json` 示例已入库（三档方案：A generated / B ai / C asset）
+- ✅ `h5-video-tool-api/config/asr-hotwords.example.json` 热词词典已入库（中英日泰）
+
 ---
 
-**下一步**：进入 `planner-spec.md`。
+**下一步**：进入 `planner-spec.md` → Challenger 评审 → Builder 开工。

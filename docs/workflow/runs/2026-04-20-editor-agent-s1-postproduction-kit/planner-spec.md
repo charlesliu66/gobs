@@ -24,10 +24,10 @@ Sprint 1 目标：三项同期落地，解放后期时间。
 
 ### 功能规格
 
-1. **ASR 引擎选择（按优先级）**
-   - 优先 Compass ASR（若 `COMPASS_ASR_ENABLED=1` 且对应 Key 可用）
-   - 降级 Whisper.cpp CLI（`WHISPER_BIN` 指向本地可执行文件）
-   - 以上都不可用 → 返回 501 + 明确错误提示，不尝试瞎编字幕
+1. **ASR 引擎**
+   - 直接调 Whisper.cpp CLI（`WHISPER_BIN` 指向 `/home/ubuntu/whisper.cpp/build/bin/whisper-cli`）
+   - 模型按 `WHISPER_MODEL_PATH`（默认 `ggml-base.bin`）；指令里显式要求"高精度字幕"时自动提升到 medium（如果存在）
+   - 不可用 → 返回 501 + 明确错误提示，不尝试瞎编字幕
 
 2. **音频源**
    - 优先从 `v1` 轨所有 VideoClip 的原视频里抽音（`ffmpeg -vn -ac 1 -ar 16000 -f s16le`）
@@ -94,9 +94,11 @@ Sprint 1 目标：三项同期落地，解放后期时间。
 
 ### 风险
 
-- **Compass ASR 未上线**：需确认 Compass 是否提供 ASR。若未上线，S1 可能只能落 Whisper 降级路径。**行动项**：开工前先问管理员确认。
-- **Whisper.cpp 部署**：服务器需安装 whisper.cpp 二进制和 ggml 模型文件（`ggml-base.bin` 或 `ggml-large.bin`），~1.5GB 磁盘。
-- **长视频 ASR 耗时**：≥3 分钟视频 ASR 可能超 30s，需要 SSE 心跳 keepalive。
+- ~~Compass ASR 未上线~~：已确认 Compass 不提供，直接走 Whisper.cpp。
+- ~~Whisper.cpp 部署~~：✅ 已完成（服务器实测通过）。
+- **长视频 ASR 耗时**：≥3 分钟视频转写约 40s，需要 SSE 心跳 keepalive（每 5s 发 progress 事件）。
+- **base 模型对中文口语精度**：base 对中文识别一般，medium 会好很多但延迟 ×5。策略：默认 base + 指令 `"高精度字幕"` 自动切 medium（若已下载），未下载时返回友好提示教用户如何拉取。
+- **多 clip 拼接 ASR**：必须在抽音时显式 `ffmpeg -filter_complex concat` 拼成单段 WAV，否则每段单独 ASR 会丢句首/句尾重叠。
 
 ---
 
@@ -159,8 +161,9 @@ Sprint 1 目标：三项同期落地，解放后期时间。
 
 ### 风险
 
-- **ffmpeg drawtext 字体依赖**：服务器需安装 CJK 字体（如 Source Han Sans）。**行动项**：部署脚本补 `fonts-noto-cjk`。
-- **CSS 渲染与 ffmpeg 渲染一致性**：不能 1:1 像素级对齐，但视觉上要像。
+- ~~ffmpeg drawtext 字体依赖~~：✅ 服务器已安装 `fonts-noto-cjk` + `fonts-noto-color-emoji`。
+- **CSS 渲染与 ffmpeg 渲染一致性**：不能 1:1 像素级对齐，但视觉上要像。每个 preset 需要前端 CSS + 后端 ffmpeg filter 双份实现，需测试视觉一致性。
+- **ASS 卡拉 OK 逐词高亮**：`word_pop` 预设需要 ASR 返回 word-level timestamps（Whisper.cpp 带 `-ml 1 --split-on-word` 可输出，需验证）。
 
 ---
 
@@ -218,8 +221,9 @@ Sprint 1 目标：三项同期落地，解放后期时间。
 
 ### 风险
 
-- **brand-kit 模板资产**：需要先上传一段 Logo 动画视频作为 intro asset，一段 CTA 动画作为 outro asset。开工时可先用占位素材。
-- **幂等检测**：如何判定"已经有品牌卡"？→ 用 `clip.meta.source = 'brand-kit-intro'` 标记。
+- ~~brand-kit 模板资产缺失~~：✅ 改为三档方案（见"EDA-03 素材来源方案"）。Sprint 1 落 A + C 两档，A 档零依赖。
+- **幂等检测**：如何判定"已经有品牌卡"？→ 用 `clip.meta.source = 'brand-kit-intro' / 'brand-kit-outro'` 标记，插入前先 filter 现有 clip。
+- **ffmpeg 合成 intro/outro mp4**：需要生成脚本（给定 Logo PNG + 文字 + 主色 → 输出 mp4）并缓存结果。缓存键 = sha256(logo + text + color + style)，避免每次重复生成。
 
 ---
 
@@ -240,20 +244,65 @@ Sprint 1 目标：三项同期落地，解放后期时间。
 
 ---
 
-## 依赖 & 前置问题
+## 依赖 & 前置问题（2026-04-20 全部确认完毕）
 
-**需要提前确认（Challenger 阶段回答）**
+| # | 问题 | 结论 |
+|---|---|---|
+| 1 | Compass ASR 可用性 | ❌ 不提供，确定走 **Whisper.cpp 降级路径**（就是主路径） |
+| 2 | 服务器 CJK 字体 | ✅ 已安装 `fonts-noto-cjk` + `fonts-noto-color-emoji`（apt 确认装好） |
+| 3 | Whisper.cpp 部署 | ✅ 已部署于 `/home/ubuntu/whisper.cpp/`，二进制 `build/bin/whisper-cli`，模型 `ggml-base.bin`（142MB），JFK 11s 冒烟测试 2.4s 完成 |
+| 4 | 品牌物料 | ✅ 采用 **"AI 生成占位 + 用户可替换"** 的混合模式（详见下方"EDA-03 素材来源方案"） |
+| 5 | .env 新变量登记 | ✅ 已写入 `.env.example`（含 WHISPER_BIN / WHISPER_MODEL_PATH / WHISPER_MODEL_SIZE / WHISPER_THREADS / EDITOR_ASR_HOTWORDS_FILE / BRAND_KIT_FILE） |
 
-1. **Compass ASR 可用性**：Compass 平台是否已提供 ASR 接口？接口地址、鉴权方式？
-2. **服务器字体**：`43.134.186.196` 是否已装 CJK 字体？未装需 apt install。
-3. **Whisper.cpp 二进制**：若走降级路径，谁负责部署 whisper 二进制和 ggml 模型？
-4. **品牌物料**：首期 brand-kit 里的 intro / outro 视频由谁提供？先用 AI 生成占位？
-5. **.env 新变量登记**：
-   - `COMPASS_ASR_ENABLED`、`COMPASS_ASR_KEY`
-   - `WHISPER_BIN`、`WHISPER_MODEL_PATH`
-   - `EDITOR_ASR_HOTWORDS_FILE`
-   - `BRAND_KIT_FILE`
-   必须先写进 `.env.example` 再在代码里引用（CLAUDE.md 禁区规则）。
+### EDA-03 素材来源方案（Q4 完整版）
+
+市场人不需要"买一套素材"也能立即用上，分三档落地：
+
+**档位 A：零素材即可用（MVP 默认）**
+- 完全用 ffmpeg 合成静态动画：黑底 → Logo PNG（用户上传一张）淡入 1s → 文字"GAME NAME"上滑 → 黑场收尾
+- 不需要任何 AI 视频能力
+- 生成后缓存为一段固定 mp4（1.5s intro / 2.5s outro），挂进 editor assets
+- 用户配置：只需给一张 Logo PNG + 品牌名 + 主色
+
+**档位 B：AI 生成（品质向）**
+- 复用已有的 VEO / Dreamina / Seedance 能力
+- 在品牌配置里写提示词：`"电影感品牌片头，粒子汇聚成 Logo，1.5 秒"`
+- 一次生成多版，用户挑一条永久绑定（复用到后续所有工程）
+- 成本：每次生成约消耗 1 个 VEO 配额
+
+**档位 C：用户自备素材**
+- 用户上传自己的 intro.mp4 / outro.mp4 → 写进 brand-kit.json
+- 自由度最高，给有品牌素材库的团队用
+
+**实现优先级**：
+- Sprint 1 落地 **档位 A**（零依赖，秒级生效，保证大家都能用）
+- Sprint 1 同时支持档位 C 的"文件路径直接引用"（实现几乎免费）
+- 档位 B 放到 Sprint 4（EDA-11 细分模板库）一起做，因为它本质是"模板化 VEO 调用"
+
+### 服务器已就绪的资源清单
+
+以下已部署，Builder 阶段可直接引用：
+```
+/home/ubuntu/whisper.cpp/
+├── build/bin/whisper-cli          # 可执行（支持 flac/mp3/ogg/wav）
+├── build/bin/whisper-server       # HTTP 服务模式（备用）
+├── models/ggml-base.bin           # 默认多语种模型，142MB
+└── samples/jfk.wav                # 冒烟测试音频
+
+系统包：
+- fonts-noto-cjk, fonts-noto-color-emoji（CJK 渲染）
+- cmake 3.28（未来扩编译需求）
+- build-essential（已有）
+```
+
+### 性能基线（服务器实测）
+
+- 硬件：AMD EPYC 9754 × 4 核，7.4GB RAM，无 GPU
+- ggml-base.bin + 4 线程：**转写耗时 ≈ 音频时长 × 0.21**
+  - 11s 音频 → 2.4s
+  - 30s 视频 → ~6s
+  - 3 分钟视频 → ~40s
+- 走 SSE 推 progress，前端无需傻等
 
 ---
 

@@ -1,0 +1,29 @@
+{
+  "_comment": "ASR 热词词典。Whisper.cpp 通过 --prompt 注入上下文，使这些术语更不易被识别错。复制为 asr-hotwords.json 后在 .env 设置 EDITOR_ASR_HOTWORDS_FILE 路径。",
+
+  "zh": [
+    "王者荣耀", "和平精英", "原神", "崩坏", "英雄联盟", "绝地求生",
+    "五杀", "四杀", "三杀", "双杀", "团灭", "推塔", "收兵", "反野", "绕后",
+    "连招", "大招", "技能", "普攻", "装备", "符文", "铭文",
+    "夜影", "狂战士", "刺客", "法师", "射手", "坦克", "辅助",
+    "TikTok", "抖音", "小红书", "B站", "快手"
+  ],
+
+  "en": [
+    "TikTok", "YouTube Shorts", "Instagram Reels", "Facebook",
+    "Pentakill", "Ace", "Clutch", "Boss", "PvP", "PvE",
+    "AOV", "MOBA", "FPS", "RPG", "Gacha",
+    "subscribe", "like", "follow"
+  ],
+
+  "ja": [
+    "TikTok", "原神", "崩壊", "五殺", "エース",
+    "チャンネル登録", "いいね"
+  ],
+
+  "th": [
+    "TikTok", "RoV", "MLBB", "เพนทาคิล", "แชมป์"
+  ],
+
+  "_tip": "热词 < 100 个效果最好，太多反而干扰模型。按项目实际上线游戏维护即可。"
+}

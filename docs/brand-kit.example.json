@@ -1,0 +1,64 @@
+{
+  "$schema": "https://example.com/brand-kit.schema.json",
+  "_comment": "复制到 h5-video-tool-api/config/brand-kit.json 并修改。三种 mode，按需选一档。",
+
+  "brand": {
+    "name": "GAME NAME",
+    "primaryColor": "#FF4D4F",
+    "secondaryColor": "#FFFFFF",
+    "logoPath": "assets/logo.png",
+    "locale": "zh",
+    "_comment": "logoPath 相对 BRAND_KIT_FILE 所在目录；建议 1024x1024 PNG 透明底"
+  },
+
+  "intro": {
+    "mode": "generated",
+    "_comment_mode": "generated=档位A:ffmpeg合成 / asset=档位C:引用 editor asset / ai=档位B:VEO/Seedance 生成",
+    "durationSec": 1.5,
+    "generated": {
+      "background": "#000000",
+      "logoAnimation": "fade_in_scale",
+      "text": "{{brand.name}}",
+      "textStylePreset": "tiktok_big",
+      "textAnimation": "slide_up"
+    },
+    "asset": {
+      "editorAssetId": "editor_asset_xxx",
+      "_comment": "mode=asset 时才生效；引用已上传到 editor 资产库的视频 id"
+    },
+    "ai": {
+      "prompt": "电影感品牌片头，粒子汇聚成 Logo，1.5 秒，纯黑背景",
+      "provider": "veo",
+      "cachedAssetId": null,
+      "_comment": "mode=ai 时才生效；生成一次后把结果 editorAssetId 写进 cachedAssetId，后续不会重复扣配额"
+    }
+  },
+
+  "outro": {
+    "mode": "generated",
+    "durationSec": 2.5,
+    "generated": {
+      "background": "{{brand.primaryColor}}",
+      "logoAnimation": "fade_in",
+      "text": "立即下载 / DOWNLOAD NOW",
+      "textStylePreset": "caption_yellow",
+      "textAnimation": "pulse",
+      "ctaIcon": "arrow_down"
+    },
+    "ctaLink": "https://example.com/download",
+    "_comment_cta": "ctaLink 用于生成二维码叠加右下角；不需要二维码就留空"
+  },
+
+  "placement": {
+    "insertAt": "both",
+    "_comment_insertAt": "both=首尾都插 / start_only / end_only",
+    "mergePolicy": "overwrite_existing_brand",
+    "_comment_merge": "若工程里已有 clip.meta.source='brand-kit-*' 则覆盖之，保证幂等"
+  },
+
+  "_example_usage": [
+    "用户指令：'给这条加品牌片头片尾' → Agent 调用 /api/editor/brand-kit/apply",
+    "零依赖档位 A：只需配 brand.logoPath + brand.name，ffmpeg 合成后缓存到 uploads/editor/brand-kit-cache/",
+    "档位 C 最简单：用户自己剪好 1.5s intro.mp4 → 上传到素材库 → 把 id 填到 intro.asset.editorAssetId → mode 改 asset"
+  ]
+}
