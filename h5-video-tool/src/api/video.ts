@@ -260,15 +260,20 @@ export interface OutputRecentVideoItem {
   size: number;
 }
 
+export interface OutputRecentVideosResponse {
+  items: OutputRecentVideoItem[];
+  syncedDreaminaCount?: number;
+}
+
 export async function getOutputRecentVideos(opts?: {
   limit?: number;
   dreaminaOnly?: boolean;
-}): Promise<{ items: OutputRecentVideoItem[] }> {
+}): Promise<OutputRecentVideosResponse> {
   const q = new URLSearchParams();
   if (opts?.limit) q.set('limit', String(opts.limit));
   if (opts?.dreaminaOnly) q.set('dreaminaOnly', '1');
   const qs = q.toString();
-  return apiGet<{ items: OutputRecentVideoItem[] }>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
+  return apiGet<OutputRecentVideosResponse>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
 }
 
 export async function generateMultishot(req: MultishotGenerateRequest): Promise<MultishotGenerateResponse> {

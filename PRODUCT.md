@@ -126,6 +126,7 @@
 
 - 灞曠ず宸插畬鎴愯棰戠殑鍗＄墖缃戞牸
 - 鍙挱鏀俱€佷笅杞?
+- 「服务端文件」页刷新时会自动补同步最近几天即梦后台已完成但尚未落盘的成片，避免“即梦后台有视频、我的成片里看不到”。
 ---
 
 ### 7. 涓€閿垚鐗囷紙Quick Film锛?
@@ -157,7 +158,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.72 -->
+<!-- NEXT_VERSION: v0.73 -->
+
+### v0.72 — 2026-04-21
+
+**我的成片补同步即梦后台最近成片**
+
+**Bug Fix:**
+- **[api] `/api/video/output-recent` 增加即梦最近成片回流**（`h5-video-tool-api/src/routes/video.ts` + `h5-video-tool-api/src/services/dreaminaRecentSync.ts`）：返回“服务端文件”列表前，后端会先扫描当前用户 `output/` 已落盘成片，再调用即梦 `list_task` 找出最近 7 天内已完成但本地还没有的成片，逐个复用现有 `pollDreaminaTask + persistVideoUrlToOutput` 逻辑补拉回服务器，随后重新扫描并返回最新列表。
+- **[api] 新增即梦回流判重/时间窗 helper 与测试**（`h5-video-tool-api/tests/dreaminaRecentSync.test.ts`）：锁定“只同步最近成功任务、跳过已落盘 submitId、去重并限制单次回流数量”的规则，避免同一批即梦成片重复落盘或把过旧任务重新灌回列表。
+- **[frontend] 我的成片读取服务端文件时展示同步结果**（`h5-video-tool/src/api/video.ts` + `h5-video-tool/src/components/GalleryView.tsx`）：如果本次刷新顺手从即梦后台补回了新成片，页面会 toast 提示同步数量，方便用户确认最近几天的成片已经回来。
 
 ### v0.71 — 2026-04-21
 
@@ -1147,4 +1157,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.71）*
+*最后更新：2026-04-21（v0.72）*

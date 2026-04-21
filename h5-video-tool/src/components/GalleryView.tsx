@@ -81,8 +81,11 @@ export function GalleryView() {
     setOutputLoading(true);
     setOutputError(null);
     try {
-      const { items } = await getOutputRecentVideos({ limit: 80, dreaminaOnly: false });
+      const { items, syncedDreaminaCount } = await getOutputRecentVideos({ limit: 80, dreaminaOnly: false });
       setOutputItems(items ?? []);
+      if ((syncedDreaminaCount ?? 0) > 0) {
+        toast.success(`已从即梦后台同步 ${syncedDreaminaCount} 个新成片`);
+      }
     } catch (e) {
       setOutputError(e instanceof Error ? e.message : '加载失败');
       setOutputItems([]);

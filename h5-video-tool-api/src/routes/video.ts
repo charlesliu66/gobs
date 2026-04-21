@@ -35,6 +35,7 @@ import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js
 import { sanitizeUsername } from '../utils/safeUsername.js';
 import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 import { persistVideoUrlToOutput } from '../services/videoUtils.js';
+import { syncRecentDreaminaOutputs } from '../services/dreaminaRecentSync.js';
 import dreaminaRouter from './videoDreamina.js';
 import klingRouter from './videoKling.js';
 import { multishotRouter, MULTISHOT_JOBS_ROOT } from './videoMultishot.js';
@@ -160,6 +161,8 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
   const onlyDreamina =
     String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
+  const syncDreaminaRecent =
+    String(req.query.syncDreaminaRecent ?? '1') !== '0' && (onlyDreamina || String(req.query.filter ?? '') !== 'local');
   const apiRoot = getApiDataDir();
   const outputDir = path.join(getDefaultVideoOutputDir(), username);
   const items: { path: string; mtimeMs: number; size: number }[] = [];
@@ -198,8 +201,26 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[video/output-recent]', err);
   }
+  let syncedDreaminaCount = 0;
+  if (syncDreaminaRecent) {
+    const syncResult = await syncRecentDreaminaOutputs({
+      username: req.user?.username,
+      existingPaths: items.map((item) => item.path),
+      listLimit: Math.min(120, Math.max(limit * 2, 40)),
+      maxSync: Math.min(24, Math.max(limit, 8)),
+    });
+    syncedDreaminaCount = syncResult.synced;
+    if (syncedDreaminaCount > 0) {
+      items.length = 0;
+      try {
+        await walk(outputDir, 0);
+      } catch (err) {
+        console.error('[video/output-recent][rescan]', err);
+      }
+    }
+  }
   items.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  res.json({ items: items.slice(0, limit) });
+  res.json({ items: items.slice(0, limit), syncedDreaminaCount });
 });
 
 videoRouter.post('/generate', async (req: Request, res: Response) => {
