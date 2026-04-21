@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   getVeoModels,
@@ -60,8 +60,15 @@ import { saveProductionProject, loadProductionProject, listProductionProjects, u
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
-import { getDreaminaTaskStatus, submitDreaminaAsync } from '../api/video';
-import { submitBatchJobs, pollBatchJobNow, type BatchJobDto } from '../api/batchJobs';
+import { getDreaminaTaskStatus } from '../api/video';
+import {
+  cancelBatchByProject,
+  cancelBatchJob,
+  enqueueProductionShot,
+  pollBatchJobNow,
+  type BatchJobDto,
+  type QueueSnapshotDto,
+} from '../api/batchJobs';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ProductionProvider } from '../studio/ProductionContext';
 import { ProductionWizardShell } from '../studio/ProductionWizardShell';
@@ -84,6 +91,13 @@ const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'five_act', label: '五幕式' },
   { value: 'save_the_cat', label: 'Save the Cat 节拍' },
 ];
+
+function formatEta(etaSec?: number): string {
+  if (!etaSec || etaSec <= 0) return '即将开始';
+  if (etaSec < 60) return `${Math.max(1, Math.round(etaSec))} 秒`;
+  if (etaSec < 3600) return `${Math.max(1, Math.round(etaSec / 60))} 分钟`;
+  return `${Math.max(1, Math.round(etaSec / 3600))} 小时`;
+}
 
 const ASPECT_OPTIONS = ['16:9', '9:16', '1:1', '4:3'] as const;
 
@@ -261,65 +275,96 @@ export function ProductionWizard() {
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
   const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
-  // Tracks shots waiting in the submission queue (before their turn to submit to Dreamina)
-  const [shotQueuedMap, setShotQueuedMap] = useState<Record<string, boolean>>({});
-  // 全局 SSE 推送的 batch-job 列表
-  const { jobs: globalJobs } = useGlobalJobs();
-  // 正在点击"同步状态"按钮
+  const { jobs: globalJobs, snapshot } = useGlobalJobs();
   const [syncing, setSyncing] = useState(false);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const [bulkCancelling, setBulkCancelling] = useState(false);
 
-  /**
-   * 依据 SSE 推送的 batch-job，派生当前项目每个 shot 的"最新一条 job 状态"。
-   * 同 shot 如果多次提交，优先级：done > processing > queuing > pending > failed/cancelled（done 意味着已完成）
-   * 只要有 done 就不展示任何 running/failed 态；否则按优先级挑一个活跃态。
-   */
-  const shotJobStatusMap = useMemo<Record<string, 'queuing' | 'processing' | 'failed'>>(() => {
-    if (!serverProjectId) return {};
-    const out: Record<string, 'queuing' | 'processing' | 'failed'> = {};
-    const relevant = globalJobs.filter((j) => j.projectId === serverProjectId);
-    const byShot = new Map<number, typeof relevant>();
-    for (const j of relevant) {
-      if (typeof j.shotIndex !== 'number') continue;
-      const arr = byShot.get(j.shotIndex) ?? [];
-      arr.push(j);
-      byShot.set(j.shotIndex, arr);
+  const projectJobs = useMemo(
+    () => globalJobs.filter((j) => j.source === 'production' && j.projectId === serverProjectId),
+    [globalJobs, serverProjectId],
+  );
+
+  const shotActiveJobMap = useMemo<Record<string, BatchJobDto>>(() => {
+    const out: Record<string, BatchJobDto> = {};
+    const byShot = new Map<number, BatchJobDto[]>();
+    const activeRank: Record<string, number> = {
+      processing: 4,
+      queuing: 3,
+      pending: 2,
+      awaiting_submit: 1,
+    };
+    for (const job of projectJobs) {
+      if (typeof job.shotIndex !== 'number') continue;
+      if (!activeRank[job.status]) continue;
+      const arr = byShot.get(job.shotIndex) ?? [];
+      arr.push(job);
+      byShot.set(job.shotIndex, arr);
     }
     for (const [idx, arr] of byShot) {
-      if (arr.some((j) => j.status === 'done')) continue; // 已经有成功视频，不展示 running/fail
-      if (arr.some((j) => j.status === 'processing')) { out[String(idx)] = 'processing'; continue; }
-      if (arr.some((j) => j.status === 'queuing' || j.status === 'pending')) { out[String(idx)] = 'queuing'; continue; }
-      // 全部 failed/cancelled 才算失败（注意：shot.previewVideoUrl 存在时 Strip 会自动屏蔽失败徽标）
-      if (arr.every((j) => j.status === 'failed' || j.status === 'cancelled')) { out[String(idx)] = 'failed'; }
+      out[String(idx)] = [...arr].sort((a, b) => {
+        const rankDiff = activeRank[b.status] - activeRank[a.status];
+        if (rankDiff !== 0) return rankDiff;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      })[0];
     }
     return out;
-  }, [globalJobs, serverProjectId]);
+  }, [projectJobs]);
 
-  /**
-   * 每个 shot 挑"最新一条活跃 job"的即梦队列信息（queue_idx / queue_length），
-   * 给 ShotStrip 做 tooltip 展示。done/failed 的 job 不参与，processing 时一般没有 queueInfo
-   * 但如果有（即梦偶尔附带）也一并带上。
-   */
-  const shotJobQueueInfoMap = useMemo<Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }>>(() => {
-    if (!serverProjectId) return {};
-    const out: Record<string, { queue_idx?: number; queue_length?: number; queue_status?: string }> = {};
-    const relevant = globalJobs.filter((j) =>
-      j.projectId === serverProjectId &&
-      (j.status === 'queuing' || j.status === 'processing' || j.status === 'pending') &&
-      j.queueInfo,
-    );
-    const latestByShot = new Map<number, typeof relevant[number]>();
-    for (const j of relevant) {
-      if (typeof j.shotIndex !== 'number') continue;
-      const prev = latestByShot.get(j.shotIndex);
-      if (!prev || new Date(j.updatedAt).getTime() > new Date(prev.updatedAt).getTime()) {
-        latestByShot.set(j.shotIndex, j);
-      }
+  const shotJobStatusMap = useMemo<Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'>>(() => {
+    const out: Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'> = {};
+    const byShot = new Map<number, BatchJobDto[]>();
+    for (const job of projectJobs) {
+      if (typeof job.shotIndex !== 'number') continue;
+      const arr = byShot.get(job.shotIndex) ?? [];
+      arr.push(job);
+      byShot.set(job.shotIndex, arr);
     }
-    for (const [idx, j] of latestByShot) {
-      if (j.queueInfo) out[String(idx)] = j.queueInfo;
+    for (const [idx, arr] of byShot) {
+      const activeJob = shotActiveJobMap[String(idx)];
+      if (activeJob) {
+        if (activeJob.status === 'processing') out[String(idx)] = 'processing';
+        else if (activeJob.status === 'awaiting_submit') out[String(idx)] = 'awaiting_submit';
+        else out[String(idx)] = 'queuing';
+        continue;
+      }
+      const latestDoneTs = Math.max(
+        -1,
+        ...arr.filter((job) => job.status === 'done').map((job) => new Date(job.updatedAt).getTime()),
+      );
+      const latestTerminal = [...arr]
+        .filter((job) => job.status === 'failed' || job.status === 'cancelled')
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+      if (!latestTerminal) continue;
+      if (new Date(latestTerminal.updatedAt).getTime() < latestDoneTs) continue;
+      out[String(idx)] = latestTerminal.status === 'cancelled' ? 'cancelled' : 'failed';
     }
     return out;
-  }, [globalJobs, serverProjectId]);
+  }, [projectJobs, shotActiveJobMap]);
+
+  const shotJobQueueInfoMap = useMemo<Record<string, {
+    queue_idx?: number;
+    queue_length?: number;
+    queue_status?: string;
+    globalQueuePos?: number;
+    etaSec?: number;
+  }>>(() => {
+    const out: Record<string, {
+      queue_idx?: number;
+      queue_length?: number;
+      queue_status?: string;
+      globalQueuePos?: number;
+      etaSec?: number;
+    }> = {};
+    for (const [key, job] of Object.entries(shotActiveJobMap)) {
+      out[key] = {
+        ...(job.queueInfo ?? {}),
+        ...(typeof job.globalQueuePos === 'number' ? { globalQueuePos: job.globalQueuePos } : {}),
+        ...(typeof job.etaSec === 'number' ? { etaSec: job.etaSec } : {}),
+      };
+    }
+    return out;
+  }, [shotActiveJobMap]);
 
   const handleSyncBatchJobsNow = useCallback(async () => {
     if (syncing) return;
@@ -344,16 +389,6 @@ export function ProductionWizard() {
       setSyncing(false);
     }
   }, [syncing]);
-  // Per-shot cancel tokens (ref so mutations don't trigger re-render)
-  const shotCancelMap = useRef<Record<string, { cancelled: boolean }>>({});
-  // Serialize Dreamina submissions: each shot waits for the previous shot's submit_id to be
-  // received before it sends its own request (not until polling completes — that runs concurrently).
-  const dreaminaQueueRef = useRef<Promise<void>>(Promise.resolve());
-  // Adaptive queue: slow mode waits for previous job to fully complete before next submission
-  const dreaminaSlowModeRef = useRef(false);
-  const slowModeSuccessCountRef = useRef(0);
-  // SSE completion listeners for slow-mode queue gating
-  const sseCompletionListenersRef = useRef<Set<(job: BatchJobDto) => void>>(new Set());
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
       setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
@@ -422,97 +457,75 @@ export function ProductionWizard() {
     [project.shots, project.meta.title, setProject],
   );
 
-  /**
-   * SSE 监听 batch-jobs 完成事件。当后端轮询到即梦视频已生成并落盘后，
-   * 通过 SSE 推送到前端，自动将视频填入对应分镜。
-   * 同时用于刷新后恢复——后端持续轮询不受前端刷新影响。
-   */
+  const handledJobStateRef = useRef<Record<string, string>>({});
+
   useEffect(() => {
-    if (isServerBootstrapping) return;
-    const pid = serverProjectId;
-    if (!pid) return;
-    const token = localStorage.getItem('gobs_token') ?? '';
-    if (!token) return;
-    const BASE = import.meta.env.VITE_API_BASE_URL || '';
-    const es = new EventSource(`${BASE}/api/batch-jobs/stream?token=${encodeURIComponent(token)}`);
-    es.onmessage = (e: MessageEvent) => {
-      try {
-        const job = JSON.parse(e.data as string) as BatchJobDto;
-        if (job.source !== 'production' || job.projectId !== pid) return;
-        if (job.status === 'done' && job.videoUrl) {
-          // 找到对应 shot 并填入视频
-          setProject((p) => {
-            const idx = p.shots.findIndex((s) => s.shotIndex === job.shotIndex);
-            if (idx < 0) return p;
-            const cur = p.shots[idx];
-            if (!cur) return p;
-            const versionId = `batch-${job.id}-${Date.now()}`;
-            const version: ProductionShotVideoVersion = {
-              id: versionId,
-              taskId: job.taskId,
-              createdAt: Date.now(),
-              videoUrl: job.videoUrl,
-            };
-            const prev = Array.isArray(cur.previewVideoVersions) ? cur.previewVideoVersions : [];
-            // 跳过已经有这个 taskId 的版本（避免重复）
-            if (prev.some((v) => v.taskId === job.taskId)) return p;
-            const shots = [...p.shots];
-            shots[idx] = {
-              ...cur,
-              pendingVideoSubmitId: undefined,
-              previewVideoVersions: [version, ...prev],
-              selectedPreviewVideoVersionId: versionId,
-              previewVideoUrl: job.videoUrl,
-              previewVideoPath: undefined,
-            } as ProductionShot;
-            return { ...p, shots, assembled: null };
-          });
-          toast.success(`分镜 ${job.shotIndex} 视频已就绪`);
-          needsFlushRef.current = true;
-          // 清除对应分镜的 busy 状态（刷新恢复时设置的）
-          setShotBusyMap((prev) => {
-            const n = { ...prev };
-            delete n[String(job.shotIndex)];
-            return n;
-          });
-        }
-        if (job.status === 'failed') {
-          setProject((p) => {
-            const idx = p.shots.findIndex((s) => s.shotIndex === job.shotIndex);
-            if (idx < 0) return p;
-            const shots = [...p.shots];
-            const cur = shots[idx];
-            if (!cur) return p;
-            shots[idx] = { ...cur, pendingVideoSubmitId: undefined };
-            return { ...p, shots };
-          });
-          toast.error(`分镜 ${job.shotIndex} 生成失败：${job.failReason || '未知错误'}`);
-          setShotBusyMap((prev) => {
-            const n = { ...prev };
-            delete n[String(job.shotIndex)];
-            return n;
-          });
-        }
-        // Notify slow-mode queue listeners when any production job reaches terminal state
-        if (job.status === 'done' || job.status === 'failed') {
-          for (const listener of sseCompletionListenersRef.current) {
-            try { listener(job); } catch { /* ignore */ }
-          }
-          // 检查是否所有 pending 分镜都已完成，清除批量标记
-          setProject((p) => {
-            const stillPending = p.shots.some((s) => s.pendingVideoSubmitId);
-            if (!stillPending) {
-              const bk = `gobs_batch_gen_${pid ?? 'local'}`;
-              try { localStorage.removeItem(bk); } catch { /* ignore */ }
-            }
-            return p;
-          });
-        }
-      } catch { /* ignore parse errors */ }
-    };
-    return () => { es.close(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isServerBootstrapping, serverProjectId]);
+    if (isServerBootstrapping || !serverProjectId) return;
+    for (const job of projectJobs) {
+      const idx = project.shots.findIndex((s) => s.shotIndex === job.shotIndex);
+      if (idx < 0) continue;
+      const cur = project.shots[idx];
+      if (!cur) continue;
+      if (
+        job.submitId &&
+        (job.status === 'pending' || job.status === 'queuing' || job.status === 'processing') &&
+        cur.pendingVideoSubmitId !== job.submitId
+      ) {
+        setProject((p) => {
+          const shots = [...p.shots];
+          const shotCur = shots[idx];
+          if (!shotCur || shotCur.pendingVideoSubmitId === job.submitId) return p;
+          shots[idx] = { ...shotCur, pendingVideoSubmitId: job.submitId };
+          return { ...p, shots };
+        });
+      }
+      const stateKey = `${job.status}:${job.updatedAt}:${job.videoUrl ?? ''}:${job.failReason ?? ''}:${job.cancelledAt ?? ''}`;
+      if (handledJobStateRef.current[job.id] === stateKey) continue;
+      if (job.status === 'done' && job.videoUrl) {
+        handledJobStateRef.current[job.id] = stateKey;
+        saveShotVideo(idx, job.videoUrl, job.taskId || `dreamina-${job.submitId}`, undefined);
+        clearShotBusy(String(job.shotIndex));
+        continue;
+      }
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        handledJobStateRef.current[job.id] = stateKey;
+        const reason = job.status === 'cancelled'
+          ? job.failReason || '用户已取消本次任务'
+          : job.failReason || '未知错误';
+        setProject((p) => {
+          const shots = [...p.shots];
+          const shotCur = shots[idx];
+          if (!shotCur) return p;
+          shots[idx] = {
+            ...shotCur,
+            pendingVideoSubmitId: undefined,
+            lastVideoError: {
+              submitId: job.submitId || shotCur.pendingVideoSubmitId,
+              jobId: job.id,
+              cancelled: job.status === 'cancelled',
+              reason,
+              at: job.cancelledAt || job.updatedAt,
+            },
+          };
+          return { ...p, shots };
+        });
+        clearShotBusy(String(job.shotIndex));
+        needsFlushRef.current = true;
+        if (job.status === 'cancelled') toast.info(`分镜 ${job.shotIndex} 已取消：${reason}`);
+        else toast.error(`分镜 ${job.shotIndex} 生成失败：${reason}`);
+      }
+    }
+    const hasActiveProductionJob = projectJobs.some((job) =>
+      job.status === 'awaiting_submit' ||
+      job.status === 'pending' ||
+      job.status === 'queuing' ||
+      job.status === 'processing',
+    );
+    if (!hasActiveProductionJob) {
+      const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
+      try { localStorage.removeItem(batchKey); } catch { /* ignore */ }
+    }
+  }, [clearShotBusy, isServerBootstrapping, project.shots, projectJobs, saveShotVideo, serverProjectId, setProject]);
 
   useEffect(() => {
     requestNotificationPermission();
@@ -1414,27 +1427,17 @@ export function ProductionWizard() {
     clearShotBusy,
   ]);
 
-  /** 核心：提交即梦 + 注册 batch-job（参数化版本，供单镜 / 批量共用）。 */
+  /** 核心：将镜头生成请求入队到后端全局调度器。 */
   const generateVideoForShotIdx = useCallback(async (shotIdx: number) => {
     const s = project.shots[shotIdx];
     if (!s) return;
-    const shotId = String(s.shotIndex);
-    setShotBusy(shotId, 'video');
-    const cancelToken = { cancelled: false };
-    shotCancelMap.current[shotId] = cancelToken;
-
-    const queueSlot = { resolve: (() => { /* replaced below */ }) as () => void };
-    const prevQueue = dreaminaQueueRef.current;
-    dreaminaQueueRef.current = new Promise<void>((resolve) => { queueSlot.resolve = resolve; });
-    setShotQueuedMap((prev) => ({ ...prev, [shotId]: true }));
-    await prevQueue;
-    setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
-    if (cancelToken.cancelled) {
-      queueSlot.resolve();
-      clearShotBusy(shotId);
-      delete shotCancelMap.current[shotId];
+    if (!serverProjectId) {
+      setErr('请先保存项目后再生成分镜视频');
+      toast.error('请先保存项目后再生成分镜视频');
       return;
     }
+    const shotId = String(s.shotIndex);
+    setShotBusy(shotId, 'video');
 
     try {
       const pref = project.meta.shotVideoDreaminaModel?.trim();
@@ -1493,113 +1496,27 @@ export function ProductionWizard() {
 
       const submitReq = {
         storyboardText,
-        materials: [] as { id: string; name: string; mimeType?: string }[],
         duration: dur,
         aspectRatio: ar,
         model,
-        source: 'production' as const,
-        // 孤儿 submitId 恢复用：即使 submit 响应丢失，后端 scanner 也能通过
-        // projectId + shotIndex + prompt 从 list_task 反查并重建 batch-job
-        ...(serverProjectId ? { projectId: serverProjectId } : {}),
-        shotIndex: s.shotIndex,
-        shotDescription: storyboardText.slice(0, 120),
         ...(mv ? { dreaminaModelVersion: mv } : {}),
         ...extraBody,
       };
-
-      const is1310Error = (err: unknown): boolean => {
-        const msg = err instanceof Error ? err.message : String(err);
-        return /排队|1310|ExceedConcurrency/i.test(msg);
-      };
-
-      const waitForAnyJobCompletion = (): Promise<BatchJobDto> =>
-        new Promise((resolve) => {
-          const handler = (job: BatchJobDto) => {
-            sseCompletionListenersRef.current.delete(handler);
-            resolve(job);
-          };
-          sseCompletionListenersRef.current.add(handler);
-        });
-
-      let submit: { submitId: string; taskId: string };
-      try {
-        submit = await submitDreaminaAsync(submitReq);
-        slowModeSuccessCountRef.current++;
-        if (slowModeSuccessCountRef.current >= 2) {
-          dreaminaSlowModeRef.current = false;
-        }
-      } catch (firstErr) {
-        if (!is1310Error(firstErr)) throw firstErr;
-        dreaminaSlowModeRef.current = true;
-        slowModeSuccessCountRef.current = 0;
-        toast.info('即梦并发受限，等待前一个视频完成后自动提交…');
-        await waitForAnyJobCompletion();
-        await new Promise<void>((r) => setTimeout(r, 5000));
-        if (cancelToken.cancelled) throw new Error('已取消');
-        try {
-          submit = await submitDreaminaAsync(submitReq);
-        } catch (retryErr) {
-          throw is1310Error(retryErr)
-            ? new Error('即梦仍在并发限制中，请稍后手动重试')
-            : retryErr;
-        }
-      }
-
+      const { globalQueuePos, etaSec } = await enqueueProductionShot(serverProjectId, s.shotIndex, submitReq);
       setProject((p) => {
         const shots = [...p.shots];
         const cur = shots[shotIdx];
         if (!cur) return p;
-        shots[shotIdx] = { ...cur, pendingVideoSubmitId: submit.submitId };
+        shots[shotIdx] = { ...cur, lastVideoError: undefined };
         return { ...p, shots };
       });
-
-      const desc = storyboardText.slice(0, 120);
-      /**
-       * 即梦提交成功后，必须把 submitId 注册到后台 batch-jobs 队列，后端 poller 才会
-       * 轮询并落盘。网络抖动时单次注册失败会导致「视频生成完成但 H5 看不到」，
-       * 因此这里做带退避的重试；三轮都失败时回滚 pendingVideoSubmitId，提示用户
-       * 改走手动「检查进度」。
-       */
-      let registered = false;
-      let lastRegisterErr: unknown = null;
-      for (let attempt = 0; attempt < 3 && !registered; attempt++) {
-        try {
-          await submitBatchJobs(serverProjectId || 'default', [{
-            submitId: submit.submitId,
-            taskId: submit.taskId,
-            shotIndex: s.shotIndex,
-            shotDescription: desc,
-            model,
-          }]);
-          registered = true;
-        } catch (e) {
-          lastRegisterErr = e;
-          if (attempt < 2) {
-            await new Promise<void>((r) => setTimeout(r, 1500 * (attempt + 1)));
-          }
-        }
-      }
-
-      if (registered) {
-        toast.success(`分镜 #${s.shotIndex} 已提交到即梦`);
-      } else {
-        console.warn('[production] batch-job 注册失败，视频可能在即梦后台已生成但未回传', lastRegisterErr);
-        toast.error(
-          `分镜 #${s.shotIndex} 已提交到即梦，但后台任务注册失败；请稍后点「检查进度」手动同步`,
-        );
-      }
-
-      if (dreaminaSlowModeRef.current) {
-        await waitForAnyJobCompletion();
-      }
-      queueSlot.resolve();
+      toast.success(`分镜 #${s.shotIndex} 已入队，平台第 ${globalQueuePos + 1} 位，约 ${formatEta(etaSec)} 后开始`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '分镜视频提交失败');
-      queueSlot.resolve();
+      const message = e instanceof Error ? e.message : '分镜视频入队失败';
+      setErr(message);
+      toast.error(message);
     } finally {
       clearShotBusy(shotId);
-      setShotQueuedMap((prev) => { const n = { ...prev }; delete n[shotId]; return n; });
-      delete shotCancelMap.current[shotId];
     }
   }, [
     project.shots,
@@ -1614,7 +1531,6 @@ export function ProductionWizard() {
     setShotBusy,
     clearShotBusy,
     setProject,
-    setShotQueuedMap,
   ]);
 
   const handleGenerateShotVideo = useCallback(async () => {
@@ -1622,80 +1538,27 @@ export function ProductionWizard() {
     await generateVideoForShotIdx(selectedShotIdx);
   }, [generateVideoForShotIdx, selectedShotIdx]);
 
-  /** 批量生成所有缺少视频的分镜（利用自适应队列串行提交） */
+  /** 批量生成所有缺少视频的分镜。 */
   const handleBatchGenerateAllVideos = useCallback(() => {
     const missing = project.shots
       .map((s, i) => ({ s, i }))
-      .filter(({ s }) => !s.previewVideoUrl && !s.previewVideoPath && !s.pendingVideoSubmitId
-        && !(s.previewVideoVersions?.length));
+      .filter(({ s }) =>
+        !s.previewVideoUrl &&
+        !s.previewVideoPath &&
+        !(s.previewVideoVersions?.length) &&
+        !shotActiveJobMap[String(s.shotIndex)],
+      );
     if (missing.length === 0) {
       toast.info('所有分镜已有视频，无需生成');
       return;
     }
-    // 持久化批量标记，刷新后可自动续接
     const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
     try { localStorage.setItem(batchKey, '1'); } catch { /* ignore */ }
     toast.info(`开始批量生成 ${missing.length} 个分镜视频…`);
     for (const { i } of missing) {
       void generateVideoForShotIdx(i);
     }
-  }, [project.shots, serverProjectId, generateVideoForShotIdx]);
-
-  // ── 刷新恢复：清理 stale pending + 自动续接批量队列 ──────────────────────
-  // 注意：这里**不再**把带 pendingVideoSubmitId 的 shot 标成 shotBusyMap='video'。
-  // `shotBusyMap='video'` 严格语义是「正在本地调 /api/video/submit 的那几秒」，
-  // 跟「已提交给即梦、正在即梦侧排队/生成」是两回事。混为一谈会导致：
-  //   1) 徽标永远卡"提交中"，覆盖掉 SSE 推过来的"即梦排队/即梦生成"实时状态；
-  //   2) `StepStoryboardGenerateActions` 的「手动检查进度」按钮因 isSubmitting=true 被隐藏。
-  // 有 pendingVideoSubmitId 时交给 ShotStrip 默认分支渲染"即梦生成/排队"即可，
-  // SSE 推到 queuing/processing/failed 时自动切对应徽标。
-  const batchResumedRef = useRef(false);
-  useEffect(() => {
-    if (isServerBootstrapping || batchResumedRef.current) return;
-    if (!project.shots.length) return;
-    batchResumedRef.current = true;
-
-    // 兜底：历史遗留的 shot 可能同时带 pendingVideoSubmitId 和已生成的 previewVideoUrl/Path/versions
-    //（即梦回写失败或 batch-job 未写回），这种情况下不应再显示"提交中"。直接清 pending 并标记为已完成。
-    const staleIdxs: number[] = [];
-    project.shots.forEach((s, idx) => {
-      const hasVideo = Boolean(s.previewVideoUrl || s.previewVideoPath || s.previewVideoVersions?.length);
-      if (s.pendingVideoSubmitId && hasVideo) {
-        staleIdxs.push(idx);
-      }
-    });
-    if (staleIdxs.length) {
-      setProject((p) => {
-        const shots = [...p.shots];
-        for (const i of staleIdxs) {
-          const cur = shots[i];
-          if (!cur) continue;
-          shots[i] = { ...cur, pendingVideoSubmitId: undefined };
-        }
-        return { ...p, shots };
-      });
-    }
-
-    const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
-    const hadBatch = (() => { try { return localStorage.getItem(batchKey) === '1'; } catch { return false; } })();
-    if (hadBatch) {
-      const remaining = project.shots.filter((s) =>
-        !s.previewVideoUrl && !s.previewVideoPath && !s.pendingVideoSubmitId
-        && !(s.previewVideoVersions?.length),
-      );
-      if (remaining.length > 0) {
-        toast.info(`检测到 ${remaining.length} 个分镜视频待生成，自动续接批量队列…`);
-        setTimeout(() => {
-          for (const s of remaining) {
-            const idx = project.shots.indexOf(s);
-            if (idx >= 0) void generateVideoForShotIdx(idx);
-          }
-        }, 2000);
-      } else {
-        try { localStorage.removeItem(batchKey); } catch { /* ignore */ }
-      }
-    }
-  }, [isServerBootstrapping, project.shots, serverProjectId, generateVideoForShotIdx]);
+  }, [generateVideoForShotIdx, project.shots, serverProjectId, shotActiveJobMap]);
 
   // ── 手动检查视频生成进度 ─────────────────────────────────────────────────
   const [checkingProgress, setCheckingProgress] = useState(false);
@@ -1712,6 +1575,25 @@ export function ProductionWizard() {
         if (job.status === 'done' && job.videoUrl) {
           saveShotVideo(selectedShotIdx, job.videoUrl, job.taskId || `dreamina-${s.pendingVideoSubmitId}`, undefined);
           toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
+        } else if (job.status === 'cancelled') {
+          toast.info(`分镜 ${s.shotIndex} 已取消：${job.failReason || '后台已停止跟进'}`);
+          setProject((p) => {
+            const shots = [...p.shots];
+            const cur = shots[selectedShotIdx];
+            if (!cur) return p;
+            shots[selectedShotIdx] = {
+              ...cur,
+              pendingVideoSubmitId: undefined,
+              lastVideoError: {
+                submitId: job.submitId || cur.pendingVideoSubmitId,
+                jobId: job.id,
+                cancelled: true,
+                reason: job.failReason || '用户已取消本次任务',
+                at: job.cancelledAt || job.updatedAt,
+              },
+            };
+            return { ...p, shots };
+          });
         } else if (job.status === 'failed') {
           toast.error(`分镜 ${s.shotIndex} 生成失败：${job.failReason || '未知'}`);
           setProject((p) => {
@@ -1749,6 +1631,45 @@ export function ProductionWizard() {
       setCheckingProgress(false);
     }
   }, [project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject]);
+
+  const selectedShotJob = project.shots[selectedShotIdx]
+    ? shotActiveJobMap[String(project.shots[selectedShotIdx].shotIndex)] ?? null
+    : null;
+  const queueSnapshot: QueueSnapshotDto = snapshot ?? { totalActive: 0, totalWaiting: 0, avgSecPerJob: 120 };
+
+  const handleCancelActiveJob = useCallback(async (job: BatchJobDto) => {
+    if (!job?.id) return;
+    if (job.status === 'processing') {
+      const confirmed = window.confirm('任务正在渲染中，取消后本次积分通常无法退回。确定继续吗？');
+      if (!confirmed) return;
+    }
+    setCancellingJobId(job.id);
+    try {
+      const result = await cancelBatchJob(job.id);
+      if (!result.ok && result.reason === 'already_terminal') {
+        toast.info('任务已经结束，无需再取消');
+        return;
+      }
+      toast.info(result.note);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '取消失败');
+    } finally {
+      setCancellingJobId((current) => (current === job.id ? null : current));
+    }
+  }, []);
+
+  const handleCancelQueuedByProject = useCallback(async () => {
+    if (!serverProjectId) return;
+    setBulkCancelling(true);
+    try {
+      const result = await cancelBatchByProject(serverProjectId);
+      toast.info(result.cancelled > 0 ? `已取消 ${result.cancelled} 个排队任务` : '当前没有可取消的排队任务');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '批量取消失败');
+    } finally {
+      setBulkCancelling(false);
+    }
+  }, [serverProjectId]);
 
   // ── AI 审片助手 ──────────────────────────────────────────────────────────
   // ── AI 审片 + 一致性检查 ────────────────────────────────────────────────────
@@ -1999,7 +1920,7 @@ export function ProductionWizard() {
             scSheets={scSheets}
             shotMediaBusy={shotBusyMap[String(shot?.shotIndex ?? '')] ?? null}
             shotBusyMap={shotBusyMap}
-            shotQueuedMap={shotQueuedMap}
+            shotActiveJobMap={shotActiveJobMap}
             shotJobStatusMap={shotJobStatusMap}
             shotJobQueueInfoMap={shotJobQueueInfoMap}
             onSyncBatchJobs={handleSyncBatchJobsNow}
@@ -2034,11 +1955,18 @@ export function ProductionWizard() {
             }
             onGenerateShotFrame={() => void handleGenerateShotFrame()}
             onGenerateShotVideo={() => void handleGenerateShotVideo()}
+            onCancelActiveJob={selectedShotJob ? () => void handleCancelActiveJob(selectedShotJob) : undefined}
+            onCancelShotJob={(job) => void handleCancelActiveJob(job)}
+            cancelBusy={!!(selectedShotJob && cancellingJobId === selectedShotJob.id)}
+            onCancelProjectQueue={() => void handleCancelQueuedByProject()}
+            bulkCancelling={bulkCancelling}
             onBatchGenerateAllVideos={handleBatchGenerateAllVideos}
             onKeepOnlyCurrentVersion={keepOnlyShotVideoVersion}
             onSelectVideoVersion={selectShotVideoVersion}
             onCheckVideoProgress={() => void handleCheckVideoProgress()}
             checkingProgress={checkingProgress}
+            selectedShotJob={selectedShotJob}
+            queueSnapshot={queueSnapshot}
             aiReviewResult={aiReviewResult}
             aiReviewing={aiReviewing}
             onAiReview={() => void handleAiReview()}

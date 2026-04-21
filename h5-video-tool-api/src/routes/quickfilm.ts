@@ -340,7 +340,14 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
 
     if (i === 0) {
       // First shot: submit immediately to Dreamina
-      const { submitId, taskId } = await submitDreaminaVideo(submitParams);
+      const { submitId, taskId } = await submitDreaminaVideo({
+        prompt,
+        aspectRatio: '9:16',
+        duration,
+        model,
+        imageBase64: refBase64,
+        imageMimeType: refBase64 ? 'image/png' : undefined,
+      });
       const bj: BatchJob = {
         id,
         submitId,
@@ -526,4 +533,3 @@ draftsRouter.delete('/:id', async (req: Request, res: Response) => {
 });
 
 export { draftsRouter };
-

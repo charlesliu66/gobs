@@ -156,7 +156,25 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.65 -->
+<!-- NEXT_VERSION: v0.66 -->
+
+### v0.65 — 2026-04-21
+
+**即梦全平台 FIFO 调度器 + 可取消排队 + 多用户可见队列位**
+
+v0.64 解决了单用户视角的状态可见性，但多用户同时使用即梦时仍会出现任务丢失、无法取消、看不到平台排队位置的问题。本版把调度权收归后端，前端统一消费全局队列状态：
+
+**核心变更：**
+- **[api] 新增 `dreaminaScheduler`**：全平台 FIFO 调度，按 `createdAt` 排序提交 awaiting_submit 任务；1310 并发限制自动留在队列里等待下次 tick，不再把错误直接抛给前端
+- **[api] 新增 `POST /api/batch-jobs/enqueue`**：高级制片镜头先落盘为 `awaiting_submit`，刷新页面也不会丢任务
+- **[api] cancelJob 升级为三档语义**：awaiting_submit 无损移除、pending/queuing 停止继续跟进、processing 明确提示积分通常无法追回
+- **[api] SSE 新增 `queue-snapshot` 广播**：跨用户共享平台活跃数 / 排队数 / 平均耗时，不暴露用户隐私
+- **[frontend] 删除前端本地 Dreamina 排队逻辑**：移除 `dreaminaQueueRef`、`waitForAnyJobCompletion`、1310 本地重试，统一改走后端 enqueue
+- **[frontend] 分镜五态统一**：等待调度 / 即梦排队 / 即梦生成 / 已取消 / 生成失败
+- **[frontend] 新增取消入口**：操作区支持“取消排队 / 放弃本次生成”，缩略图 hover 支持单镜快捷取消，工作区工具栏支持“取消本项目排队”
+- **[frontend] 顶部平台状态条**：显示当前平台空闲 / 使用中 / 繁忙，以及平均耗时
+
+**Acceptance：** 多用户并发零任务丢失；取消请求即时返回；刷新后队列状态与视频回填持续可恢复。
 
 ### v0.64.2 — 2026-04-20（hotfix）
 
@@ -1074,5 +1092,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-20（v0.64.2）*
-
+*最后更新：2026-04-21（v0.65）*

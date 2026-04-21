@@ -5,21 +5,21 @@ import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import {
-  getAllJobs,
-  getJobsByProject,
-  getJobById,
   addJob,
-  cancelJob,
-  pollJobNow,
   batchJobEvents,
+  cancelJob,
+  getAllJobs,
+  getJobById,
+  getJobsByProject,
+  pollJobNow,
   type BatchJob,
+  type BatchJobSubmitParams,
 } from '../services/batchJobsQueue.js';
 import { fromBatchJobStatus } from '../domain/job-status.js';
 import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 
 const router = Router();
 
-/** POST /api/batch-jobs — 批量提交（已有 submitId 的分镜直接加入队列） */
 router.post('/', async (req, res) => {
   const { projectId, shots } = req.body as {
     projectId?: string;
@@ -37,19 +37,19 @@ router.post('/', async (req, res) => {
   }
   const now = new Date().toISOString();
   const added: BatchJob[] = [];
-  for (const s of shots) {
-    if (!s.submitId) continue;
+  for (const shot of shots) {
+    if (!shot.submitId) continue;
     const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
     const job: BatchJob = {
       id,
-      submitId: s.submitId,
-      taskId: s.taskId ?? `dreamina-${s.submitId}`,
+      submitId: shot.submitId,
+      taskId: shot.taskId ?? `dreamina-${shot.submitId}`,
       projectId,
-      source: (s as Record<string, unknown>).source === 'quickfilm' ? 'quickfilm' : 'production',
+      source: (shot as Record<string, unknown>).source === 'quickfilm' ? 'quickfilm' : 'production',
       username: req.user?.username,
-      shotIndex: s.shotIndex,
-      shotDescription: s.shotDescription ?? '',
-      model: s.model ?? 'dreamina-multimodal',
+      shotIndex: shot.shotIndex,
+      shotDescription: shot.shotDescription ?? '',
+      model: shot.model ?? 'dreamina-multimodal',
       status: 'pending',
       createdAt: now,
       updatedAt: now,
@@ -60,7 +60,57 @@ router.post('/', async (req, res) => {
   res.json({ added: added.length, jobs: added });
 });
 
-/** GET /api/batch-jobs?projectId=xxx — 查询项目的所有任务（仅返回当前登录用户的任务） */
+router.post('/enqueue', async (req, res) => {
+  const username = req.user?.username?.trim();
+  const { projectId, shotIndex, submitParams } = req.body as {
+    projectId?: string;
+    shotIndex?: number;
+    submitParams?: BatchJobSubmitParams;
+  };
+
+  if (!username) {
+    res.status(401).json({ error: '需要登录' });
+    return;
+  }
+  if (!projectId || typeof shotIndex !== 'number' || !submitParams?.model || !submitParams.aspectRatio) {
+    res.status(400).json({ error: 'need projectId + shotIndex + submitParams' });
+    return;
+  }
+
+  const mine = (await getAllJobs()).filter(
+    (job) => job.username === username && job.projectId === projectId && job.status === 'awaiting_submit',
+  );
+  if (mine.length >= 20) {
+    res.status(429).json({ error: '本项目排队已满（20 个），请等现有任务完成或取消部分' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const job: BatchJob = {
+    id: `bj_${Date.now()}_${randomBytes(3).toString('hex')}`,
+    submitId: '',
+    taskId: '',
+    projectId,
+    source: 'production',
+    username,
+    shotIndex,
+    shotDescription: (submitParams.storyboardText ?? submitParams.prompt ?? '').slice(0, 120),
+    model: submitParams.model,
+    status: 'awaiting_submit',
+    submitParams,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await addJob(job);
+  const saved = await getJobById(job.id);
+  res.json({
+    jobId: job.id,
+    globalQueuePos: saved?.globalQueuePos ?? 0,
+    etaSec: saved?.etaSec ?? 0,
+    job: saved,
+  });
+});
+
 router.get('/', async (req, res) => {
   const callerUsername = req.user?.username?.trim();
   if (!callerUsername) {
@@ -69,97 +119,142 @@ router.get('/', async (req, res) => {
   }
   const { projectId } = req.query as { projectId?: string };
   const rawJobs = projectId ? await getJobsByProject(projectId) : await getAllJobs();
-  const jobs = rawJobs.filter((j) => j.username === callerUsername);
-  const enriched = jobs.map((j) => ({ ...j, unifiedStatus: fromBatchJobStatus(j.status) }));
-  res.json({ jobs: enriched });
+  const jobs = rawJobs
+    .filter((job) => job.username === callerUsername)
+    .map((job) => ({ ...job, unifiedStatus: fromBatchJobStatus(job.status) }));
+  res.json({ jobs });
 });
 
-/** DELETE /api/batch-jobs/project/:projectId — 批量取消项目内所有未完成任务 */
 router.delete('/project/:projectId', async (req, res) => {
+  const username = req.user?.username?.trim();
   const { projectId } = req.params;
-  if (!projectId) { res.status(400).json({ error: 'need projectId' }); return; }
-  const jobs = await getJobsByProject(projectId);
-  const cancellable = jobs.filter((j) =>
-    j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit',
-  );
-  let cancelled = 0;
-  for (const j of cancellable) {
-    if (await cancelJob(j.id)) cancelled++;
+  const shotIndexesParam = req.query['shotIndexes'];
+  const shotIndexes = typeof shotIndexesParam === 'string'
+    ? new Set(
+        shotIndexesParam
+          .split(',')
+          .map((item) => Number.parseInt(item, 10))
+          .filter((value) => Number.isFinite(value)),
+      )
+    : null;
+
+  if (!username) {
+    res.status(401).json({ error: '需要登录' });
+    return;
   }
-  res.json({ cancelled, total: cancellable.length });
+  if (!projectId) {
+    res.status(400).json({ error: 'need projectId' });
+    return;
+  }
+
+  const jobs = (await getJobsByProject(projectId)).filter((job) =>
+    job.username === username
+    && job.status !== 'processing'
+    && (job.status === 'awaiting_submit' || job.status === 'pending' || job.status === 'queuing')
+    && (!shotIndexes || shotIndexes.has(job.shotIndex)),
+  );
+
+  let cancelled = 0;
+  for (const job of jobs) {
+    const result = await cancelJob(job.id, 'user');
+    if (result.ok) cancelled += 1;
+  }
+  res.json({ cancelled, total: jobs.length });
 });
 
-/** DELETE /api/batch-jobs/:id — 取消任务 */
 router.delete('/:id', async (req, res) => {
-  const ok = await cancelJob(req.params.id);
-  res.json({ ok });
+  const username = req.user?.username?.trim();
+  const job = await getJobById(req.params.id);
+  if (!job) {
+    res.json({ ok: false, wasteCredit: false, note: '任务不存在', reason: 'not_found' });
+    return;
+  }
+  if (!username || (job.username && job.username !== username)) {
+    res.json({ ok: false, wasteCredit: false, note: '无权取消该任务', reason: 'forbidden' });
+    return;
+  }
+  const result = await cancelJob(job.id, 'user');
+  res.json(result);
 });
 
-/** POST /api/batch-jobs/:id/poll-now — 用户手动触发立即轮询 */
 router.post('/:id/poll-now', async (req, res) => {
   const id = req.params.id?.replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!id) { res.status(400).json({ error: 'invalid id' }); return; }
+  if (!id) {
+    res.status(400).json({ error: 'invalid id' });
+    return;
+  }
   const job = await pollJobNow(id);
-  if (!job) { res.status(404).json({ error: 'job not found' }); return; }
+  if (!job) {
+    res.status(404).json({ error: 'job not found' });
+    return;
+  }
   res.json({ job });
 });
 
-/**
- * POST /api/batch-jobs/sync-now — "同步状态"按钮：
- * 对当前用户所有 active (pending/queuing/processing) batch-job 立即触发一次 poll,
- * 同时触发一次 recovery scanner 扫描孤儿 submitId。
- * 用于 UI 长时间不更新时的一键兜底。
- */
 router.post('/sync-now', async (req, res) => {
   const username = req.user?.username;
-  if (!username) { res.status(401).json({ error: 'unauthorized' }); return; }
+  if (!username) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
 
   const all = await getAllJobs();
   const targets = all.filter(
-    (j) => j.username === username &&
-      (j.status === 'pending' || j.status === 'queuing' || j.status === 'processing'),
+    (job) => job.username === username && ['pending', 'queuing', 'processing'].includes(job.status),
   );
 
-  const CONCURRENCY = 5;
   const results: Array<{ id: string; status: string; videoUrl?: string; failReason?: string }> = [];
-  for (let i = 0; i < targets.length; i += CONCURRENCY) {
-    const batch = targets.slice(i, i + CONCURRENCY);
+  const concurrency = 5;
+  for (let index = 0; index < targets.length; index += concurrency) {
+    const batch = targets.slice(index, index + concurrency);
     const pairs = await Promise.all(
-      batch.map(async (j) => {
+      batch.map(async (job) => {
         try {
-          const u = await pollJobNow(j.id);
-          return u ? { id: u.id, status: u.status, videoUrl: u.videoUrl, failReason: u.failReason } : null;
-        } catch (e) {
-          return { id: j.id, status: 'error', failReason: e instanceof Error ? e.message : String(e) };
+          const updated = await pollJobNow(job.id);
+          return updated
+            ? { id: updated.id, status: updated.status, videoUrl: updated.videoUrl, failReason: updated.failReason }
+            : null;
+        } catch (error) {
+          return {
+            id: job.id,
+            status: 'error',
+            failReason: error instanceof Error ? error.message : String(error),
+          };
         }
       }),
     );
-    for (const p of pairs) if (p) results.push(p);
+    for (const item of pairs) {
+      if (item) results.push(item);
+    }
   }
 
-  // 同时触发一次孤儿 submitId 扫描
   let scan: { matched: string[]; expired: string[]; skipped: number } | null = null;
   try {
-    const mod = await import('../services/dreaminaRecovery.js');
-    scan = await mod.runRecoveryScan();
-  } catch (e) {
-    console.warn('[batch-jobs/sync-now] recovery scan skipped:', e);
+    const recovery = await import('../services/dreaminaRecovery.js');
+    scan = await recovery.runRecoveryScan();
+  } catch (error) {
+    console.warn('[batch-jobs/sync-now] recovery scan skipped', error);
   }
 
   res.json({ polled: results.length, results, scan });
 });
 
-/** GET /api/batch-jobs/stream?token=<jwt> — SSE 实时推送（按用户过滤） */
-router.get('/stream', (req, res) => {
+router.get('/stream', async (req, res) => {
   const token = req.query['token'] as string | undefined;
-  if (!token) { res.status(401).json({ error: 'token required' }); return; }
+  if (!token) {
+    res.status(401).json({ error: 'token required' });
+    return;
+  }
+
   let streamUsername: string | null = null;
   try {
     const payload = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as { username?: string };
     streamUsername = typeof payload.username === 'string' ? payload.username.trim() : null;
   } catch {
-    res.status(401).json({ error: 'invalid token' }); return;
+    res.status(401).json({ error: 'invalid token' });
+    return;
   }
+
   if (!streamUsername) {
     res.status(401).json({ error: 'token missing username' });
     return;
@@ -171,29 +266,35 @@ router.get('/stream', (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   (res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
 
-  const send = (job: BatchJob) => {
-    // 仅推送属于当前登录用户的任务，防止跨用户元数据泄露
+  const sendJob = (job: BatchJob) => {
     if (job.username !== streamUsername) return;
     const enriched = { ...job, unifiedStatus: fromBatchJobStatus(job.status) };
     res.write(`data: ${JSON.stringify(enriched)}\n\n`);
   };
 
-  batchJobEvents.on('update', send);
+  const sendSnapshot = (snapshot: unknown) => {
+    res.write('event: queue-snapshot\n');
+    res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
+  };
 
-  // Send all current jobs immediately (post-filter)
-  void getAllJobs().then((jobs) => jobs.forEach(send));
+  batchJobEvents.on('update', sendJob);
+  batchJobEvents.on('queue-snapshot', sendSnapshot);
+
+  const currentJobs = await getAllJobs();
+  currentJobs.forEach(sendJob);
+  sendSnapshot({
+    totalActive: currentJobs.filter((job) => ['pending', 'queuing', 'processing'].includes(job.status)).length,
+    totalWaiting: currentJobs.filter((job) => job.status === 'awaiting_submit').length,
+    avgSecPerJob: computeAvgSecPerJob(currentJobs),
+  });
 
   req.on('close', () => {
-    batchJobEvents.off('update', send);
+    batchJobEvents.off('update', sendJob);
+    batchJobEvents.off('queue-snapshot', sendSnapshot);
     res.end();
   });
 });
 
-/** GET /api/batch-jobs/video/:id — 下载成品视频
- *
- * 放行在 auth 中间件中（<video> 无法携带 Bearer），此处通过 JWT 或 ?fat= 校验调用者，
- * 并对照 batch job 的 username 确保跨用户不可拉取。
- */
 router.get('/video/:id', async (req, res) => {
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '');
   if (!id) {
@@ -223,5 +324,22 @@ router.get('/video/:id', async (req, res) => {
   res.setHeader('Content-Disposition', `inline; filename="${id}.mp4"`);
   fs.createReadStream(filePath).pipe(res);
 });
+
+function computeAvgSecPerJob(jobs: BatchJob[]): number {
+  const doneRecent = jobs
+    .filter((job) => job.status === 'done')
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 20);
+  if (doneRecent.length === 0) return 120;
+  return Math.max(
+    1,
+    Math.round(
+      doneRecent.reduce((sum, job) => {
+        const ageMs = new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime();
+        return sum + Math.max(0, ageMs);
+      }, 0) / doneRecent.length / 1000,
+    ),
+  );
+}
 
 export default router;
