@@ -33,7 +33,7 @@ import riskSentimentRouter from './routes/riskSentiment.js';
 import adminUsageRouter from './routes/adminUsage.js';
 import { geelarkRouter } from './routes/geelark.js';
 import { shotReviewRouter } from './routes/shotReview.js';
-import { startBatchJobsPoller, sweepGhostPendings } from './services/batchJobsQueue.js';
+import { startBatchJobsPoller } from './services/batchJobsQueue.js';
 import { runWithRequestContext } from './services/requestContext.js';
 import { resetInterruptedJobs } from './services/assetIngestService.js';
 import { recoverMultishotJobsOnBoot } from './routes/videoMultishot.js';
@@ -111,6 +111,4 @@ app.listen(Number(PORT), '127.0.0.1', () => {
   resetInterruptedJobs();
   void recoverMultishotJobsOnBoot();
   startRecoveryScanner();
-  // 启动时一次性清理所有项目的"幽灵 pending"
-  void sweepGhostPendings().catch((e) => console.warn('[boot] sweepGhostPendings failed', e));
 });
