@@ -104,6 +104,7 @@ interface BgmMixPanelProps {
   setAssets: Dispatch<SetStateAction<Record<string, MediaAsset>>>;
   onPushLog?: (line: string) => void;
   promptSync?: { prompt: string; negativePrompt: string; key: number } | null;
+  autoGenerateRequest?: { prompt: string; negativePrompt: string; key: number } | null;
 }
 
 const MOOD_CATEGORIES = [
@@ -136,7 +137,14 @@ const _QUICK_STYLES = MOOD_CATEGORIES.flatMap((c) =>
 );
 void _QUICK_STYLES;
 
-export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptSync }: BgmMixPanelProps) {
+export function BgmMixPanel({
+  project,
+  setProject,
+  setAssets,
+  onPushLog,
+  promptSync,
+  autoGenerateRequest,
+}: BgmMixPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('vocals, lyrics');
   const [busy, setBusy] = useState(false);
@@ -167,39 +175,19 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     setNegativePrompt(promptSync.negativePrompt);
   }, [promptSync?.key]);
 
-  const runPolish = useCallback(async () => {
-    const raw = prompt.trim() || '高燃游戏战斗配乐，器乐，节奏快';
-    setPolishBusy(true);
-    try {
-      const out = await withTimeout(
-        polishEditorMusicPrompt(raw),
-        45_000,
-        '配乐提示词润色超时（45s）',
-      );
-      setPrompt(out.prompt);
-      if (out.negativePrompt) setNegativePrompt(out.negativePrompt);
-      onPushLog?.('已优化配乐 prompt（英文）');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
-      onPushLog?.(`优化失败：${msg}${hint}`);
-    } finally {
-      setPolishBusy(false);
-    }
-  }, [prompt, onPushLog]);
-
-  /** 一键智能配乐：润色 prompt + 按时间轴长度自动生成多段并拼接 */
-  const runSmartBgm = useCallback(async () => {
+  const runSmartBgmWithInputs = useCallback(async (promptSeed: string, negativeSeed: string) => {
     if (busy) return;
-    const userDesc = prompt.trim() || '适合视频内容的背景音乐，器乐';
+    const userDesc = promptSeed.trim() || '适合视频内容的背景音乐，器乐';
     const contentSummary = extractVideoContentSummary(project);
     const raw = contentSummary
       ? `视频内容：${contentSummary}\n\n配乐要求：${userDesc}`
       : userDesc;
     setBusy(true);
     setLastError(null);
+    setPrompt(userDesc);
+    setNegativePrompt(negativeSeed);
     let finalPrompt = raw;
-    let finalNegative = negativePrompt;
+    let finalNegative = negativeSeed;
     try {
       onPushLog?.(`正在优化配乐风格…${contentSummary ? '（已读取视频内容）' : ''}`);
       try {
@@ -236,7 +224,40 @@ export function BgmMixPanel({ project, setProject, setAssets, onPushLog, promptS
     } finally {
       setBusy(false);
     }
-  }, [prompt, negativePrompt, busy, totalSec, project, setAssets, setProject, onPushLog]);
+  }, [busy, project, totalSec, setAssets, setProject, onPushLog]);
+
+  useEffect(() => {
+    if (!autoGenerateRequest) return;
+    void runSmartBgmWithInputs(
+      autoGenerateRequest.prompt,
+      autoGenerateRequest.negativePrompt,
+    );
+  }, [autoGenerateRequest?.key, runSmartBgmWithInputs]);
+
+  const runPolish = useCallback(async () => {
+    const raw = prompt.trim() || '高燃游戏战斗配乐，器乐，节奏快';
+    setPolishBusy(true);
+    try {
+      const out = await withTimeout(
+        polishEditorMusicPrompt(raw),
+        45_000,
+        '配乐提示词润色超时（45s）',
+      );
+      setPrompt(out.prompt);
+      if (out.negativePrompt) setNegativePrompt(out.negativePrompt);
+      onPushLog?.('已优化配乐 prompt（英文）');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = isLikelyQuotaOrRateLimitError(msg) ? '（疑似模型限流/配额不足）' : '';
+      onPushLog?.(`优化失败：${msg}${hint}`);
+    } finally {
+      setPolishBusy(false);
+    }
+  }, [prompt, onPushLog]);
+
+  const runSmartBgm = useCallback(async () => {
+    await runSmartBgmWithInputs(prompt, negativePrompt);
+  }, [prompt, negativePrompt, runSmartBgmWithInputs]);
 
   const runGenerate = useCallback(async (opts?: { provider?: 'auto' | 'suno' | 'lyria'; promptOverride?: string; negativeOverride?: string }) => {
     const t = (opts?.promptOverride ?? prompt).trim();

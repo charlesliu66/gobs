@@ -17,6 +17,14 @@ export type LyriaPolishResult = {
   negativePrompt: string;
 };
 
+type FallbackPromptHint = {
+  mood: string;
+  tempo: string;
+  instruments: string;
+  style: string;
+  negativePrompt?: string;
+};
+
 /** 从首个 `{` 起按 JSON 字符串规则配对到匹配的 `}`，避免 prompt 文本里含 `}` 时截断错误 */
 function sliceFirstBalancedJsonObject(s: string): string | null {
   const i = s.indexOf('{');
@@ -100,6 +108,8 @@ function extractPromptFieldsLoose(text: string): LyriaPolishResult | null {
   const n =
     /"negativePrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
     /'negativePrompt'\s*:\s*'((?:[^'\\]|\\.)*)'/s.exec(text) ??
+    /"negative_prompt"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
+    /negative prompt\s*[:=]\s*"((?:[^"\\]|\\.)*)"/is.exec(text) ??
     /negativePrompt\s*[:=]\s*"((?:[^"\\]|\\.)*)"/is.exec(text);
   const prompt = p?.[1]?.replace(/\\"/g, '"').replace(/\\n/g, '\n').trim() ?? '';
   if (!prompt) return null;
@@ -108,21 +118,103 @@ function extractPromptFieldsLoose(text: string): LyriaPolishResult | null {
   return { prompt, negativePrompt };
 }
 
+function pickFallbackHint(raw: string): FallbackPromptHint {
+  const hints: Array<{ pattern: RegExp; hint: FallbackPromptHint }> = [
+    {
+      pattern: /战斗|高燃|热血|团战|击杀|boss|battle|combat|fight|epic/i,
+      hint: {
+        mood: 'epic and intense',
+        tempo: 'fast tempo with a driving pulse',
+        instruments: 'big drums, brass, strings and hybrid percussion',
+        style: 'cinematic trailer music',
+        negativePrompt: 'vocals, singing, speech, soft ambient, lo-fi',
+      },
+    },
+    {
+      pattern: /紧张|悬疑|追逐|压迫|潜行|tense|suspense|thriller/i,
+      hint: {
+        mood: 'tense and suspenseful',
+        tempo: 'steady pulse with rising energy',
+        instruments: 'low synths, pulsing bass and cinematic percussion',
+        style: 'modern thriller score',
+        negativePrompt: 'vocals, singing, cheerful, bright pop',
+      },
+    },
+    {
+      pattern: /温馨|治愈|感动|成长|希望|warm|uplifting|heartfelt|inspiring/i,
+      hint: {
+        mood: 'warm and uplifting',
+        tempo: 'mid tempo with a smooth build',
+        instruments: 'piano, acoustic guitar and soft strings',
+        style: 'cinematic inspirational soundtrack',
+        negativePrompt: 'vocals, singing, aggressive drums, dark horror',
+      },
+    },
+    {
+      pattern: /浪漫|爱情|唯美|romantic|love/i,
+      hint: {
+        mood: 'romantic and emotional',
+        tempo: 'gentle flowing tempo',
+        instruments: 'piano, strings and soft pads',
+        style: 'romantic cinematic score',
+        negativePrompt: 'vocals, singing, heavy metal, harsh distortion',
+      },
+    },
+    {
+      pattern: /搞笑|轻松|欢快|日常|funny|playful|happy/i,
+      hint: {
+        mood: 'playful and upbeat',
+        tempo: 'light fast tempo',
+        instruments: 'plucky strings, light drums and bright synths',
+        style: 'fun commercial background music',
+        negativePrompt: 'vocals, singing, dark horror, slow sad ambient',
+      },
+    },
+  ];
+  return hints.find((item) => item.pattern.test(raw))?.hint ?? {
+    mood: 'cinematic and engaging',
+    tempo: 'mid tempo with clear rhythmic motion',
+    instruments: 'modern drums, synth textures and warm strings',
+    style: 'instrumental background music for short-form video',
+    negativePrompt: 'vocals, singing, speech, lyrics',
+  };
+}
+
+function buildFallbackPrompt(raw: string): LyriaPolishResult {
+  const trimmed = raw.replace(/\s+/g, ' ').trim();
+  const context = trimmed ? trimmed.slice(0, 160) : 'short-form video storytelling';
+  const hint = pickFallbackHint(trimmed);
+  return {
+    prompt: [
+      `Instrumental background music for a short-form video inspired by: ${context}.`,
+      `${hint.mood}, ${hint.tempo}.`,
+      `${hint.instruments}, ${hint.style}, instrumental only, no vocals, no spoken words.`,
+    ].join(' '),
+    negativePrompt: hint.negativePrompt ?? 'vocals, singing, speech, lyrics',
+  };
+}
+
 export async function polishLyriaMusicPrompt(raw: string): Promise<LyriaPolishResult> {
   const userText = raw.trim();
   if (!userText) {
     throw new Error('请提供描述');
   }
-  const { text } = await compassChatCompletionWithUsage({
-    systemPrompt: SYSTEM,
-    userText,
-    temperature: 0.25,
-    maxTokens: 1024,
-  });
+  let modelText = '';
+  try {
+    const { text } = await compassChatCompletionWithUsage({
+      systemPrompt: SYSTEM,
+      userText,
+      temperature: 0.25,
+      maxTokens: 1024,
+    });
+    modelText = typeof text === 'string' ? text : '';
+  } catch (e) {
+    console.warn('[editorMusicPromptPolish] model call failed, using fallback prompt:', e);
+    return buildFallbackPrompt(userText);
+  }
 
-  const modelText = typeof text === 'string' ? text : '';
   if (!modelText.trim()) {
-    throw new Error('模型返回为空，请重试');
+    return buildFallbackPrompt(userText);
   }
 
   const jsonStr = extractJsonObject(modelText);
@@ -131,14 +223,14 @@ export async function polishLyriaMusicPrompt(raw: string): Promise<LyriaPolishRe
   if (parsed === undefined) {
     const loose = extractPromptFieldsLoose(modelText);
     if (loose) return loose;
-    throw new Error('模型返回无法解析为配乐 JSON，请重试或缩短描述');
+    return buildFallbackPrompt(userText);
   }
 
-  if (!parsed || typeof parsed !== 'object') throw new Error('解析失败');
+  if (!parsed || typeof parsed !== 'object') return buildFallbackPrompt(userText);
   const p = parsed as Record<string, unknown>;
   const prompt = typeof p.prompt === 'string' ? p.prompt.trim() : '';
   const negativePrompt =
     typeof p.negativePrompt === 'string' ? p.negativePrompt.trim() : 'vocals, singing, speech';
-  if (!prompt) throw new Error('未生成有效 prompt');
+  if (!prompt) return buildFallbackPrompt(userText);
   return { prompt, negativePrompt };
 }

@@ -193,6 +193,11 @@ export function EditorWorkbench() {
     negativePrompt: string;
     key: number;
   } | null>(null);
+  const [bgmAutoGenerateRequest, setBgmAutoGenerateRequest] = useState<{
+    prompt: string;
+    negativePrompt: string;
+    key: number;
+  } | null>(null);
   /** 剪辑任务 SSE 进度（仅 edit 路径） */
   const [agentJobProgress, setAgentJobProgress] = useState<EditorAgentJobProgress | null>(null);
   /** 时间轴上选中的视频片段（微调 / 溯源） */
@@ -1039,6 +1044,7 @@ export function EditorWorkbench() {
             setAssets={setAssets}
             onPushLog={pushLog}
             promptSync={bgmFormSync}
+            autoGenerateRequest={bgmAutoGenerateRequest}
           />
         }
         previewPanel={
@@ -1106,6 +1112,11 @@ export function EditorWorkbench() {
                       el?.pause();
                       const vc = activeVideoClipRef.current;
                       if (!vc) return;
+                      const next = getNextVideoClipAfter(projectRef.current, vc);
+                      if (isPlaying && next) {
+                        setCurrentTime(next.timelineStart);
+                        return;
+                      }
                       const clipEnd = vc.timelineStart + timelineDurationOf(vc);
                       setIsPlaying(false);
                       seek(clipEnd);
@@ -1390,7 +1401,12 @@ export function EditorWorkbench() {
         sourceTitle={importGuideInfoRef.current.title || project.sourceProductionTitle}
         bgmPromptHint={project.mix?.bgmPromptHint}
         onGenerateBgm={() => {
-          pushLog('🎵 开始一键生成配乐…');
+          const key = Date.now();
+          const prompt = project.mix?.bgmPromptHint?.trim() || '';
+          const negativePrompt = 'vocals, lyrics';
+          setBgmFormSync({ prompt, negativePrompt, key });
+          setBgmAutoGenerateRequest({ prompt, negativePrompt, key });
+          pushLog('🎵 已根据导入分镜触发一键智能配乐…');
         }}
         onPreview={() => {
           if (!isPlaying) togglePlay();
