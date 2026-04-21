@@ -159,7 +159,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.81 -->
+<!-- NEXT_VERSION: v0.82 -->
+
+### v0.81 — 2026-04-21
+
+**一键成片批量任务看板恢复可见**
+
+**Bug Fix:**
+- **[api] QuickFilm 创建 batch job 时补齐 `username` 归属**（`h5-video-tool-api/src/routes/quickfilm.ts`）：`/api/quickfilm/:jobId/confirm` 现在无论是立即提交的第一镜，还是后续 `awaiting_submit` 排队镜头，都会把当前登录用户写入 batch job。这样历史页的 `GET /api/batch-jobs` 和 SSE `/api/batch-jobs/stream` 才能正确按用户返回任务，不再出现“即梦后台已在生成，但批量任务看板为空”的错位。
+- **[test] 新增 QuickFilm batch job 归属回归测试**（`h5-video-tool-api/tests/quickfilmBatchJobs.test.ts`）：覆盖 `pending` 与 `awaiting_submit` 两类任务都必须保留 `username`，防止后续再次出现任务已入队但看板不可见的问题。
 
 ### v0.80 — 2026-04-21
 
@@ -1230,4 +1238,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.80）*
+*最后更新：2026-04-21（v0.81）*

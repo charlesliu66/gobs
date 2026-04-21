@@ -15,6 +15,40 @@ import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const quickfilmRouter = Router();
 
+interface BuildQuickfilmBatchJobInput {
+  id: string;
+  submitId: string;
+  taskId: string;
+  projectId: string;
+  username: string;
+  shotIndex: number;
+  shotDescription: string;
+  model: string;
+  status: BatchJob['status'];
+  submitParams?: BatchJobSubmitParams;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export function buildQuickfilmBatchJob(input: BuildQuickfilmBatchJobInput): BatchJob {
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  return {
+    id: input.id,
+    submitId: input.submitId,
+    taskId: input.taskId,
+    projectId: input.projectId,
+    source: 'quickfilm',
+    username: input.username,
+    shotIndex: input.shotIndex,
+    shotDescription: input.shotDescription,
+    model: input.model,
+    status: input.status,
+    createdAt,
+    updatedAt: input.updatedAt ?? createdAt,
+    submitParams: input.submitParams,
+  };
+}
+
 /**
  * POST /api/quickfilm/start
  * Body: { story, protagonist, protagonistDesc?, style, styleImageBase64?, assetFiles? }
@@ -348,37 +382,37 @@ quickfilmRouter.post('/:jobId/confirm', async (req: Request, res: Response) => {
         imageBase64: refBase64,
         imageMimeType: refBase64 ? 'image/png' : undefined,
       });
-      const bj: BatchJob = {
+      const bj = buildQuickfilmBatchJob({
         id,
         submitId,
         taskId: taskId || `dreamina-${submitId}`,
         projectId,
-        source: 'quickfilm',
+        username,
         shotIndex: shot.shotIndex ?? i,
         shotDescription: shotDesc,
         model,
         status: 'pending',
         createdAt: now,
         updatedAt: now,
-      };
+      });
       await addJob(bj);
       queued.push(bj);
     } else {
       // Remaining shots: queue for later, auto-submitted when previous completes
-      const bj: BatchJob = {
+      const bj = buildQuickfilmBatchJob({
         id,
         submitId: '',
         taskId: '',
         projectId,
-        source: 'quickfilm',
+        username,
         shotIndex: shot.shotIndex ?? i,
         shotDescription: shotDesc,
         model,
         status: 'awaiting_submit',
+        submitParams,
         createdAt: now,
         updatedAt: now,
-        submitParams,
-      };
+      });
       await addJob(bj);
       queued.push(bj);
     }
