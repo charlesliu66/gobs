@@ -152,14 +152,24 @@
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，便于本地英文同事直接进入英文 UI。
+- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片与视频分发等高频页面已补齐英文壳层，便于本地英文同事直接进入英文 UI。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.80 -->
+<!-- NEXT_VERSION: v0.81 -->
+
+### v0.80 — 2026-04-21
+
+**英文壳层补齐与语言切换器重设计**
+
+**Feature / UX Polish:**
+- **[frontend] 视频分发页补齐英文界面壳层与报告弹窗国际化**（`h5-video-tool/src/pages/TabDistribute.tsx` + `h5-video-tool/src/i18n/messages.ts`）：步骤标题、账号筛选、文案生成、发布按钮、运行报告与空状态统一接入 i18n，英文 UI 下不再出现大段中文操作文案。
+- **[frontend] 一键成片分镜确认页继续收口英文残留**（`h5-video-tool/src/pages/QuickFilm.tsx`）：补齐 `AI生成 / 已匹配素材 / 手动匹配素材 / 角色 / 场景 / 选择 / 取消` 等高频文案，并统一分镜时长展示，减少英文同事在确认页的理解断层。
+- **[frontend] 语言切换入口改为紧凑模式切换器**（`h5-video-tool/src/components/LocalePresetSwitcher.tsx` + `h5-video-tool/src/components/Layout.tsx` + `h5-video-tool/src/pages/Login.tsx`）：去掉“预设按钮 + 原生 select”双层控件，改成单一拨片式语言模式切换，登录页与主站侧边栏视觉保持一致。
+- **[test] locale 文案回归测试同步覆盖新切换器文案**（`h5-video-tool/src/i18n/locale.test.ts`）：确保语言模式标题和关键英文文案在后续改动中不会回退。
 
 ### v0.79 — 2026-04-21
 
@@ -1220,4 +1230,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.79）*
+*最后更新：2026-04-21（v0.80）*

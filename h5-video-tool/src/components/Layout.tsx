@@ -5,7 +5,7 @@ import { GlobalJobsContext, useGlobalJobsProvider } from '../hooks/useGlobalJobs
 import { GlobalJobsPanel, GlobalJobsTrigger } from './GlobalJobsPanel';
 import { clearAuthStorage, clearPostLoginRedirect } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
-import { buildLocaleHeaders, defaultContentLocaleFor, type UiLocale } from '../i18n/locale.ts';
+import { buildLocaleHeaders } from '../i18n/locale.ts';
 import { LocalePresetSwitcher } from './LocalePresetSwitcher.tsx';
 
 type NavIcon = () => JSX.Element;
@@ -209,7 +209,7 @@ function navLinkClass(active: boolean, highlight?: boolean): string {
 export function Layout() {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const { uiLocale, setUiLocale, setContentLocale, contentLocale, t } = useLocale();
+  const { uiLocale, contentLocale, t } = useLocale();
   const user = getStoredUser();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
@@ -257,11 +257,6 @@ export function Layout() {
       items: filterNavItems(g.items),
     })).filter((g) => g.items.length > 0);
   }, []);
-
-  const handleLanguageChange = (nextUiLocale: UiLocale) => {
-    setUiLocale(nextUiLocale);
-    setContentLocale(defaultContentLocaleFor(nextUiLocale));
-  };
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
@@ -323,20 +318,7 @@ export function Layout() {
 
       {/* Footer — User Area */}
       <div className="mt-auto border-t border-[var(--color-border)]/40 px-3 py-3 space-y-2">
-        <div className="flex items-center justify-between gap-2 px-2">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-subtle)]">{t('common.language')}</span>
-        </div>
         <LocalePresetSwitcher />
-        <div className="px-2">
-          <select
-            value={uiLocale}
-            onChange={(e) => handleLanguageChange(e.target.value as UiLocale)}
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[11px] text-[var(--color-text)]"
-          >
-            <option value="zh-CN">{t('common.chinese')}</option>
-            <option value="en">{t('common.english')}</option>
-          </select>
-        </div>
         {user && (
           <div className="flex items-center gap-3 px-2 py-2 mb-1">
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-xs font-bold shadow-[0_0_12px_rgba(124,141,255,0.2)]">

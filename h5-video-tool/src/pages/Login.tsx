@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { clearPostLoginRedirect, consumePostLoginRedirect } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
-import { buildLocaleHeaders, defaultContentLocaleFor, type UiLocale } from '../i18n/locale.ts';
+import { buildLocaleHeaders } from '../i18n/locale.ts';
 import { LocalePresetSwitcher } from '../components/LocalePresetSwitcher.tsx';
 
 function normalizeAppRedirect(target: string | null | undefined): string {
@@ -15,7 +15,7 @@ function normalizeAppRedirect(target: string | null | undefined): string {
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { uiLocale, setUiLocale, contentLocale, setContentLocale, t } = useLocale();
+  const { uiLocale, contentLocale, t } = useLocale();
   const [from] = useState(() => {
     const queryFrom = new URLSearchParams(location.search).get('from');
     const stateFrom = (location.state as { from?: string } | null)?.from;
@@ -56,25 +56,11 @@ export function Login() {
     }
   };
 
-  const handleLanguageChange = (nextUiLocale: UiLocale) => {
-    setUiLocale(nextUiLocale);
-    setContentLocale(defaultContentLocaleFor(nextUiLocale));
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface)] p-4">
       <form onSubmit={(e) => void submit(e)} className="relative w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-8 shadow-sm">
         <div className="absolute left-4 right-4 top-4 flex flex-wrap items-center justify-end gap-2">
-          <span className="text-[11px] text-[var(--color-text-muted)]">{t('common.language')}</span>
           <LocalePresetSwitcher compact />
-          <select
-            value={uiLocale}
-            onChange={(e) => handleLanguageChange(e.target.value as UiLocale)}
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
-          >
-            <option value="zh-CN">{t('common.chinese')}</option>
-            <option value="en">{t('common.english')}</option>
-          </select>
         </div>
         <div className="text-center mb-6">
           <img src="/logo.png" alt="GOBS" className="h-14 mx-auto mb-3 object-contain" />

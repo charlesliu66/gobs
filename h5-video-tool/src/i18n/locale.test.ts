@@ -58,9 +58,12 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'login.title'), 'Sign In To GOBS');
   assert.equal(getMessage('en', 'common.language'), 'Language');
   assert.equal(getMessage('en', 'localePreset.enUiZhContent'), 'English UI + Chinese Content');
+  assert.equal(getMessage('en', 'localeSwitcher.title'), 'Language Mode');
+  assert.equal(getMessage('en', 'distribute.title'), 'Step 3: Publish To Social');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');
   assert.equal(getMessage('en', 'quickfilm.processingTitle'), 'QuickFilm Is Writing');
   assert.equal(getMessage('en', 'quickfilm.confirmTitle'), 'Storyboard Ready');
+  assert.equal(getMessage('en', 'quickfilm.generatedByAi'), 'AI Generated');
   assert.equal(getMessage('zh-CN', 'login.title'), 'GOBS 登录');
   assert.notEqual(getMessage('zh-CN', 'quickfilm.startGeneration'), 'quickfilm.startGeneration');
   assert.equal(getMessage('en', 'missing.key'), 'missing.key');

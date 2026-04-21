@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { RunningStatus } from '../components/RunningStatus';
-
 import {
   fetchAccounts,
   publishVideo,
@@ -13,18 +12,25 @@ import {
 import { generateCaptionForPost, translateCaptionForPost, type CaptionByPlatformResult } from '../api/promptPolish';
 import { getRecentPromptForVideo } from '../utils/videoHistory';
 import { toast } from '../components/Toast';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatDateTime } from '../i18n/locale.ts';
+
+type CaptionLanguage = 'DEFAULT' | 'EN' | 'CN' | 'TH' | 'ID';
+
+const CAPTION_LANGS: CaptionLanguage[] = ['DEFAULT', 'EN', 'CN', 'TH', 'ID'];
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
+  const { t, uiLocale } = useLocale();
   const [accounts, setAccounts] = useState<GeelarkAccount[]>([]);
-  const [filterRegion, setFilterRegion] = useState<string>('');
-  const [filterPlatform, setFilterPlatform] = useState<string>('');
+  const [filterRegion, setFilterRegion] = useState('');
+  const [filterPlatform, setFilterPlatform] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('');
-  const [captionLang, setCaptionLang] = useState<'DEFAULT' | 'EN' | 'CN' | 'TH' | 'ID'>('DEFAULT');
+  const [captionLang, setCaptionLang] = useState<CaptionLanguage>('DEFAULT');
   const [captionByPlatform, setCaptionByPlatform] = useState<CaptionByPlatformResult['byPlatform'] | null>(null);
   const [captionGenLoading, setCaptionGenLoading] = useState(false);
   const [captionGenError, setCaptionGenError] = useState<string | null>(null);
@@ -40,74 +46,78 @@ export function TabDistribute() {
     setError(null);
     fetchAccounts()
       .then((list) => {
-        if (!cancelled) {
-          setAccounts(list);
-          if (list.length) setSelectedIds(new Set([list[0].id]));
-        }
+        if (cancelled) return;
+        setAccounts(list);
+        if (list.length > 0) setSelectedIds(new Set([list[0].id]));
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
+        if (!cancelled) setError(e instanceof Error ? e.message : t('distribute.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
-  const accountsForPermission = useMemo(() => {
-    return accounts;
-  }, [accounts]);
+  const accountsForPermission = useMemo(() => accounts, [accounts]);
 
   useEffect(() => {
-    const ids = new Set(accountsForPermission.map((a) => a.id));
+    const ids = new Set(accountsForPermission.map((account) => account.id));
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((id) => ids.has(id)));
       if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
-      if (next.size === 0 && accountsForPermission.length > 0) {
-        next.add(accountsForPermission[0].id);
-      }
+      if (next.size === 0 && accountsForPermission.length > 0) next.add(accountsForPermission[0].id);
       return next;
     });
   }, [accountsForPermission]);
 
-  const loadReport = useCallback(async (taskId: string) => {
+  const loadReport = useCallback(async (nextTaskId: string) => {
     setReportLoading(true);
     setReport(null);
     try {
-      const detail = await fetchTaskDetail(taskId);
+      const detail = await fetchTaskDetail(nextTaskId);
       setReport(detail);
       return detail;
     } catch (e) {
-      setReport({ id: taskId, statusText: '加载失败', failDesc: e instanceof Error ? e.message : '未知错误' });
+      setReport({
+        id: nextTaskId,
+        statusText: t('distribute.reportLoadFailed'),
+        failDesc: e instanceof Error ? e.message : t('common.unknown'),
+      });
       return null;
     } finally {
       setReportLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!reportTaskId) return;
-    loadReport(reportTaskId);
-  }, [reportTaskId, loadReport]);
+    void loadReport(reportTaskId);
+  }, [loadReport, reportTaskId]);
 
   const handleGenerateCaption = async () => {
     const raw = (prompt || '').trim() || getRecentPromptForVideo(taskId);
-    const hasExisting = (caption || '').trim().length > 0 || (hashtags || '').trim().length > 0;
+    const hasExisting = caption.trim().length > 0 || hashtags.trim().length > 0;
     if (!raw && !hasExisting) {
-      setCaptionGenError('请先在 Studio 输入 prompt、或完成一次视频生成，或在文案/标签中填写待优化内容');
+      setCaptionGenError(t('distribute.captionRequiresInput'));
       return;
     }
-    const selectedAccounts = accountsForPermission.filter((a) => selectedIds.has(a.id));
-    const platforms = [...new Set(selectedAccounts.map((a) => a.platform).filter(Boolean))] as string[];
+
+    const selectedAccounts = accountsForPermission.filter((account) => selectedIds.has(account.id));
+    const platforms = [...new Set(selectedAccounts.map((account) => account.platform).filter(Boolean))] as string[];
     setCaptionGenLoading(true);
     setCaptionGenError(null);
     setCaptionByPlatform(null);
+
     try {
       const result = await generateCaptionForPost(raw, platforms.length > 0 ? platforms : undefined, {
-        existingCaption: caption?.trim() || undefined,
-        existingHashtags: hashtags?.trim() || undefined,
+        existingCaption: caption.trim() || undefined,
+        existingHashtags: hashtags.trim() || undefined,
         language: captionLang === 'DEFAULT' ? 'EN' : captionLang,
       });
+
       if ('byPlatform' in result && result.byPlatform) {
         setCaptionByPlatform(result.byPlatform);
         const first = Object.values(result.byPlatform)[0];
@@ -120,34 +130,35 @@ export function TabDistribute() {
         setHashtags(result.hashtags);
       }
     } catch (e) {
-      setCaptionGenError(e instanceof Error ? e.message : '生成失败');
+      setCaptionGenError(e instanceof Error ? e.message : t('quickfilm.processingGenericError'));
     } finally {
       setCaptionGenLoading(false);
     }
   };
 
-  const handleUsePlatformCaption = (c: string, h: string) => {
-    setCaption(c);
-    setHashtags(h);
+  const handleUsePlatformCaption = (nextCaption: string, nextHashtags: string) => {
+    setCaption(nextCaption);
+    setHashtags(nextHashtags);
   };
 
-  const handleLanguageChange = async (lang: 'DEFAULT' | 'EN' | 'CN' | 'TH' | 'ID') => {
+  const handleLanguageChange = async (lang: CaptionLanguage) => {
     if (lang === captionLang) return;
     setCaptionLang(lang);
-    if (lang === 'DEFAULT') return; // 默认不翻译
-    const hasContent = (caption || '').trim().length > 0 || (hashtags || '').trim().length > 0;
-    if (hasContent) {
-      setCaptionGenLoading(true);
-      setCaptionGenError(null);
-      try {
-        const result = await translateCaptionForPost(caption, hashtags, lang);
-        setCaption(result.caption);
-        setHashtags(result.hashtags);
-      } catch (e) {
-        setCaptionGenError(e instanceof Error ? e.message : '翻译失败');
-      } finally {
-        setCaptionGenLoading(false);
-      }
+    if (lang === 'DEFAULT') return;
+
+    const hasContent = caption.trim().length > 0 || hashtags.trim().length > 0;
+    if (!hasContent) return;
+
+    setCaptionGenLoading(true);
+    setCaptionGenError(null);
+    try {
+      const result = await translateCaptionForPost(caption, hashtags, lang);
+      setCaption(result.caption);
+      setHashtags(result.hashtags);
+    } catch (e) {
+      setCaptionGenError(e instanceof Error ? e.message : t('distribute.translationFailed'));
+    } finally {
+      setCaptionGenLoading(false);
     }
   };
 
@@ -162,13 +173,14 @@ export function TabDistribute() {
 
   const handlePush = async () => {
     if (!videoUrl && !videoPath) {
-      setPushError('请先在 Studio 生成视频');
+      setPushError(t('distribute.pushRequiresVideo'));
       return;
     }
     if (selectedIds.size === 0) {
-      setPushError('请选择至少一个目标账号');
+      setPushError(t('distribute.pushRequiresAccount'));
       return;
     }
+
     setPushing(true);
     setPushError(null);
     try {
@@ -179,12 +191,10 @@ export function TabDistribute() {
         caption: caption.trim() || undefined,
         hashtags: hashtags.trim() || undefined,
       });
-      if (taskIds?.length) {
-        setReportTaskId(taskIds[0]);
-      }
+      if (taskIds?.length) setReportTaskId(taskIds[0]);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '推送失败';
-      toast.error('发布失败：' + msg);
+      const msg = e instanceof Error ? e.message : t('distribute.pushFailed');
+      toast.error(`${t('distribute.pushFailed')}: ${msg}`);
     } finally {
       setPushing(false);
     }
@@ -194,43 +204,47 @@ export function TabDistribute() {
     if (seconds == null) return '-';
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return m > 0 ? `${m}分${s}秒` : `${s}秒`;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
   };
 
   const formatTime = (ts?: number) => {
     if (!ts) return '-';
-    return new Date(ts * 1000).toLocaleString('zh-CN');
+    return formatDateTime(ts * 1000, uiLocale);
   };
 
-  const regions = [...new Set(accountsForPermission.map((a) => a.region).filter(Boolean))] as string[];
-  const platforms = [...new Set(accountsForPermission.map((a) => a.platform).filter(Boolean))] as string[];
-  const filteredAccounts = accountsForPermission.filter((a) => {
-    if (filterRegion && a.region !== filterRegion) return false;
-    if (filterPlatform && a.platform !== filterPlatform) return false;
+  const captionLanguageLabel = (lang: CaptionLanguage) => {
+    if (lang === 'DEFAULT') return t('distribute.captionLanguageDefault');
+    return lang;
+  };
+
+  const regions = [...new Set(accountsForPermission.map((account) => account.region).filter(Boolean))] as string[];
+  const platforms = [...new Set(accountsForPermission.map((account) => account.platform).filter(Boolean))] as string[];
+  const filteredAccounts = accountsForPermission.filter((account) => {
+    if (filterRegion && account.region !== filterRegion) return false;
+    if (filterPlatform && account.platform !== filterPlatform) return false;
     return true;
   });
 
   return (
     <div className="max-w-6xl w-full space-y-6">
       <div>
-        <h1 className="page-title">第三步：分发到社媒</h1>
-        <p className="text-sm text-[var(--color-text-muted)] mt-1">选择目标账号，添加文案，一键发布到各平台</p>
+        <h1 className="page-title">{t('distribute.title')}</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t('distribute.subtitle')}</p>
       </div>
 
-      {/* TT 账号列表 */}
       <section className="mb-6">
-        <h2 className="section-title">选择目标账号</h2>
+        <h2 className="section-title">{t('distribute.targetAccounts')}</h2>
         {loading ? (
-          <p className="text-sm text-[var(--color-text-muted)]">加载中…</p>
+          <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.loadingAccounts')}</p>
         ) : error ? (
           <p className="text-sm text-[var(--color-error)]">{error}</p>
         ) : accounts.length === 0 ? (
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 text-center space-y-3">
-            <p className="text-2xl">📱</p>
-            <p className="text-sm font-medium text-[var(--color-text)]">还没有配置账号</p>
-            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-              在服务器的 <code className="bg-[var(--color-surface-hover)] px-1 py-0.5 rounded text-[10px]">config/geelark-accounts.json</code> 文件里添加账号信息，<br/>
-              参考同目录下的 <code className="bg-[var(--color-surface-hover)] px-1 py-0.5 rounded text-[10px]">geelark-accounts.json.example</code> 文件格式
+            <p className="text-2xl">📫</p>
+            <p className="text-sm font-medium text-[var(--color-text)]">{t('distribute.noAccountsTitle')}</p>
+            <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
+              {t('distribute.noAccountsHintLine1')}<br />
+              {t('distribute.noAccountsHintLine2')}
             </p>
             <a
               href="https://geelark.com"
@@ -238,68 +252,65 @@ export function TabDistribute() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"
             >
-              了解 Geelark 矩阵方案 →
+              {t('distribute.learnGeelark')} →
             </a>
           </div>
         ) : accountsForPermission.length === 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 text-center space-y-2">
-            <p className="text-sm font-medium text-[var(--color-text)]">当前登录账号未被分配任何「内容发布账号」</p>
-            <p className="text-xs text-[var(--color-text-muted)]">
-              请使用超级管理员在「账号设置」中为该用户勾选视频分发目标账号。
-            </p>
+            <p className="text-sm font-medium text-[var(--color-text)]">{t('distribute.noPermissionTitle')}</p>
+            <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.noPermissionHint')}</p>
           </div>
         ) : (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
             {(regions.length > 0 || platforms.length > 0) && (
-              <div className="flex flex-wrap gap-3 mb-4">
+              <div className="mb-4 flex flex-wrap gap-3">
                 {regions.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-text-muted)]">地区</span>
+                    <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.region')}</span>
                     <select
                       value={filterRegion}
                       onChange={(e) => setFilterRegion(e.target.value)}
-                      className="px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm focus:border-[var(--color-border-focus)] focus:outline-none"
+                      className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
                     >
-                      <option value="">全部</option>
-                      {regions.map((r) => (
-                        <option key={r} value={r}>{r}</option>
+                      <option value="">{t('common.all')}</option>
+                      {regions.map((region) => (
+                        <option key={region} value={region}>{region}</option>
                       ))}
                     </select>
                   </div>
                 )}
                 {platforms.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-text-muted)]">平台</span>
+                    <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.platform')}</span>
                     <select
                       value={filterPlatform}
                       onChange={(e) => setFilterPlatform(e.target.value)}
-                      className="px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm focus:border-[var(--color-border-focus)] focus:outline-none"
+                      className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
                     >
-                      <option value="">全部</option>
-                      {platforms.map((p) => (
-                        <option key={p} value={p}>{p}</option>
+                      <option value="">{t('common.all')}</option>
+                      {platforms.map((platform) => (
+                        <option key={platform} value={platform}>{platform}</option>
                       ))}
                     </select>
                   </div>
                 )}
               </div>
             )}
+
             <div className="space-y-2">
               {filteredAccounts.length === 0 ? (
-                <p className="text-sm text-[var(--color-text-muted)]">无匹配账号，请调整筛选条件</p>
+                <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.noMatchedAccounts')}</p>
               ) : (
-                filteredAccounts.map((a) => (
-                  <label key={a.id} className="flex items-center gap-3 cursor-pointer">
+                filteredAccounts.map((account) => (
+                  <label key={account.id} className="flex cursor-pointer items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(a.id)}
-                      onChange={() => handleToggleAccount(a.id)}
+                      checked={selectedIds.has(account.id)}
+                      onChange={() => handleToggleAccount(account.id)}
                       className="rounded border-[var(--color-border)]"
                     />
-                    <span className="text-sm text-[var(--color-text)] font-medium">{a.username}</span>
-                    {a.remark && (
-                      <span className="text-xs text-[var(--color-text-muted)]">({a.remark})</span>
-                    )}
+                    <span className="text-sm font-medium text-[var(--color-text)]">{account.username}</span>
+                    {account.remark && <span className="text-xs text-[var(--color-text-muted)]">({account.remark})</span>}
                   </label>
                 ))
               )}
@@ -308,92 +319,110 @@ export function TabDistribute() {
         )}
       </section>
 
-      {/* 视频与文案 */}
       <section className="mb-6">
-        <h2 className="section-title">视频与文案</h2>
+        <h2 className="section-title">{t('distribute.videoAndCaption')}</h2>
         {videoUrl ? (
           <>
-          <div className="space-y-4">
-            <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-black aspect-video max-h-48">
-              <video src={videoUrl} controls className="w-full h-full object-contain" />
-            </div>
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <label className="text-xs text-[var(--color-text-muted)]">文案</label>
-              <div className="flex items-center gap-2">
-                {(['DEFAULT', 'EN', 'CN', 'TH', 'ID'] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => handleLanguageChange(lang)}
-                    disabled={captionGenLoading}
-                    className={`px-2 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 ${
-                      captionLang === lang
-                        ? 'bg-[var(--color-primary)] text-white'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                    }`}
-                  >
-                    {lang === 'DEFAULT' ? '默认' : lang}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleGenerateCaption}
-                  disabled={
-                    captionGenLoading ||
-                    (!(prompt?.trim()) && !getRecentPromptForVideo(taskId) && !(caption?.trim()) && !(hashtags?.trim()))
-                  }
-                  className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {captionGenLoading ? '生成中…' : (caption?.trim() || hashtags?.trim()) ? '一键优化' : '一键生成'}
-                </button>
-                <RunningStatus active={captionGenLoading} label="正在生成文案" stallAfterSec={15} scene="on-tour" />
+            <div className="space-y-4">
+              <div className="aspect-video max-h-48 overflow-hidden rounded-lg border border-[var(--color-border)] bg-black">
+                <video src={videoUrl} controls className="h-full w-full object-contain" />
               </div>
-            </div>
-            <p className="text-[10px] text-[var(--color-text-subtle)] leading-snug mb-1">
-              基于 Studio 创意 / 历史 prompt，按 TikTok 易火公式改写（钩子、口语、标签组合），不会直接粘贴分镜长 prompt。需后端配置 COMPASS_API_KEY（Compass Gemini 文本代理）。
-            </p>
-            <textarea
+
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <label className="text-xs text-[var(--color-text-muted)]">{t('distribute.caption')}</label>
+                <div className="flex items-center gap-2">
+                  {CAPTION_LANGS.map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => void handleLanguageChange(lang)}
+                      disabled={captionGenLoading}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        captionLang === lang
+                          ? 'bg-[var(--color-primary)] text-white'
+                          : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                      }`}
+                    >
+                      {captionLanguageLabel(lang)}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateCaption()}
+                    disabled={
+                      captionGenLoading ||
+                      (!(prompt?.trim()) && !getRecentPromptForVideo(taskId) && !caption.trim() && !hashtags.trim())
+                    }
+                    className="text-xs text-[var(--color-primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {captionGenLoading
+                      ? t('distribute.generatingCaption')
+                      : (caption.trim() || hashtags.trim())
+                        ? t('distribute.polishCaption')
+                        : t('distribute.generateCaption')}
+                  </button>
+
+                  <RunningStatus
+                    active={captionGenLoading}
+                    label={t('distribute.generatingCaptionStatus')}
+                    stallAfterSec={15}
+                    scene="on-tour"
+                  />
+                </div>
+              </div>
+
+              <p className="mb-1 text-[10px] leading-snug text-[var(--color-text-subtle)]">
+                {t('distribute.captionHint')}
+              </p>
+
+              <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                placeholder="记录精彩瞬间，分享给更多人"
+                placeholder={t('distribute.captionPlaceholder')}
                 rows={2}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
+                className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
               />
+
               {captionGenError && (
-                <p className="text-xs text-[var(--color-error)] mt-1">{captionGenError}</p>
+                <p className="mt-1 text-xs text-[var(--color-error)]">{captionGenError}</p>
               )}
-            <div>
-              <label className="block text-xs text-[var(--color-text-muted)] mb-1">标签</label>
-              <input
-                type="text"
-                value={hashtags}
-                onChange={(e) => setHashtags(e.target.value)}
-                placeholder="#日常 #生活记录 #推荐"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
-              />
+
+              <div>
+                <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t('distribute.hashtags')}</label>
+                <input
+                  type="text"
+                  value={hashtags}
+                  onChange={(e) => setHashtags(e.target.value)}
+                  placeholder={t('distribute.hashtagsPlaceholder')}
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
+                />
+              </div>
             </div>
-          </div>
+
             {captionByPlatform && Object.keys(captionByPlatform).length > 0 && (
-              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-3">
-                <h4 className="text-xs font-medium text-[var(--color-text-muted)]">各平台优化文案（可选用）</h4>
+              <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                <h4 className="text-xs font-medium text-[var(--color-text-muted)]">{t('distribute.captionByPlatform')}</h4>
                 <div className="space-y-2">
-                  {Object.entries(captionByPlatform).map(([platform, { caption: c, hashtags: h }]) => (
+                  {Object.entries(captionByPlatform).map(([platform, { caption: nextCaption, hashtags: nextHashtags }]) => (
                     <div
                       key={platform}
                       className="rounded border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-2 text-sm"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-[var(--color-primary)] uppercase">{platform}</span>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase text-[var(--color-primary)]">{platform}</span>
                         <button
                           type="button"
-                          onClick={() => handleUsePlatformCaption(c, h)}
+                          onClick={() => handleUsePlatformCaption(nextCaption, nextHashtags)}
                           className="text-xs text-[var(--color-primary)] hover:underline"
                         >
-                          使用此文案
+                          {t('distribute.useCaption')}
                         </button>
                       </div>
-                      <p className="text-[var(--color-text)] text-xs break-words">{c || '—'}</p>
-                      {h && <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{h}</p>}
+                      <p className="break-words text-xs text-[var(--color-text)]">{nextCaption || '—'}</p>
+                      {nextHashtags && (
+                        <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{nextHashtags}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -401,42 +430,37 @@ export function TabDistribute() {
             )}
           </>
         ) : (
-          <div className="p-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-center">
-            <p className="text-[var(--color-text-muted)] mb-4">暂无成片，请先在 Studio 生成视频</p>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-8 text-center">
+            <p className="mb-4 text-[var(--color-text-muted)]">{t('distribute.noVideo')}</p>
             <Link
               to="/studio"
-              className="inline-flex px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
+              className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
             >
-              去 Studio 创作
+              {t('distribute.goToStudio')}
             </Link>
           </div>
         )}
       </section>
 
-      {/* 推送按钮 */}
       {videoUrl && (
         <section className="mb-6">
           <button
             type="button"
-            onClick={handlePush}
+            onClick={() => void handlePush()}
             disabled={pushing || selectedIds.size === 0}
-            className="px-6 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            className="rounded-lg bg-[var(--color-primary)] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pushing ? '发布中…' : '一键发布'}
+            {pushing ? t('distribute.publishing') : t('distribute.publish')}
           </button>
-          {pushError && (
-            <p className="mt-2 text-sm text-[var(--color-error)]">{pushError}</p>
-          )}
+          {pushError && <p className="mt-2 text-sm text-[var(--color-error)]">{pushError}</p>}
         </section>
       )}
 
-      {/* 运行报告弹窗 */}
       {reportTaskId && (
         <ReportModal
-          taskId={reportTaskId}
           report={report}
           loading={reportLoading}
-          onRefresh={() => loadReport(reportTaskId)}
+          onRefresh={() => void loadReport(reportTaskId)}
           onClose={() => setReportTaskId(null)}
           formatDuration={formatDuration}
           formatTime={formatTime}
@@ -447,28 +471,30 @@ export function TabDistribute() {
 }
 
 interface ReportModalProps {
-  taskId: string;
   report: TaskDetail | null;
   loading: boolean;
   onRefresh: () => void;
   onClose: () => void;
-  formatDuration: (s?: number) => string;
+  formatDuration: (seconds?: number) => string;
   formatTime: (ts?: number) => string;
 }
 
-function ReportModal({ taskId: _taskId, report, loading, onRefresh, onClose, formatDuration, formatTime }: ReportModalProps) {
+function ReportModal({ report, loading, onRefresh, onClose, formatDuration, formatTime }: ReportModalProps) {
+  const { t } = useLocale();
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="bg-[var(--color-surface-elevated)] rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-[var(--color-surface-elevated)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-center justify-between p-4 border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-          <h2 className="page-title text-lg">运行报告</h2>
+        <div className="sticky top-0 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+          <h2 className="page-title text-lg">{t('distribute.reportTitle')}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
+            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+            aria-label={t('common.close')}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -476,54 +502,52 @@ function ReportModal({ taskId: _taskId, report, loading, onRefresh, onClose, for
           </button>
         </div>
 
-        <div className="p-4 space-y-6">
+        <div className="space-y-6 p-4">
           {loading ? (
-            <p className="text-sm text-[var(--color-text-muted)]">加载中…</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportLoading')}</p>
           ) : report ? (
             <>
-              {/* 运行信息 */}
               <section>
-                <h3 className="section-title">运行信息</h3>
-                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-text-muted)]">运行 ID</span>
-                    <span className="text-[var(--color-text)] font-mono">{report.id}</span>
+                <h3 className="section-title">{t('distribute.reportInfo')}</h3>
+                <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportId')}</span>
+                    <span className="font-mono text-[var(--color-text)]">{report.id}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-text-muted)]">运行状态</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportStatus')}</span>
                     <span className="text-[var(--color-text)]">{report.statusText ?? report.status}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-text-muted)]">计划名称</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportPlanName')}</span>
                     <span className="text-[var(--color-text)]">{report.planName ?? '-'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-text-muted)]">运行耗时</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportDuration')}</span>
                     <span className="text-[var(--color-text)]">{formatDuration(report.cost)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-text-muted)]">运行时间</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportTime')}</span>
                     <span className="text-[var(--color-text)]">{formatTime(report.scheduleAt)}</span>
                   </div>
                   {report.failDesc && (
-                    <div className="pt-2 border-t border-[var(--color-border)]">
+                    <div className="border-t border-[var(--color-border)] pt-2">
                       <span className="text-[var(--color-error)]">{report.failDesc}</span>
                     </div>
                   )}
                 </div>
               </section>
 
-              {/* 任务结束截图 */}
               {report.resultImages && report.resultImages.length > 0 && (
                 <section>
-                  <h3 className="section-title">任务结束截图</h3>
+                  <h3 className="section-title">{t('distribute.reportScreenshots')}</h3>
                   <div className="space-y-2">
-                    {report.resultImages.map((img, i) => (
+                    {report.resultImages.map((img, index) => (
                       <img
-                        key={i}
+                        key={index}
                         src={img}
-                        alt={`截图 ${i + 1}`}
-                        className="w-full rounded-lg border border-[var(--color-border)] max-h-80 object-contain bg-black"
+                        alt={`result-${index + 1}`}
+                        className="max-h-80 w-full rounded-lg border border-[var(--color-border)] bg-black object-contain"
                       />
                     ))}
                   </div>
@@ -531,13 +555,11 @@ function ReportModal({ taskId: _taskId, report, loading, onRefresh, onClose, for
               )}
 
               {report.status === 2 && (
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  任务执行中，请稍后点击刷新查看最新状态和截图
-                </p>
+                <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportRunning')}</p>
               )}
             </>
           ) : (
-            <p className="text-sm text-[var(--color-text-muted)]">无法加载报告</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportUnavailable')}</p>
           )}
 
           <div className="flex gap-2">
@@ -545,16 +567,16 @@ function ReportModal({ taskId: _taskId, report, loading, onRefresh, onClose, for
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="px-4 py-2 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 text-sm"
+              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
             >
-              刷新
+              {t('common.refresh')}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] text-sm"
+              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm text-white hover:bg-[var(--color-primary-hover)]"
             >
-              关闭
+              {t('common.close')}
             </button>
           </div>
         </div>

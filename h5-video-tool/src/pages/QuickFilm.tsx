@@ -624,6 +624,7 @@ function ShotCard({
   assetFiles: Array<{ name: string; base64: string }>;
   onUpdateShot: (updated: ShotWithAssets) => void;
 }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [showAssetPicker, setShowAssetPicker] = useState<'character' | 'scene' | null>(null);
   const hasAssets =
@@ -638,7 +639,7 @@ function ShotCard({
       >
         <div className="flex-shrink-0 w-12 text-center">
           <span className="text-xs text-[var(--color-text-subtle)]">#{index + 1}</span>
-          <div className="text-xs font-bold text-[var(--color-text)]">{shot.durationSec}秒</div>
+          <div className="text-xs font-bold text-[var(--color-text)]">{shot.durationSec}s</div>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -662,7 +663,7 @@ function ShotCard({
             </div>
           ) : (
             <span className="text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2 py-0.5 text-[var(--color-text-subtle)]">
-              AI生成
+              {t('quickfilm.generatedByAi')}
             </span>
           )}
           <svg
@@ -679,34 +680,34 @@ function ShotCard({
         <div className="border-t border-[var(--color-border)] px-4 py-4 space-y-3 bg-[var(--color-surface)]/50">
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <span className="text-[var(--color-text-subtle)]">景别：</span>
+              <span className="text-[var(--color-text-subtle)]">{t('quickfilm.shotScaleLabel')}:</span>
               <span className="text-[var(--color-text)]">{shot.shotScale}</span>
             </div>
             <div>
-              <span className="text-[var(--color-text-subtle)]">运镜：</span>
+              <span className="text-[var(--color-text-subtle)]">{t('quickfilm.cameraMoveLabel')}:</span>
               <span className="text-[var(--color-text)]">{shot.cameraMove}</span>
             </div>
             <div>
-              <span className="text-[var(--color-text-subtle)]">情绪：</span>
+              <span className="text-[var(--color-text-subtle)]">{t('quickfilm.emotionLabel')}:</span>
               <span className="text-[var(--color-text)]">{shot.emotion}</span>
             </div>
             <div>
-              <span className="text-[var(--color-text-subtle)]">时长：</span>
+              <span className="text-[var(--color-text-subtle)]">{t('quickfilm.durationLabel')}:</span>
               <span className="text-[var(--color-text)]">{shot.durationSec}s</span>
             </div>
           </div>
           {shot.dialogue && (
             <div className="text-xs">
-              <span className="text-[var(--color-text-subtle)]">对白：</span>
+              <span className="text-[var(--color-text-subtle)]">{t('quickfilm.dialogueLabel')}:</span>
               <span className="text-[var(--color-text)]">"{shot.dialogue}"</span>
             </div>
           )}
           <div className="text-xs text-[var(--color-text-subtle)]">
-            <span>光线：</span>{shot.structuredStill.sp_lighting}
+            <span>{t('quickfilm.lightingLabel')}:</span>{shot.structuredStill.sp_lighting}
           </div>
           {hasAssets && (
             <div className="mt-2 pt-2 border-t border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-subtle)] mb-2">已匹配素材：</p>
+              <p className="text-xs text-[var(--color-text-subtle)] mb-2">{t('quickfilm.matchedAssetsLabel')}:</p>
               <div className="flex flex-wrap gap-2">
                 {shot.matchedAssets?.characterRefs.map((a) => (
                   <span key={a.id} className="text-xs bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/30 rounded-md px-2 py-0.5">
@@ -724,16 +725,16 @@ function ShotCard({
 
           {/* 手动匹配素材 */}
           <div className="mt-2 pt-2 border-t border-[var(--color-border)]">
-            <p className="text-xs text-[var(--color-text-subtle)] mb-2">手动匹配素材：</p>
+            <p className="text-xs text-[var(--color-text-subtle)] mb-2">{t('quickfilm.manualMatchAssetsLabel')}:</p>
             <div className="flex flex-wrap gap-2 items-center">
               {/* 角色参考 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[var(--color-text-subtle)]">👤 角色：</span>
+                <span className="text-xs text-[var(--color-text-subtle)]">👤 {t('quickfilm.characterLabel')}:</span>
                 {shot.userMatchedAssets?.characterRef ? (
                   <div className="flex items-center gap-1">
                     <img
                       src={`data:image/png;base64,${shot.userMatchedAssets.characterRef}`}
-                      alt="角色参考"
+                      alt={t('quickfilm.characterLabel')}
                       className="w-8 h-8 rounded object-cover border border-[var(--color-primary)]/40"
                     />
                     <button
@@ -743,24 +744,24 @@ function ShotCard({
                     >×</button>
                   </div>
                 ) : (
-                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">未匹配</span>
+                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">{t('quickfilm.unmatched')}</span>
                 )}
                 {assetFiles.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowAssetPicker('character')}
                     className="text-xs text-[var(--color-primary)] hover:underline"
-                  >选择</button>
+                  >{t('quickfilm.chooseAsset')}</button>
                 )}
               </div>
               {/* 场景参考 */}
               <div className="flex items-center gap-1.5 ml-3">
-                <span className="text-xs text-[var(--color-text-subtle)]">🏞 场景：</span>
+                <span className="text-xs text-[var(--color-text-subtle)]">🏞 {t('quickfilm.sceneLabel')}:</span>
                 {shot.userMatchedAssets?.sceneRef ? (
                   <div className="flex items-center gap-1">
                     <img
                       src={`data:image/png;base64,${shot.userMatchedAssets.sceneRef}`}
-                      alt="场景参考"
+                      alt={t('quickfilm.sceneLabel')}
                       className="w-8 h-8 rounded object-cover border border-[var(--color-success)]/40"
                     />
                     <button
@@ -770,14 +771,14 @@ function ShotCard({
                     >×</button>
                   </div>
                 ) : (
-                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">未匹配</span>
+                  <span className="text-xs text-[var(--color-text-subtle)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">{t('quickfilm.unmatched')}</span>
                 )}
                 {assetFiles.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowAssetPicker('scene')}
                     className="text-xs text-[var(--color-primary)] hover:underline"
-                  >选择</button>
+                  >{t('quickfilm.chooseAsset')}</button>
                 )}
               </div>
             </div>
@@ -788,10 +789,10 @@ function ShotCard({
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setShowAssetPicker(null)}>
               <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <h3 className="mb-4 text-sm font-semibold text-[var(--color-text)]">
-                  选择{showAssetPicker === 'character' ? '角色' : '场景'}素材
+                  {t('quickfilm.selectAssetTitle').replace('{type}', t(showAssetPicker === 'character' ? 'quickfilm.characterLabel' : 'quickfilm.sceneLabel'))}
                 </h3>
                 {assetFiles.length === 0 ? (
-                  <p className="text-sm text-[var(--color-text-muted)]">暂无可用素材</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">{t('quickfilm.noAssetsAvailable')}</p>
                 ) : (
                   <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
                     {assetFiles.map((f, fi) => (
@@ -818,7 +819,7 @@ function ShotCard({
                     type="button"
                     onClick={() => setShowAssetPicker(null)}
                     className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                  >取消</button>
+                  >{t('common.cancel')}</button>
                 </div>
               </div>
             </div>
@@ -1056,18 +1057,18 @@ export function QuickFilm() {
     try {
       const style = form.style === CUSTOM_STYLE_OPTION ? form.customStyle || DEFAULT_STYLE_OPTION : form.style;
       setAssetFiles(form.assetFiles);
-      setStoryMeta({ story: form.story, protagonist: form.protagonist || '主角', protagonistDesc: form.protagonistDesc || '', style });
+      setStoryMeta({ story: form.story, protagonist: form.protagonist || t('quickfilm.defaultProtagonist'), protagonistDesc: form.protagonistDesc || '', style });
       await clearSession().catch(() => undefined);
       let ensuredProjectId = projectId;
       if (!ensuredProjectId) {
         const titleSeed = form.story.trim().slice(0, 12);
-        const created = await createProject(titleSeed ? `${titleSeed}（一键成片）` : '一键成片项目');
+        const created = await createProject(titleSeed ? `${titleSeed} (${t('quickfilm.projectSuffix')})` : t('quickfilm.projectFallbackName'));
         ensuredProjectId = created.id;
         setProjectId(created.id);
       }
       const { jobId: id } = await startQuickFilm({
         story: form.story,
-        protagonist: form.protagonist || '主角',
+        protagonist: form.protagonist || t('quickfilm.defaultProtagonist'),
         protagonistDesc: form.protagonistDesc,
         style,
         projectId: ensuredProjectId,
