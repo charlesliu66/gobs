@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { BatchJobDto, QueueSnapshotDto } from '../api/batchJobs';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const STREAM_RETRY_BASE_MS = 1500;
+const STREAM_RETRY_MAX_MS = 10000;
 
 export interface GlobalJobsState {
   jobs: BatchJobDto[];
@@ -41,35 +43,57 @@ export function useGlobalJobsProvider(): GlobalJobsState {
     if (!token) return;
 
     const url = `${API_BASE}/api/batch-jobs/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
+    let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let es: EventSource | null = null;
+    let reconnectAttempts = 0;
 
-    es.onmessage = (event: MessageEvent) => {
-      try {
-        const job = JSON.parse(event.data as string) as BatchJobDto;
-        setJobMap((prev) => {
-          const next = new Map(prev);
-          next.set(job.id, job);
-          return next;
-        });
-      } catch {
-        // Ignore malformed events.
-      }
+    const connect = () => {
+      if (disposed) return;
+      es = new EventSource(url);
+
+      es.onopen = () => {
+        reconnectAttempts = 0;
+      };
+
+      es.onmessage = (event: MessageEvent) => {
+        try {
+          const job = JSON.parse(event.data as string) as BatchJobDto;
+          setJobMap((prev) => {
+            const next = new Map(prev);
+            next.set(job.id, job);
+            return next;
+          });
+        } catch {
+          // Ignore malformed events.
+        }
+      };
+
+      es.addEventListener('queue-snapshot', (event: MessageEvent) => {
+        try {
+          const next = JSON.parse(event.data as string) as QueueSnapshotDto;
+          setSnapshot(next);
+        } catch {
+          // Ignore malformed events.
+        }
+      });
+
+      es.onerror = () => {
+        if (disposed) return;
+        es?.close();
+        const delay = Math.min(STREAM_RETRY_BASE_MS * (2 ** reconnectAttempts), STREAM_RETRY_MAX_MS);
+        reconnectAttempts += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
     };
 
-    es.addEventListener('queue-snapshot', (event: MessageEvent) => {
-      try {
-        const next = JSON.parse(event.data as string) as QueueSnapshotDto;
-        setSnapshot(next);
-      } catch {
-        // Ignore malformed events.
-      }
-    });
+    connect();
 
-    es.onerror = () => {
-      es.close();
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
     };
-
-    return () => es.close();
   }, []);
 
   const jobs = useMemo(() => (

@@ -1243,7 +1243,7 @@ export function EditorWorkbench() {
             {project.sourceProductionTitle && (
               <>
                 <a
-                  href={`/studio/wizard${project.sourceProductionProjectId ? `?project=${project.sourceProductionProjectId}` : ''}`}
+                  href={`/studio/production${project.sourceProductionProjectId ? `?projectId=${project.sourceProductionProjectId}` : ''}`}
                   className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
                   title="打开来源制片项目"
                 >

@@ -6,6 +6,15 @@ import { GlobalJobsPanel, GlobalJobsTrigger } from './GlobalJobsPanel';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
+type RuntimeVersionResponse = {
+  success: boolean;
+  branch?: string;
+  commitShort?: string;
+  commitSha?: string;
+};
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
 function getStoredUser(): { username: string; displayName: string } | null {
   try {
     const raw = localStorage.getItem('gobs_user');
@@ -201,11 +210,37 @@ export function Layout() {
   const isProductionWizard = pathname === '/studio/production';
   const isTiktokMatrix = pathname === '/tiktok-matrix';
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [runtimeVersion, setRuntimeVersion] = useState('GOBS');
   const globalJobs = useGlobalJobsProvider();
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    void fetch(`${API_BASE}/api/system/version`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`version ${res.status}`);
+        return res.json() as Promise<RuntimeVersionResponse>;
+      })
+      .then((data) => {
+        if (cancelled || !data?.success) return;
+        const branch = (data.branch || 'unknown').trim();
+        const commit = (data.commitShort || data.commitSha?.slice(0, 7) || 'unknown').trim();
+        setRuntimeVersion(`GOBS ${branch}@${commit}`);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeVersion('GOBS');
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
 
   const visibleGroups = useMemo(() => {
     return NAV_GROUPS.map((g) => ({
@@ -329,7 +364,7 @@ export function Layout() {
           </button>
         </div>
         <ThemeToggle />
-        <p className="text-[10px] text-center text-[var(--color-text-subtle)] opacity-50">GOBS v0.1</p>
+        <p className="text-[10px] text-center text-[var(--color-text-subtle)] opacity-50">{runtimeVersion}</p>
       </div>
     </div>
   );

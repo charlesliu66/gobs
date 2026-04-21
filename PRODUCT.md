@@ -156,7 +156,26 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.67 -->
+<!-- NEXT_VERSION: v0.69 -->
+
+### v0.68 — 2026-04-21
+
+**批量任务鉴权补齐 + SSE 自动重连 + 真实版本展示**
+
+**Bug Fix / UX:**
+- **[frontend] `batch-jobs` 成片链接统一补 FAT/JWT 鉴权**（`BatchJobsBoard.tsx` + `History.tsx`）：批量任务看板里的视频预览、下载，以及历史页“导入到剪辑器”现在都会把相对媒体地址转成真实 API URL，并自动附带 file-access-token 或 JWT 旁路，不再因为裸 `/api/batch-jobs/video/:id` 链接而在真实浏览器场景下出现 401。
+- **[frontend] `batch-jobs` SSE 断线自动重连**（`useGlobalJobs.ts` + `BatchJobsBoard.tsx`）：任务流和看板流在网络抖动、Nginx reload 或后端短暂重启后，会按指数退避自动恢复连接；看板右上角同步显示“实时同步 / 重连中”，避免长任务过程中静默失联。
+- **[frontend] 剪辑器回跳制片项目改到真实路由**（`EditorWorkbench.tsx`）：顶部“来自制片项目”入口从旧的 `/studio/wizard?project=...` 修正为当前实际使用的 `/studio/production?projectId=...`，恢复“制片 -> 剪辑 -> 回看制片”的闭环。
+- **[frontend] 侧边栏版本号改为读取运行中版本**（`Layout.tsx`）：不再硬编码 `GOBS v0.1`，而是在界面底部展示 `/api/system/version` 返回的真实 `branch@commit`，便于用户和开发确认当前线上正在运行的构建。
+
+### v0.67 — 2026-04-21
+
+**导出成品下载恢复稳定直链**
+
+**Bug Fix:**
+- **[frontend] 下载成品优先走带 `fat/token` 的直链下载**（`h5-video-tool/src/api/client.ts`）：导出完成后的「下载成品」不再先把整个 MP4 拉成 Blob 再立即释放临时 URL，而是优先复用现有文件访问 token 体系触发浏览器原生下载；对大文件和不同浏览器的兼容性更稳。
+- **[api] 导出下载路由接入媒体 token 解析**（`h5-video-tool-api/src/routes/editorExport.ts`）：`/api/editor/export/download/:filename` 现在和视频/图片预览链路一致，支持通过 `fat` 或 `token` 识别当前用户，保证直链下载仍然只允许访问本人导出的成品。
+- **[api] 鉴权中间件放行导出下载 GET 请求**（`h5-video-tool-api/src/middleware/auth.ts`）：浏览器原生下载请求不会携带 `Authorization` 头，本次改为在路由层完成二次校验，避免“导出成功但点击下载报错”的断链问题。
 
 ### v0.66 — 2026-04-21
 
@@ -1101,4 +1120,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.66）*
+*最后更新：2026-04-21（v0.68）*

@@ -25,6 +25,7 @@ import {
 import { pollRemixUntilDone, submitRemixMerge } from '../api/remix';
 import { uploadEditorAsset } from '../api/editor';
 import type { BatchJobDto } from '../api/batchJobs';
+import { appendFileAccessToken } from '../api/client';
 import { absoluteApiUrl } from '../utils/absoluteApiUrl';
 import { BatchJobsBoard } from '../components/BatchJobsBoard';
 
@@ -103,7 +104,8 @@ export function History() {
     setBatchImportBusy(true);
     try {
       // 下载视频 → Blob → 上传到剪辑素材库 → navigate 到剪辑页
-      const resp = await fetch(job.videoUrl);
+      const protectedVideoUrl = appendFileAccessToken(absoluteApiUrl(job.videoUrl));
+      const resp = await fetch(protectedVideoUrl);
       if (!resp.ok) throw new Error(`下载失败 ${resp.status}`);
       const blob = await resp.blob();
       const filename = `batch_shot${job.shotIndex + 1}_${job.id}.mp4`;
