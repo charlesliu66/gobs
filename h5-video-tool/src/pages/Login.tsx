@@ -1,10 +1,22 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { clearPostLoginRedirect, consumePostLoginRedirect } from '../api/client';
+
+function normalizeAppRedirect(target: string | null | undefined): string {
+  const value = (target || '').trim();
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/api/')) return '/';
+  if (value.startsWith('/login')) return '/';
+  return value;
+}
 
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const [from] = useState(() => {
+    const queryFrom = new URLSearchParams(location.search).get('from');
+    const stateFrom = (location.state as { from?: string } | null)?.from;
+    return normalizeAppRedirect(stateFrom ?? queryFrom ?? consumePostLoginRedirect() ?? '/');
+  });
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -28,6 +40,7 @@ export function Login() {
       if (typeof data.data.fileAccessToken === 'string' && data.data.fileAccessToken) {
         localStorage.setItem('gobs_fat', data.data.fileAccessToken);
       }
+      clearPostLoginRedirect();
       navigate(from, { replace: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : '登录失败');

@@ -95,6 +95,7 @@
 - 鏀寔 fast / balanced / high 璐ㄩ噺
 - 鏈嶅姟鍣ㄧ FFmpeg 鍚堟垚锛孲SE 瀹炴椂杩涘害
 - 鏂囧瓧鍙犲姞锛氬惎鍔ㄦ椂棰勬 FFmpeg 鏄惁鏀寔 `drawtext`锛堢粨鏋滅紦瀛橈級锛屼笉鏀寔鏃剁洿鎺ヨ烦杩囨枃瀛楀眰骞舵彁绀猴紝涓嶆姤閿欓€€鍑猴紱缁撴灉缂撳瓨鑷宠繘绋嬬敓鍛藉懆鏈燂紙涓嶉噸澶嶆娴嬶級
+- 导出成品下载前会优先补齐 `file-access-token`；若登录态失效，会先记住当前页面，重新登录后自动回到原页面继续操作，而不是把用户丢回首页。
 
 #### 3.8 AI 鍓緫 Agent 閿欒澶勭悊
 
@@ -156,7 +157,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.71 -->
+<!-- NEXT_VERSION: v0.72 -->
+
+### v0.71 — 2026-04-21
+
+**导出下载鉴权回跳 + 登录后黑屏遮罩修复**
+
+**Bug Fix:**
+- **[frontend] 下载成品前先补拿 file-access-token，并统一记录登录后回跳地址**（`h5-video-tool/src/api/client.ts` + `h5-video-tool/src/api/editor.ts`）：导出下载、编辑器上传和其他 401 场景不再直接硬跳裸 `/login`；会先保存当前业务页面，登录成功后自动回到原页面，避免下载失败把人丢回首页。
+- **[frontend] 登录页支持 query/state/sessionStorage 三路回跳恢复**（`h5-video-tool/src/pages/Login.tsx`）：无论是路由守卫跳转、接口 401 跳转，还是下载链路触发的重新登录，登录成功后都会恢复到原来的页面，而不是固定落到首页。
+- **[frontend] 主布局路由切换时强制收起全局任务面板遮罩**（`h5-video-tool/src/hooks/useGlobalJobs.ts` + `h5-video-tool/src/components/Layout.tsx`）：重新登录回到主站后，会自动清掉全局队列浮层和遮罩，避免页面出现整屏变暗、按钮点不动的“黑屏假死”。
 
 ### v0.70 — 2026-04-21
 
@@ -1137,4 +1147,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.70）*
+*最后更新：2026-04-21（v0.71）*

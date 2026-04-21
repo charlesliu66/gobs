@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, redirectToLogin } from './client';
 import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../editor/types/timeline';
 import { generateUUID } from '../utils/uuid';
 
@@ -11,12 +11,7 @@ function getAuthHeaders(): Record<string, string> {
 
 function handleUnauthorized(res: Response): void {
   if (res.status === 401) {
-    localStorage.removeItem('gobs_token');
-    localStorage.removeItem('gobs_user');
-    localStorage.removeItem('gobs_fat');
-    if (!window.location.pathname.includes('/login')) {
-      window.location.href = '/login';
-    }
+    redirectToLogin();
   }
 }
 
@@ -96,12 +91,7 @@ export async function uploadEditorAsset(
       });
       xhr.addEventListener('load', () => {
         if (xhr.status === 401) {
-          localStorage.removeItem('gobs_token');
-          localStorage.removeItem('gobs_user');
-          localStorage.removeItem('gobs_fat');
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
+          redirectToLogin();
           reject(new Error('登录已过期，请重新登录'));
           return;
         }

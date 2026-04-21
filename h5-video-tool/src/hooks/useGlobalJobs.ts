@@ -11,6 +11,7 @@ export interface GlobalJobsState {
   activeCount: number;
   panelOpen: boolean;
   togglePanel: () => void;
+  closePanel: () => void;
   dismissJob: (id: string) => void;
 }
 
@@ -26,6 +27,7 @@ const GlobalJobsContext = createContext<GlobalJobsState>({
   activeCount: 0,
   panelOpen: false,
   togglePanel: () => {},
+  closePanel: () => {},
   dismissJob: () => {},
 });
 
@@ -108,9 +110,10 @@ export function useGlobalJobsProvider(): GlobalJobsState {
   );
 
   const togglePanel = useCallback(() => setPanelOpen((open) => !open), []);
+  const closePanel = useCallback(() => setPanelOpen(false), []);
   const dismissJob = useCallback((id: string) => {
     setDismissed((prev) => new Set(prev).add(id));
   }, []);
 
-  return { jobs, snapshot, activeCount, panelOpen, togglePanel, dismissJob };
+  return { jobs, snapshot, activeCount, panelOpen, togglePanel, closePanel, dismissJob };
 }

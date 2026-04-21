@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { GlobalJobsContext, useGlobalJobsProvider } from '../hooks/useGlobalJobs';
 import { GlobalJobsPanel, GlobalJobsTrigger } from './GlobalJobsPanel';
+import { clearAuthStorage, clearPostLoginRedirect } from '../api/client';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
@@ -215,7 +216,8 @@ export function Layout() {
 
   useEffect(() => {
     setSidebarOpen(false);
-  }, [pathname]);
+    globalJobs.closePanel();
+  }, [globalJobs.closePanel, pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -342,14 +344,14 @@ export function Layout() {
           <button
             type="button"
             onClick={() => {
-              localStorage.removeItem('gobs_token');
-              localStorage.removeItem('gobs_user');
-              localStorage.removeItem('gobs_fat');
+              clearAuthStorage();
+              clearPostLoginRedirect();
               localStorage.removeItem('gobs_last_project_id');
               localStorage.removeItem('h5-production-project-v1');
               localStorage.removeItem('production_compass_api_key');
               localStorage.removeItem('quickfilm_active_job');
               localStorage.removeItem('gobs_multishot_job_id');
+              globalJobs.closePanel();
               navigate('/login', { replace: true });
             }}
             className="flex-1 flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)] transition-all"
