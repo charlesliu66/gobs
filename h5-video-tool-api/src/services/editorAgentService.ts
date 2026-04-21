@@ -412,10 +412,15 @@ function findBgmAssetId(project: TimelineProject): string | null {
 // ─── 模型配置 ─────────────────────────────────────────────────────────────────
 
 function getEditorAgentModels() {
+  // 默认全部用项目主力 Compass Gemini（gemini-2.5-flash）——
+  // Plan 阶段历史默认 DeepSeek-R1 为推理模型，reasoning tokens 会吃光可见 completion，
+  // 导致只输出 SUMMARY/TOTAL_DURATION 不列 CLIPS，时间轴空。改为 gemini-2.5-flash 后
+  // completion 正常完整输出。Build/Fallback 保持 gpt-4.1 / gpt-4o 作为 JSON 可靠性兜底，
+  // 可通过 .env 覆盖（EDITOR_AGENT_PLAN_MODEL / BUILD_MODEL / FALLBACK_MODEL）。
   return {
-    plan: process.env.EDITOR_AGENT_PLAN_MODEL?.trim() || 'DeepSeek-R1',
-    build: process.env.EDITOR_AGENT_BUILD_MODEL?.trim() || 'gpt-4.1',
-    fallback: process.env.EDITOR_AGENT_FALLBACK_MODEL?.trim() || 'gpt-4o',
+    plan: process.env.EDITOR_AGENT_PLAN_MODEL?.trim() || 'gemini-2.5-flash',
+    build: process.env.EDITOR_AGENT_BUILD_MODEL?.trim() || 'gemini-2.5-flash',
+    fallback: process.env.EDITOR_AGENT_FALLBACK_MODEL?.trim() || 'gemini-2.5-flash',
   };
 }
 
