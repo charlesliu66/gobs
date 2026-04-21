@@ -159,7 +159,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.79 -->
+<!-- NEXT_VERSION: v0.80 -->
+
+### v0.79 — 2026-04-21
+
+**视频分发文案鉴权修复与 TikTok 标签收紧**
+
+**Feature / Bug Fix:**
+- **[frontend] 分发页文案生成/翻译请求补齐 JWT 鉴权**（`h5-video-tool/src/api/promptPolish.ts`）：`/api/prompt/expand-short-drama`、`/api/prompt/polish`、`/api/prompt/generate-caption`、`/api/prompt/translate-caption` 统一自动携带 `Authorization: Bearer gobs_token`，修复分发页点击生成文案时报“未提供认证 token”的问题。
+- **[api] TikTok 文案标签回退逻辑收紧为更适合分发的组合**（`h5-video-tool-api/src/services/promptPolish.ts`）：hashtags 现在会去重、移除 `#shorts`、控制在 6 个以内，并统一补齐更适合 TikTok 的流量标签；fallback 文案改为 hook-first 的短句风格，避免把生产 prompt 直贴到发布页。
+- **[test] 新增分发文案鉴权与 TikTok 标签规则回归测试**（`h5-video-tool/tests/promptPolish.test.ts` + `h5-video-tool-api/tests/promptCaptionRules.test.ts`）：覆盖前端请求头携带 JWT、标签归一化、fallback caption/hashtags 行为，避免同类问题回归。
 
 ### v0.78 — 2026-04-21
 
@@ -1211,4 +1220,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.78）*
+*最后更新：2026-04-21（v0.79）*

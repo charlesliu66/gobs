@@ -523,16 +523,48 @@ const NORMALIZED_PLATFORMS: Record<string, string> = {
   facebook: 'facebook',
 };
 
-function normalizeHashtags(hashtags: string): string {
-  let h = typeof hashtags === 'string' ? hashtags.trim() : '';
-  if (h && !h.includes(' ')) h = h.replace(/#/g, ' #').trim();
-  return h || '#fyp #viral';
+const DEFAULT_TIKTOK_HASHTAGS = ['#fyp', '#viral', '#tiktok', '#foryou'];
+
+export function normalizeHashtags(hashtags: string): string {
+  const raw = typeof hashtags === 'string' ? hashtags.trim() : '';
+  const extracted =
+    raw.match(/#[^\s#]+/g) ??
+    raw
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => (token.startsWith('#') ? token : `#${token}`));
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const token of extracted) {
+    const cleaned = `#${token.replace(/^#+/, '').replace(/[^\p{L}\p{N}_]/gu, '')}`.trim();
+    if (cleaned.length <= 1) continue;
+    const key = cleaned.toLowerCase();
+    if (key === '#shorts') continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(cleaned);
+    if (normalized.length >= 6) break;
+  }
+
+  if (normalized.length === 0) {
+    return DEFAULT_TIKTOK_HASHTAGS.join(' ');
+  }
+
+  return normalized.join(' ');
 }
 
 /** LLM 解析失败时：从 prompt 抽关键词做极简 TikTok 风，避免整段粘贴 */
-function buildFallbackFromPrompt(userText: string): CaptionResult {
+export function buildFallbackFromPrompt(userText: string): CaptionResult {
   const t = (userText || '').trim();
-  if (!t) return { caption: 'This hit different 🔥 Worth the watch.', hashtags: '#fyp #foryou #viral #shorts' };
+  if (!t) {
+    return {
+      caption: 'POV: this escalated fast and the ending lands hard 🔥',
+      hashtags: DEFAULT_TIKTOK_HASHTAGS.join(' '),
+    };
+  }
   const stripTech = t
     .replace(/\b\d{1,2}s\b/gi, '')
     .replace(/\b(16:9|9:16|4k|720p|1080p)\b/gi, '')
@@ -540,13 +572,13 @@ function buildFallbackFromPrompt(userText: string): CaptionResult {
     .trim();
   const words = stripTech.match(/[\u4e00-\u9fa5]{2,8}|[a-zA-Z]{3,12}/g)?.slice(0, 4) || [];
   const topic = words.slice(0, 2).join(' ') || 'this moment';
-  const caption = `POV: ${topic} — too good to scroll past 🔥`;
-  const tagBase = words
+  const betterCaption = `POV: ${topic} and it gets better every second 🔥`;
+  const betterTagBase = words
     .map((k) => '#' + k.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').slice(0, 24))
     .filter((x) => x.length > 1)
-    .slice(0, 3);
-  const hashtags = ['#fyp', '#foryou', '#viral', ...tagBase, '#shorts'].join(' ');
-  return { caption, hashtags };
+    .slice(0, 4);
+  const betterHashtags = normalizeHashtags(['#fyp', '#viral', ...betterTagBase].join(' '));
+  return { caption: betterCaption, hashtags: betterHashtags };
 }
 
 export interface GenerateCaptionOptions {
@@ -722,7 +754,7 @@ export async function translateCaptionForPost(
   const cap = (caption ?? '').trim();
   const tag = (hashtags ?? '').trim();
   if (!cap && !tag) {
-    return { caption: cap, hashtags: tag || '#fyp #viral' };
+    return { caption: cap, hashtags: tag || DEFAULT_TIKTOK_HASHTAGS.join(' ') };
   }
 
   const langName =
@@ -747,9 +779,12 @@ export async function translateCaptionForPost(
     const parsed = JSON.parse(extractJson(rawText)) as { caption?: string; hashtags?: string };
     return {
       caption: typeof parsed.caption === 'string' ? parsed.caption.trim() : cap,
-      hashtags: typeof parsed.hashtags === 'string' ? normalizeHashtags(parsed.hashtags) : tag || '#fyp #viral',
+      hashtags:
+        typeof parsed.hashtags === 'string'
+          ? normalizeHashtags(parsed.hashtags)
+          : tag || DEFAULT_TIKTOK_HASHTAGS.join(' '),
     };
   } catch {
-    return { caption: cap, hashtags: tag || '#fyp #viral' };
+    return { caption: cap, hashtags: tag || DEFAULT_TIKTOK_HASHTAGS.join(' ') };
   }
 }

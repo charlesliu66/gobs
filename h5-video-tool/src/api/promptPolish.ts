@@ -1,5 +1,26 @@
 const API_BASE = '';
 
+function readPromptAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('gobs_token');
+  } catch {
+    return null;
+  }
+}
+
+export function buildPromptRequestHeaders(tokenOverride?: string | null): Record<string, string> {
+  const token = tokenOverride === undefined ? readPromptAuthToken() : tokenOverride;
+  return token
+    ? {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }
+    : {
+        'Content-Type': 'application/json',
+      };
+}
+
 export interface PromptTemplate {
   id: string;
   name: string;
@@ -111,7 +132,7 @@ export async function expandShortDramaFromIdea(idea: string): Promise<ShortDrama
   try {
     const res = await fetch(`${API_BASE}/api/prompt/expand-short-drama`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildPromptRequestHeaders(),
       body: JSON.stringify({ idea: raw }),
       signal: controller.signal,
     });
@@ -150,7 +171,7 @@ export async function polishPrompt(
   try {
     const res = await fetch(`${API_BASE}/api/prompt/polish`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildPromptRequestHeaders(),
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -195,7 +216,7 @@ export async function translateCaptionForPost(
   };
   const res = await fetch(`${API_BASE}/api/prompt/translate-caption`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildPromptRequestHeaders(),
     body: JSON.stringify(body),
   });
   const data = await safeParseJson<CaptionResult & { error?: string }>(res);
@@ -223,7 +244,7 @@ export async function generateCaptionForPost(
   if (opts?.language) body.language = opts.language;
   const res = await fetch(`${API_BASE}/api/prompt/generate-caption`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildPromptRequestHeaders(),
     body: JSON.stringify(body),
   });
   const data = await safeParseJson<CaptionResult & CaptionByPlatformResult & { error?: string }>(res);
