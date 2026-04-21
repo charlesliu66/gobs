@@ -4,9 +4,12 @@ import { ThemeToggle } from './ThemeToggle';
 import { GlobalJobsContext, useGlobalJobsProvider } from '../hooks/useGlobalJobs';
 import { GlobalJobsPanel, GlobalJobsTrigger } from './GlobalJobsPanel';
 import { clearAuthStorage, clearPostLoginRedirect } from '../api/client';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { buildLocaleHeaders, defaultContentLocaleFor, type UiLocale } from '../i18n/locale.ts';
+import { LocalePresetSwitcher } from './LocalePresetSwitcher.tsx';
 
 type NavIcon = () => JSX.Element;
-type NavItemDef = { to: string; label: string; icon: NavIcon; end?: boolean; highlight?: boolean };
+type NavItemDef = { to: string; labelKey: string; icon: NavIcon; end?: boolean; highlight?: boolean };
 type RuntimeVersionResponse = {
   success: boolean;
   branch?: string;
@@ -132,30 +135,30 @@ function GalleryIcon() {
   );
 }
 
-const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
+const NAV_GROUPS: { labelKey: string; items: NavItemDef[] }[] = [
   {
-    label: '创作',
+    labelKey: 'layout.navCreate',
     items: [
-      { to: '/quickfilm', label: '一键成片', icon: QuickFilmIcon },
-      { to: '/studio/production', label: '高级制片', icon: ProductionIcon },
-      { to: '/studio', label: '生成视频', icon: StudioIcon, end: true },
+      { to: '/quickfilm', labelKey: 'layout.quickfilm', icon: QuickFilmIcon },
+      { to: '/studio/production', labelKey: 'layout.production', icon: ProductionIcon },
+      { to: '/studio', labelKey: 'layout.studio', icon: StudioIcon, end: true },
     ],
   },
   {
-    label: '后期 & 素材',
+    labelKey: 'layout.navPost',
     items: [
-      { to: '/editor', label: '视频剪辑', icon: EditorIcon },
-      { to: '/gallery', label: '我的成片', icon: GalleryIcon },
-      { to: '/asset-library', label: '素材库', icon: AssetLibraryIcon },
+      { to: '/editor', labelKey: 'layout.editor', icon: EditorIcon },
+      { to: '/gallery', labelKey: 'layout.gallery', icon: GalleryIcon },
+      { to: '/asset-library', labelKey: 'layout.assets', icon: AssetLibraryIcon },
     ],
   },
   {
-    label: '分发 & 工具',
+    labelKey: 'layout.navDistribution',
     items: [
-      { to: '/distribute', label: '视频分发', icon: DistributeIcon },
-      { to: '/tiktok-matrix', label: '风控大师', icon: MatrixIcon },
-      { to: '/projects', label: '我的项目', icon: ProjectsIcon },
-      { to: '/history', label: '历史记录', icon: HistoryIcon },
+      { to: '/distribute', labelKey: 'layout.distribute', icon: DistributeIcon },
+      { to: '/tiktok-matrix', labelKey: 'layout.matrix', icon: MatrixIcon },
+      { to: '/projects', labelKey: 'layout.projects', icon: ProjectsIcon },
+      { to: '/history', labelKey: 'layout.history', icon: HistoryIcon },
     ],
   },
 ];
@@ -206,6 +209,7 @@ function navLinkClass(active: boolean, highlight?: boolean): string {
 export function Layout() {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
+  const { uiLocale, setUiLocale, setContentLocale, contentLocale, t } = useLocale();
   const user = getStoredUser();
   const isEditor = pathname === '/editor';
   const isProductionWizard = pathname === '/studio/production';
@@ -223,7 +227,10 @@ export function Layout() {
     let cancelled = false;
     const controller = new AbortController();
 
-    void fetch(`${API_BASE}/api/system/version`, { signal: controller.signal })
+    void fetch(`${API_BASE}/api/system/version`, {
+      signal: controller.signal,
+      headers: buildLocaleHeaders(uiLocale, contentLocale),
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`version ${res.status}`);
         return res.json() as Promise<RuntimeVersionResponse>;
@@ -235,14 +242,14 @@ export function Layout() {
         setRuntimeVersion(`GOBS ${branch}@${commit}`);
       })
       .catch(() => {
-        if (!cancelled) setRuntimeVersion('GOBS');
+        if (!cancelled) setRuntimeVersion(t('layout.runtimeFallback'));
       });
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, []);
+  }, [contentLocale, t, uiLocale]);
 
   const visibleGroups = useMemo(() => {
     return NAV_GROUPS.map((g) => ({
@@ -250,6 +257,11 @@ export function Layout() {
       items: filterNavItems(g.items),
     })).filter((g) => g.items.length > 0);
   }, []);
+
+  const handleLanguageChange = (nextUiLocale: UiLocale) => {
+    setUiLocale(nextUiLocale);
+    setContentLocale(defaultContentLocaleFor(nextUiLocale));
+  };
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
@@ -259,7 +271,7 @@ export function Layout() {
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
-          aria-label="关闭侧边栏"
+          aria-label={t('layout.closeSidebar')}
           className="sm:hidden p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -273,11 +285,11 @@ export function Layout() {
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         {visibleGroups.map((group, gi) => (
           <div key={gi} className={gi > 0 ? 'mt-5' : ''}>
-            <p className="section-overline px-3 mb-2">{group.label}</p>
+            <p className="section-overline px-3 mb-2">{t(group.labelKey)}</p>
             <div className="space-y-0.5 nav-stagger">
-              {group.items.map(({ to, label, icon: Icon, end: endProp, highlight }) => (
+              {group.items.map(({ to, labelKey, icon: Icon, end: endProp, highlight }) => (
                 <NavLink
-                  key={`${to}:${label}`}
+                  key={`${to}:${labelKey}`}
                   to={to === '/studio/production' ? getProductionNavTo(pathname, search) : to}
                   end={endProp ?? to === '/'}
                   className={({ isActive }) => {
@@ -295,7 +307,7 @@ export function Layout() {
                           <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[var(--color-primary)] shadow-[0_0_8px_rgba(124,141,255,0.5)]" />
                         )}
                         <span className={`flex-shrink-0 ${active ? 'text-[var(--color-primary)] opacity-100' : 'opacity-60'}`}><Icon /></span>
-                        {label}
+                        {t(labelKey)}
                         {highlight && (
                           <span className="chip-cyan ml-auto !text-[9px] !py-0 !px-1.5">NEW</span>
                         )}
@@ -311,6 +323,20 @@ export function Layout() {
 
       {/* Footer — User Area */}
       <div className="mt-auto border-t border-[var(--color-border)]/40 px-3 py-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 px-2">
+          <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-subtle)]">{t('common.language')}</span>
+        </div>
+        <LocalePresetSwitcher />
+        <div className="px-2">
+          <select
+            value={uiLocale}
+            onChange={(e) => handleLanguageChange(e.target.value as UiLocale)}
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[11px] text-[var(--color-text)]"
+          >
+            <option value="zh-CN">{t('common.chinese')}</option>
+            <option value="en">{t('common.english')}</option>
+          </select>
+        </div>
         {user && (
           <div className="flex items-center gap-3 px-2 py-2 mb-1">
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-xs font-bold shadow-[0_0_12px_rgba(124,141,255,0.2)]">
@@ -325,7 +351,8 @@ export function Layout() {
         <div className="flex items-center gap-1">
           <NavLink
             to="/settings/accounts"
-            aria-label="设置"
+            aria-label={t('layout.settings')}
+            title={t('layout.settings')}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition-all"
           >
             <SettingsIcon />
@@ -334,7 +361,7 @@ export function Layout() {
             <NavLink
               to="/settings/usage"
               className="flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition-all"
-              title="Key 调用监控"
+              title={t('layout.usageMonitor')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -355,8 +382,8 @@ export function Layout() {
               navigate('/login', { replace: true });
             }}
             className="flex-1 flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)] transition-all"
-            aria-label="退出登录"
-            title="退出登录"
+            aria-label={t('layout.logout')}
+            title={t('layout.logout')}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -411,7 +438,7 @@ export function Layout() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                aria-label="打开菜单"
+                aria-label={t('layout.openMenu')}
                 className="p-2 rounded-lg border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

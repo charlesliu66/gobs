@@ -1,9 +1,28 @@
+import {
+  buildLocaleHeaders,
+  getInitialContentLocale,
+  getInitialUiLocale,
+  readStoredContentLocale,
+  readStoredUiLocale,
+} from '../i18n/locale.ts';
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const POST_LOGIN_REDIRECT_KEY = 'gobs_post_login_redirect';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('gobs_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function getLocaleHeaders(): Record<string, string> {
+  const storage = typeof window === 'undefined' ? null : window.localStorage;
+  const uiLocale = storage
+    ? readStoredUiLocale(storage)
+    : getInitialUiLocale(null, null);
+  const contentLocale = storage
+    ? readStoredContentLocale(storage)
+    : getInitialContentLocale(null, uiLocale);
+  return buildLocaleHeaders(uiLocale, contentLocale);
 }
 
 export function clearAuthStorage(): void {
@@ -72,7 +91,7 @@ export function ensureFileAccessToken(): Promise<void> {
   _fatEnsurePromise = (async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/auth/file-access-token`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...getLocaleHeaders() },
       });
       if (res.status === 401) {
         redirectToLogin();
@@ -182,6 +201,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getLocaleHeaders(),
       },
       body: JSON.stringify(body),
     });
@@ -199,7 +219,10 @@ export async function apiGet<T>(path: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+        ...getLocaleHeaders(),
+      },
     });
   } catch (e) {
     wrapFetchError(e);
@@ -217,6 +240,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
+      ...getLocaleHeaders(),
     },
     body: JSON.stringify(body),
   });
@@ -241,7 +265,10 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+        ...getLocaleHeaders(),
+      },
     });
   } catch (e) {
     wrapFetchError(e);
@@ -266,6 +293,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getLocaleHeaders(),
       },
       body: JSON.stringify(body),
     });
@@ -283,7 +311,10 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+    },
   });
   handleUnauthorized(res);
   if (!res.ok) {
