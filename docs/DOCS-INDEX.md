@@ -34,7 +34,17 @@
 
 ---
 
-## D. 当前最重要的 5 份文档
+## D. 方案层
+
+| 文档/目录 | 角色 | 说明 |
+|---|---|---|
+| [docs/plans/](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans>) | 跨 run 的设计与实施方案池 | 适合沉淀主题型设计、阶段性 implementation plan |
+| [docs/plans/README.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/README.md>) | `plans/` 目录导航 | 说明 design / plan 的分工与命名约定 |
+| [docs/i18n-中英文切换设计方案-v2.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/i18n-中英文切换设计方案-v2.md>) | 当前 i18n 主设计稿 | 面向后续落地，优先于旧版设计稿阅读 |
+
+---
+
+## E. 当前最重要的 5 份文档
 
 1. [AGENTS.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/AGENTS.md>)
 2. [.claude/memory/feedback.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/.claude/memory/feedback.md>)
@@ -44,9 +54,10 @@
 
 ---
 
-## E. 后续整合建议
+## F. 后续整合建议
 
 - `AGENTS.md` 和 `CLAUDE.md` 可以继续保留双份，但最好只保留“短版规则”，减少细节复制
 - `docs/CODEX-CLI-PROJECT-GUIDE.md` 作为长版说明，承接所有扩展细节
 - `docs/TASK-INDEX.md` 只承担“当前入口”，不要再写成一次性的历史任务归档
+- `docs/plans/` 用来沉淀跨 run 的主题设计，不要把它和 `workflow/runs/` 的单次交付档案混在一起
 - 历史 handoff、review、run 文档继续保留，但都通过 `TASK-INDEX` 或 `DOCS-INDEX` 被发现

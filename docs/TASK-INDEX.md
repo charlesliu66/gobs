@@ -41,6 +41,18 @@
 - [2026-04-20-dreamina-scheduler-cancel](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/workflow/runs/2026-04-20-dreamina-scheduler-cancel/SESSION-ANCHOR.md>)
   - 即梦调度器 / 取消排队的重要历史 run，带 handoff 说明
 
+### 4. 当前活跃方案
+- [docs/plans/README.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/README.md>)
+  - `plans/` 目录入口，先看这里再决定读哪份设计稿
+- [docs/i18n-中英文切换设计方案-v2.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/i18n-中英文切换设计方案-v2.md>)
+  - 当前 i18n 主设计稿，解释 `uiLocale / contentLocale` 的分层思路
+- [2026-04-21-i18n-phase0-phase1-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-i18n-phase0-phase1-implementation-plan.md>)
+  - i18n 第一阶段可执行计划
+- [2026-04-21-distribute-caption-auth-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-distribute-caption-auth-design.md>)
+  - 分发文案鉴权设计
+- [2026-04-21-distribute-caption-auth.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-distribute-caption-auth.md>)
+  - 分发文案鉴权实施计划
+
 ---
 
 ## 文档分工建议
@@ -55,6 +67,8 @@
   - 放完整长文说明，不追求短
 - `docs/TASK-INDEX.md`
   - 放“当前入口”和“现在最重要的文档地图”
+- `docs/plans/*.md`
+  - 放跨 run 仍会持续复用的设计稿和实施计划
 - `docs/reviews/*.md`
   - 放阶段性评估，不承担规则职责
 - `docs/workflow/runs/*`

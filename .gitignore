@@ -55,3 +55,13 @@ h5-video-tool-api/exports/
 
 # 本地配置覆盖
 .claude/settings.local.json
+
+# 本地敏感/一次性运维脚本
+scripts/_check_logs.py
+scripts/_sync_server_users_config.py
+patch_gng_sharing.py
+
+# 本地演示/导出产物
+test_output.pptx
+test_slides.json
+ppt_template_config.json
