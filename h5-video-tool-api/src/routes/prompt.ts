@@ -114,12 +114,24 @@ promptRouter.post('/generate-caption', async (req: Request, res: Response) => {
     existingCaption,
     existingHashtags,
     language,
+    videoPath,
+    videoUrl,
+    accountContext,
   } = req.body as {
     prompt?: string;
     platforms?: string[];
     existingCaption?: string;
     existingHashtags?: string;
     language?: 'EN' | 'CN' | 'TH' | 'ID';
+    videoPath?: string;
+    videoUrl?: string;
+    accountContext?: Array<{
+      id?: string;
+      username?: string;
+      platform?: string;
+      region?: string;
+      remark?: string;
+    }>;
   };
   const raw = typeof prompt === 'string' ? prompt : '';
   const existingCap = typeof existingCaption === 'string' ? existingCaption.trim() : '';
@@ -136,6 +148,10 @@ promptRouter.post('/generate-caption', async (req: Request, res: Response) => {
       existingCaption: existingCap || undefined,
       existingHashtags: existingTag || undefined,
       language: lang || 'EN',
+      videoPath: typeof videoPath === 'string' ? videoPath.trim() || undefined : undefined,
+      videoUrl: typeof videoUrl === 'string' ? videoUrl.trim() || undefined : undefined,
+      accountContext: Array.isArray(accountContext) ? accountContext : undefined,
+      requestUsername: req.user?.username ?? undefined,
     });
     res.json(result);
   } catch (err) {

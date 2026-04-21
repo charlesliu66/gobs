@@ -116,6 +116,15 @@ export function TabDistribute() {
         existingCaption: caption.trim() || undefined,
         existingHashtags: hashtags.trim() || undefined,
         language: captionLang === 'DEFAULT' ? 'EN' : captionLang,
+        videoPath: videoPath || undefined,
+        videoUrl: videoUrl || undefined,
+        accountContext: selectedAccounts.map((account) => ({
+          id: account.id,
+          username: account.username,
+          platform: account.platform,
+          region: account.region,
+          remark: account.remark,
+        })),
       });
 
       if ('byPlatform' in result && result.byPlatform) {

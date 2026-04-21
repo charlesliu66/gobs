@@ -203,6 +203,41 @@ export interface CaptionByPlatformResult {
   byPlatform: Record<string, CaptionResult>;
 }
 
+export interface CaptionAccountContext {
+  id?: string;
+  username?: string;
+  platform?: string;
+  region?: string;
+  remark?: string;
+}
+
+export interface GenerateCaptionRequestOptions {
+  existingCaption?: string;
+  existingHashtags?: string;
+  language?: 'EN' | 'CN' | 'TH' | 'ID';
+  videoPath?: string;
+  videoUrl?: string;
+  accountContext?: CaptionAccountContext[];
+}
+
+export function buildGenerateCaptionRequestBody(
+  prompt: string,
+  platforms?: string[],
+  opts?: GenerateCaptionRequestOptions,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    prompt: prompt.trim() || undefined,
+    platforms: platforms?.length ? platforms : undefined,
+  };
+  if (opts?.existingCaption) body.existingCaption = opts.existingCaption;
+  if (opts?.existingHashtags) body.existingHashtags = opts.existingHashtags;
+  if (opts?.language) body.language = opts.language;
+  if (opts?.videoPath) body.videoPath = opts.videoPath;
+  if (opts?.videoUrl) body.videoUrl = opts.videoUrl;
+  if (opts?.accountContext?.length) body.accountContext = opts.accountContext;
+  return body;
+}
+
 /** 将现有文案与标签翻译为目标语言（EN/CN/TH/ID）。 */
 export async function translateCaptionForPost(
   caption: string,
@@ -233,15 +268,9 @@ export async function translateCaptionForPost(
 export async function generateCaptionForPost(
   prompt: string,
   platforms?: string[],
-  opts?: { existingCaption?: string; existingHashtags?: string; language?: 'EN' | 'CN' | 'TH' | 'ID' }
+  opts?: GenerateCaptionRequestOptions
 ): Promise<CaptionResult | CaptionByPlatformResult> {
-  const body: Record<string, unknown> = {
-    prompt: prompt.trim() || undefined,
-    platforms: platforms?.length ? platforms : undefined,
-  };
-  if (opts?.existingCaption) body.existingCaption = opts.existingCaption;
-  if (opts?.existingHashtags) body.existingHashtags = opts.existingHashtags;
-  if (opts?.language) body.language = opts.language;
+  const body = buildGenerateCaptionRequestBody(prompt, platforms, opts);
   const res = await fetch(`${API_BASE}/api/prompt/generate-caption`, {
     method: 'POST',
     headers: buildPromptRequestHeaders(),

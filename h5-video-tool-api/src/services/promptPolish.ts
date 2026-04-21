@@ -7,10 +7,19 @@
  * 支持模板（templateId）：viral-dance 单镜、cg-trailer/short-drama 多镜分镜。
  */
 import axios, { isAxiosError } from 'axios';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { getTemplate } from '../config/prompt-templates/index.js';
 import { resolveCompassApiKeyForGeminiChat } from './compassApiKey.js';
 import { recordKeyUsage } from './keyUsageStats.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
+import { bufferFromVideoUrlPayload } from './videoUtils.js';
+import { ffprobeDurationSeconds, getFfmpegPath } from './video/ffmpegPaths.js';
 
 /** VEO 通用规则（Subject + Action 结构，单场景、具体描述） */
 const VEO_BASE_RULES = `
@@ -330,6 +339,14 @@ function extractJson(s: string): string {
   return s.trim();
 }
 
+function safeJsonParse<T>(raw: string): T | null {
+  try {
+    return JSON.parse(extractJson(raw)) as T;
+  } catch {
+    return null;
+  }
+}
+
 export type PolishOptions = { styleId?: string; templateId?: string; multishot?: boolean; duration?: number; aspectRatio?: string };
 
 export async function polishPrompt(
@@ -514,6 +531,33 @@ export interface CaptionByPlatformResult {
   byPlatform: Record<string, CaptionResult>;
 }
 
+export type CaptionLanguage = 'EN' | 'CN' | 'TH' | 'ID';
+
+export interface CaptionAccountContext {
+  id?: string;
+  username?: string;
+  platform?: string;
+  region?: string;
+  remark?: string;
+}
+
+interface CaptionCandidate {
+  caption?: string;
+  hashtags?: string;
+  hookType?: string;
+  confidence?: number;
+}
+
+interface CaptionVisionSummary {
+  subject: string;
+  action: string;
+  vibe: string;
+  standoutMoment: string;
+  audienceAngle: string;
+  contentTags: string[];
+  styleTags: string[];
+}
+
 const NORMALIZED_PLATFORMS: Record<string, string> = {
   tiktok: 'tiktok',
   instagram: 'instagram',
@@ -524,6 +568,61 @@ const NORMALIZED_PLATFORMS: Record<string, string> = {
 };
 
 const DEFAULT_TIKTOK_HASHTAGS = ['#fyp', '#viral', '#tiktok', '#foryou'];
+
+const TIKTOK_TRAFFIC_TAGS = ['#fyp', '#viral', '#foryou'];
+
+const PROMPT_ARTIFACT_PATTERN =
+  /\b(16:9|9:16|4k|8k|1080p|720p|cinematic|slow motion|camera|shot|lens|scene|lighting|render|vfx)\b/i;
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function stripPromptArtifacts(value: string): string {
+  return normalizeWhitespace(
+    value
+      .replace(/\b\d{1,2}\s*s(ec(onds?)?)?\b/gi, ' ')
+      .replace(/\b(16:9|9:16|4k|8k|1080p|720p)\b/gi, ' ')
+      .replace(/\b(cinematic|slow motion|close[- ]up|wide shot|camera move|camera pan|camera zoom)\b/gi, ' ')
+      .replace(/[|]+/g, ' ')
+      .replace(/\s{2,}/g, ' '),
+  );
+}
+
+function containsCjk(value: string): boolean {
+  return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/u.test(value);
+}
+
+function containsLatin(value: string): boolean {
+  return /[a-z]/i.test(value);
+}
+
+function countMatches(value: string, pattern: RegExp): number {
+  const matches = value.match(pattern);
+  return matches ? matches.length : 0;
+}
+
+function toHashtagToken(value: string): string | null {
+  const raw = normalizeWhitespace(value).replace(/^#+/, '');
+  if (!raw) return null;
+  const compact = raw
+    .replace(/['".,!?()[\]{}:;/\\]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join('');
+  const cleaned = compact.replace(/[^\p{L}\p{N}_]/gu, '');
+  if (cleaned.length < 3) return null;
+  if (/^[a-z]{1,3}$/i.test(cleaned)) return null;
+  return `#${cleaned.slice(0, 24)}`;
+}
+
+function uniquePush(target: string[], seen: Set<string>, token: string | null | undefined): void {
+  if (!token) return;
+  const key = token.toLowerCase();
+  if (seen.has(key)) return;
+  seen.add(key);
+  target.push(token);
+}
 
 export function normalizeHashtags(hashtags: string): string {
   const raw = typeof hashtags === 'string' ? hashtags.trim() : '';
@@ -559,6 +658,15 @@ export function normalizeHashtags(hashtags: string): string {
 /** LLM 解析失败时：从 prompt 抽关键词做极简 TikTok 风，避免整段粘贴 */
 export function buildFallbackFromPrompt(userText: string): CaptionResult {
   const t = (userText || '').trim();
+  const baseWords = stripPromptArtifacts(t).match(/[\u4e00-\u9fa5]{2,8}|[a-zA-Z]{3,12}/g)?.slice(0, 4) || [];
+  const fallbackTopic = baseWords.slice(0, 2).join(' ') || 'this moment';
+  return {
+    caption: `Wait for it: ${fallbackTopic} hits way harder than you expect.`,
+    hashtags: assembleTikTokHashtags({
+      rawHashtags: ['#fyp', '#viral', ...baseWords.map((word) => `#${word}`)].join(' '),
+      contentTags: baseWords,
+    }),
+  };
   if (!t) {
     return {
       caption: 'POV: this escalated fast and the ending lands hard 🔥',
@@ -587,6 +695,334 @@ export interface GenerateCaptionOptions {
   language?: 'EN' | 'CN' | 'TH' | 'ID';
 }
 
+export function scoreCaptionQuality(caption: string, language: CaptionLanguage = 'EN'): number {
+  const text = normalizeWhitespace(caption);
+  if (!text) return 0;
+
+  let score = 35;
+  const lower = text.toLowerCase();
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const charCount = text.length;
+
+  if (/^(wait for it|you need to see this|this part|the way|he|she|when|watch)/i.test(text)) score += 10;
+  if (/[!?]/.test(text)) score += 4;
+  if (/🔥|😮|😳|😭|💀|✨/.test(text)) score += 3;
+  if (PROMPT_ARTIFACT_PATTERN.test(text)) score -= 18;
+  if (/it gets better every second/i.test(lower)) score -= 28;
+  if (/\bpov:\s*/i.test(lower) && containsCjk(text)) score -= 18;
+
+  if (language === 'EN') {
+    if (containsCjk(text) && containsLatin(text)) score -= 18;
+    if (!containsLatin(text)) score -= 16;
+  }
+  if (language === 'CN' && containsLatin(text) && containsCjk(text)) score -= 10;
+
+  if (charCount < 18) score -= 8;
+  if (charCount > 120) score -= 10;
+  if (wordCount >= 4 && wordCount <= 14) score += 6;
+
+  const keywordish = countMatches(lower, /\b[a-z]{3,}\b/g);
+  if (wordCount >= 6 && keywordish === wordCount && !/[.!?]/.test(text)) score -= 12;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+export function isLowQualityCaption(caption: string, language: CaptionLanguage = 'EN'): boolean {
+  return scoreCaptionQuality(caption, language) < 32;
+}
+
+export function assembleTikTokHashtags(input: {
+  rawHashtags?: string;
+  contentTags?: string[];
+  styleTags?: string[];
+}): string {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const traffic of TIKTOK_TRAFFIC_TAGS.slice(0, 2)) uniquePush(tags, seen, traffic);
+
+  const rawTokens = normalizeHashtags(input.rawHashtags || '').split(/\s+/).filter(Boolean);
+  for (const token of rawTokens) {
+    if (tags.length >= 6) break;
+    if (/^#(?:fyp|viral|foryou|tiktok)$/i.test(token)) {
+      uniquePush(tags, seen, token);
+      continue;
+    }
+    if (/^#[a-z]{1,3}$/i.test(token)) continue;
+    uniquePush(tags, seen, token);
+  }
+
+  for (const token of input.contentTags ?? []) {
+    if (tags.length >= 6) break;
+    uniquePush(tags, seen, toHashtagToken(token));
+  }
+  for (const token of input.styleTags ?? []) {
+    if (tags.length >= 6) break;
+    uniquePush(tags, seen, toHashtagToken(token));
+  }
+
+  return normalizeHashtags(tags.join(' '));
+}
+
+function sanitizeCaptionText(caption: string): string {
+  return normalizeWhitespace(
+    caption
+      .replace(/^["'“”]+|["'“”]+$/g, '')
+      .replace(/^caption:\s*/i, '')
+      .replace(/^copy:\s*/i, ''),
+  );
+}
+
+export function pickBestCaptionResult(
+  candidates: Array<Partial<CaptionResult>>,
+  fallback: CaptionResult,
+  language: CaptionLanguage = 'EN',
+  hashtagOptions?: { contentTags?: string[]; styleTags?: string[] },
+): CaptionResult {
+  const ranked = candidates
+    .map((candidate) => {
+      const caption = sanitizeCaptionText(typeof candidate.caption === 'string' ? candidate.caption : '');
+      const hashtags = typeof candidate.hashtags === 'string' ? candidate.hashtags : '';
+      return { caption, hashtags, quality: scoreCaptionQuality(caption, language) };
+    })
+    .sort((a, b) => b.quality - a.quality);
+
+  const winner = ranked.find((item) => item.caption && !isLowQualityCaption(item.caption, language));
+  if (!winner) {
+    return {
+      caption: sanitizeCaptionText(fallback.caption),
+      hashtags: assembleTikTokHashtags({
+        rawHashtags: fallback.hashtags,
+        contentTags: hashtagOptions?.contentTags,
+        styleTags: hashtagOptions?.styleTags,
+      }),
+    };
+  }
+
+  return {
+    caption: winner.caption,
+    hashtags: assembleTikTokHashtags({
+      rawHashtags: winner.hashtags || fallback.hashtags,
+      contentTags: hashtagOptions?.contentTags,
+      styleTags: hashtagOptions?.styleTags,
+    }),
+  };
+}
+
+export interface GenerateCaptionOptions {
+  videoPath?: string;
+  videoUrl?: string;
+  accountContext?: CaptionAccountContext[];
+  requestUsername?: string;
+}
+
+function isWithinAllowedRoot(candidatePath: string, username?: string): boolean {
+  const safeUser = sanitizeUsername(username || 'admin');
+  const roots = [
+    path.resolve(getDefaultVideoOutputDir(), safeUser),
+    path.resolve(getDefaultVideoOutputDir(), 'batch-jobs', 'videos'),
+    path.resolve(getDefaultVideoOutputDir(), 'production', 'projects', safeUser),
+    path.resolve(getDefaultVideoOutputDir(), 'production', 'images', safeUser),
+    path.resolve(getApiDataDir(), 'output', safeUser),
+    path.resolve(getApiDataDir(), 'output', 'batch-jobs', 'videos'),
+  ];
+  const abs = path.resolve(candidatePath);
+  return roots.some((root) => abs === root || abs.startsWith(root + path.sep));
+}
+
+async function fileExists(candidatePath: string): Promise<boolean> {
+  try {
+    await fs.access(candidatePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCaptionVideoPath(
+  videoPath?: string,
+  videoUrl?: string,
+  username?: string,
+): Promise<{ videoFilePath?: string; tempFilePath?: string }> {
+  const trimmedPath = videoPath?.trim();
+  if (trimmedPath) {
+    const resolved = path.isAbsolute(trimmedPath)
+      ? trimmedPath
+      : path.resolve(getApiDataDir(), path.normalize(trimmedPath));
+    if (isWithinAllowedRoot(resolved, username) && await fileExists(resolved)) {
+      return { videoFilePath: resolved };
+    }
+  }
+
+  const trimmedUrl = videoUrl?.trim();
+  if (!trimmedUrl) return {};
+
+  try {
+    const parsed = new URL(trimmedUrl, 'http://localhost');
+    if (parsed.pathname === '/api/video/file') {
+      const relPath = parsed.searchParams.get('path');
+      if (relPath) {
+        const resolved = path.resolve(getApiDataDir(), path.normalize(relPath));
+        if (isWithinAllowedRoot(resolved, username) && await fileExists(resolved)) {
+          return { videoFilePath: resolved };
+        }
+      }
+    }
+    const batchMatch = parsed.pathname.match(/^\/api\/batch-jobs\/video\/([a-zA-Z0-9_-]+)$/);
+    if (batchMatch) {
+      const resolved = path.resolve(getApiDataDir(), 'output', 'batch-jobs', 'videos', `${batchMatch[1]}.mp4`);
+      if (await fileExists(resolved)) return { videoFilePath: resolved };
+    }
+  } catch {
+    // fall through to remote/data URL handling
+  }
+
+  const buffer = await bufferFromVideoUrlPayload(trimmedUrl);
+  if (!buffer?.length) return {};
+  const tempFilePath = path.join(os.tmpdir(), `caption-video-${randomUUID()}.mp4`);
+  await fs.writeFile(tempFilePath, buffer);
+  return { videoFilePath: tempFilePath, tempFilePath };
+}
+
+async function extractFrameAtTime(videoFilePath: string, tSec: number, outPath: string): Promise<void> {
+  const ffmpeg = getFfmpegPath();
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(
+      ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-ss',
+        String(Math.max(0, tSec)),
+        '-i',
+        videoFilePath,
+        '-vframes',
+        '1',
+        '-vf',
+        'scale=768:-2',
+        '-q:v',
+        '3',
+        outPath,
+      ],
+      { windowsHide: true },
+    );
+    proc.on('close', (code) => {
+      if (code !== 0) reject(new Error(`extract frame failed at ${tSec}`));
+      else resolve();
+    });
+    proc.on('error', reject);
+  });
+}
+
+async function extractCaptionFrames(videoFilePath: string): Promise<Array<{ tSec: number; dataUrl: string }>> {
+  const durationSec = await ffprobeDurationSeconds(videoFilePath);
+  const checkpoints = [
+    Math.max(0.1, durationSec * 0.15),
+    Math.max(0.2, durationSec * 0.5),
+    Math.max(0.3, durationSec * 0.82),
+  ];
+  const tempDir = path.join(os.tmpdir(), `caption-frames-${randomUUID()}`);
+  await fs.mkdir(tempDir, { recursive: true });
+  try {
+    const frames: Array<{ tSec: number; dataUrl: string }> = [];
+    for (let index = 0; index < checkpoints.length; index += 1) {
+      const tSec = checkpoints[index]!;
+      const outPath = path.join(tempDir, `frame-${index}.jpg`);
+      await extractFrameAtTime(videoFilePath, tSec, outPath);
+      const buffer = await fs.readFile(outPath);
+      frames.push({ tSec, dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}` });
+    }
+    return frames;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function summarizeAccountContext(accountContext?: CaptionAccountContext[]): string {
+  if (!accountContext?.length) return '';
+  return accountContext
+    .map((account) => {
+      const bits = [
+        account.platform?.trim(),
+        account.region?.trim(),
+        account.username?.trim(),
+      ].filter(Boolean);
+      return bits.join('/');
+    })
+    .filter(Boolean)
+    .slice(0, 6)
+    .join(', ');
+}
+
+async function analyzeCaptionVideo(
+  videoFilePath: string,
+  userText: string,
+  accountContext?: CaptionAccountContext[],
+): Promise<CaptionVisionSummary | null> {
+  const frames = await extractCaptionFrames(videoFilePath);
+  if (frames.length === 0) return null;
+
+  const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+    {
+      type: 'text',
+      text: [
+        'Analyze these video frames for short-form social distribution.',
+        `Original prompt or idea: ${userText || 'none'}`,
+        summarizeAccountContext(accountContext) ? `Account context: ${summarizeAccountContext(accountContext)}` : '',
+        'Return strict JSON: {"subject":"","action":"","vibe":"","standoutMoment":"","audienceAngle":"","contentTags":[""],"styleTags":[""]}',
+      ].filter(Boolean).join('\n'),
+    },
+    ...frames.map((frame) => ({ type: 'image_url' as const, image_url: { url: frame.dataUrl } })),
+  ];
+
+  const raw = await compassChatCompletionWithContent({
+    systemPrompt:
+      'You are a TikTok content strategist. Describe what is visually happening in the clip for publishing copy, not production prompting. Keep tags short and concrete.',
+    userContent,
+    temperature: 0.2,
+    maxTokens: 1200,
+  });
+  const parsed = safeJsonParse<Partial<CaptionVisionSummary>>(raw);
+  if (!parsed) return null;
+  return {
+    subject: normalizeWhitespace(parsed.subject || ''),
+    action: normalizeWhitespace(parsed.action || ''),
+    vibe: normalizeWhitespace(parsed.vibe || ''),
+    standoutMoment: normalizeWhitespace(parsed.standoutMoment || ''),
+    audienceAngle: normalizeWhitespace(parsed.audienceAngle || ''),
+    contentTags: Array.isArray(parsed.contentTags) ? parsed.contentTags.filter((item): item is string => typeof item === 'string').slice(0, 4) : [],
+    styleTags: Array.isArray(parsed.styleTags) ? parsed.styleTags.filter((item): item is string => typeof item === 'string').slice(0, 3) : [],
+  };
+}
+
+function buildCaptionContextBlock(input: {
+  prompt: string;
+  language: CaptionLanguage;
+  existingCaption?: string;
+  existingHashtags?: string;
+  platforms?: string[];
+  accountContext?: CaptionAccountContext[];
+  vision?: CaptionVisionSummary | null;
+}): string {
+  const lines = [
+    `Requested language: ${input.language}`,
+    input.platforms?.length ? `Target platforms: ${input.platforms.join(', ')}` : '',
+    summarizeAccountContext(input.accountContext) ? `Selected accounts: ${summarizeAccountContext(input.accountContext)}` : '',
+    input.prompt ? `Source idea: ${input.prompt}` : '',
+    input.vision?.subject ? `Visual subject: ${input.vision.subject}` : '',
+    input.vision?.action ? `Visual action: ${input.vision.action}` : '',
+    input.vision?.vibe ? `Visual vibe: ${input.vision.vibe}` : '',
+    input.vision?.standoutMoment ? `Best moment: ${input.vision.standoutMoment}` : '',
+    input.vision?.audienceAngle ? `Audience angle: ${input.vision.audienceAngle}` : '',
+    input.vision?.contentTags?.length ? `Content tags: ${input.vision.contentTags.join(', ')}` : '',
+    input.vision?.styleTags?.length ? `Style tags: ${input.vision.styleTags.join(', ')}` : '',
+    input.existingCaption ? `Existing caption draft: ${input.existingCaption}` : '',
+    input.existingHashtags ? `Existing hashtags draft: ${input.existingHashtags}` : '',
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 export async function generateCaptionForPost(
   prompt: string,
   platforms?: string[],
@@ -596,10 +1032,97 @@ export async function generateCaptionForPost(
   const exCaption = (options?.existingCaption ?? '').trim();
   const exHashtags = (options?.existingHashtags ?? '').trim();
   const hasExistingDraft = exCaption.length > 0 || exHashtags.length > 0;
-
-  const uniquePlatforms =
-    platforms?.length && platforms.length > 0
+  const precomputedPlatforms =
+    platforms?.length && platforms?.length > 0
       ? [...new Set(platforms.map((p) => NORMALIZED_PLATFORMS[p.toLowerCase()] || p.toLowerCase()).filter(Boolean))]
+      : [];
+  const lang2: CaptionLanguage = options?.language ?? 'EN';
+  let tempFilePath2: string | undefined;
+  let vision2: CaptionVisionSummary | null = null;
+  try {
+    const resolved2 = await resolveCaptionVideoPath(options?.videoPath, options?.videoUrl, options?.requestUsername);
+    tempFilePath2 = resolved2.tempFilePath;
+    if (resolved2.videoFilePath) {
+      try {
+        vision2 = await analyzeCaptionVideo(resolved2.videoFilePath, userText, options?.accountContext);
+      } catch (error) {
+        console.warn('[prompt/generate-caption] vision analysis skipped:', error);
+      }
+    }
+    const fallback2 = pickBestCaptionResult(
+      [],
+      buildFallbackFromPrompt(userText),
+      lang2,
+      { contentTags: vision2?.contentTags, styleTags: vision2?.styleTags },
+    );
+    const contextBlock2 = buildCaptionContextBlock({
+      prompt: userText,
+      language: lang2,
+      existingCaption: exCaption || undefined,
+      existingHashtags: exHashtags || undefined,
+      platforms: precomputedPlatforms,
+      accountContext: options?.accountContext,
+      vision: vision2,
+    });
+    if (precomputedPlatforms.length > 0) {
+      const rawText2 = await compassChatCompletion({
+        systemPrompt: [
+          'You write publish-ready short-form social captions.',
+          'Use the visual context, not raw production prompting language.',
+          'Each platform entry must feel native, concise, and hook-first.',
+          'Return strict JSON keyed by platform name.',
+        ].join('\n'),
+        userText: `${contextBlock2}\n\nReturn JSON like {"tiktok":{"caption":"","hashtags":""},"instagram":{"caption":"","hashtags":""}}`,
+        temperature: 0.45,
+        maxTokens: 1800,
+      });
+      const parsed2 = safeJsonParse<Record<string, { caption?: string; hashtags?: string }>>(rawText2) ?? {};
+      const byPlatform2: Record<string, CaptionResult> = {};
+      for (const platform of precomputedPlatforms) {
+        byPlatform2[platform] = pickBestCaptionResult(
+          [parsed2[platform] || parsed2[platform.toLowerCase()] || {}],
+          fallback2,
+          lang2,
+          { contentTags: vision2?.contentTags, styleTags: vision2?.styleTags },
+        );
+      }
+      return { byPlatform: byPlatform2 };
+    }
+    const rawText2 = await compassChatCompletion({
+      systemPrompt: [
+        'You write TikTok-first short-form captions.',
+        'Use a real hook, clean single-language output, and compact hashtags.',
+        'Never paste production prompt wording, camera language, or technical specs.',
+        'Return strict JSON with a candidates array.',
+      ].join('\n'),
+      userText: hasExistingDraft
+        ? `${contextBlock2}\n\nPolish the existing draft into 3 better candidates. Return JSON: {"candidates":[{"caption":"","hashtags":"","hookType":"","confidence":0.0}]}`
+        : `${contextBlock2}\n\nGenerate 3 publish-ready candidates. Return JSON: {"candidates":[{"caption":"","hashtags":"","hookType":"","confidence":0.0}]}`,
+      temperature: 0.5,
+      maxTokens: 1800,
+    });
+    const parsed2 = safeJsonParse<{ candidates?: CaptionCandidate[]; caption?: string; hashtags?: string }>(rawText2);
+    const candidates2 = Array.isArray(parsed2?.candidates)
+      ? parsed2?.candidates ?? []
+      : parsed2 && (parsed2.caption || parsed2.hashtags)
+        ? [{ caption: parsed2.caption, hashtags: parsed2.hashtags }]
+        : [];
+    return pickBestCaptionResult(
+      candidates2,
+      fallback2,
+      lang2,
+      { contentTags: vision2?.contentTags, styleTags: vision2?.styleTags },
+    );
+  } finally {
+    if (tempFilePath2) {
+      await fs.rm(tempFilePath2, { force: true }).catch(() => undefined);
+    }
+  }
+
+  const legacyPlatforms: string[] = platforms ?? [];
+  const uniquePlatforms =
+    legacyPlatforms.length > 0
+      ? [...new Set(legacyPlatforms.map((p) => NORMALIZED_PLATFORMS[p.toLowerCase()] || p.toLowerCase()).filter(Boolean))]
       : [];
 
   const usePlatformMode = uniquePlatforms.length > 0;
@@ -643,8 +1166,8 @@ ${TIKTOK_RULES}
         const item = parsed[p] || parsed[p.toLowerCase()];
         const fb = buildFallbackFromPrompt(userText);
         byPlatform[p] = {
-          caption: (typeof item?.caption === 'string' && item.caption.trim()) ? item.caption.trim() : fb.caption,
-          hashtags: normalizeHashtags((typeof item?.hashtags === 'string' && item.hashtags.trim()) ? item.hashtags : fb.hashtags),
+          caption: (typeof item?.caption === 'string' && item.caption?.trim()) ? (item.caption?.trim() || '') : fb.caption,
+          hashtags: normalizeHashtags((typeof item?.hashtags === 'string' && item.hashtags?.trim()) ? (item.hashtags ?? '') : fb.hashtags),
         };
       }
       return { byPlatform };
@@ -658,7 +1181,7 @@ ${TIKTOK_RULES}
     const parsed = JSON.parse(extractJson(rawText)) as { caption?: string; hashtags?: string };
     const fb = buildFallbackFromPrompt(userText);
     return {
-      caption: typeof parsed.caption === 'string' ? parsed.caption.trim() : fb.caption,
+      caption: typeof parsed.caption === 'string' ? parsed.caption?.trim() || '' : fb.caption,
       hashtags: normalizeHashtags(parsed.hashtags ?? fb.hashtags),
     };
   } catch {

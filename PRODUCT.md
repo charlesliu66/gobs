@@ -151,6 +151,7 @@
 ### 9. 璐﹀彿绠＄悊
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
+- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签，并直接发往对应社媒平台
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片与视频分发等高频页面已补齐英文壳层，便于本地英文同事直接进入英文 UI。
 
@@ -159,7 +160,17 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.82 -->
+<!-- NEXT_VERSION: v0.83 -->
+
+### v0.82 — 2026-04-21
+
+**视频分发文案质量升级为视频感知生成**
+
+**Feature / Quality Upgrade:**
+- **[api] 分发文案生成改为优先结合视频关键帧、账号上下文和 Studio 创意**（`h5-video-tool-api/src/services/promptPolish.ts` + `h5-video-tool-api/src/routes/prompt.ts`）：`/api/prompt/generate-caption` 现在会优先解析分发视频本身，抽取关键帧并结合所选平台/地区账号语境生成发布文案，不再主要依赖生产 prompt 直推发布文案。
+- **[api] 新增分发文案质量筛选与标签结构化规则**（`h5-video-tool-api/src/services/promptPolish.ts`）：补入低质量 caption 识别、候选打分、TikTok 标签压缩与去噪逻辑，优先保留 hook-first、单语言、4-6 个更像真实发帖的标签组合，避免再回退成半中半英模板句。
+- **[frontend] 分发页文案请求补齐视频与账号上下文，并优化发布提示文案**（`h5-video-tool/src/api/promptPolish.ts` + `h5-video-tool/src/pages/TabDistribute.tsx` + `h5-video-tool/src/i18n/messages.ts`）：前端现在会把 `videoPath/videoUrl` 与已选账号信息一并传给后端；页面提示改为强调“3 秒钩子 + 发布即用标签”，占位文案也更贴近 TikTok 爆款内容语感。
+- **[test] 新增分发文案质量与请求体回归测试**（`h5-video-tool-api/tests/promptCaptionRules.test.ts` + `h5-video-tool/tests/promptPolish.test.ts`）：覆盖低质 fallback 识别、候选优选、标签结构化，以及前端请求体带视频/账号上下文，避免后续再次退回到 prompt-only 生成。
 
 ### v0.81 — 2026-04-21
 
@@ -1238,4 +1249,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.81）*
+*最后更新：2026-04-21（v0.82）*
