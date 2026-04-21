@@ -156,7 +156,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.70 -->
+<!-- NEXT_VERSION: v0.71 -->
+
+### v0.70 — 2026-04-21
+
+**剪辑器连续播放边界抖动修复**
+
+**Bug Fix:**
+- **[frontend] 预览播放器按“当前渲染 clip”处理结束事件**（`h5-video-tool/src/pages/EditorWorkbench.tsx`）：连续播放切到下一镜时，不再依赖可能已经切换到下一段的全局 `activeVideoClipRef`，而是把 `onCanPlay / onTimeUpdate / onEnded` 和当前这支 `<video>` 对应的 clip 绑定，避免片尾迟到事件把时间轴错误写回上一镜。
+- **[frontend] 新增旧事件防串扰保护**（`EditorWorkbench.tsx`）：当镜头刚切换到下一段时，上一段 `<video>` 的迟到 `timeupdate/ended` 事件会被直接忽略，不再出现像“镜10结束后还黏在镜10，必须手动拖到镜11”这样的边界抖动问题。
 
 ### v0.69 — 2026-04-21
 
@@ -1129,4 +1137,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.69）*
+*最后更新：2026-04-21（v0.70）*

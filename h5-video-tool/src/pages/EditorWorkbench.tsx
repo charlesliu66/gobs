@@ -175,9 +175,11 @@ export function EditorWorkbench() {
   const projectRef = useRef(project);
   const sourceTimeForPreviewRef = useRef(sourceTimeForPreview);
   const activeVideoClipRef = useRef(activeVideoClip);
+  const isPlayingRef = useRef(isPlaying);
   projectRef.current = project;
   sourceTimeForPreviewRef.current = sourceTimeForPreview;
   activeVideoClipRef.current = activeVideoClip;
+  isPlayingRef.current = isPlaying;
   const [agentLogs, setAgentLogs] = useState<string[]>([]);
   const [agentBusy, setAgentBusy] = useState(false);
   /** Agent 流式请求的 abort 控制器，用于前端取消按钮 */
@@ -715,6 +717,8 @@ export function EditorWorkbench() {
     return null;
   }, [project.subtitles, currentTime]);
 
+  const renderedPreviewClip = activeVideoClip;
+
   const applyTimelineProject = useCallback(
     (next: TimelineProject) => {
       setIsPlaying(false);
@@ -1057,9 +1061,9 @@ export function EditorWorkbench() {
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black p-2">
               <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
-                {canPreview && activeVideoUrl ? (
+                {canPreview && activeVideoUrl && renderedPreviewClip ? (
                   <video
-                    key={activeVideoUrl}
+                    key={renderedPreviewClip.id}
                     ref={videoRef}
                     src={activeVideoUrl}
                     className="h-full w-full object-cover object-center"
@@ -1068,7 +1072,7 @@ export function EditorWorkbench() {
                     muted={false}
                     onLoadedMetadata={(e) => {
                       const el = e.currentTarget;
-                      if (!activeVideoClip) return;
+                      if (!renderedPreviewClip) return;
                       let t = sourceTimeForPreview;
                       const d = el.duration;
                       if (Number.isFinite(d) && d > 0) {
@@ -1077,18 +1081,19 @@ export function EditorWorkbench() {
                       el.currentTime = t;
                     }}
                     onCanPlay={(e) => {
-                      if (!isPlaying) return;
+                      if (!isPlayingRef.current) return;
+                      if (activeVideoClipRef.current?.id !== renderedPreviewClip.id) return;
                       const el = e.currentTarget;
-                      const vc = activeVideoClipRef.current;
-                      if (!vc || !el.paused) return;
+                      if (!el.paused) return;
                       el.currentTime = sourceTimeForPreviewRef.current;
-                      el.playbackRate = vc.speed ?? 1;
+                      el.playbackRate = renderedPreviewClip.speed ?? 1;
                       el.play().catch(() => {});
                     }}
                     onTimeUpdate={(e) => {
-                      if (!isPlaying || !activeVideoClip) return;
+                      if (!isPlayingRef.current) return;
+                      if (activeVideoClipRef.current?.id !== renderedPreviewClip.id) return;
                       const el = e.currentTarget;
-                      const vc = activeVideoClip;
+                      const vc = renderedPreviewClip;
                       /** 源文件不得越过片段出点，否则画面会跑到时间轴外 */
                       if (el.currentTime > vc.sourceEnd - 0.001) {
                         el.currentTime = vc.sourceEnd;
@@ -1110,10 +1115,10 @@ export function EditorWorkbench() {
                     onEnded={() => {
                       const el = videoRef.current;
                       el?.pause();
-                      const vc = activeVideoClipRef.current;
-                      if (!vc) return;
+                      if (activeVideoClipRef.current?.id !== renderedPreviewClip.id) return;
+                      const vc = renderedPreviewClip;
                       const next = getNextVideoClipAfter(projectRef.current, vc);
-                      if (isPlaying && next) {
+                      if (isPlayingRef.current && next) {
                         setCurrentTime(next.timelineStart);
                         return;
                       }
