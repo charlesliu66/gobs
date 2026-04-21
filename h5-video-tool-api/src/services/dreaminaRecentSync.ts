@@ -9,16 +9,59 @@ import { persistVideoUrlToOutput } from './videoUtils.js';
 export const DREAMINA_RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_LIST_LIMIT = 120;
 const DEFAULT_MAX_SYNC = 24;
+const ACTIVE_SYNC_BY_USER = new Map<string, Promise<{ synced: number; attempted: number }>>();
+
+export interface OutputRecentVideoEntry {
+  path: string;
+  mtimeMs: number;
+  size: number;
+}
 
 function toDreaminaSubmitKey(value: string): string | undefined {
   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   return normalized ? normalized.slice(0, 12) : undefined;
 }
 
+function toSyncUserKey(username?: string): string {
+  const trimmed = username?.trim().toLowerCase();
+  return trimmed || '_default';
+}
+
 export function extractDreaminaSubmitKeyFromPath(videoPath: string): string | undefined {
   const base = videoPath.split('/').pop() || videoPath;
   const match = base.match(/dreamina[_-]([a-z0-9]+)(?:[_-]\d{10,13})?\.(mp4|mov|webm|mkv)$/i);
   return match?.[1]?.toLowerCase();
+}
+
+export function dedupeOutputRecentVideoItems(items: OutputRecentVideoEntry[]): {
+  items: OutputRecentVideoEntry[];
+  collapsedCount: number;
+} {
+  const byDreaminaSubmitKey = new Map<string, OutputRecentVideoEntry>();
+  const passthrough: OutputRecentVideoEntry[] = [];
+  let collapsedCount = 0;
+
+  for (const item of items) {
+    const submitKey = extractDreaminaSubmitKeyFromPath(item.path);
+    if (!submitKey) {
+      passthrough.push(item);
+      continue;
+    }
+    const previous = byDreaminaSubmitKey.get(submitKey);
+    if (!previous) {
+      byDreaminaSubmitKey.set(submitKey, item);
+      continue;
+    }
+    collapsedCount++;
+    const shouldReplace =
+      item.size > previous.size || (item.size === previous.size && item.mtimeMs > previous.mtimeMs);
+    if (shouldReplace) {
+      byDreaminaSubmitKey.set(submitKey, item);
+    }
+  }
+
+  const dedupedItems = [...passthrough, ...byDreaminaSubmitKey.values()].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return { items: dedupedItems, collapsedCount };
 }
 
 export function selectDreaminaTasksForBackfill(
@@ -102,4 +145,26 @@ export async function syncRecentDreaminaOutputs(options: {
   }
 
   return { synced, attempted };
+}
+
+export async function runRecentDreaminaSyncLocked(options: {
+  username?: string;
+  existingPaths: string[];
+  nowMs?: number;
+  listLimit?: number;
+  maxSync?: number;
+}): Promise<{ synced: number; attempted: number; joinedExisting: boolean }> {
+  const userKey = toSyncUserKey(options.username);
+  const active = ACTIVE_SYNC_BY_USER.get(userKey);
+  if (active) {
+    const result = await active;
+    return { ...result, joinedExisting: true };
+  }
+
+  const task = syncRecentDreaminaOutputs(options).finally(() => {
+    ACTIVE_SYNC_BY_USER.delete(userKey);
+  });
+  ACTIVE_SYNC_BY_USER.set(userKey, task);
+  const result = await task;
+  return { ...result, joinedExisting: false };
 }

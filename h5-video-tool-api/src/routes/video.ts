@@ -35,7 +35,11 @@ import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js
 import { sanitizeUsername } from '../utils/safeUsername.js';
 import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 import { persistVideoUrlToOutput } from '../services/videoUtils.js';
-import { syncRecentDreaminaOutputs } from '../services/dreaminaRecentSync.js';
+import {
+  dedupeOutputRecentVideoItems,
+  runRecentDreaminaSyncLocked,
+  type OutputRecentVideoEntry,
+} from '../services/dreaminaRecentSync.js';
 import dreaminaRouter from './videoDreamina.js';
 import klingRouter from './videoKling.js';
 import { multishotRouter, MULTISHOT_JOBS_ROOT } from './videoMultishot.js';
@@ -111,6 +115,51 @@ videoRouter.use('/dreamina', dreaminaRouter);
 videoRouter.use('/', klingRouter);
 videoRouter.use('/', multishotRouter);
 
+async function collectOutputRecentItems(options: {
+  username: string;
+  onlyDreamina: boolean;
+}): Promise<OutputRecentVideoEntry[]> {
+  const apiRoot = getApiDataDir();
+  const outputDir = path.join(getDefaultVideoOutputDir(), options.username);
+  const items: OutputRecentVideoEntry[] = [];
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > 10) return;
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      const abs = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        await walk(abs, depth + 1);
+        continue;
+      }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) continue;
+      const rel = path.relative(apiRoot, abs).replace(/\\/g, '/');
+      if (!rel.startsWith('output/')) continue;
+      const lower = rel.toLowerCase();
+      if (options.onlyDreamina && !lower.includes('dreamina')) continue;
+      try {
+        const st = await fs.stat(abs);
+        items.push({ path: rel, mtimeMs: st.mtimeMs, size: st.size });
+      } catch {
+        /* ignore missing */
+      }
+    }
+  }
+
+  try {
+    await walk(outputDir, 0);
+  } catch (err) {
+    console.error('[video/output-recent]', err);
+  }
+  return items;
+}
+
 /** GET /api/video/file?path=output/xxx.mp4 - 提供已生成视频文件访问，供历史记录预览
  *
  * 此接口在 auth 中间件中已针对 <video> 标签的无 Bearer 请求放行。
@@ -161,66 +210,21 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
   const onlyDreamina =
     String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
-  const syncDreaminaRecent =
-    String(req.query.syncDreaminaRecent ?? '1') !== '0' && (onlyDreamina || String(req.query.filter ?? '') !== 'local');
-  const apiRoot = getApiDataDir();
-  const outputDir = path.join(getDefaultVideoOutputDir(), username);
-  const items: { path: string; mtimeMs: number; size: number }[] = [];
+  const rawItems = await collectOutputRecentItems({ username, onlyDreamina });
+  const deduped = dedupeOutputRecentVideoItems(rawItems);
+  res.json({ items: deduped.items.slice(0, limit), duplicateCollapsedCount: deduped.collapsedCount });
+});
 
-  async function walk(dir: string, depth: number): Promise<void> {
-    if (depth > 10) return;
-    let entries;
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const ent of entries) {
-      const abs = path.join(dir, ent.name);
-      if (ent.isDirectory()) {
-        await walk(abs, depth + 1);
-        continue;
-      }
-      const ext = path.extname(ent.name).toLowerCase();
-      if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) continue;
-      const rel = path.relative(apiRoot, abs).replace(/\\/g, '/');
-      if (!rel.startsWith('output/')) continue;
-      const lower = rel.toLowerCase();
-      if (onlyDreamina && !lower.includes('dreamina')) continue;
-      try {
-        const st = await fs.stat(abs);
-        items.push({ path: rel, mtimeMs: st.mtimeMs, size: st.size });
-      } catch {
-        /* ignore missing */
-      }
-    }
-  }
-
-  try {
-    await walk(outputDir, 0);
-  } catch (err) {
-    console.error('[video/output-recent]', err);
-  }
-  let syncedDreaminaCount = 0;
-  if (syncDreaminaRecent) {
-    const syncResult = await syncRecentDreaminaOutputs({
-      username: req.user?.username,
-      existingPaths: items.map((item) => item.path),
-      listLimit: Math.min(120, Math.max(limit * 2, 40)),
-      maxSync: Math.min(24, Math.max(limit, 8)),
-    });
-    syncedDreaminaCount = syncResult.synced;
-    if (syncedDreaminaCount > 0) {
-      items.length = 0;
-      try {
-        await walk(outputDir, 0);
-      } catch (err) {
-        console.error('[video/output-recent][rescan]', err);
-      }
-    }
-  }
-  items.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  res.json({ items: items.slice(0, limit), syncedDreaminaCount });
+videoRouter.post('/output-recent/sync-dreamina', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const rawItems = await collectOutputRecentItems({ username, onlyDreamina: false });
+  const syncResult = await runRecentDreaminaSyncLocked({
+    username: req.user?.username,
+    existingPaths: rawItems.map((item) => item.path),
+    listLimit: 120,
+    maxSync: 24,
+  });
+  res.json(syncResult);
 });
 
 videoRouter.post('/generate', async (req: Request, res: Response) => {

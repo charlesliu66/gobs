@@ -262,7 +262,7 @@ export interface OutputRecentVideoItem {
 
 export interface OutputRecentVideosResponse {
   items: OutputRecentVideoItem[];
-  syncedDreaminaCount?: number;
+  duplicateCollapsedCount?: number;
 }
 
 export async function getOutputRecentVideos(opts?: {
@@ -274,6 +274,16 @@ export async function getOutputRecentVideos(opts?: {
   if (opts?.dreaminaOnly) q.set('dreaminaOnly', '1');
   const qs = q.toString();
   return apiGet<OutputRecentVideosResponse>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
+}
+
+export interface OutputDreaminaSyncResponse {
+  synced: number;
+  attempted: number;
+  joinedExisting: boolean;
+}
+
+export async function syncOutputRecentDreaminaVideos(): Promise<OutputDreaminaSyncResponse> {
+  return apiPost<OutputDreaminaSyncResponse>('/api/video/output-recent/sync-dreamina', {});
 }
 
 export async function generateMultishot(req: MultishotGenerateRequest): Promise<MultishotGenerateResponse> {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DREAMINA_RECENT_WINDOW_MS,
+  dedupeOutputRecentVideoItems,
   extractDreaminaSubmitKeyFromPath,
   selectDreaminaTasksForBackfill,
 } from '../src/services/dreaminaRecentSync.ts';
@@ -77,5 +78,40 @@ test('selectDreaminaTasksForBackfill respects the maxTasks cap', () => {
   assert.deepEqual(
     selected.map((task) => task.submitId),
     ['task001', 'task002'],
+  );
+});
+
+test('dedupeOutputRecentVideoItems collapses repeated dreamina files by submit key and keeps the best copy', () => {
+  const { items, collapsedCount } = dedupeOutputRecentVideoItems([
+    {
+      path: 'output/admin/dreamina_65ed730260b2_1776760243547.mp4',
+      mtimeMs: 1776760243547,
+      size: 7463958,
+    },
+    {
+      path: 'output/admin/dreamina_65ed730260b2_1776760249379.mp4',
+      mtimeMs: 1776760249379,
+      size: 7463958,
+    },
+    {
+      path: 'output/admin/dreamina_90e37db2eaa4_1776760242919.mp4',
+      mtimeMs: 1776760242919,
+      size: 5035422,
+    },
+    {
+      path: 'output/admin/uploaded_manual_clip.mp4',
+      mtimeMs: 1776760249999,
+      size: 100,
+    },
+  ]);
+
+  assert.equal(collapsedCount, 1);
+  assert.deepEqual(
+    items.map((item) => item.path),
+    [
+      'output/admin/uploaded_manual_clip.mp4',
+      'output/admin/dreamina_65ed730260b2_1776760249379.mp4',
+      'output/admin/dreamina_90e37db2eaa4_1776760242919.mp4',
+    ],
   );
 });

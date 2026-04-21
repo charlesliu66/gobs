@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOutputRecentVideos, type OutputRecentVideoItem } from '../api/video';
+import {
+  getOutputRecentVideos,
+  syncOutputRecentDreaminaVideos,
+  type OutputRecentVideoItem,
+} from '../api/video';
 import {
   loadVideoHistory,
   saveVideoToHistory,
@@ -22,19 +26,20 @@ function formatTime(ts: number) {
   }
 }
 
-/** 将服务端路径转为可读展示名：去掉目录前缀和 hash */
-function formatOutputFilename(path: string): string {
-  const base = path.split('/').pop() || path;
-  // dreamina_c426c0cd2dfb_1776229192704.mp4 → dreamina · 2026/4/15 12:59
+function formatOutputFilename(videoPath: string): string {
+  const base = videoPath.split('/').pop() || videoPath;
   const dreaminaMatch = base.match(/dreamina[_-]([0-9a-f]{8,})[_-](\d{10,13})/i);
   if (dreaminaMatch) {
     const ts = Number(dreaminaMatch[2]);
-    const d = new Date(ts > 1e12 ? ts : ts * 1000);
-    return `即梦成片 · ${d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+    const date = new Date(ts > 1e12 ? ts : ts * 1000);
+    return `即梦成片 · ${date.toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
   }
-  // 去掉 hash 后缀（32位 hex）
-  const cleaned = base.replace(/[_-][0-9a-f]{16,}\.(mp4|mov|webm)/i, '.$1');
-  return cleaned;
+  return base.replace(/[_-][0-9a-f]{16,}\.(mp4|mov|webm|mkv)$/i, '.$1');
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -54,12 +59,13 @@ function TrashIcon() {
   );
 }
 
-/** 小问号 tooltip */
 function InfoTip({ text }: { text: string }) {
   return (
-    <span className="relative group inline-flex items-center ml-1">
-      <span className="w-4 h-4 rounded-full border border-[var(--color-text-subtle)] text-[var(--color-text-subtle)] text-[10px] flex items-center justify-center cursor-default select-none">?</span>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-6 z-50 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-xs text-[var(--color-text-muted)] shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+    <span className="relative ml-1 inline-flex items-center group">
+      <span className="flex h-4 w-4 select-none items-center justify-center rounded-full border border-[var(--color-text-subtle)] text-[10px] text-[var(--color-text-subtle)]">
+        ?
+      </span>
+      <span className="pointer-events-none absolute bottom-6 left-1/2 z-50 w-56 -translate-x-1/2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
         {text}
       </span>
     </span>
@@ -71,7 +77,9 @@ export function GalleryView() {
   const [localItems, setLocalItems] = useState<VideoHistoryItem[]>(() => loadVideoHistory());
   const [outputItems, setOutputItems] = useState<OutputRecentVideoItem[]>([]);
   const [outputLoading, setOutputLoading] = useState(false);
+  const [outputSyncing, setOutputSyncing] = useState(false);
   const [outputError, setOutputError] = useState<string | null>(null);
+  const outputAutoSyncStartedRef = useRef(false);
 
   const refreshLocal = useCallback(() => {
     setLocalItems(loadVideoHistory());
@@ -81,26 +89,50 @@ export function GalleryView() {
     setOutputLoading(true);
     setOutputError(null);
     try {
-      const { items, syncedDreaminaCount } = await getOutputRecentVideos({ limit: 80, dreaminaOnly: false });
+      const { items } = await getOutputRecentVideos({ limit: 80, dreaminaOnly: false });
       setOutputItems(items ?? []);
-      if ((syncedDreaminaCount ?? 0) > 0) {
-        toast.success(`已从即梦后台同步 ${syncedDreaminaCount} 个新成片`);
-      }
-    } catch (e) {
-      setOutputError(e instanceof Error ? e.message : '加载失败');
+    } catch (error) {
+      setOutputError(error instanceof Error ? error.message : '加载失败');
       setOutputItems([]);
     } finally {
       setOutputLoading(false);
     }
   }, []);
 
+  const syncOutput = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (outputSyncing) return;
+      setOutputSyncing(true);
+      setOutputError(null);
+      try {
+        const result = await syncOutputRecentDreaminaVideos();
+        await loadOutput();
+        if (result.synced > 0) {
+          toast.success(`已从即梦后台同步 ${result.synced} 个新成片`);
+        } else if (!options?.silent) {
+          toast.success(result.joinedExisting ? '即梦后台同步仍在进行中' : '即梦后台同步完成');
+        }
+      } catch (error) {
+        setOutputError(error instanceof Error ? error.message : '同步失败');
+      } finally {
+        setOutputSyncing(false);
+      }
+    },
+    [loadOutput, outputSyncing],
+  );
+
   useEffect(() => {
     refreshLocal();
   }, [refreshLocal]);
 
   useEffect(() => {
-    if (tab === 'output') void loadOutput();
-  }, [tab, loadOutput]);
+    if (tab !== 'output') return;
+    void loadOutput();
+    if (!outputAutoSyncStartedRef.current) {
+      outputAutoSyncStartedRef.current = true;
+      void syncOutput({ silent: true });
+    }
+  }, [tab, loadOutput, syncOutput]);
 
   useEffect(() => {
     const onVis = () => {
@@ -137,21 +169,25 @@ export function GalleryView() {
     return (b.createdAt ?? 0) - (a.createdAt ?? 0);
   });
 
+  const refreshOutputNow = () => {
+    void loadOutput();
+    void syncOutput();
+  };
+
   return (
     <div className="space-y-6">
-      {/* Tab 栏 */}
       <div className="flex flex-wrap gap-2 border-b border-[var(--color-border)] pb-2">
         {(
           [
             {
               id: 'local' as const,
               label: `我的成片 (${localItems.length})`,
-              tip: '通过本站 Studio / 高级制片生成的视频，记录保存在当前浏览器中。',
+              tip: '展示本地保存的成片记录，支持收藏、删除和再次查看。',
             },
             {
               id: 'output' as const,
               label: '服务端文件',
-              tip: '扫描服务端 output/ 目录下的视频文件，可将其保存到「我的成片」。',
+              tip: '展示服务端 output 目录中的视频文件，并可在后台补同步即梦最近成片。',
             },
           ] as const
         ).map(({ id, label, tip }) => (
@@ -159,7 +195,7 @@ export function GalleryView() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`flex items-center gap-0.5 rounded-t-lg px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+            className={`flex items-center gap-0.5 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               tab === id
                 ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
                 : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
@@ -172,23 +208,21 @@ export function GalleryView() {
         {tab === 'output' && (
           <button
             type="button"
-            onClick={() => void loadOutput()}
-            disabled={outputLoading}
+            onClick={refreshOutputNow}
+            disabled={outputLoading || outputSyncing}
             className="ml-auto text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50"
           >
-            {outputLoading ? '刷新中…' : '刷新列表'}
+            {outputSyncing ? '同步中...' : outputLoading ? '加载中...' : '刷新列表'}
           </button>
         )}
       </div>
 
-      {/* 我的成片 Tab */}
       {tab === 'local' && (
         <section className="space-y-4">
           {sortedLocal.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-16 text-center">
-              <div className="mb-3 text-4xl opacity-30">🎬</div>
               <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">还没有成片</p>
-              <p className="mb-6 text-sm text-[var(--color-text-subtle)]">生成完成后会自动出现在这里</p>
+              <p className="mb-6 text-sm text-[var(--color-text-subtle)]">生成完成后会自动出现在这里。</p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link
                   to="/studio"
@@ -253,7 +287,7 @@ export function GalleryView() {
                           <button
                             type="button"
                             onClick={() => handleRemove(item.taskId)}
-                            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-surface-hover)]"
+                            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-error)]"
                             title="删除记录"
                           >
                             <TrashIcon />
@@ -288,27 +322,26 @@ export function GalleryView() {
         </section>
       )}
 
-      {/* 服务端文件 Tab */}
       {tab === 'output' && (
         <section className="space-y-4">
           {outputError && <p className="text-sm text-red-400">{outputError}</p>}
+          {outputSyncing && (
+            <p className="text-sm text-[var(--color-text-muted)]">正在同步即梦后台最近成片，完成后会自动刷新列表。</p>
+          )}
           {outputLoading && !outputItems.length ? (
-            <p className="text-sm text-[var(--color-text-muted)]">加载中…</p>
+            <p className="text-sm text-[var(--color-text-muted)]">加载中...</p>
           ) : outputItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-12 text-center">
-              <div className="mb-3 text-4xl opacity-30">📂</div>
-              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">服务端暂无视频文件</p>
-              <p className="mb-5 text-sm text-[var(--color-text-subtle)]">
-                在「我的成片」里找不到？
-              </p>
+              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">服务端暂时没有视频文件</p>
+              <p className="mb-5 text-sm text-[var(--color-text-subtle)]">可以先刷新列表，系统会顺手同步即梦后台最近成片。</p>
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => void loadOutput()}
-                  disabled={outputLoading}
+                  onClick={refreshOutputNow}
+                  disabled={outputLoading || outputSyncing}
                   className="inline-flex rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
                 >
-                  刷新列表
+                  {outputSyncing ? '同步中...' : '刷新列表'}
                 </button>
                 <button
                   type="button"

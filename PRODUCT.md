@@ -158,7 +158,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.73 -->
+<!-- NEXT_VERSION: v0.74 -->
+
+### v0.73 — 2026-04-21
+
+**我的成片即梦同步改为后台串行，修复卡顿与重复旧片**
+
+**Bug Fix:**
+- **[api] 服务端文件列表改回快速返回，并对即梦落盘结果做去重展示**（`h5-video-tool-api/src/routes/video.ts` + `h5-video-tool-api/src/services/dreaminaRecentSync.ts`）：`GET /api/video/output-recent` 不再在列表接口里同步阻塞调用即梦后台，而是先快速返回当前服务端文件；返回前会按 `dreamina_<submitId前缀>` 合并重复文件，只保留同 submit 的最佳副本，避免列表里出现同一个旧视频多次。
+- **[api] 新增按用户串行的即梦后台同步接口**（`POST /api/video/output-recent/sync-dreamina`）：即梦最近成片同步改为单独接口，并加了 per-user 锁；同一用户同一时间只会跑一条同步任务，后续请求只会复用已有同步，不会再因为多次刷新并发写出重复 mp4。
+- **[frontend] 我的成片改为“先秒开列表，再后台同步即梦”**（`h5-video-tool/src/components/GalleryView.tsx` + `h5-video-tool/src/api/video.ts`）：进入“服务端文件”页时先快速加载现有列表，再后台发起即梦同步；同步期间页面仍可操作，完成后自动刷新列表并 toast 提示，不再整页长时间卡在“刷新中 / 加载中”。
 
 ### v0.72 — 2026-04-21
 
@@ -1157,4 +1166,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.72）*
+*最后更新：2026-04-21（v0.73）*
