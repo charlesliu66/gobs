@@ -152,13 +152,33 @@
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
+- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，便于本地英文同事直接进入英文 UI。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.77 -->
+<!-- NEXT_VERSION: v0.79 -->
+
+### v0.78 — 2026-04-21
+
+**文档入口整理与三端同步补齐**
+
+**Chore / Docs:**
+- **[docs] 补齐统一文档入口**（`docs/DOCS-INDEX.md` + `docs/TASK-INDEX.md` + `docs/plans/README.md`）：明确 `rules / reviews / runs / plans` 四类文档分工，让后续任务先看入口页再进具体方案，减少文档散落和重复维护。
+- **[docs] 重要方案文档正式入库**（`docs/i18n-中英文切换设计方案-v2.md` + `docs/plans/2026-04-21-distribute-caption-auth-design.md` + `docs/plans/2026-04-21-distribute-caption-auth.md` + `docs/plans/2026-04-21-i18n-phase0-phase1-implementation-plan.md`）：把当前最活跃的 i18n 与分发鉴权方案沉淀为可检索的长期文档资产。
+- **[repo] 本地敏感/一次性文件加入忽略规则**（`.gitignore`）：忽略本地服务器排障脚本、临时 PPT 配置和导出产物，避免敏感信息与测试垃圾继续污染工作区。
+
+### v0.77 — 2026-04-21
+
+**中英文界面切换 Phase 1 上线**
+
+**Feature / Bug Fix:**
+- **[frontend] 登录前即可切换界面语言与内容语言预设**（`h5-video-tool/src/pages/Login.tsx` + `h5-video-tool/src/components/LocalePresetSwitcher.tsx`）：登录页新增语言切换入口，支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种组合，英文同事无需先登录再找设置。
+- **[frontend] 主站侧边栏接入全局 locale 切换与请求头透传**（`h5-video-tool/src/components/Layout.tsx` + `h5-video-tool/src/api/client.ts` + `h5-video-tool/src/i18n/locale.ts` + `h5-video-tool/src/i18n/LocaleContext.tsx`）：前端统一注入 `X-UI-Locale` / `X-Content-Locale`，并在主布局底部提供持续可见的语言切换入口，确保页面壳层与后续内容生成链路有一致的 locale 上下文。
+- **[frontend] 新增基础 i18n 字典与 QuickFilm 主流程壳层国际化**（`h5-video-tool/src/i18n/messages.ts` + `h5-video-tool/src/pages/QuickFilm.tsx`）：补齐登录页、侧边导航、一键成片主入口、处理中状态、分镜确认页等高频中文文案的中英映射，降低英文协作同学首次使用门槛。
+- **[test] 新增 locale 协议与文案回归测试**（`h5-video-tool/src/i18n/locale.test.ts` + `h5-video-tool/tsconfig.app.json`）：覆盖 locale 归一化、请求头生成、预设匹配、文案 key 查找与中文兜底，避免后续切语言能力回退。
 
 ### v0.76 — 2026-04-21
 
@@ -1191,4 +1211,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.76）*
+*最后更新：2026-04-21（v0.78）*
