@@ -158,7 +158,17 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.76 -->
+<!-- NEXT_VERSION: v0.77 -->
+
+### v0.76 — 2026-04-21
+
+**GeeLark 视频分发自动开关机**
+
+**Feature / Bug Fix:**
+- **[distribution] GeeLark 分发账号补齐 5 个已绑定环境**（`config/geelark-accounts.json`）：补入 `web TH tt`、`TH test2`、`Test 3`、`ID test3`、`ID xianyu test`，并统一作为视频分发可选账号源。
+- **[api] 视频分发账号权限真正落到 GeeLark 列表与发布接口**（`h5-video-tool-api/src/routes/geelark.ts` + `h5-video-tool-api/src/services/geelark.ts`）：`/api/geelark/accounts` 与 `/api/geelark/publish` 现在都会按 GOBS 当前登录用户的 `publishAccountIds` 过滤，避免设置页分配结果与实际分发脱节。
+- **[api] GeeLark 分发改为“发布前自动开机，成功后自动关机”**（`h5-video-tool-api/src/services/geelark.ts`）：发布前会先检查目标云手机状态，只启动关机中的设备并等待其 ready；GeeLark 返回 `taskIds` 后由后端后台轮询任务状态，只有任务成功（`status=3`）才自动关机，失败或取消时保留设备现场用于排查。
+- **[test] 新增 GeeLark 分发权限与自动开关机纯逻辑回归测试**（`h5-video-tool-api/tests/geelarkAccounts.test.ts`）：覆盖账号过滤、需启动设备筛选、设备 ready 判定、任务与 env 映射、成功后关机规则。
 
 ### v0.75 — 2026-04-21
 
@@ -1181,4 +1191,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.75）*
+*最后更新：2026-04-21（v0.76）*

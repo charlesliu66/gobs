@@ -16,6 +16,41 @@ type AccountCfg = {
   canPost?: boolean;
 };
 
+export type ListedAccount = {
+  id: string;
+  username: string;
+  region?: string;
+  platform?: string;
+  remark?: string;
+  canPost: boolean;
+};
+
+type PhoneStatusDetail = {
+  id: string;
+  serialName?: string;
+  status: number;
+};
+
+type PhoneBatchResult = {
+  totalAmount?: number;
+  successAmount?: number;
+  failAmount?: number;
+  successDetails?: Array<{ id: string; status?: number; serialName?: string }>;
+  failDetails?: Array<{ id: string; code?: number; msg?: string }>;
+};
+
+const PHONE_STATUS_RUNNING = 0;
+const PHONE_STATUS_STARTING = 1;
+const PHONE_STATUS_STOPPED = 2;
+const PHONE_STATUS_EXPIRED = 3;
+const TASK_STATUS_SUCCESS = 3;
+const TASK_STATUS_FAILED = 4;
+const TASK_STATUS_CANCELED = 7;
+const PHONE_READY_TIMEOUT_MS = 180_000;
+const PHONE_READY_POLL_MS = 5_000;
+const TASK_MONITOR_POLL_MS = 15_000;
+const TASK_MONITOR_TIMEOUT_MS = 45 * 60 * 1000;
+
 function getBase(): string {
   const raw =
     process.env.GEELARK_BASE_URL?.trim() ||
@@ -51,7 +86,7 @@ function proxyCfg(timeoutMs: number) {
 
 async function geelarkPost<T>(pathName: string, body: Record<string, unknown>): Promise<T> {
   const key = getApiKey();
-  if (!key) throw new Error('未配置 GEELARK_BEARER_TOKEN/GEELARK_API_KEY');
+  if (!key) throw new Error('Missing GEELARK_BEARER_TOKEN or GEELARK_API_KEY');
   const url = `${getBase()}${pathName.startsWith('/') ? pathName : `/${pathName}`}`;
   const res = await axios.post(url, body, {
     headers: {
@@ -64,8 +99,12 @@ async function geelarkPost<T>(pathName: string, body: Record<string, unknown>): 
     ...proxyCfg(60_000),
   });
   const data = res.data as { code?: number; msg?: string; data?: T };
-  if (res.status >= 400) throw new Error(`GeeLark HTTP ${res.status}: ${JSON.stringify(data).slice(0, 220)}`);
-  if (typeof data.code === 'number' && data.code !== 0) throw new Error(`GeeLark [${data.code}]: ${data.msg || '未知错误'}`);
+  if (res.status >= 400) {
+    throw new Error(`GeeLark HTTP ${res.status}: ${JSON.stringify(data).slice(0, 220)}`);
+  }
+  if (typeof data.code === 'number' && data.code !== 0) {
+    throw new Error(`GeeLark [${data.code}]: ${data.msg || 'unknown error'}`);
+  }
   return (data.data ?? ({} as T)) as T;
 }
 
@@ -75,70 +114,181 @@ function loadAccountsConfig(): AccountCfg[] {
     path.join(process.cwd(), 'config', 'geelark-accounts.json'),
     path.join(process.cwd(), '..', 'config', 'geelark-accounts.json'),
   ].filter(Boolean) as string[];
-  for (const p of candidates) {
+
+  for (const candidate of candidates) {
     try {
-      if (!fs.existsSync(p)) continue;
-      const raw = fs.readFileSync(p, 'utf-8');
-      const j = JSON.parse(raw) as { accounts?: unknown } | unknown[];
-      const list = Array.isArray(j) ? j : Array.isArray((j as { accounts?: unknown })?.accounts) ? ((j as { accounts: unknown[] }).accounts) : [];
-      const out: AccountCfg[] = [];
-      for (const a of list) {
-        if (!a || typeof a !== 'object') continue;
-        const o = a as Record<string, unknown>;
-        const id = String(o.id ?? '').trim();
-        const username = String(o.username ?? '').trim();
-        const envId = String(o.envId ?? '').trim();
+      if (!fs.existsSync(candidate)) continue;
+      const raw = fs.readFileSync(candidate, 'utf8');
+      const parsed = JSON.parse(raw) as { accounts?: unknown } | unknown[];
+      const list = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray((parsed as { accounts?: unknown })?.accounts)
+          ? (parsed as { accounts: unknown[] }).accounts
+          : [];
+
+      const accounts: AccountCfg[] = [];
+      for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const record = item as Record<string, unknown>;
+        const id = String(record.id ?? '').trim();
+        const username = String(record.username ?? '').trim();
+        const envId = String(record.envId ?? '').trim();
         if (!id || !username || !envId) continue;
-        out.push({
+        accounts.push({
           id,
           username,
           envId,
-          region: typeof o.region === 'string' ? o.region : undefined,
-          platform: typeof o.platform === 'string' ? o.platform : undefined,
-          remark: typeof o.remark === 'string' ? o.remark : undefined,
-          canPost: o.canPost !== false,
+          region: typeof record.region === 'string' ? record.region : undefined,
+          platform: typeof record.platform === 'string' ? record.platform : undefined,
+          remark: typeof record.remark === 'string' ? record.remark : undefined,
+          canPost: record.canPost !== false,
         });
       }
-      if (out.length > 0) return out;
+      if (accounts.length > 0) return accounts;
     } catch {
-      // try next
+      // Try the next candidate.
     }
   }
+
   return [];
 }
 
-export function listAccounts() {
+export function listAccounts(): ListedAccount[] {
   return loadAccountsConfig()
-    .filter((a) => a.canPost !== false)
-    .map((a) => ({
-      id: a.id,
-      username: a.username,
-      region: a.region,
-      platform: a.platform,
-      remark: a.remark,
-      canPost: a.canPost !== false,
+    .filter((account) => account.canPost !== false)
+    .map((account) => ({
+      id: account.id,
+      username: account.username,
+      region: account.region,
+      platform: account.platform,
+      remark: account.remark,
+      canPost: account.canPost !== false,
     }));
 }
 
-function resolveEnvIds(accountIds: string[]): string[] {
-  const all = loadAccountsConfig();
-  const ids: string[] = [];
-  for (const aid of accountIds) {
-    const m = all.find((a) => a.id === aid);
-    if (m?.envId) ids.push(m.envId);
+export function filterAccountsByAllowedIds<T extends { id: string }>(accounts: T[], allowedIds: string[] | null): T[] {
+  if (allowedIds === null) return accounts;
+  const allowed = new Set(allowedIds);
+  return accounts.filter((account) => allowed.has(account.id));
+}
+
+export function filterAccountIdsByAllowedIds(accountIds: string[], allowedIds: string[] | null): string[] {
+  if (allowedIds === null) return [...accountIds];
+  const allowed = new Set(allowedIds);
+  return accountIds.filter((accountId) => allowed.has(accountId));
+}
+
+export function getEnvIdsRequiringStart(targetEnvIds: string[], statuses: PhoneStatusDetail[]): string[] {
+  const statusById = new Map(statuses.map((status) => [status.id, status.status]));
+  return targetEnvIds.filter((envId) => statusById.get(envId) === PHONE_STATUS_STOPPED);
+}
+
+export function areAllPhonesReady(targetEnvIds: string[], statuses: PhoneStatusDetail[]): boolean {
+  const statusById = new Map(statuses.map((status) => [status.id, status.status]));
+  return targetEnvIds.every((envId) => statusById.get(envId) === PHONE_STATUS_RUNNING);
+}
+
+export function buildTaskEnvMap(taskIds: string[], envIds: string[]): Record<string, string> {
+  const taskEnvMap: Record<string, string> = {};
+  const count = Math.min(taskIds.length, envIds.length);
+  for (let index = 0; index < count; index += 1) {
+    taskEnvMap[taskIds[index]] = envIds[index];
   }
-  return [...new Set(ids)];
+  return taskEnvMap;
+}
+
+export function shouldStopPhoneForTaskStatus(status: number): boolean {
+  return status === TASK_STATUS_SUCCESS;
+}
+
+function resolveEnvIds(accountIds: string[]): string[] {
+  const allAccounts = loadAccountsConfig();
+  const envIds: string[] = [];
+  for (const accountId of accountIds) {
+    const matched = allAccounts.find((account) => account.id === accountId);
+    if (matched?.envId) envIds.push(matched.envId);
+  }
+  return [...new Set(envIds)];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatPhoneBatchFailures(result: PhoneBatchResult): string {
+  return (result.failDetails ?? [])
+    .map((detail) => `${detail.id}:${detail.code ?? 'ERR'}:${detail.msg ?? 'unknown'}`)
+    .join(', ');
+}
+
+async function getPhoneStatuses(envIds: string[]): Promise<PhoneStatusDetail[]> {
+  if (envIds.length === 0) return [];
+  const result = await geelarkPost<PhoneBatchResult>('/phone/status', { ids: envIds });
+  if ((result.failAmount ?? 0) > 0) {
+    throw new Error(`GeeLark phone/status failed for ${formatPhoneBatchFailures(result)}`);
+  }
+  return (result.successDetails ?? []).map((detail) => ({
+    id: detail.id,
+    serialName: detail.serialName,
+    status: Number(detail.status ?? PHONE_STATUS_EXPIRED),
+  }));
+}
+
+async function startPhones(envIds: string[]): Promise<void> {
+  if (envIds.length === 0) return;
+  const result = await geelarkPost<PhoneBatchResult>('/phone/start', {
+    ids: envIds,
+    energySavingMode: 1,
+  });
+  if ((result.failAmount ?? 0) > 0) {
+    throw new Error(`GeeLark phone/start failed for ${formatPhoneBatchFailures(result)}`);
+  }
+}
+
+async function stopPhones(envIds: string[]): Promise<void> {
+  if (envIds.length === 0) return;
+  const result = await geelarkPost<PhoneBatchResult>('/phone/stop', { ids: envIds });
+  if ((result.failAmount ?? 0) > 0) {
+    throw new Error(`GeeLark phone/stop failed for ${formatPhoneBatchFailures(result)}`);
+  }
+}
+
+async function ensurePhonesReady(envIds: string[]): Promise<void> {
+  if (envIds.length === 0) return;
+  const initialStatuses = await getPhoneStatuses(envIds);
+  if (initialStatuses.some((status) => status.status === PHONE_STATUS_EXPIRED)) {
+    throw new Error('One or more GeeLark phones are expired and cannot be started');
+  }
+
+  const envIdsToStart = getEnvIdsRequiringStart(envIds, initialStatuses);
+  if (envIdsToStart.length > 0) {
+    await startPhones(envIdsToStart);
+  }
+
+  const deadline = Date.now() + PHONE_READY_TIMEOUT_MS;
+  while (Date.now() <= deadline) {
+    const statuses = await getPhoneStatuses(envIds);
+    if (statuses.some((status) => status.status === PHONE_STATUS_EXPIRED)) {
+      throw new Error('One or more GeeLark phones expired while waiting to start');
+    }
+    if (areAllPhonesReady(envIds, statuses)) {
+      return;
+    }
+    await sleep(PHONE_READY_POLL_MS);
+  }
+
+  throw new Error('GeeLark phones did not become ready before timeout');
 }
 
 async function putBinary(uploadUrl: string, buf: Buffer): Promise<number> {
-  const u = new URL(uploadUrl);
-  const mod = u.protocol === 'https:' ? https : http;
+  const url = new URL(uploadUrl);
+  const mod = url.protocol === 'https:' ? https : http;
   return await new Promise((resolve, reject) => {
     const req = mod.request(
       {
-        hostname: u.hostname,
-        port: u.port || (u.protocol === 'https:' ? 443 : 80),
-        path: `${u.pathname}${u.search}`,
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
         method: 'PUT',
         headers: { 'Content-Length': buf.length },
       },
@@ -150,7 +300,7 @@ async function putBinary(uploadUrl: string, buf: Buffer): Promise<number> {
     req.on('error', reject);
     req.setTimeout(120_000, () => {
       req.destroy();
-      reject(new Error('GeeLark 上传超时'));
+      reject(new Error('GeeLark upload timed out'));
     });
     req.write(buf);
     req.end();
@@ -163,21 +313,79 @@ async function readVideoInput(input: string): Promise<Buffer> {
     return Buffer.from(b64, 'base64');
   }
   if (input.startsWith('http://') || input.startsWith('https://')) {
-    const r = await axios.get<ArrayBuffer>(input, { responseType: 'arraybuffer', maxRedirects: 5, ...proxyCfg(180_000) });
-    return Buffer.from(r.data);
+    const response = await axios.get<ArrayBuffer>(input, {
+      responseType: 'arraybuffer',
+      maxRedirects: 5,
+      ...proxyCfg(180_000),
+    });
+    return Buffer.from(response.data);
   }
-  const fp = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
-  if (!fs.existsSync(fp)) throw new Error(`视频路径不存在: ${input}`);
-  return fs.readFileSync(fp);
+  const filePath = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
+  if (!fs.existsSync(filePath)) throw new Error(`Video path does not exist: ${input}`);
+  return fs.readFileSync(filePath);
 }
 
 async function uploadVideoToGeelark(videoInput: string): Promise<string> {
   const fileBuf = await readVideoInput(videoInput);
-  const up = await geelarkPost<{ uploadUrl?: string; resourceUrl?: string }>('/upload/getUrl', { fileType: 'mp4' });
-  if (!up.uploadUrl || !up.resourceUrl) throw new Error('GeeLark 获取上传地址失败');
-  const status = await putBinary(up.uploadUrl, fileBuf);
-  if (status >= 400) throw new Error(`GeeLark OSS 上传失败: HTTP ${status}`);
-  return up.resourceUrl;
+  const uploadInfo = await geelarkPost<{ uploadUrl?: string; resourceUrl?: string }>('/upload/getUrl', {
+    fileType: 'mp4',
+  });
+  if (!uploadInfo.uploadUrl || !uploadInfo.resourceUrl) {
+    throw new Error('GeeLark did not return an upload URL');
+  }
+  const statusCode = await putBinary(uploadInfo.uploadUrl, fileBuf);
+  if (statusCode >= 400) {
+    throw new Error(`GeeLark upload storage failed with HTTP ${statusCode}`);
+  }
+  return uploadInfo.resourceUrl;
+}
+
+const STATUS_MAP: Record<number, string> = {
+  1: 'waiting',
+  2: 'running',
+  3: 'success',
+  4: 'failed',
+  7: 'canceled',
+};
+
+export async function getTaskDetail(taskId: string): Promise<Record<string, unknown>> {
+  const detail = await geelarkPost<Record<string, unknown>>('/task/detail', { id: taskId });
+  const status = Number(detail.status ?? 0);
+  return { ...detail, statusText: STATUS_MAP[status] ?? `status:${status}` };
+}
+
+async function monitorPublishTasksAndStopPhones(taskEnvMap: Record<string, string>): Promise<void> {
+  const pending = new Map(Object.entries(taskEnvMap));
+  if (pending.size === 0) return;
+
+  const deadline = Date.now() + TASK_MONITOR_TIMEOUT_MS;
+  while (pending.size > 0 && Date.now() <= deadline) {
+    for (const [taskId, envId] of [...pending.entries()]) {
+      try {
+        const detail = await getTaskDetail(taskId);
+        const status = Number(detail.status ?? 0);
+        if (shouldStopPhoneForTaskStatus(status)) {
+          await stopPhones([envId]);
+          pending.delete(taskId);
+          continue;
+        }
+        if (status === TASK_STATUS_FAILED || status === TASK_STATUS_CANCELED) {
+          console.warn(`[geelark/auto-stop] preserving env ${envId} because task ${taskId} ended with status ${status}`);
+          pending.delete(taskId);
+        }
+      } catch (error) {
+        console.error(`[geelark/auto-stop] failed while monitoring task ${taskId}`, error);
+      }
+    }
+
+    if (pending.size > 0) {
+      await sleep(TASK_MONITOR_POLL_MS);
+    }
+  }
+
+  if (pending.size > 0) {
+    console.warn(`[geelark/auto-stop] monitor timed out for tasks ${[...pending.keys()].join(', ')}`);
+  }
 }
 
 export async function publishVideo(options: {
@@ -189,7 +397,11 @@ export async function publishVideo(options: {
   needShareLink?: boolean;
 }): Promise<{ taskIds: string[]; planName: string }> {
   const envIds = resolveEnvIds(options.accountIds);
-  if (envIds.length === 0) throw new Error('未匹配到可发布账号（请检查 config/geelark-accounts.json 的 id/envId）');
+  if (envIds.length === 0) {
+    throw new Error('No GeeLark envIds matched the selected publish accounts');
+  }
+
+  await ensurePhonesReady(envIds);
   const resourceUrl = await uploadVideoToGeelark(options.videoUrl);
   const planName = `task${Date.now()}`;
   const scheduleAt = Math.floor(Date.now() / 1000);
@@ -201,26 +413,19 @@ export async function publishVideo(options: {
     markAI: !!options.markAI,
     needShareLink: !!options.needShareLink,
   }));
+
   const data = await geelarkPost<{ taskIds?: string[] }>('/task/add', { planName, taskType: 1, list });
-  return { taskIds: data.taskIds ?? [], planName };
-}
-
-const STATUS_MAP: Record<number, string> = {
-  1: '等待执行',
-  2: '执行中',
-  3: '已完成',
-  4: '任务失败',
-  7: '已取消',
-};
-
-export async function getTaskDetail(taskId: string): Promise<Record<string, unknown>> {
-  const d = await geelarkPost<Record<string, unknown>>('/task/detail', { id: taskId });
-  const s = Number(d.status ?? 0);
-  return { ...d, statusText: STATUS_MAP[s] ?? `状态${s}` };
+  const taskIds = data.taskIds ?? [];
+  const taskEnvMap = buildTaskEnvMap(taskIds, envIds);
+  void monitorPublishTasksAndStopPhones(taskEnvMap).catch((error) => {
+    console.error('[geelark/auto-stop] background monitor crashed', error);
+  });
+  return { taskIds, planName };
 }
 
 export async function getTaskHistory(size = 20): Promise<unknown[]> {
-  const d = await geelarkPost<{ items?: unknown[] }>('/task/historyRecords', { size: Math.min(Math.max(size, 1), 100) });
-  return d.items ?? [];
+  const data = await geelarkPost<{ items?: unknown[] }>('/task/historyRecords', {
+    size: Math.min(Math.max(size, 1), 100),
+  });
+  return data.items ?? [];
 }
-

@@ -2,11 +2,47 @@
   "accounts": [
     {
       "id": "acc1",
-      "username": "@senja66612",
+      "username": "Test 3",
       "envId": "609149762754576432",
-      "region": "印尼",
+      "region": "ID",
       "platform": "TT",
-      "remark": "ID（印尼）",
+      "remark": "Indonesia legacy slot",
+      "canPost": true
+    },
+    {
+      "id": "web-th-tt",
+      "username": "web TH tt",
+      "envId": "611322277471977809",
+      "region": "TH",
+      "platform": "TT",
+      "remark": "group:web TH",
+      "canPost": true
+    },
+    {
+      "id": "th-test2",
+      "username": "TH test2",
+      "envId": "612336154733183404",
+      "region": "TH",
+      "platform": "TT",
+      "remark": "group:web TH",
+      "canPost": true
+    },
+    {
+      "id": "id-test3",
+      "username": "ID test3",
+      "envId": "614947890221023530",
+      "region": "ID",
+      "platform": "TT",
+      "remark": "group:ID",
+      "canPost": true
+    },
+    {
+      "id": "id-xianyu-test",
+      "username": "ID xianyu test",
+      "envId": "615544734445731887",
+      "region": "ID",
+      "platform": "TT",
+      "remark": "group:ID",
       "canPost": true
     }
   ]
