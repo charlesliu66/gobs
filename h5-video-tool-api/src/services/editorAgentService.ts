@@ -1177,7 +1177,95 @@ ${planText}`;
     etaSec: eta(92),
   });
 
+  /**
+   * 终极兜底：若模型返回或合并后 v1 轨仍为空（completion 过短、Plan/Build 都没挑出片段），
+   * 用均分候选窗按目标时长按素材轮流采样填充，保证用户一定看到一条可编辑的初稿。
+   * 这比"200 success 但时间轴空白"好得多（后者会让用户困惑为什么消耗了 token 却没结果）。
+   */
+  const v1BeforeSanitize = merged.tracks.find((t) => t.type === 'video' && t.id === 'v1');
+  const v1BeforeClips = v1BeforeSanitize?.clips ?? [];
+  if (v1BeforeClips.length === 0) {
+    if (candidateWindows.length === 0) {
+      throw new Error('剪辑失败：Agent 未挑出任何片段，且候选窗不足以兜底。请更换素材或重新发送更具体的指令。');
+    }
+    console.warn(`[editor agent] merged v1 clips 为空（Agent 未输出选段），启动均分候选窗兜底，候选窗数=${candidateWindows.length}，目标时长=${targetTimelineSec}s`);
+    report({
+      stage: 'fallback_fill',
+      percent: 94,
+      message: `模型未挑出片段，自动用均分候选段填满 ${targetTimelineSec} 秒…`,
+      etaSec: 6,
+    });
+
+    // 按 asset 分桶，轮流抽窗；每段目标 2.5–4s，最后一段裁到不超过 targetTimelineSec
+    const byAsset = new Map<string, CandidateWindow[]>();
+    for (const w of candidateWindows) {
+      if (!byAsset.has(w.assetId)) byAsset.set(w.assetId, []);
+      byAsset.get(w.assetId)!.push(w);
+    }
+    const assetIds = Array.from(byAsset.keys());
+    const iters: number[] = assetIds.map(() => 0);
+    const fallbackVideoClips: VideoClip[] = [];
+    let timelineStart = 0;
+    let guard = 0;
+    while (timelineStart < targetTimelineSec && guard++ < 60) {
+      let picked: CandidateWindow | null = null;
+      for (let k = 0; k < assetIds.length; k++) {
+        const ai = (guard - 1 + k) % assetIds.length;
+        const aid = assetIds[ai]!;
+        const wlist = byAsset.get(aid)!;
+        if (iters[ai]! < wlist.length) {
+          picked = wlist[iters[ai]!]!;
+          iters[ai]! += 1;
+          break;
+        }
+      }
+      if (!picked) break;
+      const rawDur = picked.sourceEnd - picked.sourceStart;
+      const wantDur = Math.min(rawDur, 3.2, targetTimelineSec - timelineStart);
+      if (wantDur < 0.4) break;
+      fallbackVideoClips.push({
+        id: `fb_v_${Date.now()}_${fallbackVideoClips.length}`,
+        assetId: picked.assetId,
+        sourceStart: Math.round(picked.sourceStart * 100) / 100,
+        sourceEnd: Math.round((picked.sourceStart + wantDur) * 100) / 100,
+        timelineStart: Math.round(timelineStart * 100) / 100,
+      } as VideoClip);
+      timelineStart += wantDur;
+    }
+
+    if (fallbackVideoClips.length === 0) {
+      throw new Error('剪辑失败：候选窗均无法产出有效片段，请检查素材。');
+    }
+
+    // 镜像生成 a1 原声轨（与 v1 等长等位）
+    const fallbackAudioClips: AudioClip[] = fallbackVideoClips.map((vc, i) => ({
+      id: `fb_a_${Date.now()}_${i}`,
+      assetId: vc.assetId,
+      sourceStart: vc.sourceStart,
+      sourceEnd: vc.sourceEnd,
+      timelineStart: vc.timelineStart,
+      gain: 1,
+    } as AudioClip));
+
+    merged.tracks = merged.tracks.map((t) => {
+      if (t.type === 'video' && t.id === 'v1') {
+        return { ...t, clips: fallbackVideoClips } as Track;
+      }
+      if (t.type === 'audio' && t.id === 'a1') {
+        return { ...t, clips: fallbackAudioClips } as Track;
+      }
+      return t;
+    });
+    merged.durationSec = timelineStart;
+  }
+
   const sanitized = sanitizeAgentProject(merged, allowed, durationMap, candidateWindows);
+
+  // 最终再校验一次：sanitize 后可能因 allowed/durationMap 过滤掉所有 clip
+  const v1Final = sanitized.tracks.find((t) => t.type === 'video' && t.id === 'v1');
+  if (!v1Final || v1Final.clips.length === 0) {
+    throw new Error('剪辑失败：所有候选片段在校验阶段被过滤。请确认素材仍在资产库中，或重新发送指令。');
+  }
 
   report({
     stage: 'done',
