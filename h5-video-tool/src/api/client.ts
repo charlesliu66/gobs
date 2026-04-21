@@ -65,6 +65,35 @@ export function appendFileAccessToken(url: string): string {
   return url;
 }
 
+function triggerBrowserDownload(url: string, filename: string): void {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function isDirectDownloadCapable(path: string): boolean {
+  return path.startsWith('/api/editor/export/download/');
+}
+
+function getFilenameFromDisposition(disposition: string | null, fallback: string): string {
+  if (!disposition) return fallback;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+  return plainMatch?.[1] || fallback;
+}
+
 function handleUnauthorized(res: Response): void {
   if (res.status === 401) {
     localStorage.removeItem('gobs_token');
@@ -169,6 +198,10 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
  * 解决 <a href> 直接导航不带 Authorization 头导致 401 的问题。
  */
 export async function apiDownload(path: string, filename: string): Promise<void> {
+  if (isDirectDownloadCapable(path)) {
+    triggerBrowserDownload(appendFileAccessToken(`${BASE_URL}${path}`), filename);
+    return;
+  }
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -184,13 +217,9 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const downloadName = getFilenameFromDisposition(res.headers.get('content-disposition'), filename);
+  triggerBrowserDownload(url, downloadName);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {

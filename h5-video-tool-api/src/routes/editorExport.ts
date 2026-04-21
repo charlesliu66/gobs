@@ -5,6 +5,7 @@ import type { EditorExportRequestBody } from '../editor/timelineSchema.js';
 import { runFfmpegExport } from '../services/ffmpegExport.js';
 import { getApiDataDir, getUploadsPath, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
+import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 
 const router = Router();
 
@@ -364,7 +365,12 @@ router.get('/export/:jobId', (req, res) => {
 
 /** GET /api/editor/export/download/:filename — 下载导出文件 */
 router.get('/export/download/:filename', (req, res) => {
-  const username = sanitizeUsername(req.user?.username);
+  const callerUsername = resolveMediaRequestUsername(req);
+  if (!callerUsername) {
+    res.status(401).json({ error: '需要登录或有效的下载访问 token' });
+    return;
+  }
+  const username = sanitizeUsername(callerUsername);
   const filename = path.basename(req.params.filename); // 防路径穿越
   const filePath = path.join(getApiDataDir(), 'exports', username, filename);
   if (!fs.existsSync(filePath)) {

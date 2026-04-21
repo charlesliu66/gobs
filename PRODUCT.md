@@ -156,7 +156,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.69 -->
+<!-- NEXT_VERSION: v0.70 -->
+
+### v0.69 — 2026-04-21
+
+**导出成品下载恢复稳定直链**
+
+**Bug Fix:**
+- **[frontend] 下载成品优先走带 `fat/token` 的直链下载**（`h5-video-tool/src/api/client.ts`）：导出完成后的「下载成品」不再先把整个 MP4 拉成 Blob 再立即释放临时 URL，而是优先复用现有文件访问 token 体系触发浏览器原生下载；对大文件和不同浏览器的兼容性更稳。
+- **[api] 导出下载路由接入媒体 token 解析**（`h5-video-tool-api/src/routes/editorExport.ts`）：`/api/editor/export/download/:filename` 现在和视频/图片预览链路一致，支持通过 `fat` 或 `token` 识别当前用户，保证直链下载仍然只允许访问本人导出的成品。
+- **[api] 鉴权中间件放行导出下载 GET 请求**（`h5-video-tool-api/src/middleware/auth.ts`）：浏览器原生下载请求不会携带 `Authorization` 头，本次改为在路由层完成二次校验，避免“导出成功但点击下载报错”的断链问题。
 
 ### v0.68 — 2026-04-21
 
@@ -1120,4 +1129,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.68）*
+*最后更新：2026-04-21（v0.69）*

@@ -50,6 +50,11 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     next();
     return;
   }
+  // 剪辑器导出成品下载：浏览器原生下载不带 Bearer，路由内部再校验 fat/token
+  if (req.method === 'GET' && req.path.startsWith('/api/editor/export/download/')) {
+    next();
+    return;
+  }
   // 高级制片分镜视频回放：<video src="/api/video/file?path=..."> 无法附带 Bearer
   if (req.method === 'GET' && req.path === '/api/video/file') {
     next();
