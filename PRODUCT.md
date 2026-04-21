@@ -126,7 +126,7 @@
 
 - 灞曠ず宸插畬鎴愯棰戠殑鍗＄墖缃戞牸
 - 鍙挱鏀俱€佷笅杞?
-- 「服务端文件」页刷新时会自动补同步最近几天即梦后台已完成但尚未落盘的成片，避免“即梦后台有视频、我的成片里看不到”。
+- 「服务端文件」页刷新时会自动分页补同步最近几天即梦后台已完成但尚未落盘的成片；即便第一页都是旧片，后续分页里的新成片也会继续补拉回来。
 ---
 
 ### 7. 涓€閿垚鐗囷紙Quick Film锛?
@@ -158,7 +158,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.75 -->
+<!-- NEXT_VERSION: v0.76 -->
+
+### v0.75 — 2026-04-21
+
+**我的成片即梦回补补齐后续分页漏片**
+
+**Bug Fix:**
+- **[api] `dreaminaRecentSync` 改为直接分页扫描即梦 `list_task` 结果**（`h5-video-tool-api/src/services/dreaminaRecentSync.ts`）：同步服务不再只依赖单次列表结果，而是按 `offset` 连续扫描多页任务；即使前几页都是已经落盘的旧 submit，也会继续往后找缺失成片，修复“即梦后台还有视频，但服务端文件始终拉不到”的问题。
+- **[api] 同步层新增独立 wrapper 调用与分页回归测试**（`h5-video-tool-api/src/services/dreaminaRecentSync.ts` + `h5-video-tool-api/tests/dreaminaRecentSync.test.ts`）：在不修改禁改的 `dreaminaVideo.ts` 前提下，回补流程会显式带上 Dreamina wrapper 路径和 `--offset` 参数跑分页；同时新增“第一页全是旧片、第二页才有新片”测试，防止后续再退回只扫第一页的行为。
 
 ### v0.74 — 2026-04-21
 
@@ -1173,4 +1181,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.74）*
+*最后更新：2026-04-21（v0.75）*

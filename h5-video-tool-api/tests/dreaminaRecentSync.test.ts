@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  collectDreaminaBackfillCandidates,
   DREAMINA_RECENT_WINDOW_MS,
   dedupeOutputRecentVideoItems,
   extractDreaminaSubmitKeyFromPath,
@@ -113,5 +114,39 @@ test('dedupeOutputRecentVideoItems collapses repeated dreamina files by submit k
       'output/admin/dreamina_65ed730260b2_1776760249379.mp4',
       'output/admin/dreamina_90e37db2eaa4_1776760242919.mp4',
     ],
+  );
+});
+
+test('collectDreaminaBackfillCandidates keeps scanning later Dreamina pages when the first page is already persisted', async () => {
+  const requestedOffsets: number[] = [];
+  const selected = await collectDreaminaBackfillCandidates({
+    existingPaths: [
+      'output/admin/dreamina_aaaa1111bbbb_1776229192704.mp4',
+      'output/admin/dreamina_cccc2222dddd_1776229192705.mp4',
+    ],
+    maxTasks: 2,
+    pageSize: 2,
+    listPage: async ({ offset }) => {
+      requestedOffsets.push(offset);
+      if (offset === 0) {
+        return [
+          { submitId: 'aaaa1111bbbb0001', genStatus: 'success', raw: {} },
+          { submitId: 'cccc2222dddd0002', genStatus: 'success', raw: {} },
+        ];
+      }
+      if (offset === 2) {
+        return [
+          { submitId: 'eeee3333ffff0003', genStatus: 'success', raw: {} },
+          { submitId: 'gggg4444hhhh0004', genStatus: 'success', raw: {} },
+        ];
+      }
+      return [];
+    },
+  });
+
+  assert.deepEqual(requestedOffsets, [0, 2]);
+  assert.deepEqual(
+    selected.map((task) => task.submitId),
+    ['eeee3333ffff0003', 'gggg4444hhhh0004'],
   );
 });
