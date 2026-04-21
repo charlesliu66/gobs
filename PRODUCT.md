@@ -158,7 +158,14 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.74 -->
+<!-- NEXT_VERSION: v0.75 -->
+
+### v0.74 — 2026-04-21
+
+**即梦后台同步补齐 Linux 运行时兜底**
+
+**Bug Fix:**
+- **[api] `dreaminaRecentSync` 自动探测服务器上的 Dreamina CLI 与 wrapper 路径**（`h5-video-tool-api/src/services/dreaminaRecentSync.ts`）：当线上 `qas-api` 进程没有显式注入 `DREAMINA_BIN / DREAMINA_SCRIPTS_DIR` 时，会自动尝试 `/home/ubuntu/.local/bin/dreamina`、`~/.dreamina_cli/dreamina` 和部署目录下的 `.cursor/skills/dreamina-cli-skill/scripts`，避免“同步接口正常返回但实际上没有真正调用即梦后台”的假成功。
 
 ### v0.73 — 2026-04-21
 
@@ -1166,4 +1173,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-21（v0.73）*
+*最后更新：2026-04-21（v0.74）*

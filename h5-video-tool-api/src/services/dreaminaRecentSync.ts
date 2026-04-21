@@ -5,6 +5,9 @@ import {
   type DreaminaListedTask,
 } from './dreaminaVideo.js';
 import { persistVideoUrlToOutput } from './videoUtils.js';
+import fsSync from 'fs';
+import os from 'os';
+import path from 'path';
 
 export const DREAMINA_RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_LIST_LIMIT = 120;
@@ -25,6 +28,34 @@ function toDreaminaSubmitKey(value: string): string | undefined {
 function toSyncUserKey(username?: string): string {
   const trimmed = username?.trim().toLowerCase();
   return trimmed || '_default';
+}
+
+function ensureDreaminaRuntimeHints(): void {
+  if (process.platform === 'win32') return;
+
+  if (!process.env.DREAMINA_BIN?.trim()) {
+    const home = os.homedir();
+    const candidates = [
+      path.join(home, '.local', 'bin', 'dreamina'),
+      path.join(home, '.dreamina_cli', 'dreamina'),
+    ];
+    const hit = candidates.find((item) => fsSync.existsSync(item));
+    if (hit) {
+      process.env.DREAMINA_BIN = hit;
+      process.env.DREAMINA_PATH_PREFIX = `${path.dirname(hit)}${path.delimiter}${process.env.DREAMINA_PATH_PREFIX ?? ''}`;
+    }
+  }
+
+  if (!process.env.DREAMINA_SCRIPTS_DIR?.trim()) {
+    const scriptCandidates = [
+      path.resolve(process.cwd(), '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'),
+      path.resolve(process.cwd(), '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'),
+    ];
+    const hit = scriptCandidates.find((item) => fsSync.existsSync(path.join(item, 'list_task.py')));
+    if (hit) {
+      process.env.DREAMINA_SCRIPTS_DIR = hit;
+    }
+  }
 }
 
 export function extractDreaminaSubmitKeyFromPath(videoPath: string): string | undefined {
@@ -107,6 +138,7 @@ export async function syncRecentDreaminaOutputs(options: {
   listLimit?: number;
   maxSync?: number;
 }): Promise<{ synced: number; attempted: number }> {
+  ensureDreaminaRuntimeHints();
   if (!isDreaminaEnabled()) {
     return { synced: 0, attempted: 0 };
   }
