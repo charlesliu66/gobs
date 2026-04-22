@@ -80,6 +80,8 @@
 - 鐢熸垚瀹屾垚鍚庢樉绀哄紩鎿庢潵婧?badge锛堢传鑹?Suno / 钃濊壊 Lyria锛?- 楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩棰勫～鍒剁墖闃舵鐨勯煶涔愰鏍兼弿杩帮紙鏉ヨ嚜 SoundMusicPlan锛夛紝涓€閿嵆鍙敓鎴愬尮閰嶉厤涔?- 鍙皟鏁撮煶閲忋€丅PM銆侀鏍?- 瀵煎嚭鏃舵敮鎸佹贰鍏ワ紙1s锛? 娣″嚭锛堝彲璋?0-3s锛?
 #### 3.6 AI 鍓緫 Agent
 
+- TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
+- 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
 - **蹇嵎鎸囦护妯℃澘锛坴0.58锛?*锛氶娆′娇鐢ㄦ椂灞曠ず棰勮鎸夐挳锛堟垬鏂楁贩鍓?/ 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝涓€閿彂閫?- **澶氭ā鍨?Plan 鈫?Build 涓ら樁娈垫灦鏋勶紙v0.58锛夛細**
   - Plan 闃舵锛欴eepSeek-R1 鑷劧璇█鎺ㄧ悊锛岃緭鍑洪€夋鏂规锛堜笉瑕佹眰 JSON锛岄伩鍏嶆牸寮忛敊璇級
@@ -162,7 +164,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.87 -->
+<!-- NEXT_VERSION: v0.88 -->
+
+### v0.87 — 2026-04-22
+
+**剪辑 Agent TikTok 创意 Brief 首版落地**
+
+**Feature / Workflow / Build Stability:**
+- **[api] 新增 `editorCreativeBrief` 纯函数层与默认 brief prompt**（`h5-video-tool-api/src/services/editorCreativeBrief.ts`, `h5-video-tool-api/src/routes/editorAgent.ts`, `h5-video-tool-api/tests/editorCreativeBrief.test.ts`）：后端现在支持接收结构化 `creativeBrief`，在没有自然语言指令时自动生成默认 TikTok 剪辑需求，并在流式结果里回传 `creativeStrategy`。
+- **[frontend] 剪辑器 Agent 面板升级为 TikTok 创意工作台**（`h5-video-tool/src/editor/components/AgentPanel.tsx`, `h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool/src/api/editorCreative.ts`, `h5-video-tool/src/editor/utils/editorCreativeBrief.ts`, `h5-video-tool/tests/editorCreativeBrief.test.ts`）：新增 TikTok 内容 / 买量双模式、卖点与 CTA 表单、推荐 Hook 策略卡；带 brief 的请求会直接进入剪辑链路，不再被误判成聊天。
+- **[frontend] 素材库本地化导出补齐，恢复生产构建**（`h5-video-tool/src/pages/AssetLibraryPage/localize.ts`）：补全分类、筛选、Tab 的本地化函数与类型，修复前端 `npm run build` 被 Asset Library 缺失导出阻断的问题。
 
 ### v0.86 — 2026-04-22
 
@@ -1281,4 +1292,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.86）*
+*最后更新：2026-04-22（v0.87）*

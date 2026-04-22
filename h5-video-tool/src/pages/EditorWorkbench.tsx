@@ -6,7 +6,7 @@ import { EditorShell } from '../editor/layout/EditorShell';
 import { useTimelineState } from '../editor/hooks/useTimelineState';
 import { TimelinePanel } from '../editor/components/TimelinePanel';
 import { TimelineClipToolbar } from '../editor/components/TimelineClipToolbar';
-import { AgentPanel } from '../editor/components/AgentPanel';
+import { AgentPanel, type AgentPanelApplyRequest } from '../editor/components/AgentPanel';
 import { MediaLibrary } from '../editor/components/MediaLibrary';
 import { BgmMixPanel } from '../editor/components/BgmMixPanel';
 import { TextClipEditor } from '../editor/components/TextClipEditor';
@@ -57,6 +57,10 @@ import {
   type EditorAgentJobProgress,
   type EditorAssetDto,
 } from '../api/editor';
+import {
+  applyEditorAgentCreativeStream,
+  type EditorCreativeStrategy,
+} from '../api/editorCreative';
 import {
   buildAssetNameResolver,
   formatAgentDeliverableMarkdown,
@@ -189,6 +193,7 @@ export function EditorWorkbench() {
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
   const [agentDeliverable, setAgentDeliverable] = useState<string | null>(null);
+  const [agentCreativeStrategy, setAgentCreativeStrategy] = useState<EditorCreativeStrategy | null>(null);
   /** Agent 自动配乐成功后同步到左下「配乐生成」文案 */
   const [bgmFormSync, setBgmFormSync] = useState<{
     prompt: string;
@@ -507,6 +512,162 @@ export function EditorWorkbench() {
       }
       if (agentOk && detectBgmIntent(userMessage)) {
         void runAutoBgmFromAgentMessage(userMessage);
+      }
+    },
+    [
+      selectedAssetIds,
+      project,
+      aspectRatio,
+      assets,
+      libraryItems,
+      setAssets,
+      setProject,
+      setCurrentTime,
+      setIsPlaying,
+      pushLog,
+      runAutoBgmFromAgentMessage,
+    ],
+  );
+
+  void handleAgentApply;
+
+  const handleCreativeAgentApply = useCallback(
+    async ({ userMessage, creativeBrief }: AgentPanelApplyRequest) => {
+      const trimmedMessage = userMessage?.trim() ?? '';
+      const shouldForceEdit = Boolean(creativeBrief);
+      let agentOk = false;
+
+      setAgentBusy(true);
+      setAgentDeliverable(null);
+      setAgentCreativeStrategy(null);
+      setAgentJobProgress(null);
+
+      try {
+        if (!shouldForceEdit) {
+          let route: Awaited<ReturnType<typeof routeEditorAgentMessage>>;
+          try {
+            route = await routeEditorAgentMessage(trimmedMessage);
+          } catch (error) {
+            pushLog(`错误：意图识别失败：${error instanceof Error ? error.message : String(error)}`);
+            return;
+          }
+
+          if (route.intent === 'chat') {
+            try {
+              const { reply } = await chatEditorAgent(trimmedMessage);
+              pushLog(`助手：${reply}`);
+              setAgentChatHistory((prev) => [
+                ...prev,
+                { role: 'user', content: trimmedMessage },
+                { role: 'assistant', content: reply },
+              ]);
+            } catch (error) {
+              pushLog(`错误：对话失败：${error instanceof Error ? error.message : String(error)}`);
+            }
+            return;
+          }
+        }
+
+        let ids = [...selectedAssetIds];
+        if (ids.length === 0) {
+          ids = uniqueVideoAssetIds(project);
+        }
+        if (ids.length === 0) {
+          pushLog('请先勾选左侧素材，或先在时间轴中加入至少一段视频。');
+          return;
+        }
+
+        const assetPayload: Array<{ id: string; originalName: string; durationSec: number }> = [];
+        const durUpdates: Record<string, number> = {};
+        let assetsForNames: Record<string, MediaAsset> = { ...assets };
+
+        for (const id of ids) {
+          const media = assets[id];
+          if (!media) {
+            assetPayload.push({ id, originalName: id, durationSec: 60 });
+            continue;
+          }
+
+          let duration = media.durationSec;
+          if (duration == null || !Number.isFinite(duration)) {
+            try {
+              duration = await probeVideoDuration(media.url);
+              durUpdates[id] = duration;
+            } catch {
+              duration = 60;
+            }
+          }
+
+          assetPayload.push({
+            id,
+            originalName: String(media.meta?.originalName ?? id),
+            durationSec: Math.min(Math.max(duration, 0.5), 36000),
+          });
+        }
+
+        if (Object.keys(durUpdates).length > 0) {
+          for (const [id, duration] of Object.entries(durUpdates)) {
+            const currentAsset = assetsForNames[id];
+            if (currentAsset) assetsForNames[id] = { ...currentAsset, durationSec: duration };
+          }
+          setAssets((prev) => {
+            const next = { ...prev };
+            for (const [id, duration] of Object.entries(durUpdates)) {
+              const currentAsset = next[id];
+              if (currentAsset) next[id] = { ...currentAsset, durationSec: duration };
+            }
+            return next;
+          });
+        }
+
+        const ctrl = new AbortController();
+        agentAbortRef.current = ctrl;
+        const {
+          summary,
+          project: nextProject,
+          llmUsage,
+          creativeStrategy,
+        } = await applyEditorAgentCreativeStream(
+          {
+            userMessage: trimmedMessage || undefined,
+            aspectRatio,
+            selectedAssetIds: ids,
+            assets: assetPayload,
+            currentProject: project,
+            creativeBrief,
+          },
+          (progress) => setAgentJobProgress(progress),
+          ctrl.signal,
+        );
+
+        const syncedProject = withSyncedDuration(
+          snapVideoClipsSequential(normalizeTimelineProject(nextProject)),
+        );
+        setProject(syncedProject);
+        mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
+        setCurrentTime(0);
+        setIsPlaying(false);
+        setAgentCreativeStrategy(creativeStrategy ?? null);
+
+        const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
+        setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
+
+        pushLog(`Agent：${summary}`);
+        if (llmUsage?.totals) {
+          const totals = llmUsage.totals;
+          pushLog(
+            `Token 合计：prompt ${totals.prompt_tokens ?? '—'} / completion ${totals.completion_tokens ?? '—'} / total ${totals.total_tokens ?? '—'}`,
+          );
+        }
+        agentOk = true;
+      } finally {
+        setAgentJobProgress(null);
+        setAgentBusy(false);
+        agentAbortRef.current = null;
+      }
+
+      if (agentOk && trimmedMessage && detectBgmIntent(trimmedMessage)) {
+        void runAutoBgmFromAgentMessage(trimmedMessage);
       }
     },
     [
@@ -1156,7 +1317,7 @@ export function EditorWorkbench() {
           <AgentPanel
             logs={agentLogs}
             onPushLog={pushLog}
-            onApply={handleAgentApply}
+            onApply={handleCreativeAgentApply}
             busy={agentBusy}
             onAbort={() => {
               if (agentAbortRef.current) {
@@ -1169,6 +1330,7 @@ export function EditorWorkbench() {
             timelineAssetCount={uniqueVideoAssetIds(project).length}
             deliverableMarkdown={agentDeliverable}
             chatHistory={agentChatHistory}
+            creativeStrategy={agentCreativeStrategy}
           />
         }
         timelinePanel={

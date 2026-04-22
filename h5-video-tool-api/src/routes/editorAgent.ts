@@ -2,58 +2,66 @@ import { Router } from 'express';
 import type { AspectRatioPreset, TimelineProject, VideoClip } from '../editor/timelineSchema.js';
 import { routeEditorAgentMessage } from '../services/editorAgentIntent.js';
 import { runEditorAgentChat } from '../services/editorAgentChat.js';
+import {
+  buildDefaultCreativeUserMessage,
+  normalizeEditorCreativeBrief,
+} from '../services/editorCreativeBrief.js';
 import type { EditorAgentApplyInput } from '../services/editorAgentService.js';
 import { runEditorAgentApply } from '../services/editorAgentService.js';
 import { parseEditorVisionFocusBody } from '../services/video/editorVideoAnalysis.js';
-import { updatePreferenceFromExport, loadPreference, type ExportBehaviorReport } from '../services/userPreferenceService.js';
+import {
+  updatePreferenceFromExport,
+  loadPreference,
+  type ExportBehaviorReport,
+} from '../services/userPreferenceService.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
 
 function videoAssetIdsFromProject(project: TimelineProject): string[] {
   const ids = new Set<string>();
-  for (const t of project.tracks) {
-    if (t.type !== 'video') continue;
-    for (const c of t.clips) {
-      ids.add((c as VideoClip).assetId);
+  for (const track of project.tracks) {
+    if (track.type !== 'video') continue;
+    for (const clip of track.clips) {
+      ids.add((clip as VideoClip).assetId);
     }
   }
   return [...ids];
 }
 
-/** 闲聊：独立大模型对话（与意图路由分离） */
 router.post('/agent/chat', async (req, res) => {
-  const msg = typeof (req.body as { userMessage?: string }).userMessage === 'string'
-    ? String((req.body as { userMessage: string }).userMessage).trim()
-    : '';
+  const msg =
+    typeof (req.body as { userMessage?: string }).userMessage === 'string'
+      ? String((req.body as { userMessage: string }).userMessage).trim()
+      : '';
   if (!msg) {
-    res.status(400).json({ error: '请提供 userMessage' });
+    res.status(400).json({ error: 'Please provide userMessage' });
     return;
   }
   try {
     const reply = await runEditorAgentChat(msg);
     res.json({ reply });
-  } catch (e) {
-    console.error('[editor/agent/chat]', e);
-    res.status(500).json({ error: e instanceof Error ? e.message : '对话失败' });
+  } catch (error) {
+    console.error('[editor/agent/chat]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Chat failed' });
   }
 });
 
-/** 仅做意图分类（chat / edit），闲聊内容请调 /agent/chat */
 router.post('/agent/route', async (req, res) => {
-  const msg = typeof (req.body as { userMessage?: string }).userMessage === 'string'
-    ? String((req.body as { userMessage: string }).userMessage).trim()
-    : '';
+  const msg =
+    typeof (req.body as { userMessage?: string }).userMessage === 'string'
+      ? String((req.body as { userMessage: string }).userMessage).trim()
+      : '';
   if (!msg) {
-    res.status(400).json({ error: '请提供 userMessage' });
+    res.status(400).json({ error: 'Please provide userMessage' });
     return;
   }
   try {
     const out = await routeEditorAgentMessage(msg);
     res.json(out);
-  } catch (e) {
-    console.error('[editor/agent/route]', e);
-    res.status(500).json({ error: e instanceof Error ? e.message : '意图识别失败' });
+  } catch (error) {
+    console.error('[editor/agent/route]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Intent routing failed' });
   }
 });
 
@@ -63,35 +71,45 @@ interface ApplyBody {
   selectedAssetIds?: string[];
   assets?: Array<{ id: string; originalName: string; durationSec?: number }>;
   currentProject?: TimelineProject;
+  creativeBrief?: unknown;
   visionFocus?: unknown;
 }
 
-function buildEditorApplyInput(body: ApplyBody): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
-  const msg = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
+function buildEditorApplyInput(
+  body: ApplyBody,
+): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
+  const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
+  const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
+  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief) : '');
+
   if (!msg) {
-    return { ok: false, error: '请提供 userMessage' };
+    return { ok: false, error: 'Please provide userMessage or creativeBrief' };
   }
   if (!body.currentProject || typeof body.currentProject !== 'object') {
-    return { ok: false, error: '请提供 currentProject' };
+    return { ok: false, error: 'Please provide currentProject' };
   }
+
   let selectedAssetIds = Array.isArray(body.selectedAssetIds)
-    ? body.selectedAssetIds.filter((x): x is string => typeof x === 'string')
+    ? body.selectedAssetIds.filter((item): item is string => typeof item === 'string')
     : [];
   if (selectedAssetIds.length === 0) {
     selectedAssetIds = videoAssetIdsFromProject(body.currentProject);
   }
+
   const assetsRaw = Array.isArray(body.assets) ? body.assets : [];
   const fromClient = new Map(
-    assetsRaw.map((a) => {
-      const id = String(a.id);
+    assetsRaw.map((asset) => {
+      const id = String(asset.id);
       return [
         id,
         {
           id,
-          originalName: typeof a.originalName === 'string' ? a.originalName : '未命名',
+          originalName: typeof asset.originalName === 'string' ? asset.originalName : 'Untitled',
           durationSec:
-            typeof a.durationSec === 'number' && Number.isFinite(a.durationSec) && a.durationSec > 0
-              ? Math.min(a.durationSec, 36000)
+            typeof asset.durationSec === 'number' &&
+            Number.isFinite(asset.durationSec) &&
+            asset.durationSec > 0
+              ? Math.min(asset.durationSec, 36000)
               : 60,
         },
       ] as const;
@@ -107,7 +125,7 @@ function buildEditorApplyInput(body: ApplyBody): { ok: true; input: EditorAgentA
   if (selectedAssetIds.length === 0) {
     return {
       ok: false,
-      error: '请先勾选左侧素材，或先在时间轴上加入至少一段视频',
+      error: 'Please select media first, or place at least one video clip on the timeline.',
     };
   }
 
@@ -129,6 +147,7 @@ function buildEditorApplyInput(body: ApplyBody): { ok: true; input: EditorAgentA
       selectedAssetIds,
       assets,
       currentProject: body.currentProject,
+      creativeBrief,
       visionFocus,
     },
   };
@@ -140,17 +159,19 @@ router.post('/agent/apply', async (req, res) => {
     res.status(400).json({ error: parsed.error });
     return;
   }
+
   try {
     const username = sanitizeUsername(req.user?.username);
-    const { summary, project, llmUsage } = await runEditorAgentApply(parsed.input, { username });
-    res.json({ summary, project, llmUsage });
-  } catch (e) {
-    console.error('[editor/agent/apply]', e);
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Agent 调用失败' });
+    const { summary, project, llmUsage, creativeStrategy } = await runEditorAgentApply(parsed.input, {
+      username,
+    });
+    res.json({ summary, project, llmUsage, creativeStrategy });
+  } catch (error) {
+    console.error('[editor/agent/apply]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Agent apply failed' });
   }
 });
 
-/** 剪辑任务 SSE：推送进度事件，最后一条 type=done 含 summary/project/llmUsage */
 router.post('/agent/apply-stream', async (req, res) => {
   const parsed = buildEditorApplyInput(req.body as ApplyBody);
   if (!parsed.ok) {
@@ -171,49 +192,49 @@ router.post('/agent/apply-stream', async (req, res) => {
   try {
     const username = sanitizeUsername(req.user?.username);
     const result = await runEditorAgentApply(parsed.input, {
-      onProgress: (p) => send({ type: 'progress', ...p }),
+      onProgress: (progress) => send({ type: 'progress', ...progress }),
       username,
     });
+
     send({
       type: 'done',
       summary: result.summary,
       project: result.project,
       llmUsage: result.llmUsage,
+      creativeStrategy: result.creativeStrategy,
     });
     res.end();
-  } catch (e) {
-    console.error('[editor/agent/apply-stream]', e);
-    send({ type: 'error', error: e instanceof Error ? e.message : 'Agent 调用失败' });
+  } catch (error) {
+    console.error('[editor/agent/apply-stream]', error);
+    send({ type: 'error', error: error instanceof Error ? error.message : 'Agent apply failed' });
     res.end();
   }
 });
 
-/** 上报导出行为统计，更新用户偏好画像 */
 router.post('/preference/report', async (req, res) => {
   const username = sanitizeUsername(req.user?.username);
   const report = req.body as ExportBehaviorReport;
   if (!Array.isArray(report?.clips)) {
-    res.status(400).json({ error: '请提供 clips 数组' });
+    res.status(400).json({ error: 'Please provide clips array' });
     return;
   }
   try {
     const pref = await updatePreferenceFromExport(username, report);
     res.json({ ok: true, totalExports: pref.totalExports });
-  } catch (e) {
-    console.error('[editor/preference/report]', e);
-    res.status(500).json({ error: '偏好更新失败' });
+  } catch (error) {
+    console.error('[editor/preference/report]', error);
+    res.status(500).json({ error: 'Preference update failed' });
   }
 });
 
-/** 查看当前用户偏好画像 */
 router.get('/preference', async (req, res) => {
   const username = sanitizeUsername(req.user?.username);
   try {
     const pref = await loadPreference(username);
     res.json({ preference: pref });
-  } catch (e) {
-    console.error('[editor/preference]', e);
-    res.status(500).json({ error: '读取偏好失败' });
+  } catch (error) {
+    console.error('[editor/preference]', error);
+    res.status(500).json({ error: 'Preference load failed' });
   }
 });
 

@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { EditorAgentJobProgress } from '../../api/editor';
+import {
+  normalizeEditorCreativeBriefForRequest,
+  type EditorCreativeBrief,
+  type EditorCreativeMode,
+  type EditorCreativeStrategy,
+} from '../../api/editorCreative';
 
 type LogVariant = 'user' | 'agent' | 'progress' | 'token' | 'error' | 'system';
 
 function classifyLogLine(line: string): LogVariant {
-  if (line.startsWith('你：') || line.startsWith('你:')) return 'user';
-  if (line.startsWith('Agent：') || line.startsWith('Agent:')) return 'agent';
-  if (line.startsWith('助手：') || line.startsWith('助手:')) return 'agent';
-  if (line.startsWith('进度：') || line.startsWith('进度:')) return 'progress';
-  if (line.startsWith('Token') || line.includes('Token 合计')) return 'token';
-  if (line.startsWith('错误：') || line.startsWith('错误:')) return 'error';
+  if (line.startsWith('你：') || line.startsWith('Brief：')) return 'user';
+  if (line.startsWith('Agent：') || line.startsWith('助手：')) return 'agent';
+  if (line.startsWith('进度：')) return 'progress';
+  if (line.startsWith('Token')) return 'token';
+  if (line.startsWith('错误：')) return 'error';
   return 'system';
 }
 
@@ -28,22 +33,27 @@ const bubbleClass: Record<LogVariant, string> = {
     'max-w-[min(96%,22rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]',
 };
 
+export interface AgentPanelApplyRequest {
+  userMessage?: string;
+  creativeBrief?: EditorCreativeBrief;
+}
+
 interface AgentPanelProps {
   logs: string[];
   onPushLog: (line: string) => void;
-  onApply: (userMessage: string) => Promise<void>;
+  onApply: (input: AgentPanelApplyRequest) => Promise<void>;
   busy: boolean;
-  /** 剪辑任务流式进度（百分比 + 粗估剩余时间） */
   jobProgress?: EditorAgentJobProgress | null;
   selectedCount: number;
-  /** 未勾选时，若时间轴上已有片段，将用时间轴上的素材做「继续调整」 */
   timelineAssetCount: number;
-  /** 最近一次 Agent 成功后的成片结构（Markdown 表），对齐竞品「交付说明」 */
   deliverableMarkdown?: string | null;
-  /** 本次会话的对话历史（仅 chat 轮次） */
   chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
-  /** busy 期间可调用，请求中止当前 Agent 流式任务 */
   onAbort?: () => void;
+  creativeStrategy?: EditorCreativeStrategy | null;
+}
+
+function modeLabel(mode: EditorCreativeMode): string {
+  return mode === 'tiktok_ua' ? 'TikTok 买量' : 'TikTok 内容';
 }
 
 export function AgentPanel({
@@ -57,86 +67,239 @@ export function AgentPanel({
   deliverableMarkdown,
   chatHistory,
   onAbort,
+  creativeStrategy,
 }: AgentPanelProps) {
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [showBrief, setShowBrief] = useState(true);
+  const [mode, setMode] = useState<EditorCreativeMode>('tiktok_content');
+  const [objective, setObjective] = useState('');
+  const [audience, setAudience] = useState('');
+  const [sellingPoints, setSellingPoints] = useState('');
+  const [cta, setCta] = useState('');
+  const [referenceStyle, setReferenceStyle] = useState('');
 
-  const send = async (text?: string) => {
-    const t = (text ?? input).trim();
-    if (!t || busy) return;
-    onPushLog(`你：${t}`);
+  const briefPreview = useMemo(
+    () =>
+      normalizeEditorCreativeBriefForRequest({
+        mode,
+        objective,
+        audience,
+        sellingPoints,
+        cta,
+        referenceStyle,
+      }),
+    [mode, objective, audience, sellingPoints, cta, referenceStyle],
+  );
+
+  const send = async () => {
+    if (busy) return;
+    const userMessage = input.trim();
+    const creativeBrief = briefPreview;
+    if (!userMessage && !creativeBrief) return;
+
+    if (creativeBrief) {
+      const pointText =
+        creativeBrief.sellingPoints.length > 0
+          ? creativeBrief.sellingPoints.slice(0, 3).join(' / ')
+          : '未填写卖点';
+      onPushLog(`Brief：${modeLabel(creativeBrief.mode)} · 卖点 ${pointText}`);
+    }
+    if (userMessage) {
+      onPushLog(`你：${userMessage}`);
+    }
+
     setInput('');
+
     try {
-      await onApply(t);
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') {
-        onPushLog('Agent 任务已取消');
+      await onApply({ userMessage, creativeBrief });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        onPushLog('进度：已取消当前 Agent 任务');
         return;
       }
-      onPushLog(`错误：${e instanceof Error ? e.message : String(e)}`);
+      onPushLog(`错误：${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   const hint =
     selectedCount > 0
-      ? `将针对已选 ${selectedCount} 条素材处理`
+      ? `将针对已选 ${selectedCount} 条素材做创意剪辑`
       : timelineAssetCount > 0
-        ? `未勾选时将按时间轴上 ${timelineAssetCount} 段素材继续调整`
-        : '请先勾选素材，或先加入时间轴';
+        ? `未勾选时会基于时间轴上的 ${timelineAssetCount} 段素材继续优化`
+        : '请先勾选素材，或先往时间轴放入视频';
 
-  const recentHistory = chatHistory && chatHistory.length > 0
-    ? chatHistory.slice(-10)
-    : [];
+  const recentHistory = chatHistory && chatHistory.length > 0 ? chatHistory.slice(-10) : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-      <div className="border-b border-[var(--color-border)] px-3 py-2">
+      <div className="border-b border-[var(--color-border)] px-3 py-3">
         <h2 className="text-sm font-semibold text-[var(--color-text)]">剪辑 Agent</h2>
-        <p className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">{hint}</p>
+        <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{hint}</p>
       </div>
-      {recentHistory.length > 0 && (
+
+      <div className="border-b border-[var(--color-border)] px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setShowBrief((value) => !value)}
+          className="flex w-full items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left"
+        >
+          <div>
+            <div className="text-[11px] font-semibold text-[var(--color-text)]">TikTok 创意 Brief</div>
+            <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+              先填平台目标和卖点，再让 Agent 自动出剪辑方案
+            </div>
+          </div>
+          <span className="text-xs text-[var(--color-text-muted)]">{showBrief ? '收起' : '展开'}</span>
+        </button>
+
+        {showBrief ? (
+          <div className="mt-2 space-y-2">
+            <div className="flex gap-2">
+              {(['tiktok_content', 'tiktok_ua'] as EditorCreativeMode[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setMode(item)}
+                  className={`rounded-full border px-3 py-1 text-[10px] transition ${
+                    mode === item
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {modeLabel(item)}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <input
+                value={objective}
+                onChange={(event) => setObjective(event.target.value)}
+                placeholder={mode === 'tiktok_ua' ? '目标，例如 drive installs / CTR' : '目标，例如 内容运营 / 角色种草'}
+                disabled={busy}
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              />
+              <input
+                value={audience}
+                onChange={(event) => setAudience(event.target.value)}
+                placeholder="目标受众，例如 anime RPG players / female fantasy fans"
+                disabled={busy}
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              />
+              <textarea
+                value={sellingPoints}
+                onChange={(event) => setSellingPoints(event.target.value)}
+                rows={3}
+                disabled={busy}
+                placeholder="卖点，每行一个，例如：\nSSR 爆率开局\n冰雪女王角色颜值\nBoss 战爆发感"
+                className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  value={cta}
+                  onChange={(event) => setCta(event.target.value)}
+                  placeholder="CTA，例如 Download now"
+                  disabled={busy}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                />
+                <input
+                  value={referenceStyle}
+                  onChange={(event) => setReferenceStyle(event.target.value)}
+                  placeholder="参考风格，例如 fast hook + character reveal"
+                  disabled={busy}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {creativeStrategy ? (
+        <div className="border-b border-[var(--color-border)] px-3 py-2">
+          <div className="rounded-xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold text-[var(--color-text)]">创意策略卡</div>
+                <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+                  {modeLabel(creativeStrategy.mode)} · {creativeStrategy.objective}
+                </div>
+              </div>
+              <span className="rounded-full border border-[var(--color-primary)]/30 px-2 py-0.5 text-[10px] text-[var(--color-primary)]">
+                {creativeStrategy.cta}
+              </span>
+            </div>
+            <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+              <div className="text-[10px] text-[var(--color-text-muted)]">推荐 Hook</div>
+              <div className="mt-1 text-[11px] font-medium text-[var(--color-text)]">
+                {creativeStrategy.recommendedHook}
+              </div>
+            </div>
+            {creativeStrategy.hookOptions.length > 1 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {creativeStrategy.hookOptions.map((hook) => (
+                  <span
+                    key={hook}
+                    className="rounded-full border border-sky-500/25 bg-sky-500/8 px-2 py-1 text-[10px] text-sky-200"
+                  >
+                    {hook}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+              {creativeStrategy.rationale}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {recentHistory.length > 0 ? (
         <div className="border-b border-[var(--color-border)]">
           <button
             type="button"
-            onClick={() => setShowHistory((v) => !v)}
+            onClick={() => setShowHistory((value) => !value)}
             className="flex w-full items-center justify-between px-3 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-border)]/20"
           >
-            <span>📜 历史对话（{Math.floor(recentHistory.length / 2)} 轮）</span>
-            <span>{showHistory ? '▲' : '▼'}</span>
+            <span>最近对话（{Math.floor(recentHistory.length / 2)} 轮）</span>
+            <span>{showHistory ? '收起' : '展开'}</span>
           </button>
-          {showHistory && (
+          {showHistory ? (
             <div className="max-h-40 space-y-1.5 overflow-y-auto bg-black/10 p-2">
-              {recentHistory.map((msg, i) => (
+              {recentHistory.map((message, index) => (
                 <div
-                  key={`hist-${i}`}
-                  className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  key={`history-${index}`}
+                  className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
                     className={`max-w-[92%] rounded-xl px-2.5 py-1.5 text-[10px] leading-relaxed ${
-                      msg.role === 'user'
+                      message.role === 'user'
                         ? 'border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/15 text-[var(--color-text)]'
                         : 'border border-sky-500/35 bg-sky-500/10 text-[var(--color-text)]'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
                   </div>
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
+
       {deliverableMarkdown ? (
         <div className="border-b border-[var(--color-border)] px-3 py-2">
           <div className="text-[10px] font-semibold text-[var(--color-text)]">成片说明</div>
           <p className="mt-0.5 text-[9px] text-[var(--color-text-muted)]">
-            与成片时间线同步，可复制到文档（对标专业工作流的交付表）。
+            这里会同步展示这次剪辑的结构说明，方便市场和剪辑师对齐。
           </p>
           <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--color-border)]/80 bg-[var(--color-surface)] p-2 font-mono text-[10px] leading-snug text-[var(--color-text)]">
             {deliverableMarkdown}
           </pre>
         </div>
       ) : null}
+
       {busy && jobProgress ? (
         <div className="border-b border-[var(--color-border)] px-3 py-2">
           <div className="flex items-center justify-between gap-2">
@@ -150,7 +313,6 @@ export function AgentPanel({
                   type="button"
                   onClick={onAbort}
                   className="rounded border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] text-red-300 hover:bg-red-500/25"
-                  title="停止当前 Agent 任务"
                 >
                   停止
                 </button>
@@ -173,26 +335,23 @@ export function AgentPanel({
           <p className="mt-1.5 text-[10px] leading-snug text-[var(--color-text)]">{jobProgress.message}</p>
           <p className="mt-0.5 text-[9px] text-[var(--color-text-muted)]">
             {jobProgress.etaSec != null && jobProgress.etaSec > 0
-              ? `预计剩余约 ${jobProgress.etaSec} 秒（受素材数量与服务器负载影响，仅供参考）`
-              : '即将完成…'}
+              ? `预计剩余约 ${jobProgress.etaSec} 秒`
+              : '即将完成'}
           </p>
         </div>
-      ) : busy && !jobProgress ? (
-        <div className="border-b border-[var(--color-border)] px-3 py-2 text-[10px] text-[var(--color-text-muted)]">
-          {selectedCount > 0 || timelineAssetCount > 0
-            ? '正在识别意图或准备对话…'
-            : '处理中…'}
-        </div>
       ) : null}
+
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-black/15 p-2">
-        {logs.length === 0 && (
-          <p className="px-1 text-center text-[11px] text-[var(--color-text-muted)]">对话与结果将显示在这里。</p>
-        )}
-        {logs.map((line, i) => {
+        {logs.length === 0 ? (
+          <p className="px-1 text-center text-[11px] text-[var(--color-text-muted)]">
+            对话、创意说明和剪辑结果会显示在这里。
+          </p>
+        ) : null}
+        {logs.map((line, index) => {
           const variant = classifyLogLine(line);
           const isUser = variant === 'user';
           return (
-            <div key={`log-${i}`} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
+            <div key={`log-${index}`} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
               <div className={`px-2.5 py-2 text-[11px] leading-relaxed ${bubbleClass[variant]}`}>
                 <p className="whitespace-pre-wrap break-words">{line}</p>
               </div>
@@ -200,51 +359,29 @@ export function AgentPanel({
           );
         })}
       </div>
+
       <div className="border-t border-[var(--color-border)] p-2">
-        {!busy && logs.length === 0 && (
-          <div className="mb-2">
-            <p className="mb-1.5 text-[10px] text-[var(--color-text-muted)]">快捷指令</p>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { label: '战斗混剪 30s', text: '用已选素材做一个30秒的战斗混剪，节奏紧凑' },
-                { label: '角色展示', text: '用已选素材做一个角色技能展示视频，突出角色特色' },
-                { label: 'TikTok 预告', text: '做一个符合TikTok风格的15秒短预告，开头要抓眼球' },
-                { label: '高燃混剪+配乐', text: '做一个30秒高燃战斗混剪，配上史诗感的配乐' },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => void send(preset.text)}
-                  disabled={busy || (selectedCount === 0 && timelineAssetCount === 0)}
-                  className="rounded-md border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/8 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/18 disabled:opacity-40"
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
               void send();
             }
           }}
-          placeholder="描述你想怎么剪…（Shift+Enter 换行）"
+          placeholder="补充一句要求，例如：开头更像 TikTok 原生内容，结尾要更强 CTA"
           rows={3}
           disabled={busy}
           className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50"
         />
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || (!input.trim() && !briefPreview)}
           onClick={() => void send()}
           className="mt-2 w-full rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? (jobProgress ? '生成中…' : '处理中…') : '发送'}
+          {busy ? '处理中' : briefPreview ? '生成创意剪辑' : '发送'}
         </button>
       </div>
     </div>

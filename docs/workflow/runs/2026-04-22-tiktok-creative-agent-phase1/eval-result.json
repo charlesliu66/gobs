@@ -1,0 +1,36 @@
+{
+  "runId": "2026-04-22-tiktok-creative-agent-phase1",
+  "status": "pass",
+  "checks": [
+    {
+      "name": "api editor creative brief tests",
+      "command": "node --import tsx --test tests/editorCreativeBrief.test.ts",
+      "result": "pass"
+    },
+    {
+      "name": "frontend editor creative brief tests",
+      "command": "node --test --experimental-strip-types tests/editorCreativeBrief.test.ts",
+      "result": "pass"
+    },
+    {
+      "name": "api typescript",
+      "command": "npx tsc --noEmit",
+      "result": "pass"
+    },
+    {
+      "name": "frontend typescript",
+      "command": "npx tsc --noEmit",
+      "result": "pass"
+    },
+    {
+      "name": "api build",
+      "command": "npm run build",
+      "result": "pass"
+    },
+    {
+      "name": "frontend build",
+      "command": "npm run build",
+      "result": "pass"
+    }
+  ]
+}
