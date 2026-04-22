@@ -25,6 +25,12 @@ export interface StoredWizard {
   maxTotalDurationSec: number;
   step: number;
   storyGenre: string;
+  projectPersistId?: string | null;
+}
+
+export interface KnownBatchJobOwnership {
+  projectId: string;
+  shotIndex: number;
 }
 
 export function migrateProject(p: ProductionProject): ProductionProject {
@@ -116,6 +122,7 @@ export function loadStored(): StoredWizard | null {
         maxTotalDurationSec: 60,
         step: 0,
         storyGenre: '',
+        projectPersistId: null,
       };
     }
   } catch {
@@ -130,6 +137,99 @@ export function saveStored(s: StoredWizard) {
   } catch {
     // ignore
   }
+}
+
+function extractBatchJobId(version: ProductionShotVideoVersion): string | undefined {
+  const explicit = version.batchJobId?.trim();
+  if (explicit) return explicit;
+
+  const fromUrl = version.videoUrl?.match(/\/api\/batch-jobs\/video\/([^/?#]+)/)?.[1]?.trim();
+  if (fromUrl) return fromUrl;
+
+  const fromId = version.id?.match(/^batch-(.+)-\d{10,}$/)?.[1]?.trim();
+  if (fromId) return fromId;
+
+  return undefined;
+}
+
+export function shouldMergeStoredShotVideoVersions(
+  stored: StoredWizard | null,
+  projectId?: string | null,
+): boolean {
+  if (!stored?.project?.shots?.length) return false;
+  const normalizedProjectId = projectId?.trim();
+  if (!normalizedProjectId) return true;
+  return stored.projectPersistId?.trim() === normalizedProjectId;
+}
+
+export function sanitizeShotVideoVersions(
+  shots: ProductionShot[],
+  options: {
+    projectId?: string | null;
+    knownBatchJobsById?: Map<string, KnownBatchJobOwnership>;
+  } = {},
+): ProductionShot[] {
+  if (!shots?.length) return shots;
+
+  const normalizedProjectId = options.projectId?.trim();
+
+  return shots.map((shot) => {
+    const versions = Array.isArray(shot.previewVideoVersions)
+      ? shot.previewVideoVersions.filter((version) => !!(version?.videoPath?.trim() || version?.videoUrl?.trim()))
+      : [];
+
+    if (versions.length === 0) return shot;
+
+    const filtered = versions.filter((version) => {
+      const versionProjectId = version.sourceProjectId?.trim();
+      if (normalizedProjectId && versionProjectId && versionProjectId !== normalizedProjectId) {
+        return false;
+      }
+
+      if (
+        typeof version.sourceShotIndex === 'number'
+        && Number.isFinite(version.sourceShotIndex)
+        && version.sourceShotIndex !== shot.shotIndex
+      ) {
+        return false;
+      }
+
+      const batchJobId = extractBatchJobId(version);
+      const knownOwner = batchJobId ? options.knownBatchJobsById?.get(batchJobId) : undefined;
+      if (!knownOwner) return true;
+      if (normalizedProjectId && knownOwner.projectId !== normalizedProjectId) return false;
+      if (knownOwner.shotIndex !== shot.shotIndex) return false;
+      return true;
+    });
+
+    const deduped = new Map<string, ProductionShotVideoVersion>();
+    for (const version of filtered.sort((a, b) => b.createdAt - a.createdAt)) {
+      if (!version.id?.trim()) continue;
+      if (!deduped.has(version.id)) deduped.set(version.id, version);
+    }
+    const normalized = [...deduped.values()].sort((a, b) => b.createdAt - a.createdAt);
+
+    if (normalized.length === 0) {
+      return {
+        ...shot,
+        previewVideoVersions: [],
+        selectedPreviewVideoVersionId: undefined,
+        previewVideoPath: undefined,
+        previewVideoUrl: undefined,
+      } as ProductionShot;
+    }
+
+    const selectedId = shot.selectedPreviewVideoVersionId?.trim();
+    const selected = normalized.find((version) => version.id === selectedId) ?? normalized[0];
+
+    return {
+      ...shot,
+      previewVideoVersions: normalized,
+      selectedPreviewVideoVersionId: selected?.id,
+      previewVideoPath: selected?.videoPath,
+      previewVideoUrl: selected?.videoUrl,
+    } as ProductionShot;
+  });
 }
 
 /**

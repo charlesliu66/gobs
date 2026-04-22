@@ -1,3 +1,5 @@
+import { localizedText, type ReplyLocale } from './replyLocale.js';
+
 export type EditorCreativeMode = 'tiktok_content' | 'tiktok_ua';
 
 export interface EditorCreativeBrief {
@@ -36,7 +38,7 @@ function normalizeSellingPoints(value: unknown): string[] {
   }
   if (typeof value === 'string') {
     return value
-      .split(/\r?\n|,|，|;|；/)
+      .split(/\r?\n|,|，|;/)
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -78,48 +80,85 @@ export function normalizeEditorCreativeBrief(input: unknown): EditorCreativeBrie
   };
 }
 
-function defaultObjectiveForMode(mode: EditorCreativeMode): string {
-  return mode === 'tiktok_ua' ? '点击转化' : '内容运营';
-}
-
-function defaultCtaForMode(mode: EditorCreativeMode): string {
-  return mode === 'tiktok_ua' ? 'Download now' : 'Follow for more';
-}
-
-function primarySellingPoint(brief: EditorCreativeBrief): string {
-  return brief.sellingPoints[0] || '核心玩法爽点';
-}
-
-export function buildCreativeHookOptions(brief: EditorCreativeBrief): string[] {
-  const point = primarySellingPoint(brief);
-  if (brief.mode === 'tiktok_ua') {
-    return [
-      `Wait, you get ${point}?`,
-      `POV: ${point} hits in the first 3 seconds.`,
-      `This ${point} payoff changes the whole run.`,
-      `No one expects ${point} this early.`,
-    ];
+function defaultObjectiveForMode(mode: EditorCreativeMode, replyLocale: ReplyLocale): string {
+  if (mode === 'tiktok_ua') {
+    return localizedText(replyLocale, '点击转化', 'Click-through conversion');
   }
-  return [
-    `POV: the moment ${point} finally lands.`,
-    `This ${point} scene feels unreal.`,
-    `You stay for the vibe, then ${point} hits.`,
-    `When the world opens up and ${point} clicks.`,
-  ];
+  return localizedText(replyLocale, '内容运营', 'Content growth');
 }
 
-export function buildCreativeStrategy(brief?: EditorCreativeBrief): EditorCreativeStrategy | undefined {
+function defaultCtaForMode(mode: EditorCreativeMode, replyLocale: ReplyLocale): string {
+  if (mode === 'tiktok_ua') {
+    return localizedText(replyLocale, '立即下载', 'Download now');
+  }
+  return localizedText(replyLocale, '关注获取更多', 'Follow for more');
+}
+
+function primarySellingPoint(brief: EditorCreativeBrief, replyLocale: ReplyLocale): string {
+  return brief.sellingPoints[0] || localizedText(replyLocale, '核心玩法爽点', 'core gameplay payoff');
+}
+
+export function buildCreativeHookOptions(
+  brief: EditorCreativeBrief,
+  replyLocale: ReplyLocale,
+): string[] {
+  const point = primarySellingPoint(brief, replyLocale);
+  if (brief.mode === 'tiktok_ua') {
+    return replyLocale === 'en'
+      ? [
+          `Wait, you get ${point}?`,
+          `POV: ${point} lands in the first 3 seconds.`,
+          `This ${point} payoff changes the whole run.`,
+          `No one expects ${point} that early.`,
+        ]
+      : [
+          `等等，这个「${point}」一开场就给到了？`,
+          `POV：前 3 秒就把「${point}」打出来。`,
+          `这个「${point}」一出来，整条视频都成立了。`,
+          `没人会想到「${point}」这么早就放出来。`,
+        ];
+  }
+
+  return replyLocale === 'en'
+    ? [
+        `POV: the moment ${point} finally lands.`,
+        `This ${point} scene feels unreal.`,
+        `You stay for the vibe, then ${point} hits.`,
+        `When the world opens up and ${point} clicks.`,
+      ]
+    : [
+        `POV：当「${point}」真正打出来的那一刻。`,
+        `这个「${point}」的画面质感有点离谱。`,
+        `你先是被氛围留住，然后「${point}」突然打到点上。`,
+        `世界观铺开之后，「${point}」一下就成立了。`,
+      ];
+}
+
+export function buildCreativeStrategy(
+  brief?: EditorCreativeBrief,
+  replyLocale: ReplyLocale = 'zh-CN',
+): EditorCreativeStrategy | undefined {
   if (!brief) return undefined;
-  const primaryPoint = primarySellingPoint(brief);
-  const objective = brief.objective || defaultObjectiveForMode(brief.mode);
-  const hookOptions = buildCreativeHookOptions(brief);
-  const recommendedHook = hookOptions[0] || `POV: ${primaryPoint}`;
-  const cta = brief.cta || defaultCtaForMode(brief.mode);
-  const audienceBlock = brief.audience ? `，面向「${brief.audience}」` : '';
+  const primaryPoint = primarySellingPoint(brief, replyLocale);
+  const objective = brief.objective || defaultObjectiveForMode(brief.mode, replyLocale);
+  const hookOptions = buildCreativeHookOptions(brief, replyLocale);
+  const recommendedHook = hookOptions[0] || (replyLocale === 'en' ? `POV: ${primaryPoint}` : `POV：${primaryPoint}`);
+  const cta = brief.cta || defaultCtaForMode(brief.mode, replyLocale);
+  const audienceBlock = brief.audience
+    ? localizedText(replyLocale, `，面向「${brief.audience}」`, ` for ${brief.audience}`)
+    : '';
   const rationale =
     brief.mode === 'tiktok_ua'
-      ? `买量模式优先把「${primaryPoint}」放进前 3 秒钩子${audienceBlock}，节奏更快，结尾用更直接的 CTA「${cta}」。`
-      : `内容模式优先把「${primaryPoint}」做成更易停留的 TikTok 开场${audienceBlock}，保留氛围感和角色/世界观表达，再用轻 CTA「${cta}」收尾。`;
+      ? localizedText(
+          replyLocale,
+          `买量模式会优先把「${primaryPoint}」放进前 3 秒钩子${audienceBlock}，节奏更快，结尾用更直接的 CTA「${cta}」。`,
+          `UA mode pushes "${primaryPoint}" into the first 3-second hook${audienceBlock}, keeps the pace sharper, and closes with a direct CTA: "${cta}".`,
+        )
+      : localizedText(
+          replyLocale,
+          `内容模式会先把「${primaryPoint}」做成更容易停留的 TikTok 开场${audienceBlock}，保留氛围感和角色表达，再用较软的 CTA「${cta}」收尾。`,
+          `Content mode turns "${primaryPoint}" into a creator-native TikTok opening${audienceBlock}, keeps more atmosphere and character expression, then lands on a softer CTA: "${cta}".`,
+        );
 
   return {
     platform: 'tiktok',
@@ -137,41 +176,76 @@ export function buildCreativeStrategy(brief?: EditorCreativeBrief): EditorCreati
 export function buildCreativeBriefPromptBlock(
   brief?: EditorCreativeBrief,
   strategy?: EditorCreativeStrategy,
+  replyLocale: ReplyLocale = 'zh-CN',
 ): string {
   if (!brief || !strategy) return '';
+
   const lines: string[] = [
-    '## TikTok Campaign Brief',
-    `- Mode: ${brief.mode === 'tiktok_ua' ? 'TikTok 买量' : 'TikTok 内容'}`,
-    `- Objective: ${strategy.objective}`,
-    `- Selling points: ${brief.sellingPoints.length > 0 ? brief.sellingPoints.join(' / ') : primarySellingPoint(brief)}`,
+    replyLocale === 'en' ? '## TikTok Campaign Brief' : '## TikTok 投放/内容 Brief',
+    `- ${replyLocale === 'en' ? 'Mode' : '模式'}: ${
+      brief.mode === 'tiktok_ua'
+        ? localizedText(replyLocale, 'TikTok 买量', 'TikTok UA')
+        : localizedText(replyLocale, 'TikTok 内容', 'TikTok Content')
+    }`,
+    `- ${replyLocale === 'en' ? 'Objective' : '目标'}: ${strategy.objective}`,
+    `- ${replyLocale === 'en' ? 'Selling points' : '卖点'}: ${
+      brief.sellingPoints.length > 0 ? brief.sellingPoints.join(' / ') : primarySellingPoint(brief, replyLocale)
+    }`,
     `- CTA: ${strategy.cta}`,
   ];
-  if (brief.audience) lines.push(`- Audience: ${brief.audience}`);
-  if (brief.referenceStyle) lines.push(`- Reference style: ${brief.referenceStyle}`);
-  lines.push('');
-  lines.push('## Creative Strategy');
-  lines.push(`- Recommended hook: ${strategy.recommendedHook}`);
-  if (strategy.hookOptions.length > 1) {
-    lines.push(`- Backup hooks: ${strategy.hookOptions.slice(1).join(' | ')}`);
+
+  if (brief.audience) {
+    lines.push(`- ${replyLocale === 'en' ? 'Audience' : '人群'}: ${brief.audience}`);
   }
-  lines.push(`- Rationale: ${strategy.rationale}`);
+  if (brief.referenceStyle) {
+    lines.push(`- ${replyLocale === 'en' ? 'Reference style' : '参考风格'}: ${brief.referenceStyle}`);
+  }
+
+  lines.push('');
+  lines.push(replyLocale === 'en' ? '## Creative Strategy' : '## 创意策略');
+  lines.push(`- ${replyLocale === 'en' ? 'Recommended hook' : '推荐开场'}: ${strategy.recommendedHook}`);
+  if (strategy.hookOptions.length > 1) {
+    lines.push(`- ${replyLocale === 'en' ? 'Backup hooks' : '备选开场'}: ${strategy.hookOptions.slice(1).join(' | ')}`);
+  }
+  lines.push(`- ${replyLocale === 'en' ? 'Rationale' : '策略理由'}: ${strategy.rationale}`);
   lines.push(
     brief.mode === 'tiktok_ua'
-      ? '- Editing guidance: open strong in the first 3 seconds, surface payoff early, and end with a direct conversion CTA.'
-      : '- Editing guidance: keep a creator-native TikTok tone, allow more atmosphere, and land the selling point before a softer CTA.',
+      ? localizedText(
+          replyLocale,
+          '- 剪辑要求：前 3 秒要强钩子，尽早露出 payoff，结尾给直接转化 CTA。',
+          '- Editing guidance: open strong in the first 3 seconds, surface the payoff early, and end with a direct conversion CTA.',
+        )
+      : localizedText(
+          replyLocale,
+          '- 剪辑要求：保持原生 TikTok 内容感，多留一点氛围，再在中后段落下卖点和柔和 CTA。',
+          '- Editing guidance: keep a creator-native TikTok tone, allow more atmosphere, then land the selling point before a softer CTA.',
+        ),
   );
   return lines.join('\n');
 }
 
-export function buildDefaultCreativeUserMessage(brief: EditorCreativeBrief): string {
-  const strategy = buildCreativeStrategy(brief);
-  const objective = strategy?.objective || defaultObjectiveForMode(brief.mode);
-  const point = primarySellingPoint(brief);
-  const audience = brief.audience ? `，目标人群是「${brief.audience}」` : '';
-  const reference = brief.referenceStyle ? `，参考风格是「${brief.referenceStyle}」` : '';
-  const cta = strategy?.cta || defaultCtaForMode(brief.mode);
+export function buildDefaultCreativeUserMessage(
+  brief: EditorCreativeBrief,
+  replyLocale: ReplyLocale = 'zh-CN',
+): string {
+  const strategy = buildCreativeStrategy(brief, replyLocale);
+  const objective = strategy?.objective || defaultObjectiveForMode(brief.mode, replyLocale);
+  const point = primarySellingPoint(brief, replyLocale);
+  const audience = brief.audience
+    ? localizedText(replyLocale, `，目标人群是「${brief.audience}」`, ` for ${brief.audience}`)
+    : '';
+  const reference = brief.referenceStyle
+    ? localizedText(replyLocale, `，参考风格是「${brief.referenceStyle}」`, ` with a reference style of ${brief.referenceStyle}`)
+    : '';
+  const cta = strategy?.cta || defaultCtaForMode(brief.mode, replyLocale);
+
   if (brief.mode === 'tiktok_ua') {
-    return `请基于已选素材制作一条适合 TikTok 游戏买量的 15 秒短视频，前 3 秒必须有强钩子，优先突出卖点「${point}」，目标是「${objective}」${audience}${reference}，结尾 CTA 用「${cta}」。`;
+    return replyLocale === 'en'
+      ? `Create a 15-second TikTok game UA cut from the selected footage. The first 3 seconds must hook hard, the edit should surface "${point}" early, the goal is "${objective}"${audience}${reference}, and the ending CTA should be "${cta}".`
+      : `请基于已选素材制作一条适合 TikTok 游戏买量的 15 秒短视频，前 3 秒必须有强钩子，优先突出卖点「${point}」，目标是「${objective}」${audience}${reference}，结尾 CTA 用「${cta}」。`;
   }
-  return `请基于已选素材制作一条适合 TikTok 游戏内容运营的 15 秒短视频，用更像平台内容的方式突出「${point}」，目标是「${objective}」${audience}${reference}，结尾 CTA 用「${cta}」。`;
+
+  return replyLocale === 'en'
+    ? `Create a 15-second TikTok content cut from the selected footage. Keep it creator-native, make "${point}" the main payoff, the goal is "${objective}"${audience}${reference}, and close with the CTA "${cta}".`
+    : `请基于已选素材制作一条适合 TikTok 内容运营的 15 秒短视频，用更像平台内容的方式突出「${point}」，目标是「${objective}」${audience}${reference}，结尾 CTA 用「${cta}」。`;
 }

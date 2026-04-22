@@ -13,6 +13,12 @@ import {
   type CharacterVisualProfile,
 } from '../services/studioPipeline.js';
 import { compassChatCompletion } from '../services/compassLlm.js';
+import {
+  collectStringSamples,
+  localizeStructuredPayload,
+  resolveReplyLocale,
+  type ReplyLocale,
+} from '../services/replyLocale.js';
 
 export const studioRouter = Router();
 
@@ -87,6 +93,42 @@ async function autoRefineShots(
 
 const TEMPLATES: StructureTemplate[] = ['three_act', 'five_act', 'save_the_cat'];
 
+function getStudioReplyLocale(req: Request, samples: unknown[] = []): ReplyLocale {
+  const body = req.body as Record<string, unknown>;
+  return resolveReplyLocale({
+    explicit:
+      typeof body.replyLocale === 'string'
+        ? body.replyLocale
+        : req.get('X-Reply-Locale'),
+    contentLocale: req.get('X-Content-Locale'),
+    samples: samples.flatMap((sample) => collectStringSamples(sample)),
+  });
+}
+
+function localizeStoryArc(story: StoryArcLayer, replyLocale: ReplyLocale): Promise<StoryArcLayer> {
+  return localizeStructuredPayload(story, replyLocale, {
+    preserveKeys: ['beatIds', 'relatedBeatIds'],
+  });
+}
+
+function localizeProductionDesign(
+  productionDesign: ProductionDesignLayer,
+  replyLocale: ReplyLocale,
+): Promise<ProductionDesignLayer> {
+  return localizeStructuredPayload(productionDesign, replyLocale);
+}
+
+function localizeShots(shots: ProductionShot[], replyLocale: ReplyLocale): Promise<ProductionShot[]> {
+  return localizeStructuredPayload(shots, replyLocale);
+}
+
+function localizeCharacterVisualProfile(
+  characterVisualProfile: CharacterVisualProfile,
+  replyLocale: ReplyLocale,
+): Promise<CharacterVisualProfile> {
+  return localizeStructuredPayload(characterVisualProfile, replyLocale);
+}
+
 /**
  * POST /api/studio/story-arc
  * Body: { characterBible, synopsis, styleRef, structureTemplate }
@@ -110,13 +152,14 @@ studioRouter.post('/story-arc', async (req: Request, res: Response) => {
     return;
   }
   try {
+    const replyLocale = getStudioReplyLocale(req, [bible, syn, styleRef]);
     const story = await generateStoryArc({
       characterBible: bible,
       synopsis: syn,
       styleRef: typeof styleRef === 'string' ? styleRef.trim() : '',
       structureTemplate: st,
     });
-    res.json({ story });
+    res.json({ story: await localizeStoryArc(story, replyLocale) });
   } catch (err) {
     console.error('[studio/story-arc]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失败' });
@@ -134,8 +177,9 @@ studioRouter.post('/production-design', async (req: Request, res: Response) => {
     return;
   }
   try {
+    const replyLocale = getStudioReplyLocale(req, [story]);
     const productionDesign = await generateProductionDesign(story);
-    res.json({ productionDesign });
+    res.json({ productionDesign: await localizeProductionDesign(productionDesign, replyLocale) });
   } catch (err) {
     console.error('[studio/production-design]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失败' });
@@ -162,6 +206,7 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
     ? ((req.body as Record<string, unknown>).styleRef as string).trim()
     : productionDesign.colorGrading?.trim();
   try {
+    const replyLocale = getStudioReplyLocale(req, [story, productionDesign, extraNotes, styleRef]);
     const rawShots = await generateStoryboardTable({
       story,
       productionDesign,
@@ -169,7 +214,7 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
       extraNotes: typeof extraNotes === 'string' ? extraNotes.trim() : undefined,
     });
     const shots = await autoRefineShots(rawShots, styleRef);
-    res.json({ shots });
+    res.json({ shots: await localizeShots(shots, replyLocale) });
   } catch (err) {
     console.error('[studio/storyboard-table]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失败' });
@@ -188,11 +233,14 @@ studioRouter.post('/extract-style-reference', async (req: Request, res: Response
     return;
   }
   try {
+    const replyLocale = getStudioReplyLocale(req);
     const styleReference = await extractStyleReference({
       imageBase64: raw,
       mimeType: typeof mimeType === 'string' ? mimeType : undefined,
     });
-    res.json({ styleReference });
+    res.json({
+      styleReference: await localizeStructuredPayload(styleReference, replyLocale),
+    });
   } catch (err) {
     console.error('[studio/extract-style-reference]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '反解析失败' });
@@ -211,11 +259,14 @@ studioRouter.post('/extract-character-visuals', async (req: Request, res: Respon
     return;
   }
   try {
+    const replyLocale = getStudioReplyLocale(req);
     const characterVisualProfile = await extractCharacterVisuals({
       imageBase64: raw,
       mimeType: typeof mimeType === 'string' ? mimeType : undefined,
     });
-    res.json({ characterVisualProfile });
+    res.json({
+      characterVisualProfile: await localizeCharacterVisualProfile(characterVisualProfile, replyLocale),
+    });
   } catch (err) {
     console.error('[studio/extract-character-visuals]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '解析失败' });
@@ -236,11 +287,12 @@ studioRouter.post('/assemble-prompts', async (req: Request, res: Response) => {
     return;
   }
   try {
+    const replyLocale = getStudioReplyLocale(req, [shots, characterVisualProfile]);
     const assembled = assemblePrompts({
       shots,
       characterVisualProfile: characterVisualProfile ?? undefined,
     });
-    res.json(assembled);
+    res.json(await localizeStructuredPayload(assembled, replyLocale));
   } catch (err) {
     console.error('[studio/assemble-prompts]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : '组装失败' });

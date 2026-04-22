@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import type { AspectRatioPreset, TimelineProject, VideoClip } from '../editor/timelineSchema.js';
 import { routeEditorAgentMessage } from '../services/editorAgentIntent.js';
@@ -16,6 +16,11 @@ import {
   buildDefaultCreativeUserMessage,
   normalizeEditorCreativeBrief,
 } from '../services/editorCreativeBrief.js';
+import {
+  collectStringSamples,
+  resolveReplyLocale,
+  type ReplyLocale,
+} from '../services/replyLocale.js';
 import type { EditorAgentApplyInput } from '../services/editorAgentService.js';
 import { runEditorAgentApply } from '../services/editorAgentService.js';
 import { parseEditorVisionFocusBody } from '../services/video/editorVideoAnalysis.js';
@@ -72,6 +77,23 @@ function videoAssetIdsFromProject(project: TimelineProject): string[] {
     }
   }
   return [...ids];
+}
+
+function getEditorReplyLocale(
+  req: Request,
+  body: ApplyBody | { userMessage?: string; projectMemory?: unknown },
+): ReplyLocale {
+  return resolveReplyLocale({
+    explicit:
+      typeof (body as { replyLocale?: unknown }).replyLocale === 'string'
+        ? String((body as { replyLocale?: string }).replyLocale)
+        : req.get('X-Reply-Locale'),
+    contentLocale: req.get('X-Content-Locale'),
+    samples: [
+      ...collectStringSamples((body as { userMessage?: unknown }).userMessage),
+      ...collectStringSamples((body as { creativeBrief?: unknown }).creativeBrief),
+    ],
+  });
 }
 
 function buildInstructionMemoryPromotion(
@@ -133,7 +155,8 @@ router.post('/agent/chat', async (req, res) => {
   }
   try {
     const username = sanitizeUsername(req.user?.username);
-    const reply = await runEditorAgentChat(msg);
+    const replyLocale = getEditorReplyLocale(req, req.body as { userMessage?: string; projectMemory?: unknown });
+    const reply = await runEditorAgentChat(msg, replyLocale);
     const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
       userMessage: msg,
     });
@@ -295,14 +318,16 @@ interface ApplyBody {
   projectMemory?: unknown;
   creativeBrief?: unknown;
   visionFocus?: unknown;
+  replyLocale?: string;
 }
 
 function buildEditorApplyInput(
   body: ApplyBody,
+  replyLocale: ReplyLocale,
 ): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
   const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
   const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
-  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief) : '');
+  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, replyLocale) : '');
 
   if (!msg) {
     return { ok: false, error: 'Please provide userMessage or creativeBrief' };
@@ -372,12 +397,15 @@ function buildEditorApplyInput(
       projectMemory: body.projectMemory,
       creativeBrief,
       visionFocus,
+      replyLocale,
     },
   };
 }
 
 router.post('/agent/apply', async (req, res) => {
-  const parsed = buildEditorApplyInput(req.body as ApplyBody);
+  const body = req.body as ApplyBody;
+  const replyLocale = getEditorReplyLocale(req, body);
+  const parsed = buildEditorApplyInput(body, replyLocale);
   if (!parsed.ok) {
     res.status(400).json({ error: parsed.error });
     return;
@@ -385,7 +413,6 @@ router.post('/agent/apply', async (req, res) => {
 
   try {
     const username = sanitizeUsername(req.user?.username);
-    const body = req.body as ApplyBody;
     const { summary, project, llmUsage, creativeStrategy } = await runEditorAgentApply(parsed.input, {
       username,
     });
@@ -418,7 +445,9 @@ router.post('/agent/apply', async (req, res) => {
 });
 
 router.post('/agent/apply-stream', async (req, res) => {
-  const parsed = buildEditorApplyInput(req.body as ApplyBody);
+  const body = req.body as ApplyBody;
+  const replyLocale = getEditorReplyLocale(req, body);
+  const parsed = buildEditorApplyInput(body, replyLocale);
   if (!parsed.ok) {
     res.status(400).json({ error: parsed.error });
     return;
@@ -436,7 +465,6 @@ router.post('/agent/apply-stream', async (req, res) => {
 
   try {
     const username = sanitizeUsername(req.user?.username);
-    const body = req.body as ApplyBody;
     const result = await runEditorAgentApply(parsed.input, {
       onProgress: (progress) => send({ type: 'progress', ...progress }),
       username,

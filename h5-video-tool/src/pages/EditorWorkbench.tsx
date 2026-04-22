@@ -78,6 +78,8 @@ import { detectBgmIntent } from '../editor/utils/bgmIntent';
 import { formatTimelineTime } from '../editor/utils/formatTimelineTime';
 import { useSearchParams } from 'react-router-dom';
 import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { resolveReplyLocale } from '../i18n/replyLocale.ts';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -148,6 +150,7 @@ function mergeAssetsForTimelineClips(
 }
 
 export function EditorWorkbench() {
+  const { contentLocale } = useLocale();
   const {
     aspectRatio,
     setAspectRatio,
@@ -240,6 +243,14 @@ export function EditorWorkbench() {
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
   }, []);
+
+  const resolveEditorReplyLocale = useCallback((sampleObject?: unknown, values?: Array<string | null | undefined>) => {
+    return resolveReplyLocale({
+      values,
+      sampleObject,
+      fallbackContentLocale: contentLocale,
+    });
+  }, [contentLocale]);
 
   useEffect(() => {
     setAgentChatHistory(projectMemoryToChatTurns(projectMemory));
@@ -446,6 +457,7 @@ export function EditorWorkbench() {
 
   const handleAgentApply = useCallback(
     async (userMessage: string) => {
+      const replyLocale = resolveEditorReplyLocale(undefined, [userMessage]);
       let agentOk = false;
       setAgentBusy(true);
       setAgentDeliverable(null);
@@ -464,7 +476,7 @@ export function EditorWorkbench() {
               reply,
               projectMemory: nextProjectMemory,
               userCommunicationProfile,
-            } = await chatEditorAgent(userMessage, projectMemory);
+            } = await chatEditorAgent(userMessage, projectMemory, replyLocale);
             pushLog(`助手：${reply}`);
             setProjectMemory(nextProjectMemory ?? projectMemory);
             setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
@@ -540,6 +552,7 @@ export function EditorWorkbench() {
             assets: assetPayload,
             currentProject: project,
             projectMemory,
+            replyLocale,
           },
           (p) => setAgentJobProgress(p),
           ctrl.signal,
@@ -587,6 +600,7 @@ export function EditorWorkbench() {
       setCurrentTime,
       setIsPlaying,
       pushLog,
+      resolveEditorReplyLocale,
       runAutoBgmFromAgentMessage,
     ],
   );
@@ -596,6 +610,7 @@ export function EditorWorkbench() {
   const handleCreativeAgentApply = useCallback(
     async ({ userMessage, creativeBrief }: AgentPanelApplyRequest) => {
       const trimmedMessage = userMessage?.trim() ?? '';
+      const replyLocale = resolveEditorReplyLocale(creativeBrief, [trimmedMessage]);
       const shouldForceEdit = Boolean(creativeBrief);
       let agentOk = false;
 
@@ -620,7 +635,7 @@ export function EditorWorkbench() {
                 reply,
                 projectMemory: nextProjectMemory,
                 userCommunicationProfile,
-              } = await chatEditorAgent(trimmedMessage, projectMemory);
+              } = await chatEditorAgent(trimmedMessage, projectMemory, replyLocale);
               pushLog(`助手：${reply}`);
               setProjectMemory(nextProjectMemory ?? projectMemory);
               setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
@@ -701,6 +716,7 @@ export function EditorWorkbench() {
             currentProject: project,
             projectMemory,
             creativeBrief,
+            replyLocale,
           },
           (progress) => setAgentJobProgress(progress),
           ctrl.signal,
@@ -751,6 +767,7 @@ export function EditorWorkbench() {
       setCurrentTime,
       setIsPlaying,
       pushLog,
+      resolveEditorReplyLocale,
       runAutoBgmFromAgentMessage,
     ],
   );

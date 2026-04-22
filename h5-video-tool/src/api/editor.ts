@@ -318,6 +318,7 @@ export interface ApplyEditorAgentBody {
   currentProject: TimelineProject;
   projectMemory?: EditorProjectMemory;
   visionFocus?: EditorVisionFocus;
+  replyLocale?: 'zh-CN' | 'en';
 }
 
 /** 与后端 Compass OpenAI 兼容 usage 一致；网关未透传时可能缺省 */
@@ -463,6 +464,7 @@ export async function routeEditorAgentMessage(userMessage: string): Promise<Rout
 export async function chatEditorAgent(
   userMessage: string,
   projectMemory?: EditorProjectMemory,
+  replyLocale?: 'zh-CN' | 'en',
 ): Promise<{
   reply: string;
   projectMemory?: EditorProjectMemory;
@@ -472,7 +474,7 @@ export async function chatEditorAgent(
     reply: string;
     projectMemory?: EditorProjectMemory;
     userCommunicationProfile?: EditorUserCommunicationProfile;
-  }>('/api/editor/agent/chat', { userMessage, projectMemory });
+  }>('/api/editor/agent/chat', { userMessage, projectMemory, replyLocale });
 }
 
 // ---------------------------------------------------------------------------

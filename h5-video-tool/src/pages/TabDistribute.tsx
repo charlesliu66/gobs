@@ -13,6 +13,7 @@ import { getRecentPromptForVideo } from '../utils/videoHistory';
 import { toast } from '../components/Toast';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { formatDateTime } from '../i18n/locale.ts';
+import { replyLocaleToCaptionLanguage, resolveReplyLocale } from '../i18n/replyLocale.ts';
 import {
   buildLatestPublishBatch,
   buildSubmittingPreviewBatch,
@@ -31,7 +32,7 @@ const BATCH_POLL_MS = 8000;
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
-  const { t, uiLocale } = useLocale();
+  const { t, uiLocale, contentLocale } = useLocale();
   const [accounts, setAccounts] = useState<GeelarkAccount[]>([]);
   const [filterRegion, setFilterRegion] = useState('');
   const [filterPlatform, setFilterPlatform] = useState('');
@@ -128,10 +129,18 @@ export function TabDistribute() {
     setCaptionByPlatform(null);
 
     try {
+      const language = captionLang === 'DEFAULT'
+        ? replyLocaleToCaptionLanguage(
+          resolveReplyLocale({
+            values: [raw, caption, hashtags],
+            fallbackContentLocale: contentLocale,
+          }),
+        )
+        : captionLang;
       const result = await generateCaptionForPost(raw, platforms.length > 0 ? platforms : undefined, {
         existingCaption: caption.trim() || undefined,
         existingHashtags: hashtags.trim() || undefined,
-        language: captionLang === 'DEFAULT' ? 'EN' : captionLang,
+        language,
         videoPath: videoPath || undefined,
         videoUrl: videoUrl || undefined,
         accountContext: selectedAccounts.map((account) => ({

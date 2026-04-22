@@ -5,6 +5,10 @@ import {
   translateCaptionForPost,
   expandShortDramaFromIdea,
 } from '../services/promptPolish.js';
+import {
+  replyLocaleToCaptionLanguage,
+  resolveReplyLocale,
+} from '../services/replyLocale.js';
 import { getTemplates, getShortDramaPresets } from '../config/prompt-templates/index.js';
 
 export const promptRouter = Router();
@@ -144,10 +148,18 @@ promptRouter.post('/generate-caption', async (req: Request, res: Response) => {
   const platformList = Array.isArray(platforms) ? platforms.filter((p) => typeof p === 'string') : undefined;
   const lang = ['EN', 'CN', 'TH', 'ID'].includes(language as string) ? (language as 'EN' | 'CN' | 'TH' | 'ID') : undefined;
   try {
+    const resolvedLanguage =
+      lang ??
+      replyLocaleToCaptionLanguage(
+        resolveReplyLocale({
+          contentLocale: req.get('X-Content-Locale'),
+          samples: [raw, existingCap, existingTag],
+        }),
+      );
     const result = await generateCaptionForPost(raw, platformList, {
       existingCaption: existingCap || undefined,
       existingHashtags: existingTag || undefined,
-      language: lang || 'EN',
+      language: resolvedLanguage,
       videoPath: typeof videoPath === 'string' ? videoPath.trim() || undefined : undefined,
       videoUrl: typeof videoUrl === 'string' ? videoUrl.trim() || undefined : undefined,
       accountContext: Array.isArray(accountContext) ? accountContext : undefined,

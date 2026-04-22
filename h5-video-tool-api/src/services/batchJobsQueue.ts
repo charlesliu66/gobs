@@ -598,6 +598,9 @@ async function writeBackToProject(job: BatchJob, videoApiUrl: string): Promise<v
     taskId: job.taskId,
     createdAt: Date.now(),
     videoUrl: videoApiUrl,
+    sourceProjectId: job.projectId,
+    sourceShotIndex: job.shotIndex,
+    batchJobId: job.id,
   };
   const versions = Array.isArray(shot.previewVideoVersions)
     ? shot.previewVideoVersions as Array<Record<string, unknown>>

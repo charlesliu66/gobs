@@ -33,6 +33,7 @@
 | 5 | 瀵煎嚭 | 鏀炬槧瀹よ繛缁鐗?+ 涓€閿鍏ュ壀杈戝伐浣滃彴 |
 
 - Step 0 的“参考图反解析”支持两种入口：本地上传，或直接从素材库选择图片；选中后沿用现有预览、上传和风格反解析链路。
+- 剧本大纲、制片清单、分镜表、参考图反解析与提示词组装主链路已补齐“按本轮输入语言输出”的语言协议：英文输入优先得到英文结果，中文输入继续保持中文。
 
 **鍒嗛暅宸ヤ綔鍙板寮哄姛鑳斤紙v0.42+锛夛細**
 - 涓€閿敓鎴愭墍鏈夌己澶辫棰戯紙鎵归噺鎻愪氦鑷宠嚜閫傚簲闃熷垪锛?- AI 鑷姩瀹＄墖锛氬垎闀滅敓鎴愭椂鍚庣鑷姩浼樺寲 Prompt 璐ㄩ噺锛坴0.43 璧峰唴缃簬鐢熸垚娴佺▼锛夛紱鎵嬪姩瀹＄墖浠嶅彲鐢ㄤ簬浜屾妫€鏌?- 蹇€熻皟鏁撮潰鏉匡細杩愰暅/鑺傚/鍏夊奖棰勮鎸夐挳锛屼竴閿慨鏀圭粨鏋勫寲鍙傛暟
@@ -86,6 +87,7 @@
 - 记忆系统 P0 首批（v0.94）：同项目聊天/剪辑历史会随工程一起保存，重新打开项目时可恢复最近对话；系统也会开始为当前用户累积跨项目的沟通方式画像，为后续“更懂你怎么协作”的 Agent 打底。
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
 - 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
+- 回复语言跟随（v0.99）：剪辑 Agent 的聊天回复、默认 brief 指令、创意策略卡与剪辑总结现在会优先跟随当前用户消息或 brief 的语言；英文提问默认回英文，中文提问继续回中文。
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
 - **蹇嵎鎸囦护妯℃澘锛坴0.58锛?*锛氶娆′娇鐢ㄦ椂灞曠ず棰勮鎸夐挳锛堟垬鏂楁贩鍓?/ 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝涓€閿彂閫?- **澶氭ā鍨?Plan 鈫?Build 涓ら樁娈垫灦鏋勶紙v0.58锛夛細**
   - Plan 闃舵锛欴eepSeek-R1 鑷劧璇█鎺ㄧ悊锛岃緭鍑洪€夋鏂规锛堜笉瑕佹眰 JSON锛岄伩鍏嶆牸寮忛敊璇級
@@ -160,15 +162,27 @@
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
 - **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务；账号配置若补充 `profileUrl`，分发页和结果卡会直接展示该账号的 TikTok 主页入口
+- **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。
+- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.99 -->
+<!-- NEXT_VERSION: v0.100 -->
+
+### v0.99 — 2026-04-22
+
+**高级制片 / 剪辑 Agent / 视频分发主链路补齐语言跟随**
+
+**Core Reply Locale / i18n Follow-up:**
+- **[frontend+api] 新增 `replyLocale` 检测与透传链路**（`h5-video-tool/src/i18n/replyLocale.ts`, `h5-video-tool-api/src/services/replyLocale.ts`, `h5-video-tool/src/api/studio.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool/src/api/editorCreative.ts`）：三条主链路现在会优先根据本轮用户输入文本判断回复语言，并以 `contentLocale` 作为兜底，不再只看界面语言。
+- **[frontend] 高级制片请求开始显式携带 `replyLocale`**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/i18n/locale.ts`）：剧本大纲、制片清单、分镜表、角色反解析、风格反解析和提示词组装都会按当前输入语言请求结果，同时修复 `contentLocale` 持久化读取逻辑，避免内容语言被 UI 语言强制覆盖。
+- **[api] 高级制片路由层补齐结果本地化**（`h5-video-tool-api/src/routes/studio.ts`）：在不改动底层 `studioPipeline.ts` 的前提下，`story-arc / production-design / storyboard-table / extract-* / assemble-prompts` 会按 `replyLocale` 对结构化结果做后处理翻译，让英文用户能先跑通核心剧本生成链路。
+- **[frontend+api] 剪辑 Agent 聊天与 apply 主链路开始跟随用户语言**（`h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool-api/src/routes/editorAgent.ts`, `h5-video-tool-api/src/services/editorAgentChat.ts`, `h5-video-tool-api/src/services/editorAgentService.ts`, `h5-video-tool-api/src/services/editorCreativeBrief.ts`）：聊天回复、默认 brief、创意策略、进度文案和剪辑总结现在都会优先使用当前用户消息的语言。
+- **[frontend+api] 视频分发 `DEFAULT` 语言改为跟随当前输入内容**（`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool-api/src/routes/prompt.ts`）：分发文案默认语言不再硬编码为 `EN`，而是根据当前 caption / hashtags / 原始输入自动判断中英文。
 
 ### v0.98 — 2026-04-22
 
@@ -1398,4 +1412,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.98）*
+*最后更新：2026-04-22（v0.99）*

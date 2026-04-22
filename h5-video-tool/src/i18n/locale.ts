@@ -76,8 +76,9 @@ export function readStoredUiLocale(storage?: StorageLike | null): UiLocale {
 }
 
 export function readStoredContentLocale(storage?: StorageLike | null, uiLocale?: UiLocale): ContentLocale {
-  const normalized = normalizeContentLocale(read(storage, CONTENT_LOCALE_STORAGE_KEY));
-  return uiLocale ? getLocalePairForLanguage(uiLocale).contentLocale : normalized;
+  const stored = read(storage, CONTENT_LOCALE_STORAGE_KEY);
+  if (stored) return normalizeContentLocale(stored);
+  return uiLocale ? getLocalePairForLanguage(uiLocale).contentLocale : 'zh';
 }
 
 export function writeStoredUiLocale(storage: StorageLike | null | undefined, locale: UiLocale): void {
@@ -111,8 +112,8 @@ export function getInitialContentLocale(
   uiLocale?: UiLocale,
 ): ContentLocale {
   const stored = read(storage, CONTENT_LOCALE_STORAGE_KEY);
-  if (uiLocale) return getLocalePairForLanguage(uiLocale).contentLocale;
   if (stored) return normalizeContentLocale(stored);
+  if (uiLocale) return getLocalePairForLanguage(uiLocale).contentLocale;
   return defaultContentLocaleFor(uiLocale ?? 'zh-CN');
 }
 

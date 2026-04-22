@@ -119,6 +119,9 @@ export interface ProductionShotVideoVersion {
   createdAt: number;
   videoUrl?: string;
   videoPath?: string;
+  sourceProjectId?: string;
+  sourceShotIndex?: number;
+  batchJobId?: string;
 }
 
 export interface ProductionShot {

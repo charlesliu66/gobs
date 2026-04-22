@@ -33,6 +33,11 @@ import {
   type EditorCreativeBrief,
   type EditorCreativeStrategy,
 } from './editorCreativeBrief.js';
+import {
+  localizedText,
+  localizeStructuredPayload,
+  type ReplyLocale,
+} from './replyLocale.js';
 
 export interface EditorAgentAssetContext {
   id: string;
@@ -52,6 +57,7 @@ export interface EditorAgentApplyInput {
   creativeBrief?: EditorCreativeBrief;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
+  replyLocale: ReplyLocale;
 }
 
 function normLabel(s: string): string {
@@ -767,6 +773,7 @@ export async function runEditorAgentApply(
 }> {
   const onProgress = options?.onProgress;
   const report = (p: EditorAgentProgressPayload) => onProgress?.(p);
+  const replyLocale = input.replyLocale ?? 'zh-CN';
 
   const roughTotal = roughTotalMsForApply(input.assets.length);
   const eta = (pct: number) => etaSecFromPercent(pct, roughTotal);
@@ -778,7 +785,7 @@ export async function runEditorAgentApply(
   const usageSink = (stage: string, usage: CompassChatUsage | undefined) => {
     usageRecords.push({ stage, usage });
   };
-  const creativeStrategy = buildCreativeStrategy(input.creativeBrief);
+  const creativeStrategy = buildCreativeStrategy(input.creativeBrief, replyLocale);
 
   let effectiveUserMessage = input.userMessage;
   const combatLike = isCombatLikeIntent(effectiveUserMessage);
@@ -836,7 +843,11 @@ export async function runEditorAgentApply(
     report({
       stage: 'analyze',
       percent: Math.min(44, pctStart),
-      message: `正在分析素材「${a.originalName}」…（${i + 1}/${input.assets.length}）`,
+      message: localizedText(
+        replyLocale,
+        `正在分析素材「${a.originalName}」…（${i + 1}/${input.assets.length}）`,
+        `Analyzing asset "${a.originalName}"... (${i + 1}/${input.assets.length})`,
+      ),
       etaSec: eta(5 + Math.round(((i + 0.5) / nAssets) * 40)),
     });
 
@@ -894,7 +905,11 @@ export async function runEditorAgentApply(
     report({
       stage: 'analyze',
       percent: Math.min(45, pctDone),
-      message: `素材「${a.originalName}」候选段已就绪`,
+      message: localizedText(
+        replyLocale,
+        `素材「${a.originalName}」候选段已就绪`,
+        `Candidate segments for "${a.originalName}" are ready`,
+      ),
       etaSec: eta(pctDone),
     });
   }
@@ -906,7 +921,12 @@ export async function runEditorAgentApply(
     if (bgmAssetId) {
       const bgmPath = getEditorAssetAbsolutePath(bgmAssetId);
       if (bgmPath) {
-        report({ stage: 'beat', percent: 47, message: '分析 BGM 节拍结构…', etaSec: eta(47) });
+        report({
+          stage: 'beat',
+          percent: 47,
+          message: localizedText(replyLocale, '分析 BGM 节拍结构…', 'Analyzing the BGM beat structure...'),
+          etaSec: eta(47),
+        });
         beatInfo = await analyzeMusicBeat(bgmPath);
         if (beatInfo) {
           console.log(`[editor agent] beat analysis done: BPM=${beatInfo.bpm}, sections=${beatInfo.sections.length}`);
@@ -950,7 +970,11 @@ export async function runEditorAgentApply(
   report({
     stage: 'plan',
     percent: 48,
-    message: `正在规划剪辑方案（${models.plan}）…`,
+    message: localizedText(
+      replyLocale,
+      `正在规划剪辑方案（${models.plan}）…`,
+      `Planning the edit approach (${models.plan})...`,
+    ),
     etaSec: eta(48),
   });
 
@@ -966,7 +990,7 @@ export async function runEditorAgentApply(
     contentManifest,
     beatGuide: beatGuideBlock,
     currentClipsMetaBlock,
-    creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy),
+    creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy, replyLocale),
     memoryContextBlock,
   });
 
@@ -994,7 +1018,11 @@ export async function runEditorAgentApply(
     report({
       stage: 'plan_fallback',
       percent: 65,
-      message: '规划模型暂时不可用，切换到兜底剪辑方案…',
+      message: localizedText(
+        replyLocale,
+        '规划模型暂时不可用，切换到兜底剪辑方案…',
+        'The planning model is unavailable, switching to the fallback edit path...',
+      ),
       etaSec: eta(65),
     });
   }
@@ -1004,7 +1032,11 @@ export async function runEditorAgentApply(
   report({
     stage: 'build',
     percent: 70,
-    message: `正在生成时间轴 JSON（${models.build}）…`,
+    message: localizedText(
+      replyLocale,
+      `正在生成时间轴 JSON（${models.build}）…`,
+      `Generating the timeline JSON (${models.build})...`,
+    ),
     etaSec: eta(70),
   });
 
@@ -1068,7 +1100,11 @@ ${planText}`;
       report({
         stage: 'build_retry',
         percent: 80,
-        message: `JSON 生成失败，正在用备选模型（${models.fallback}）重试…`,
+        message: localizedText(
+          replyLocale,
+          `JSON 生成失败，正在用备选模型（${models.fallback}）重试…`,
+          `JSON generation failed, retrying with the fallback model (${models.fallback})...`,
+        ),
         etaSec: eta(80),
       });
     }
@@ -1079,7 +1115,11 @@ ${planText}`;
     report({
       stage: 'build_legacy',
       percent: 85,
-      message: `两阶段失败，正在用兜底方案生成…`,
+      message: localizedText(
+        replyLocale,
+        '两阶段失败，正在用兜底方案生成…',
+        'The two-stage flow failed, switching to the fallback generation path...',
+      ),
       etaSec: eta(85),
     });
 
@@ -1110,7 +1150,13 @@ ${planText}`;
       } catch {
         const snippet = legacyRaw.slice(0, 300).replace(/\n/g, '↵');
         console.error('[editor agent] All 3 attempts failed, raw snippet:', snippet);
-        throw new Error(`剪辑模型三次生成均失败。最后一次输出片段：${snippet}`);
+        throw new Error(
+          localizedText(
+            replyLocale,
+            `剪辑模型三次生成均失败。最后一次输出片段：${snippet}`,
+            `The editing model failed three times. Last output snippet: ${snippet}`,
+          ),
+        );
       }
     }
   }
@@ -1118,19 +1164,19 @@ ${planText}`;
   report({
     stage: 'parse',
     percent: 88,
-    message: '正在解析模型输出…',
+    message: localizedText(replyLocale, '正在解析模型输出…', 'Parsing the model output...'),
     etaSec: eta(88),
   });
 
   if (!parsed!.project || typeof parsed!.project !== 'object') {
-    throw new Error('模型输出 JSON 缺少 project 字段');
+    throw new Error(localizedText(replyLocale, '模型输出 JSON 缺少 project 字段', 'The model JSON output is missing the project field'));
   }
 
   const agentResult = parsed!;
   const summary =
     typeof agentResult.summary === 'string' && agentResult.summary.trim()
       ? agentResult.summary.trim()
-      : '已根据指令更新时间轴。';
+      : localizedText(replyLocale, '已根据指令更新时间轴。', 'The timeline has been updated based on your instruction.');
 
   /**
    * 合并策略（改进版）：
@@ -1210,7 +1256,7 @@ ${planText}`;
   report({
     stage: 'sanitize',
     percent: 92,
-    message: '校验片段与候选窗对齐…',
+    message: localizedText(replyLocale, '校验片段与候选窗对齐…', 'Validating clip alignment against candidate windows...'),
     etaSec: eta(92),
   });
 
@@ -1223,13 +1269,23 @@ ${planText}`;
   const v1BeforeClips = v1BeforeSanitize?.clips ?? [];
   if (v1BeforeClips.length === 0) {
     if (candidateWindows.length === 0) {
-      throw new Error('剪辑失败：Agent 未挑出任何片段，且候选窗不足以兜底。请更换素材或重新发送更具体的指令。');
+      throw new Error(
+        localizedText(
+          replyLocale,
+          '剪辑失败：Agent 未挑出任何片段，且候选窗不足以兜底。请更换素材或重新发送更具体的指令。',
+          'Editing failed: the agent did not select any clips, and there were not enough candidate windows for fallback. Try different footage or send a more specific instruction.',
+        ),
+      );
     }
     console.warn(`[editor agent] merged v1 clips 为空（Agent 未输出选段），启动均分候选窗兜底，候选窗数=${candidateWindows.length}，目标时长=${targetTimelineSec}s`);
     report({
       stage: 'fallback_fill',
       percent: 94,
-      message: `模型未挑出片段，自动用均分候选段填满 ${targetTimelineSec} 秒…`,
+      message: localizedText(
+        replyLocale,
+        `模型未挑出片段，自动用均分候选段填满 ${targetTimelineSec} 秒…`,
+        `The model did not choose clips, so fallback windows are filling ${targetTimelineSec} seconds automatically...`,
+      ),
       etaSec: 6,
     });
 
@@ -1271,7 +1327,13 @@ ${planText}`;
     }
 
     if (fallbackVideoClips.length === 0) {
-      throw new Error('剪辑失败：候选窗均无法产出有效片段，请检查素材。');
+      throw new Error(
+        localizedText(
+          replyLocale,
+          '剪辑失败：候选窗均无法产出有效片段，请检查素材。',
+          'Editing failed: none of the candidate windows produced a valid clip. Please check the source footage.',
+        ),
+      );
     }
 
     // 镜像生成 a1 原声轨（与 v1 等长等位）
@@ -1301,20 +1363,36 @@ ${planText}`;
   // 最终再校验一次：sanitize 后可能因 allowed/durationMap 过滤掉所有 clip
   const v1Final = sanitized.tracks.find((t) => t.type === 'video' && t.id === 'v1');
   if (!v1Final || v1Final.clips.length === 0) {
-    throw new Error('剪辑失败：所有候选片段在校验阶段被过滤。请确认素材仍在资产库中，或重新发送指令。');
+    throw new Error(
+      localizedText(
+        replyLocale,
+        '剪辑失败：所有候选片段在校验阶段被过滤。请确认素材仍在资产库中，或重新发送指令。',
+        'Editing failed: every candidate clip was filtered out during validation. Confirm the footage still exists in the asset library, or send the request again.',
+      ),
+    );
   }
 
   report({
     stage: 'done',
     percent: 100,
-    message: '剪辑方案已生成',
+    message: localizedText(replyLocale, '剪辑方案已生成', 'The edit plan is ready'),
     etaSec: 0,
   });
 
+  const localizedSummaryPayload = await localizeStructuredPayload({ summary }, replyLocale);
+  const localizedProject = await localizeStructuredPayload(sanitized, replyLocale, {
+    preserveKeys: ['aspectRatio', 'kind', 'type'],
+  });
+  const localizedCreativeStrategy = creativeStrategy
+    ? await localizeStructuredPayload(creativeStrategy, replyLocale, {
+      preserveKeys: ['mode', 'platform'],
+    })
+    : undefined;
+
   return {
-    summary,
-    project: sanitized,
+    summary: localizedSummaryPayload.summary,
+    project: localizedProject,
     llmUsage: { byCall: usageRecords, totals: sumCompassUsage(usageRecords) },
-    creativeStrategy,
+    creativeStrategy: localizedCreativeStrategy,
   };
 }

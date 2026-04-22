@@ -35,6 +35,7 @@ export interface ApplyEditorCreativeAgentBody {
   projectMemory?: EditorProjectMemory;
   creativeBrief?: EditorCreativeBrief;
   visionFocus?: EditorVisionFocus;
+  replyLocale?: 'zh-CN' | 'en';
 }
 
 export interface ApplyEditorCreativeAgentResponse extends ApplyEditorAgentResponse {

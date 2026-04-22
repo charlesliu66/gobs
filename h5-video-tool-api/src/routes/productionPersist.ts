@@ -73,6 +73,99 @@ async function ensureDirs(username: string) {
   await fs.mkdir(getProductionProjDir(username), { recursive: true });
 }
 
+function extractBatchJobId(version: Record<string, unknown>): string | undefined {
+  const explicit = typeof version.batchJobId === 'string' ? version.batchJobId.trim() : '';
+  if (explicit) return explicit;
+
+  const videoUrl = typeof version.videoUrl === 'string' ? version.videoUrl.trim() : '';
+  const fromUrl = videoUrl.match(/\/api\/batch-jobs\/video\/([^/?#]+)/)?.[1]?.trim();
+  if (fromUrl) return fromUrl;
+
+  const versionId = typeof version.id === 'string' ? version.id.trim() : '';
+  const fromId = versionId.match(/^batch-(.+)-\d{10,}$/)?.[1]?.trim();
+  if (fromId) return fromId;
+
+  return undefined;
+}
+
+async function sanitizeShotVideoVersionsForProject(
+  shots: Array<Record<string, unknown>> | undefined,
+  projectId: string,
+): Promise<void> {
+  if (!Array.isArray(shots) || !projectId) return;
+
+  const jobOwnerCache = new Map<string, { projectId: string; shotIndex: number } | null>();
+
+  const resolveJobOwner = async (jobId: string) => {
+    if (jobOwnerCache.has(jobId)) return jobOwnerCache.get(jobId);
+    const job = await getJobById(jobId);
+    const owner = job ? { projectId: job.projectId, shotIndex: job.shotIndex } : null;
+    jobOwnerCache.set(jobId, owner);
+    return owner;
+  };
+
+  for (const shot of shots) {
+    const shotIndex = typeof shot.shotIndex === 'number' ? shot.shotIndex : Number(shot.shotIndex);
+    const rawVersions = Array.isArray(shot.previewVideoVersions)
+      ? shot.previewVideoVersions as Array<Record<string, unknown>>
+      : [];
+    if (!rawVersions.length) continue;
+
+    const filtered: Array<Record<string, unknown>> = [];
+    for (const version of rawVersions) {
+      const videoUrl = typeof version.videoUrl === 'string' ? version.videoUrl.trim() : '';
+      const videoPath = typeof version.videoPath === 'string' ? version.videoPath.trim() : '';
+      if (!videoUrl && !videoPath) continue;
+
+      const versionProjectId = typeof version.sourceProjectId === 'string'
+        ? version.sourceProjectId.trim()
+        : '';
+      if (versionProjectId && versionProjectId !== projectId) continue;
+
+      const versionShotIndex = typeof version.sourceShotIndex === 'number'
+        ? version.sourceShotIndex
+        : Number(version.sourceShotIndex);
+      if (Number.isFinite(versionShotIndex) && versionShotIndex !== shotIndex) continue;
+
+      const batchJobId = extractBatchJobId(version);
+      if (batchJobId) {
+        const owner = await resolveJobOwner(batchJobId);
+        if (owner && (owner.projectId !== projectId || owner.shotIndex !== shotIndex)) continue;
+      }
+
+      filtered.push(version);
+    }
+
+    const deduped = new Map<string, Record<string, unknown>>();
+    for (const version of filtered.sort(
+      (a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0),
+    )) {
+      const versionId = typeof version.id === 'string' ? version.id.trim() : '';
+      if (!versionId || deduped.has(versionId)) continue;
+      deduped.set(versionId, version);
+    }
+
+    const normalized = [...deduped.values()].sort(
+      (a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0),
+    );
+    shot.previewVideoVersions = normalized;
+
+    const selectedVersionId = typeof shot.selectedPreviewVideoVersionId === 'string'
+      ? shot.selectedPreviewVideoVersionId.trim()
+      : '';
+    const selected = normalized.find((version) => version.id === selectedVersionId) ?? normalized[0];
+
+    shot.selectedPreviewVideoVersionId = selected?.id;
+    shot.previewVideoPath = selected?.videoPath;
+    shot.previewVideoUrl = selected?.videoUrl;
+    if (!selected) {
+      shot.selectedPreviewVideoVersionId = undefined;
+      shot.previewVideoPath = undefined;
+      shot.previewVideoUrl = undefined;
+    }
+  }
+}
+
 /**
  * 只删除已知的「大体积可再生成缓存」字段里的 data: URL，
  * 保留 imageDataUrl（角色/场景头像）、previewVideoUrl/videoUrl（视频 URL）等用户数据。
@@ -234,6 +327,8 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       id,
       updatedAt,
     }) as Record<string, unknown>;
+    const incomingProject = payload.project as Record<string, unknown> | undefined;
+    const incomingShots = incomingProject?.shots as Array<Record<string, unknown>> | undefined;
 
     const projDir = getProductionProjDir(username);
     const filePath = path.join(projDir, `${id}.json`);
@@ -245,8 +340,6 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       const existing = JSON.parse(existingRaw) as Record<string, unknown>;
       const existingProject = existing.project as Record<string, unknown> | undefined;
       const existingShots = existingProject?.shots as Array<Record<string, unknown>> | undefined;
-      const incomingProject = payload.project as Record<string, unknown> | undefined;
-      const incomingShots = incomingProject?.shots as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(existingShots) && Array.isArray(incomingShots)) {
         for (const iShot of incomingShots) {
           const eShot = existingShots.find((e) => e.shotIndex === iShot.shotIndex);
@@ -264,6 +357,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       }
     } catch { /* first save or file missing — no merge needed */ }
 
+    await sanitizeShotVideoVersionsForProject(incomingShots, id);
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
 
     // 写 sidecar 元数据（供 /list 快速读取，无需解析全量 JSON）
@@ -291,7 +385,11 @@ productionPersistRouter.get('/project/load', async (req: Request, res: Response)
   const filePath = path.join(getProductionProjDir(username), `${id}.json`);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
-    res.json(JSON.parse(raw));
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const project = data.project as Record<string, unknown> | undefined;
+    const shots = project?.shots as Array<Record<string, unknown>> | undefined;
+    await sanitizeShotVideoVersionsForProject(shots, id);
+    res.json(data);
   } catch {
     res.status(404).json({ error: '项目不存在' });
   }

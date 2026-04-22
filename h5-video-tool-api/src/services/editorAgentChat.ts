@@ -1,28 +1,58 @@
 import { compassChatCompletion } from './promptPolish.js';
+import { localizedText, type ReplyLocale } from './replyLocale.js';
 
-const CHAT_SYSTEM = `你是「COBS 剪辑工作台」里的对话助手，通过大模型与用户自然交流。
+function buildChatSystemPrompt(replyLocale: ReplyLocale): string {
+  return [
+    'You are the conversational assistant inside the GOBS video editor.',
+    localizedText(
+      replyLocale,
+      '用简洁、专业、友好的中文回答。',
+      'Reply in concise, professional, friendly English.',
+    ),
+    localizedText(
+      replyLocale,
+      '可以说明：智能剪辑会先做素材分析和候选片段规划，再生成时间轴；用户也可以先在左侧勾选素材、在下方时间轴继续微调。',
+      'You can explain that smart editing first analyzes footage and plans candidate segments, then builds a timeline; users can also pick footage on the left and fine-tune on the timeline.',
+    ),
+    localizedText(
+      replyLocale,
+      '可以回答剪辑概念、操作提示、为什么需要等待等问题。',
+      'You can answer editing questions, workflow tips, and why a step may take time.',
+    ),
+    localizedText(
+      replyLocale,
+      '不要编造不存在的功能；不确定时建议用户直接描述目标时长、内容和节奏。',
+      'Do not invent features that do not exist; when uncertain, suggest that the user describe the target duration, content, and pacing directly.',
+    ),
+    'Do not output JSON or markdown code fences.',
+  ].join('\n');
+}
 
-## 能力
-- 用简洁、专业、友好的**中文**回答。
-- 可说明：智能剪辑会先做素材分析/候选段，再用 Compass 剪辑模型生成时间轴；用户可在左侧勾选素材、在下方时间轴微调。
-- 可回答剪辑概念、操作提示、耐心等待原因等。
-- **不要**编造不存在的功能；不确定时建议用户直接描述剪辑需求（时长、内容、节奏）。
-
-## 不要
-- 不要输出 JSON、代码块包裹整段回复。
-- 不要承诺具体等待秒数（除非用户问「一般要多久」，可答「通常约 1～3 分钟，视素材数量与服务器负载而定」这类范围）。`;
-
-export async function runEditorAgentChat(userMessage: string): Promise<string> {
+export async function runEditorAgentChat(
+  userMessage: string,
+  replyLocale: ReplyLocale = 'zh-CN',
+): Promise<string> {
   const msg = userMessage.trim();
   if (!msg) {
-    return '请说说你想了解的内容，或直接描述想怎么剪（例如时长、高光、节奏）。';
+    return localizedText(
+      replyLocale,
+      '请说说你想了解的内容，或直接描述想怎么剪，比如时长、高光和节奏。',
+      'Tell me what you want to know, or describe how you want the cut to feel, like length, highlights, and pacing.',
+    );
   }
+
   const raw = await compassChatCompletion({
-    systemPrompt: CHAT_SYSTEM,
+    systemPrompt: buildChatSystemPrompt(replyLocale),
     userText: msg,
     temperature: 0.55,
     maxTokens: 1800,
   });
   const text = raw.trim();
-  return text.length > 0 ? text : '我在。需要改时间轴时，直接说你的剪辑需求即可。';
+  if (text.length > 0) return text;
+
+  return localizedText(
+    replyLocale,
+    '我在。需要改时间轴时，直接说你的剪辑需求就可以。',
+    'I am here. If you want to change the timeline, just tell me the edit you want.',
+  );
 }

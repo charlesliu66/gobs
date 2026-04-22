@@ -23,7 +23,10 @@ import {
   mergeSceneSheetsPreservingImages,
   mergeShotVideoVersions,
   migrateProject,
+  sanitizeShotVideoVersions,
   saveStored,
+  shouldMergeStoredShotVideoVersions,
+  type KnownBatchJobOwnership,
   type StoredWizard,
 } from '../studio/productionWizardStorage';
 import {
@@ -66,6 +69,7 @@ import {
   cancelBatchByProject,
   cancelBatchJob,
   enqueueProductionShot,
+  getBatchJobs,
   pollBatchJobNow,
   type BatchJobDto,
   type QueueSnapshotDto,
@@ -86,6 +90,8 @@ import { useProductionShotReview } from '../studio/useProductionShotReview';
 import { useProductionShotVersions } from '../studio/useProductionShotVersions';
 import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { apiPost } from '../api/client';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { resolveReplyLocale } from '../i18n/replyLocale.ts';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -125,6 +131,7 @@ interface BatchAssetGenState {
 }
 
 export function ProductionWizard() {
+  const { contentLocale } = useLocale();
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
   const urlProjectId = searchParams.get('projectId');
@@ -199,6 +206,54 @@ export function ProductionWizard() {
   const [canAutoPersist, setCanAutoPersist] = useState(!shouldLoadFromServer);
   // SSE 监听 batch-jobs 完成事件（替代旧的前端轮询恢复）
 
+  const resolveStudioReplyLocale = useCallback((sampleObject?: unknown, values?: Array<string | null | undefined>) => {
+    return resolveReplyLocale({
+      values,
+      sampleObject,
+      fallbackContentLocale: contentLocale,
+    });
+  }, [contentLocale]);
+
+  const loadKnownBatchJobsById = useCallback(async () => {
+    try {
+      const { jobs } = await getBatchJobs();
+      return new Map<string, KnownBatchJobOwnership>(
+        jobs
+          .filter((job) => !!job.id && !!job.projectId && typeof job.shotIndex === 'number')
+          .map((job) => [
+            job.id,
+            {
+              projectId: job.projectId,
+              shotIndex: job.shotIndex,
+            },
+          ]),
+      );
+    } catch (error) {
+      console.warn('[production] 加载 batch-jobs 归属失败，跳过版本清理', error);
+      return new Map<string, KnownBatchJobOwnership>();
+    }
+  }, []);
+
+  const hydrateStoredProject = useCallback((
+    stored: StoredWizard,
+    projectId: string,
+    knownBatchJobsById: Map<string, KnownBatchJobOwnership>,
+  ) => {
+    const nextProject = migrateProject(stored.project);
+    const local = loadStored();
+    const shouldMergeLocalShots = local != null && shouldMergeStoredShotVideoVersions(local, projectId);
+    const mergedShots = shouldMergeLocalShots
+      ? mergeShotVideoVersions(nextProject.shots, local.project.shots)
+      : nextProject.shots;
+    return {
+      ...nextProject,
+      shots: sanitizeShotVideoVersions(mergedShots, {
+        projectId,
+        knownBatchJobsById,
+      }),
+    } as ProductionProject;
+  }, []);
+
   /** 执行一次服务端保存（共享逻辑） */
   const doServerSync = useCallback(async (data: StoredWizard) => {
     try {
@@ -245,10 +300,13 @@ export function ProductionWizard() {
     setLoadingProjectTitle(title?.trim() || null);
     setIsServerBootstrapping(true);
     try {
-      const raw = await loadProductionProject(id);
+      const [raw, knownBatchJobsById] = await Promise.all([
+        loadProductionProject(id),
+        loadKnownBatchJobsById(),
+      ]);
       if (raw && typeof raw === 'object' && 'project' in raw) {
         const s = raw as unknown as StoredWizard;
-        setProject(migrateProject(s.project));
+        setProject(hydrateStoredProject(s, id, knownBatchJobsById));
         if (s.characterBible) setCharacterBible(s.characterBible);
         if (s.synopsis) setSynopsis(s.synopsis);
         if (s.structureTemplate) setStructureTemplate(s.structureTemplate);
@@ -271,7 +329,7 @@ export function ProductionWizard() {
       setIsServerBootstrapping(false);
       setLoadingProjectTitle(null);
     }
-  }, []);
+  }, [hydrateStoredProject, loadKnownBatchJobsById]);
 
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
@@ -415,10 +473,17 @@ export function ProductionWizard() {
    * 提取为独立 callback 以便 mount-time resume 也能调用。
    */
   const saveShotVideo = useCallback(
-    (shotIdx: number, url: string, taskId: string, videoPath: string | undefined) => {
+    (
+      shotIdx: number,
+      url: string,
+      taskId: string,
+      videoPath: string | undefined,
+      batchJobId?: string,
+    ) => {
       const s = project.shots[shotIdx];
       if (!s) return;
       const vp = videoPath?.trim();
+      const normalizedProjectId = serverProjectId?.trim();
       const versionId = `${taskId || `production-shot-${s.shotIndex}`}-${Date.now()}`;
       const version: ProductionShotVideoVersion = {
         id: versionId,
@@ -426,6 +491,9 @@ export function ProductionWizard() {
         createdAt: Date.now(),
         ...(vp ? { videoPath: vp } : {}),
         ...(url?.trim() ? { videoUrl: url } : {}),
+        ...(normalizedProjectId ? { sourceProjectId: normalizedProjectId } : {}),
+        sourceShotIndex: s.shotIndex,
+        ...(batchJobId?.trim() ? { batchJobId: batchJobId.trim() } : {}),
       };
       setProject((p) => {
         const shots = [...p.shots];
@@ -455,7 +523,7 @@ export function ProductionWizard() {
       toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
       needsFlushRef.current = true;
     },
-    [project.shots, project.meta.title, setProject],
+    [project.shots, project.meta.title, serverProjectId, setProject],
   );
 
   const handledJobStateRef = useRef<Record<string, string>>({});
@@ -484,7 +552,7 @@ export function ProductionWizard() {
       if (handledJobStateRef.current[job.id] === stateKey) continue;
       if (job.status === 'done' && job.videoUrl) {
         handledJobStateRef.current[job.id] = stateKey;
-        saveShotVideo(idx, job.videoUrl, job.taskId || `dreamina-${job.submitId}`, undefined);
+        saveShotVideo(idx, job.videoUrl, job.taskId || `dreamina-${job.submitId}`, undefined, job.id);
         clearShotBusy(String(job.shotIndex));
         continue;
       }
@@ -898,22 +966,13 @@ export function ProductionWizard() {
     }
     void (async () => {
       try {
-        const raw = await loadProductionProject(idToLoad);
+        const [raw, knownBatchJobsById] = await Promise.all([
+          loadProductionProject(idToLoad),
+          loadKnownBatchJobsById(),
+        ]);
         if (raw && typeof raw === 'object' && 'project' in raw) {
           const s = raw as unknown as StoredWizard;
-          const serverProject = migrateProject(s.project);
-          // Merge video data from localStorage: the server sync is debounced
-          // (3 s), so a page refresh right after video generation may leave the
-          // server copy stale.  localStorage is written synchronously on every
-          // state change, so it may contain newer video paths/versions.
-          const local = loadStored();
-          if (local?.project?.shots?.length) {
-            serverProject.shots = mergeShotVideoVersions(
-              serverProject.shots,
-              local.project.shots,
-            );
-          }
-          setProject(serverProject);
+          setProject(hydrateStoredProject(s, idToLoad, knownBatchJobsById));
           if (s.characterBible) setCharacterBible(s.characterBible);
           if (s.synopsis) setSynopsis(s.synopsis);
           if (s.structureTemplate) setStructureTemplate(s.structureTemplate);
@@ -934,7 +993,13 @@ export function ProductionWizard() {
         if (!urlProjectId) {
           const fallback = loadStored();
           if (fallback) {
-            setProject(migrateProject(fallback.project));
+            const fallbackProject = migrateProject(fallback.project);
+            setProject({
+              ...fallbackProject,
+              shots: sanitizeShotVideoVersions(fallbackProject.shots, {
+                projectId: fallback.projectPersistId,
+              }),
+            });
             setCharacterBible(fallback.characterBible);
             setSynopsis(fallback.synopsis);
             setStructureTemplate(fallback.structureTemplate);
@@ -1021,14 +1086,21 @@ export function ProductionWizard() {
 
   useEffect(() => {
     if (isServerBootstrapping || !canAutoPersist) return;
+    const persistedProject = {
+      ...project,
+      shots: sanitizeShotVideoVersions(project.shots, {
+        projectId: serverProjectId,
+      }),
+    } as ProductionProject;
     const data: StoredWizard = {
-      project,
+      project: persistedProject,
       characterBible,
       synopsis,
       structureTemplate,
       maxTotalDurationSec,
       step,
       storyGenre,
+      projectPersistId: serverProjectId,
     };
     saveStored(data);
     if (needsFlushRef.current) {
@@ -1045,6 +1117,7 @@ export function ProductionWizard() {
     maxTotalDurationSec,
     step,
     storyGenre,
+    serverProjectId,
     scheduleServerSync,
     flushServerSync,
     isServerBootstrapping,
@@ -1090,6 +1163,12 @@ export function ProductionWizard() {
         synopsis: synopsis.trim(),
         styleRef: project.meta.styleRefSummary.trim(),
         structureTemplate,
+        replyLocale: resolveStudioReplyLocale(project.meta.styleRefAnalysis, [
+          characterBible,
+          synopsis,
+          storyGenre,
+          project.meta.styleRefSummary,
+        ]),
       });
       const characterAssets = buildCharacterSheetsFromStory(story);
       const sceneAssets = buildSceneSheetsFromStory(story);
@@ -1109,7 +1188,15 @@ export function ProductionWizard() {
     } finally {
       setBusyL1(false);
     }
-  }, [characterBible, synopsis, project.meta.styleRefSummary, structureTemplate]);
+  }, [
+    characterBible,
+    synopsis,
+    storyGenre,
+    project.meta.styleRefAnalysis,
+    project.meta.styleRefSummary,
+    resolveStudioReplyLocale,
+    structureTemplate,
+  ]);
 
   const handleL2 = useCallback(async () => {
     if (!project.story) {
@@ -1119,7 +1206,10 @@ export function ProductionWizard() {
     setErr(null);
     setBusyL2(true);
     try {
-      const { productionDesign } = await postProductionDesign({ story: project.story });
+      const { productionDesign } = await postProductionDesign({
+        story: project.story,
+        replyLocale: resolveStudioReplyLocale(project.story),
+      });
       setProject((p) => {
         const baseScenes = p.sceneAssets?.length ? p.sceneAssets : buildSceneSheetsFromStory(p.story!);
         const nextProps = buildPropSheetsFromProductionDesign(productionDesign);
@@ -1139,7 +1229,7 @@ export function ProductionWizard() {
     } finally {
       setBusyL2(false);
     }
-  }, [project.story]);
+  }, [project.story, resolveStudioReplyLocale]);
 
   const handleL3 = useCallback(async () => {
     if (!project.story || !project.productionDesign) return;
@@ -1167,6 +1257,10 @@ export function ProductionWizard() {
         story: project.story,
         productionDesign: project.productionDesign,
         maxTotalDurationSec,
+        replyLocale: resolveStudioReplyLocale({
+          story: project.story,
+          productionDesign: project.productionDesign,
+        }),
       });
       setProject((p) => {
         const mediaByIdx = new Map<
@@ -1212,7 +1306,7 @@ export function ProductionWizard() {
     } finally {
       setBusyL3(false);
     }
-  }, [project.story, project.productionDesign, project.shots, maxTotalDurationSec]);
+  }, [project.story, project.productionDesign, project.shots, maxTotalDurationSec, resolveStudioReplyLocale]);
 
   const {
     runGenerateFrame,
@@ -1259,6 +1353,7 @@ export function ProductionWizard() {
           const { characterVisualProfile } = await postExtractCharacterVisuals({
             imageBase64: dataUrl,
             mimeType: file.type,
+            replyLocale: resolveStudioReplyLocale(project, [characterBible, synopsis, storyGenre]),
           });
           setProject((p) => ({ ...p, characterVisualProfile, assembled: null }));
         } catch (e) {
@@ -1269,7 +1364,7 @@ export function ProductionWizard() {
       })();
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [characterBible, project, resolveStudioReplyLocale, storyGenre, synopsis]);
 
   const handleAssemble = useCallback(async () => {
     if (!project.shots.length) {
@@ -1282,6 +1377,10 @@ export function ProductionWizard() {
       const assembled = await postAssemblePrompts({
         shots: project.shots,
         characterVisualProfile: project.characterVisualProfile,
+        replyLocale: resolveStudioReplyLocale({
+          shots: project.shots,
+          characterVisualProfile: project.characterVisualProfile,
+        }, [characterBible, synopsis, storyGenre]),
       });
       setProject((p) => ({ ...p, assembled }));
     } catch (e) {
@@ -1289,7 +1388,7 @@ export function ProductionWizard() {
     } finally {
       setBusyAsm(false);
     }
-  }, [project.shots, project.characterVisualProfile]);
+  }, [characterBible, project.characterVisualProfile, project.shots, resolveStudioReplyLocale, storyGenre, synopsis]);
 
   const copyAllSeedance = useCallback(() => {
     if (!project.assembled?.shots.length) return;
@@ -1332,6 +1431,7 @@ export function ProductionWizard() {
             const { styleReference } = await postExtractStyleReference({
               imageBase64: dataUrl,
               mimeType: file.type,
+              replyLocale: resolveStudioReplyLocale(project, [characterBible, synopsis, storyGenre]),
             });
             setProject((p) => ({
               ...p,
@@ -1351,7 +1451,7 @@ export function ProductionWizard() {
       };
       reader.readAsDataURL(file);
     },
-    [clearStylePreview],
+    [characterBible, clearStylePreview, project, resolveStudioReplyLocale, storyGenre, synopsis],
   );
 
   const resetDraft = useCallback(() => {
@@ -1606,7 +1706,7 @@ export function ProductionWizard() {
       if (bj) {
         const { job } = await pollBatchJobNow(bj.id);
         if (job.status === 'done' && job.videoUrl) {
-          saveShotVideo(selectedShotIdx, job.videoUrl, job.taskId || `dreamina-${s.pendingVideoSubmitId}`, undefined);
+          saveShotVideo(selectedShotIdx, job.videoUrl, job.taskId || `dreamina-${s.pendingVideoSubmitId}`, undefined, bj.id);
           toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
         } else if (job.status === 'cancelled') {
           toast.info(`分镜 ${s.shotIndex} 已取消：${job.failReason || '后台已停止跟进'}`);
