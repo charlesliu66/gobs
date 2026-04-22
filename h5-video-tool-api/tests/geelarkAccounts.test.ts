@@ -157,3 +157,39 @@ test('normalizeTaskDetailPayload extracts status text, screenshots, share link, 
     },
   );
 });
+
+test('isRetryableProxyConnectionError detects timeout to the configured proxy host', () => {
+  const isRetryableProxyConnectionError = (geelark as Record<string, unknown>).isRetryableProxyConnectionError as
+    | ((error: unknown, proxyUrl?: string) => boolean)
+    | undefined;
+
+  assert.equal(typeof isRetryableProxyConnectionError, 'function');
+  assert.equal(
+    isRetryableProxyConnectionError?.(
+      {
+        code: 'ECONNABORTED',
+        cause: {
+          code: 'ETIMEDOUT',
+          address: '10.21.100.220',
+          port: 8840,
+        },
+      },
+      'http://10.21.100.220:8840',
+    ),
+    true,
+  );
+  assert.equal(
+    isRetryableProxyConnectionError?.(
+      {
+        code: 'ECONNABORTED',
+        cause: {
+          code: 'ETIMEDOUT',
+          address: '8.8.8.8',
+          port: 443,
+        },
+      },
+      'http://10.21.100.220:8840',
+    ),
+    false,
+  );
+});

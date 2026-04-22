@@ -5,6 +5,7 @@ import https from 'https';
 import path from 'path';
 import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import type { AxiosRequestConfig } from 'axios';
 
 type AccountCfg = {
   id: string;
@@ -102,30 +103,78 @@ function traceId(): string {
   return crypto.randomUUID().replace(/-/g, '').toUpperCase();
 }
 
-function proxyCfg(timeoutMs: number) {
-  const proxyUrl =
+function getGeelarkProxyUrl(): string {
+  return (
     process.env.GEELARK_HTTP_PROXY?.trim() ||
     process.env.HTTPS_PROXY?.trim() ||
-    process.env.HTTP_PROXY?.trim();
+    process.env.HTTP_PROXY?.trim() ||
+    ''
+  );
+}
+
+function proxyCfg(timeoutMs: number, proxyUrl = getGeelarkProxyUrl()): AxiosRequestConfig {
   if (!proxyUrl) return { timeout: timeoutMs, proxy: false as const };
   const agent = new HttpsProxyAgent(proxyUrl);
   return { timeout: timeoutMs, httpsAgent: agent, httpAgent: agent, proxy: false as const };
+}
+
+export function isRetryableProxyConnectionError(error: unknown, proxyUrl = getGeelarkProxyUrl()): boolean {
+  if (!proxyUrl) return false;
+  let proxyHost = '';
+  let proxyPort = '';
+  try {
+    const parsed = new URL(proxyUrl);
+    proxyHost = parsed.hostname;
+    proxyPort = parsed.port;
+  } catch {
+    return false;
+  }
+
+  const record = (error && typeof error === 'object' ? error : {}) as Record<string, unknown>;
+  const cause = (record.cause && typeof record.cause === 'object' ? record.cause : {}) as Record<string, unknown>;
+  const errorCode = String(cause.code ?? record.code ?? '');
+  const errorAddress = String(cause.address ?? record.address ?? '');
+  const errorPort = String(cause.port ?? record.port ?? '');
+
+  if (!['ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH'].includes(errorCode)) {
+    return false;
+  }
+  if (errorAddress && errorAddress !== proxyHost) {
+    return false;
+  }
+  if (proxyPort && errorPort && errorPort !== proxyPort) {
+    return false;
+  }
+  return true;
 }
 
 async function geelarkPost<T>(pathName: string, body: Record<string, unknown>): Promise<T> {
   const key = getApiKey();
   if (!key) throw new Error('Missing GEELARK_BEARER_TOKEN or GEELARK_API_KEY');
   const url = `${getBase()}${pathName.startsWith('/') ? pathName : `/${pathName}`}`;
-  const res = await axios.post(url, body, {
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      traceId: traceId(),
-      Authorization: `Bearer ${key}`,
-    },
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    traceId: traceId(),
+    Authorization: `Bearer ${key}`,
+  };
+  const request = async (proxyUrl?: string) => axios.post(url, body, {
+    headers,
     validateStatus: () => true,
-    ...proxyCfg(60_000),
+    ...proxyCfg(60_000, proxyUrl),
   });
+
+  let res;
+  const proxyUrl = getGeelarkProxyUrl();
+  try {
+    res = await request(proxyUrl);
+  } catch (error) {
+    if (!isRetryableProxyConnectionError(error, proxyUrl)) {
+      throw error;
+    }
+    console.warn(`[geelark] proxy ${proxyUrl} unreachable for ${pathName}, retrying direct connection`);
+    res = await request('');
+  }
   const data = res.data as { code?: number; msg?: string; data?: T };
   if (res.status >= 400) {
     throw new Error(`GeeLark HTTP ${res.status}: ${JSON.stringify(data).slice(0, 220)}`);

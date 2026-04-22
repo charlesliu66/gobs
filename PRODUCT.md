@@ -164,7 +164,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.93 -->
+<!-- NEXT_VERSION: v0.94 -->
+
+### v0.93 — 2026-04-22
+
+**GeeLark 分发代理超时自动回退**
+
+**Bug Fix / Reliability:**
+- **[api] GeeLark OpenAPI 请求新增“代理不可达时自动直连重试”**（`h5-video-tool-api/src/services/geelark.ts`）：当 `GEELARK_HTTP_PROXY` 指向的代理连接超时、拒绝连接或网络不可达时，后端会立刻回退为直连 GeeLark，而不是把整次发布卡在“提交中”直到超时失败。
+- **[test] 新增 GeeLark 代理连接超时识别回归测试**（`h5-video-tool-api/tests/geelarkAccounts.test.ts`）：覆盖“错误地址命中当前代理 host/port 时才触发回退”的判断，避免把普通 GeeLark 网络错误误判成代理故障。
+- **[ops] 云端清理误配的 `GEELARK_HTTP_PROXY`**（服务器 `/home/ubuntu/qas-h5/api/.env` 与 `/home/ubuntu/qas-h5/.env`）：移除不可达的内网代理配置后，服务器本机直连 GeeLark `taskHistory` 已恢复正常。
 
 ### v0.92 — 2026-04-22
 
@@ -1338,4 +1347,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.92）*
+*最后更新：2026-04-22（v0.93）*
