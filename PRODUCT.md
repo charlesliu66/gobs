@@ -157,14 +157,23 @@
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
 - **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布结果会自动硬过滤内部工程词、拆分 caption 内联标签，再直接发往对应社媒平台
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层，便于本地英文同事直接进入英文 UI。
+- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.89 -->
+<!-- NEXT_VERSION: v0.90 -->
+
+### v0.89 — 2026-04-22
+
+**语言切换收口为单一下拉框**
+
+**UX / i18n Simplification:**
+- **[frontend] 语言切换器改为单一 dropdown，仅保留 `简体中文` / `English` 两项**（`h5-video-tool/src/components/LocalePresetSwitcher.tsx`, `h5-video-tool/src/pages/Login.tsx`, `h5-video-tool/src/components/Layout.tsx`）：登录页和侧边栏不再显示多 preset 按钮，用户只按语言切换，不需要理解 `UI locale / content locale` 组合。
+- **[frontend] 英文选择自动联动内容语言**（`h5-video-tool/src/i18n/LocaleContext.tsx`, `h5-video-tool/src/i18n/locale.ts`, `h5-video-tool/src/api/client.ts`）：选择 `English` 后会统一写入 `uiLocale=en`、`contentLocale=en`，旧的 `English UI + 中文内容` 存储也会在读取请求头时自动归一，不再残留隐形混合模式。
+- **[test] locale 协议回归测试补充语言映射覆盖**（`h5-video-tool/src/i18n/locale.test.ts`）：新增“两种语言选项映射到固定 ui/content locale 组合”的断言，避免后续又把混合 preset 暴露回前台。
 
 ### v0.88 — 2026-04-22
 
@@ -1301,4 +1310,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.88）*
+*最后更新：2026-04-22（v0.89）*

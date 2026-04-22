@@ -48,6 +48,16 @@ export function defaultContentLocaleFor(uiLocale: UiLocale): ContentLocale {
   return uiLocale === 'en' ? 'en' : 'zh';
 }
 
+export function getLocalePairForLanguage(uiLocale: UiLocale): {
+  uiLocale: UiLocale;
+  contentLocale: ContentLocale;
+} {
+  return {
+    uiLocale,
+    contentLocale: defaultContentLocaleFor(uiLocale),
+  };
+}
+
 export function getLocalePreset(id: LocalePresetId): { uiLocale: UiLocale; contentLocale: ContentLocale } {
   return LOCALE_PRESETS[id];
 }
@@ -65,8 +75,9 @@ export function readStoredUiLocale(storage?: StorageLike | null): UiLocale {
   return normalizeUiLocale(read(storage, UI_LOCALE_STORAGE_KEY));
 }
 
-export function readStoredContentLocale(storage?: StorageLike | null): ContentLocale {
-  return normalizeContentLocale(read(storage, CONTENT_LOCALE_STORAGE_KEY));
+export function readStoredContentLocale(storage?: StorageLike | null, uiLocale?: UiLocale): ContentLocale {
+  const normalized = normalizeContentLocale(read(storage, CONTENT_LOCALE_STORAGE_KEY));
+  return uiLocale ? getLocalePairForLanguage(uiLocale).contentLocale : normalized;
 }
 
 export function writeStoredUiLocale(storage: StorageLike | null | undefined, locale: UiLocale): void {
@@ -100,6 +111,7 @@ export function getInitialContentLocale(
   uiLocale?: UiLocale,
 ): ContentLocale {
   const stored = read(storage, CONTENT_LOCALE_STORAGE_KEY);
+  if (uiLocale) return getLocalePairForLanguage(uiLocale).contentLocale;
   if (stored) return normalizeContentLocale(stored);
   return defaultContentLocaleFor(uiLocale ?? 'zh-CN');
 }

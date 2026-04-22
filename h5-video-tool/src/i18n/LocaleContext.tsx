@@ -4,6 +4,7 @@ import { getMessage } from './messages.ts';
 import {
   getInitialContentLocale,
   getInitialUiLocale,
+  getLocalePairForLanguage,
   writeStoredContentLocale,
   writeStoredUiLocale,
   type ContentLocale,
@@ -13,6 +14,7 @@ import {
 type LocaleContextValue = {
   uiLocale: UiLocale;
   contentLocale: ContentLocale;
+  setLanguage: (next: UiLocale) => void;
   setUiLocale: (next: UiLocale) => void;
   setContentLocale: (next: ContentLocale) => void;
   t: (path: string) => string;
@@ -33,6 +35,16 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     getInitialContentLocale(typeof window === 'undefined' ? null : window.localStorage, uiLocale),
   );
 
+  const setLanguage = (next: UiLocale) => {
+    const pair = getLocalePairForLanguage(next);
+    setUiLocaleState(pair.uiLocale);
+    setContentLocaleState(pair.contentLocale);
+    if (typeof window !== 'undefined') {
+      writeStoredUiLocale(window.localStorage, pair.uiLocale);
+      writeStoredContentLocale(window.localStorage, pair.contentLocale);
+    }
+  };
+
   const setUiLocale = (next: UiLocale) => {
     setUiLocaleState(next);
     if (typeof window !== 'undefined') {
@@ -51,6 +63,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     () => ({
       uiLocale,
       contentLocale,
+      setLanguage,
       setUiLocale,
       setContentLocale,
       t: (path: string) => getMessage(uiLocale, path),

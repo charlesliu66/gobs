@@ -20,7 +20,7 @@ function getLocaleHeaders(): Record<string, string> {
     ? readStoredUiLocale(storage)
     : getInitialUiLocale(null, null);
   const contentLocale = storage
-    ? readStoredContentLocale(storage)
+    ? readStoredContentLocale(storage, uiLocale)
     : getInitialContentLocale(null, uiLocale);
   return buildLocaleHeaders(uiLocale, contentLocale);
 }

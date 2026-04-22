@@ -5,6 +5,7 @@ import {
   buildLocaleHeaders,
   CONTENT_LOCALE_STORAGE_KEY,
   UI_LOCALE_STORAGE_KEY,
+  getLocalePairForLanguage,
   getLocalePreset,
   matchLocalePreset,
   normalizeContentLocale,
@@ -43,6 +44,12 @@ test('stored locale readers return normalized values', () => {
 
   assert.equal(readStoredUiLocale(storage), 'en');
   assert.equal(readStoredContentLocale(storage), 'en');
+  assert.equal(readStoredContentLocale(storage, 'zh-CN'), 'zh');
+});
+
+test('language options map to linked ui/content locales', () => {
+  assert.deepEqual(getLocalePairForLanguage('zh-CN'), { uiLocale: 'zh-CN', contentLocale: 'zh' });
+  assert.deepEqual(getLocalePairForLanguage('en'), { uiLocale: 'en', contentLocale: 'en' });
 });
 
 test('locale header builder returns both UI and content headers', () => {
