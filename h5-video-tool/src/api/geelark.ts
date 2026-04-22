@@ -7,6 +7,7 @@ export interface GeelarkAccount {
   region?: string;
   platform?: string;
   remark?: string;
+  profileUrl?: string;
   canPost?: boolean;
 }
 

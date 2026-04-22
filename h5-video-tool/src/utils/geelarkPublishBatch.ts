@@ -5,6 +5,7 @@ export interface PublishBatchResponseItem {
   region?: string;
   platform?: string;
   remark?: string;
+  profileUrl?: string;
   taskId?: string;
   submitError?: string;
 }
@@ -78,6 +79,7 @@ export function buildSubmittingPreviewBatch(
     platform?: string;
     region?: string;
     remark?: string;
+    profileUrl?: string;
   }>,
   createdAt = Date.now(),
 ): LatestPublishBatch | null {
@@ -96,6 +98,7 @@ export function buildSubmittingPreviewBatch(
         detailLoading: true,
       };
       if (account.remark) item.remark = account.remark;
+      if (account.profileUrl) item.profileUrl = account.profileUrl;
       return item;
     }),
   };

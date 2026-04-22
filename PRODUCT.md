@@ -156,7 +156,7 @@
 ### 9. 璐﹀彿绠＄悊
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
-- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务
+- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务；账号配置若补充 `profileUrl`，分发页和结果卡会直接展示该账号的 TikTok 主页入口
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。
 
@@ -166,6 +166,15 @@
 
 
 <!-- NEXT_VERSION: v0.95 -->
+
+### v0.95 — 2026-04-22
+
+**视频分发账号支持直达主页链接**
+
+**Feature / UX Upgrade:**
+- **[api] GeeLark 账号配置与批次结果开始透传 `profileUrl`**（`h5-video-tool-api/src/services/geelark.ts`）：`/api/geelark/accounts` 和 `/api/geelark/publish` 现在都会把账号配置中的主页地址一起返回，前端无需再自行猜测 handle 或拼接 TikTok 主页 URL。
+- **[frontend] 分发账号列表与发布结果卡新增“主页/Profile”入口**（`h5-video-tool/src/pages/TabDistribute.tsx` + `h5-video-tool/src/api/geelark.ts` + `h5-video-tool/src/utils/geelarkPublishBatch.ts` + `h5-video-tool/src/i18n/messages.ts`）：只要账号配置里存在 `profileUrl`，用户就能在勾选账号时或查看最近一次发布结果时一键打开该账号主页，自行查看 profile 信息。
+- **[test] 新增 `profileUrl` 透传回归测试**（`h5-video-tool-api/tests/geelarkAccounts.test.ts` + `h5-video-tool/tests/geelarkPublishBatch.test.ts`）：覆盖账号列表和“提交中”批次预览都能保留主页链接，避免后续又把字段丢在后端到前端的链路中。
 
 ### v0.94 — 2026-04-22
 
@@ -1359,4 +1368,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.94）*
+*最后更新：2026-04-22（v0.95）*

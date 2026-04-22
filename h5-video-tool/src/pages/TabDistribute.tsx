@@ -331,6 +331,17 @@ export function TabDistribute() {
                     />
                     <span className="text-sm font-medium text-[var(--color-text)]">{account.username}</span>
                     {account.remark && <span className="text-xs text-[var(--color-text-muted)]">({account.remark})</span>}
+                    {account.profileUrl && (
+                      <a
+                        href={account.profileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="text-xs text-[var(--color-primary)] hover:underline"
+                      >
+                        {t('distribute.profileLink')}
+                      </a>
+                    )}
                   </label>
                 ))
               )}
@@ -577,6 +588,16 @@ function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }:
                   )}
                   {item.region && (
                     <span className="text-[10px] text-[var(--color-text-muted)]">{item.region}</span>
+                  )}
+                  {item.profileUrl && (
+                    <a
+                      href={item.profileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[var(--color-primary)] hover:underline"
+                    >
+                      {t('distribute.profileLink')}
+                    </a>
                   )}
                 </div>
 

@@ -131,6 +131,34 @@ test('buildPublishBatchItems keeps task-account rows aligned for the latest publ
   );
 });
 
+test('toListedAccount keeps profileUrl so the distribute page can render a homepage link', () => {
+  const toListedAccount = (geelark as Record<string, unknown>).toListedAccount as
+    | ((account: Record<string, unknown>) => unknown)
+    | undefined;
+
+  assert.equal(typeof toListedAccount, 'function');
+  assert.deepEqual(
+    toListedAccount?.({
+      id: 'acc-1',
+      username: 'web TH tt',
+      region: 'TH',
+      platform: 'TT',
+      remark: 'group:web TH',
+      profileUrl: 'https://www.tiktok.com/@example',
+      canPost: true,
+    }),
+    {
+      id: 'acc-1',
+      username: 'web TH tt',
+      region: 'TH',
+      platform: 'TT',
+      remark: 'group:web TH',
+      profileUrl: 'https://www.tiktok.com/@example',
+      canPost: true,
+    },
+  );
+});
+
 test('normalizeTaskDetailPayload extracts status text, screenshots, share link, and logs for the UI', () => {
   const normalizeTaskDetailPayload = (geelark as Record<string, unknown>).normalizeTaskDetailPayload as
     | ((detail: Record<string, unknown>) => unknown)

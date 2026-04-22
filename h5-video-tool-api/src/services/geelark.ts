@@ -14,6 +14,7 @@ type AccountCfg = {
   region?: string;
   platform?: string;
   remark?: string;
+  profileUrl?: string;
   canPost?: boolean;
 };
 
@@ -23,6 +24,7 @@ export type ListedAccount = {
   region?: string;
   platform?: string;
   remark?: string;
+  profileUrl?: string;
   canPost: boolean;
 };
 
@@ -33,6 +35,7 @@ export type PublishBatchItem = {
   region?: string;
   platform?: string;
   remark?: string;
+  profileUrl?: string;
   taskId?: string;
   submitError?: string;
 };
@@ -218,6 +221,7 @@ function loadAccountsConfig(): AccountCfg[] {
           region: typeof record.region === 'string' ? record.region : undefined,
           platform: typeof record.platform === 'string' ? record.platform : undefined,
           remark: typeof record.remark === 'string' ? record.remark : undefined,
+          profileUrl: typeof record.profileUrl === 'string' ? record.profileUrl : undefined,
           canPost: record.canPost !== false,
         });
       }
@@ -230,17 +234,22 @@ function loadAccountsConfig(): AccountCfg[] {
   return [];
 }
 
+export function toListedAccount(account: AccountCfg): ListedAccount {
+  return {
+    id: account.id,
+    username: account.username,
+    region: account.region,
+    platform: account.platform,
+    remark: account.remark,
+    profileUrl: account.profileUrl,
+    canPost: account.canPost !== false,
+  };
+}
+
 export function listAccounts(): ListedAccount[] {
   return loadAccountsConfig()
     .filter((account) => account.canPost !== false)
-    .map((account) => ({
-      id: account.id,
-      username: account.username,
-      region: account.region,
-      platform: account.platform,
-      remark: account.remark,
-      canPost: account.canPost !== false,
-    }));
+    .map((account) => toListedAccount(account));
 }
 
 export function filterAccountsByAllowedIds<T extends { id: string }>(accounts: T[], allowedIds: string[] | null): T[] {
@@ -292,6 +301,7 @@ export function buildPublishBatchItems(
       platform: account.platform,
     };
     if (account.remark) item.remark = account.remark;
+    if (account.profileUrl) item.profileUrl = account.profileUrl;
     if (taskId) item.taskId = taskId;
     else item.submitError = 'GeeLark did not return a task id for this account';
     return item;
@@ -369,6 +379,7 @@ function resolvePublishAccounts(accountIds: string[]): Array<ListedAccount & { e
       region: matched.region,
       platform: matched.platform,
       remark: matched.remark,
+      profileUrl: matched.profileUrl,
       canPost: matched.canPost !== false,
     });
   }

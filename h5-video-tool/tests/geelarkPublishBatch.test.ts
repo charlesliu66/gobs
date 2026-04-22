@@ -57,7 +57,7 @@ test('buildSubmittingPreviewBatch shows selected accounts while publish request 
   assert.deepEqual(
     buildSubmittingPreviewBatch?.(
       [
-        { id: 'acc-1', username: 'web TH tt', platform: 'tiktok', region: 'TH', remark: 'group:webTH' },
+        { id: 'acc-1', username: 'web TH tt', platform: 'tiktok', region: 'TH', remark: 'group:webTH', profileUrl: 'https://www.tiktok.com/@web_th_tt' },
         { id: 'acc-2', username: 'ID test3', platform: 'tiktok', region: 'ID' },
       ],
       456,
@@ -72,6 +72,7 @@ test('buildSubmittingPreviewBatch shows selected accounts while publish request 
           platform: 'tiktok',
           region: 'TH',
           remark: 'group:webTH',
+          profileUrl: 'https://www.tiktok.com/@web_th_tt',
           statusText: 'submitting',
           detailLoading: true,
         },
