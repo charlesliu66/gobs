@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import {
   areAllPhonesReady,
   buildTaskEnvMap,
-  filterAccountIdsByAllowedIds,
   filterAccountsByAllowedIds,
+  filterAccountIdsByAllowedIds,
+  type ListedAccount,
   getEnvIdsRequiringStart,
   shouldStopPhoneForTaskStatus,
+  // Added via namespace fallback until the helpers exist.
 } from '../src/services/geelark.ts';
+import * as geelark from '../src/services/geelark.ts';
 
 const sampleAccounts = [
   { id: 'web-th-tt', username: 'web TH tt' },
@@ -91,4 +94,66 @@ test('shouldStopPhoneForTaskStatus stops only successful publish tasks', () => {
   assert.equal(shouldStopPhoneForTaskStatus(3), true);
   assert.equal(shouldStopPhoneForTaskStatus(4), false);
   assert.equal(shouldStopPhoneForTaskStatus(7), false);
+});
+
+test('buildPublishBatchItems keeps task-account rows aligned for the latest publish batch', () => {
+  const buildPublishBatchItems = (geelark as Record<string, unknown>).buildPublishBatchItems as
+    | ((accounts: Array<ListedAccount & { envId?: string }>, taskIds: string[]) => unknown)
+    | undefined;
+
+  assert.equal(typeof buildPublishBatchItems, 'function');
+  assert.deepEqual(
+    buildPublishBatchItems?.(
+      [
+        { id: 'acc-1', username: 'web TH tt', envId: 'env-1', region: 'TH', platform: 'tiktok', canPost: true },
+        { id: 'acc-2', username: 'ID test3', envId: 'env-2', region: 'ID', platform: 'tiktok', canPost: true },
+      ],
+      ['task-1'],
+    ),
+    [
+      {
+        accountId: 'acc-1',
+        username: 'web TH tt',
+        envId: 'env-1',
+        region: 'TH',
+        platform: 'tiktok',
+        taskId: 'task-1',
+      },
+      {
+        accountId: 'acc-2',
+        username: 'ID test3',
+        envId: 'env-2',
+        region: 'ID',
+        platform: 'tiktok',
+        submitError: 'GeeLark did not return a task id for this account',
+      },
+    ],
+  );
+});
+
+test('normalizeTaskDetailPayload extracts status text, screenshots, share link, and logs for the UI', () => {
+  const normalizeTaskDetailPayload = (geelark as Record<string, unknown>).normalizeTaskDetailPayload as
+    | ((detail: Record<string, unknown>) => unknown)
+    | undefined;
+
+  assert.equal(typeof normalizeTaskDetailPayload, 'function');
+  assert.deepEqual(
+    normalizeTaskDetailPayload?.({
+      id: 'task-1',
+      status: 3,
+      failDesc: '',
+      resultImages: ['https://img.example/a.jpg', 'ignore-me'],
+      shareLink: 'https://share.example/post/1',
+      logs: ['waiting', 2, 'done'],
+    }),
+    {
+      id: 'task-1',
+      status: 3,
+      statusText: 'success',
+      failDesc: undefined,
+      resultImages: ['https://img.example/a.jpg'],
+      shareLink: 'https://share.example/post/1',
+      logs: ['waiting', 'done'],
+    },
+  );
 });

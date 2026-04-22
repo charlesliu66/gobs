@@ -7,17 +7,26 @@ import {
   publishVideo,
   fetchTaskDetail,
   type GeelarkAccount,
-  type TaskDetail,
 } from '../api/geelark';
 import { generateCaptionForPost, translateCaptionForPost, type CaptionByPlatformResult } from '../api/promptPolish';
 import { getRecentPromptForVideo } from '../utils/videoHistory';
 import { toast } from '../components/Toast';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { formatDateTime } from '../i18n/locale.ts';
+import {
+  buildLatestPublishBatch,
+  getPendingTaskIds,
+  isBatchComplete,
+  mergeTaskDetailError,
+  mergeTaskDetailIntoBatch,
+  type LatestPublishBatch,
+  type LatestPublishBatchItem,
+} from '../utils/geelarkPublishBatch';
 
 type CaptionLanguage = 'DEFAULT' | 'EN' | 'CN' | 'TH' | 'ID';
 
 const CAPTION_LANGS: CaptionLanguage[] = ['DEFAULT', 'EN', 'CN', 'TH', 'ID'];
+const BATCH_POLL_MS = 8000;
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
@@ -36,9 +45,8 @@ export function TabDistribute() {
   const [captionGenError, setCaptionGenError] = useState<string | null>(null);
   const [pushing, setPushing] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
-  const [reportTaskId, setReportTaskId] = useState<string | null>(null);
-  const [report, setReport] = useState<TaskDetail | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
+  const [latestBatch, setLatestBatch] = useState<LatestPublishBatch | null>(null);
+  const [batchRefreshing, setBatchRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,29 +81,36 @@ export function TabDistribute() {
     });
   }, [accountsForPermission]);
 
-  const loadReport = useCallback(async (nextTaskId: string) => {
-    setReportLoading(true);
-    setReport(null);
+  const refreshBatch = useCallback(async (batch: LatestPublishBatch | null) => {
+    if (!batch) return;
+    const pendingTaskIds = getPendingTaskIds(batch);
+    if (pendingTaskIds.length === 0) return;
+
+    setBatchRefreshing(true);
     try {
-      const detail = await fetchTaskDetail(nextTaskId);
-      setReport(detail);
-      return detail;
-    } catch (e) {
-      setReport({
-        id: nextTaskId,
-        statusText: t('distribute.reportLoadFailed'),
-        failDesc: e instanceof Error ? e.message : t('common.unknown'),
-      });
-      return null;
+      await Promise.all(
+        pendingTaskIds.map(async (currentTaskId) => {
+          try {
+            const detail = await fetchTaskDetail(currentTaskId);
+            setLatestBatch((prev) => (prev ? mergeTaskDetailIntoBatch(prev, currentTaskId, detail) : prev));
+          } catch (e) {
+            const message = e instanceof Error ? e.message : t('distribute.reportLoadFailed');
+            setLatestBatch((prev) => (prev ? mergeTaskDetailError(prev, currentTaskId, message) : prev));
+          }
+        }),
+      );
     } finally {
-      setReportLoading(false);
+      setBatchRefreshing(false);
     }
   }, [t]);
 
   useEffect(() => {
-    if (!reportTaskId) return;
-    void loadReport(reportTaskId);
-  }, [loadReport, reportTaskId]);
+    if (!latestBatch || isBatchComplete(latestBatch)) return;
+    const timer = window.setTimeout(() => {
+      void refreshBatch(latestBatch);
+    }, BATCH_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [latestBatch, refreshBatch]);
 
   const handleGenerateCaption = async () => {
     const raw = (prompt || '').trim() || getRecentPromptForVideo(taskId);
@@ -193,32 +208,24 @@ export function TabDistribute() {
     setPushing(true);
     setPushError(null);
     try {
-      const { taskIds } = await publishVideo({
+      const result = await publishVideo({
         videoPath: videoPath || undefined,
         videoUrl: videoPath ? undefined : videoUrl ?? undefined,
         accountIds: Array.from(selectedIds),
         caption: caption.trim() || undefined,
         hashtags: hashtags.trim() || undefined,
       });
-      if (taskIds?.length) setReportTaskId(taskIds[0]);
+      const nextBatch = buildLatestPublishBatch(result);
+      setLatestBatch(nextBatch);
+      if (nextBatch) {
+        void refreshBatch(nextBatch);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : t('distribute.pushFailed');
       toast.error(`${t('distribute.pushFailed')}: ${msg}`);
     } finally {
       setPushing(false);
     }
-  };
-
-  const formatDuration = (seconds?: number) => {
-    if (seconds == null) return '-';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-  };
-
-  const formatTime = (ts?: number) => {
-    if (!ts) return '-';
-    return formatDateTime(ts * 1000, uiLocale);
   };
 
   const captionLanguageLabel = (lang: CaptionLanguage) => {
@@ -249,7 +256,7 @@ export function TabDistribute() {
           <p className="text-sm text-[var(--color-error)]">{error}</p>
         ) : accounts.length === 0 ? (
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 text-center space-y-3">
-            <p className="text-2xl">📫</p>
+            <p className="text-2xl">馃摣</p>
             <p className="text-sm font-medium text-[var(--color-text)]">{t('distribute.noAccountsTitle')}</p>
             <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
               {t('distribute.noAccountsHintLine1')}<br />
@@ -261,7 +268,7 @@ export function TabDistribute() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"
             >
-              {t('distribute.learnGeelark')} →
+              {t('distribute.learnGeelark')} 鈫?
             </a>
           </div>
         ) : accountsForPermission.length === 0 ? (
@@ -428,7 +435,7 @@ export function TabDistribute() {
                           {t('distribute.useCaption')}
                         </button>
                       </div>
-                      <p className="break-words text-xs text-[var(--color-text)]">{nextCaption || '—'}</p>
+                      <p className="break-words text-xs text-[var(--color-text)]">{nextCaption || '鈥?'}</p>
                       {nextHashtags && (
                         <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{nextHashtags}</p>
                       )}
@@ -452,7 +459,7 @@ export function TabDistribute() {
       </section>
 
       {videoUrl && (
-        <section className="mb-6">
+        <section className="mb-6 space-y-3">
           <button
             type="button"
             onClick={() => void handlePush()}
@@ -461,135 +468,166 @@ export function TabDistribute() {
           >
             {pushing ? t('distribute.publishing') : t('distribute.publish')}
           </button>
-          {pushError && <p className="mt-2 text-sm text-[var(--color-error)]">{pushError}</p>}
+          {pushError && <p className="text-sm text-[var(--color-error)]">{pushError}</p>}
         </section>
       )}
 
-      {reportTaskId && (
-        <ReportModal
-          report={report}
-          loading={reportLoading}
-          onRefresh={() => void loadReport(reportTaskId)}
-          onClose={() => setReportTaskId(null)}
-          formatDuration={formatDuration}
-          formatTime={formatTime}
+      {latestBatch && (
+        <BatchStatusPanel
+          batch={latestBatch}
+          refreshing={batchRefreshing}
+          onRefresh={() => void refreshBatch(latestBatch)}
+          onClear={() => setLatestBatch(null)}
+          formatTime={(ts) => formatDateTime(ts, uiLocale)}
         />
       )}
     </div>
   );
 }
 
-interface ReportModalProps {
-  report: TaskDetail | null;
-  loading: boolean;
-  onRefresh: () => void;
-  onClose: () => void;
-  formatDuration: (seconds?: number) => string;
-  formatTime: (ts?: number) => string;
+function getDisplayStatus(item: LatestPublishBatchItem, t: (key: string) => string): string {
+  if (item.statusText === 'submit_failed') return t('distribute.batchStatusSubmitFailed');
+  if (item.statusText === 'submitted') return t('distribute.batchStatusSubmitted');
+  if (item.detail?.statusText) return item.detail.statusText;
+  return item.statusText || t('common.unknown');
 }
 
-function ReportModal({ report, loading, onRefresh, onClose, formatDuration, formatTime }: ReportModalProps) {
+function getStatusTone(item: LatestPublishBatchItem): string {
+  if (item.submitError) return 'border-red-500/30 bg-red-500/10 text-red-200';
+  const status = Number(item.detail?.status ?? 0);
+  if (status === 3) return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  if (status === 4 || status === 7) return 'border-red-500/30 bg-red-500/10 text-red-200';
+  if (status === 2) return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+  return 'border-amber-500/30 bg-amber-500/10 text-amber-100';
+}
+
+interface BatchStatusPanelProps {
+  batch: LatestPublishBatch;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onClear: () => void;
+  formatTime: (timestamp: number) => string;
+}
+
+function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }: BatchStatusPanelProps) {
   const { t } = useLocale();
+  const successCount = batch.items.filter((item) => Number(item.detail?.status ?? 0) === 3).length;
+  const failedCount = batch.items.filter((item) => item.submitError || [4, 7].includes(Number(item.detail?.status ?? 0))).length;
+  const pendingCount = getPendingTaskIds(batch).length;
+  const summaryText = `${t('distribute.batchSummaryTotal')} ${batch.items.length} · ${t('distribute.batchSummarySuccess')} ${successCount} · ${t('distribute.batchSummaryFailed')} ${failedCount} · ${t('distribute.batchSummaryPending')} ${pendingCount}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-[var(--color-surface-elevated)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-          <h2 className="page-title text-lg">{t('distribute.reportTitle')}</h2>
+    <section className="mb-6 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="section-title">{t('distribute.latestBatchTitle')}</h2>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {t('distribute.latestBatchMeta')} {formatTime(batch.createdAt)}
+          </p>
+          <p className="text-xs text-[var(--color-text-muted)]">{summaryText}</p>
+        </div>
+
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-            aria-label={t('common.close')}
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            {refreshing ? t('distribute.batchRefreshing') : t('common.refresh')}
+          </button>
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+          >
+            {t('common.close')}
           </button>
         </div>
+      </div>
 
-        <div className="space-y-6 p-4">
-          {loading ? (
-            <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportLoading')}</p>
-          ) : report ? (
-            <>
-              <section>
-                <h3 className="section-title">{t('distribute.reportInfo')}</h3>
-                <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportId')}</span>
-                    <span className="font-mono text-[var(--color-text)]">{report.id}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportStatus')}</span>
-                    <span className="text-[var(--color-text)]">{report.statusText ?? report.status}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportPlanName')}</span>
-                    <span className="text-[var(--color-text)]">{report.planName ?? '-'}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportDuration')}</span>
-                    <span className="text-[var(--color-text)]">{formatDuration(report.cost)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[var(--color-text-muted)]">{t('distribute.reportTime')}</span>
-                    <span className="text-[var(--color-text)]">{formatTime(report.scheduleAt)}</span>
-                  </div>
-                  {report.failDesc && (
-                    <div className="border-t border-[var(--color-border)] pt-2">
-                      <span className="text-[var(--color-error)]">{report.failDesc}</span>
-                    </div>
+      <p className="text-xs text-[var(--color-text-subtle)]">
+        {pendingCount > 0 ? t('distribute.latestBatchHintRunning') : t('distribute.latestBatchHintDone')}
+      </p>
+
+      <div className="space-y-3">
+        {batch.items.map((item) => (
+          <article
+            key={`${item.accountId}:${item.taskId ?? 'missing-task'}`}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--color-text)]">{item.username}</span>
+                  {item.platform && (
+                    <span className="rounded bg-[var(--color-surface-elevated)] px-2 py-0.5 text-[10px] uppercase text-[var(--color-text-muted)]">
+                      {item.platform}
+                    </span>
+                  )}
+                  {item.region && (
+                    <span className="text-[10px] text-[var(--color-text-muted)]">{item.region}</span>
                   )}
                 </div>
-              </section>
 
-              {report.resultImages && report.resultImages.length > 0 && (
-                <section>
-                  <h3 className="section-title">{t('distribute.reportScreenshots')}</h3>
-                  <div className="space-y-2">
-                    {report.resultImages.map((img, index) => (
-                      <img
-                        key={index}
-                        src={img}
-                        alt={`result-${index + 1}`}
-                        className="max-h-80 w-full rounded-lg border border-[var(--color-border)] bg-black object-contain"
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+                <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)]">
+                  <span>{t('distribute.reportPlanName')}: {batch.planName ?? '-'}</span>
+                  <span>{t('distribute.batchTaskId')}: {item.taskId ?? '-'}</span>
+                </div>
+              </div>
 
-              {report.status === 2 && (
-                <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportRunning')}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.reportUnavailable')}</p>
-          )}
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusTone(item)}`}>
+                {getDisplayStatus(item, t)}
+              </span>
+            </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-            >
-              {t('common.refresh')}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm text-white hover:bg-[var(--color-primary-hover)]"
-            >
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
+            {(item.detailError || item.submitError || item.detail?.failDesc) && (
+              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-200">
+                {item.detail?.failDesc || item.detailError || item.submitError}
+              </div>
+            )}
+
+            {item.detail?.shareLink && (
+              <div className="mt-3">
+                <a
+                  href={item.detail.shareLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[var(--color-primary)] hover:underline"
+                >
+                  {t('distribute.batchShareLink')}
+                </a>
+              </div>
+            )}
+
+            {item.detail?.resultImages && item.detail.resultImages.length > 0 && (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {item.detail.resultImages.map((img, index) => (
+                  <img
+                    key={`${item.accountId}:${index}`}
+                    src={img}
+                    alt={`${item.username}-result-${index + 1}`}
+                    className="max-h-64 w-full rounded-lg border border-[var(--color-border)] bg-black object-contain"
+                  />
+                ))}
+              </div>
+            )}
+
+            {item.detail?.logs && item.detail.logs.length > 0 && (
+              <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2">
+                <p className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">
+                  {t('distribute.batchLogs')}
+                </p>
+                <div className="space-y-1 text-xs text-[var(--color-text-muted)]">
+                  {item.detail.logs.slice(-3).map((line, index) => (
+                    <p key={`${item.accountId}:log:${index}`} className="break-words">{line}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </article>
+        ))}
       </div>
-    </div>
+    </section>
   );
 }

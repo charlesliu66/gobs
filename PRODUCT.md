@@ -155,7 +155,7 @@
 ### 9. 璐﹀彿绠＄悊
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
-- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布结果会自动硬过滤内部工程词、拆分 caption 内联标签，再直接发往对应社媒平台
+- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。
 
@@ -164,7 +164,18 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.91 -->
+<!-- NEXT_VERSION: v0.92 -->
+
+### v0.91 — 2026-04-22
+
+**视频分发发布状态与结果页内可见**
+
+**Feature / UX Upgrade:**
+- **[api] GeeLark 发布接口返回批次级账号任务映射**（`h5-video-tool-api/src/services/geelark.ts`）：`/api/geelark/publish` 现在除了 `taskIds` 与 `planName`，还会带回 `batch.items[]`，把每个所选账号与对应 `taskId/envId` 绑定起来，前端不再只能盯住第一个任务。
+- **[api] 任务详情统一归一化为前端可直接渲染的数据结构**（`h5-video-tool-api/src/services/geelark.ts`）：`/api/geelark/task/:id` 现在会统一输出 `statusText`、`failDesc`、`resultImages`、`logs` 和可用的 `shareLink`，避免前端继续猜 GeeLark 原始字段。
+- **[frontend] 分发页改为页内批次状态面板**（`h5-video-tool/src/pages/TabDistribute.tsx` + `h5-video-tool/src/utils/geelarkPublishBatch.ts` + `h5-video-tool/src/api/geelark.ts`）：发布后当前页会保留最近一次批次结果，逐账号显示提交状态、运行中/成功/失败、失败原因、截图和返回链接，并对未结束任务自动轮询。
+- **[frontend] 分发结果文案补齐中英文壳层**（`h5-video-tool/src/i18n/messages.ts`）：新增“最近一次发布结果、刷新中、提交失败、最近日志”等关键状态文案，避免新结果面板出现裸 key 或中文/英文断裂。
+- **[test] 新增 GeeLark 批次状态前后端回归测试**（`h5-video-tool-api/tests/geelarkAccounts.test.ts` + `h5-video-tool/tests/geelarkPublishBatch.test.ts`）：覆盖批次映射、任务详情归一化、前端批次初始化、详情合并与待轮询任务筛选，防止后续再次退回到“只跟踪第一个 taskId”。 
 
 ### v0.90 — 2026-04-22
 
@@ -1318,4 +1329,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.90）*
+*最后更新：2026-04-22（v0.91）*

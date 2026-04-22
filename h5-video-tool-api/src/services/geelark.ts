@@ -25,6 +25,34 @@ export type ListedAccount = {
   canPost: boolean;
 };
 
+export type PublishBatchItem = {
+  accountId: string;
+  username: string;
+  envId?: string;
+  region?: string;
+  platform?: string;
+  remark?: string;
+  taskId?: string;
+  submitError?: string;
+};
+
+export type NormalizedTaskDetail = {
+  id: string;
+  planName?: string;
+  taskType?: number;
+  serialName?: string;
+  envId?: string;
+  scheduleAt?: number;
+  status?: number;
+  statusText?: string;
+  failCode?: number;
+  failDesc?: string;
+  cost?: number;
+  resultImages: string[];
+  shareLink?: string;
+  logs: string[];
+};
+
 type PhoneStatusDetail = {
   id: string;
   serialName?: string;
@@ -201,6 +229,74 @@ export function shouldStopPhoneForTaskStatus(status: number): boolean {
   return status === TASK_STATUS_SUCCESS;
 }
 
+export function buildPublishBatchItems(
+  accounts: Array<ListedAccount & { envId?: string }>,
+  taskIds: string[],
+): PublishBatchItem[] {
+  return accounts.map((account, index) => {
+    const taskId = taskIds[index];
+    const item: PublishBatchItem = {
+      accountId: account.id,
+      username: account.username,
+      envId: account.envId,
+      region: account.region,
+      platform: account.platform,
+    };
+    if (account.remark) item.remark = account.remark;
+    if (taskId) item.taskId = taskId;
+    else item.submitError = 'GeeLark did not return a task id for this account';
+    return item;
+  });
+}
+
+function firstNonEmptyString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && /^https?:\/\//.test(item.trim())).map((item) => item.trim());
+}
+
+function readLogArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim());
+}
+
+export function normalizeTaskDetailPayload(detail: Record<string, unknown>): NormalizedTaskDetail {
+  const status = Number(detail.status ?? 0) || 0;
+  const normalized: NormalizedTaskDetail = {
+    id: String(detail.id ?? ''),
+    status,
+    statusText: typeof detail.statusText === 'string' && detail.statusText.trim()
+      ? detail.statusText
+      : (STATUS_MAP[status] ?? `status:${status}`),
+    failDesc: undefined,
+    resultImages: readStringArray(detail.resultImages),
+    logs: readLogArray(detail.logs),
+  };
+  if (typeof detail.planName === 'string' && detail.planName) normalized.planName = detail.planName;
+  if (typeof detail.taskType === 'number') normalized.taskType = detail.taskType;
+  if (typeof detail.serialName === 'string' && detail.serialName) normalized.serialName = detail.serialName;
+  if (typeof detail.envId === 'string' && detail.envId) normalized.envId = detail.envId;
+  if (typeof detail.scheduleAt === 'number') normalized.scheduleAt = detail.scheduleAt;
+  if (typeof detail.failCode === 'number') normalized.failCode = detail.failCode;
+  if (typeof detail.failDesc === 'string' && detail.failDesc.trim()) normalized.failDesc = detail.failDesc.trim();
+  if (typeof detail.cost === 'number') normalized.cost = detail.cost;
+  const shareLink = firstNonEmptyString([
+    detail.shareLink,
+    detail.shareUrl,
+    detail.url,
+    detail.postUrl,
+    detail.videoUrl,
+  ]);
+  if (shareLink) normalized.shareLink = shareLink;
+  return normalized;
+}
+
 function resolveEnvIds(accountIds: string[]): string[] {
   const allAccounts = loadAccountsConfig();
   const envIds: string[] = [];
@@ -209,6 +305,25 @@ function resolveEnvIds(accountIds: string[]): string[] {
     if (matched?.envId) envIds.push(matched.envId);
   }
   return [...new Set(envIds)];
+}
+
+function resolvePublishAccounts(accountIds: string[]): Array<ListedAccount & { envId: string }> {
+  const allAccounts = loadAccountsConfig();
+  const targets: Array<ListedAccount & { envId: string }> = [];
+  for (const accountId of accountIds) {
+    const matched = allAccounts.find((account) => account.id === accountId && account.canPost !== false);
+    if (!matched?.envId) continue;
+    targets.push({
+      id: matched.id,
+      username: matched.username,
+      envId: matched.envId,
+      region: matched.region,
+      platform: matched.platform,
+      remark: matched.remark,
+      canPost: matched.canPost !== false,
+    });
+  }
+  return targets;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -348,10 +463,9 @@ const STATUS_MAP: Record<number, string> = {
   7: 'canceled',
 };
 
-export async function getTaskDetail(taskId: string): Promise<Record<string, unknown>> {
+export async function getTaskDetail(taskId: string): Promise<NormalizedTaskDetail> {
   const detail = await geelarkPost<Record<string, unknown>>('/task/detail', { id: taskId });
-  const status = Number(detail.status ?? 0);
-  return { ...detail, statusText: STATUS_MAP[status] ?? `status:${status}` };
+  return normalizeTaskDetailPayload(detail);
 }
 
 async function monitorPublishTasksAndStopPhones(taskEnvMap: Record<string, string>): Promise<void> {
@@ -395,8 +509,9 @@ export async function publishVideo(options: {
   hashtags?: string;
   markAI?: boolean;
   needShareLink?: boolean;
-}): Promise<{ taskIds: string[]; planName: string }> {
-  const envIds = resolveEnvIds(options.accountIds);
+}): Promise<{ taskIds: string[]; planName: string; batch: { planName: string; items: PublishBatchItem[] } }> {
+  const publishAccounts = resolvePublishAccounts(options.accountIds);
+  const envIds = publishAccounts.map((account) => account.envId);
   if (envIds.length === 0) {
     throw new Error('No GeeLark envIds matched the selected publish accounts');
   }
@@ -420,7 +535,14 @@ export async function publishVideo(options: {
   void monitorPublishTasksAndStopPhones(taskEnvMap).catch((error) => {
     console.error('[geelark/auto-stop] background monitor crashed', error);
   });
-  return { taskIds, planName };
+  return {
+    taskIds,
+    planName,
+    batch: {
+      planName,
+      items: buildPublishBatchItems(publishAccounts, taskIds),
+    },
+  };
 }
 
 export async function getTaskHistory(size = 20): Promise<unknown[]> {

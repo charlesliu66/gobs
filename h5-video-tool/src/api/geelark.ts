@@ -1,4 +1,5 @@
 import { apiGet, apiPost } from './client';
+import type { PublishBatchResponse } from '../utils/geelarkPublishBatch';
 
 export interface GeelarkAccount {
   id: string;
@@ -17,6 +18,7 @@ export async function fetchAccounts(): Promise<GeelarkAccount[]> {
 export interface PublishResult {
   taskIds: string[];
   planName?: string;
+  batch?: PublishBatchResponse;
 }
 
 export async function publishVideo(params: {
@@ -46,6 +48,7 @@ export interface TaskDetail {
   failDesc?: string;
   cost?: number;
   resultImages?: string[];
+  shareLink?: string;
   logs?: string[];
 }
 
