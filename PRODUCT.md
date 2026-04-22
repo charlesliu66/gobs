@@ -46,6 +46,7 @@
 - **瑙掕壊鐘舵€佹劅鐭ワ紙v0.54锛?*锛氬垎闀滃紩鐢ㄨ鑹叉椂鑷姩鍖归厤鐘舵€佸浘锛堝彈浼?鎴樻枟/绔ュ勾绛夛級锛屼紭鍏堢骇锛氬垎闀滄墜鍔ㄨ鐩?> 瑙掕壊榛樿婵€娲荤姸鎬?> 瀹氱褰㈣薄
 - 鏀寔骞跺彂鎻愪氦锛氬涓垎闀滃悓鏃惰繘鍏ラ槦鍒楋紝骞跺彂鏁伴€氳繃 `DREAMINA_MAX_CONCURRENT` 閰嶇疆
 - **鍚庣鏅鸿兘杞 + SSE 鎺ㄩ€侊紙v0.35a+锛?*锛氬嵆姊︿换鍔＄敱鏈嶅姟绔悗鍙拌疆璇紝瑙嗛灏辩华鍚?SSE 瀹炴椂閫氱煡鍓嶇锛涘叧闂祻瑙堝櫒涔熶笉涓㈠け鐢熸垚缁撴灉
+- **分镜状态口径收口（v0.98）**：分镜页优先按“是否已有真实视频 + 当前 batch-job 实时状态”判断，不再被历史残留 `pendingVideoSubmitId` 误导；刷新后若后台已完成/失败/取消，会自动清理旧 submitId，确保分镜页、导出页、即梦后台看到的是同一批真实状态。
 - 骞跺彂瓒呴檺锛坮et=1310锛夎嚜鍔ㄧ瓑寰?45s 閲嶈瘯锛屾渶缁堝け璐ョ粰鍑哄弸濂戒腑鏂囨彁绀?- 鐢熸垚瀹屾垚瑙嗛閫氳繃鏈嶅姟 URL锛坄/api/video/file?path=...`锛夎闂紝涓嶄細鍦?localStorage 涓瓨鍌ㄥぇ浣撶Н data URL
 
 ---
@@ -167,7 +168,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.98 -->
+<!-- NEXT_VERSION: v0.99 -->
+
+### v0.98 — 2026-04-22
+
+**高级制片分镜状态与已生成视频口径重新收口**
+
+**Production Wizard / Storyboard Status:**
+- **[frontend] 分镜条、右侧生成操作区、预览面板统一改成“真实视频优先，旧 pending submitId 只作无视频兜底”**（`h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardPreviewPanel.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx`, `h5-video-tool/src/studio/productionTypes.ts`）：当镜头已经有可播放视频时，不再因为历史残留的 `pendingVideoSubmitId` 被误显示成“生成中”，导出页与分镜页对同一镜头的状态口径重新一致。
+- **[frontend] 项目加载后会按当前 batch-jobs 自动清理失效的 `pendingVideoSubmitId`**（`h5-video-tool/src/pages/ProductionWizard.tsx`）：如果后台已经判定任务完成/失败/取消，或该镜头已经有真实视频，前端会主动把旧 submitId 清掉，并触发一次服务器回写，避免刷新后旧状态再次复活。
+- **[frontend] 服务端项目与本地缓存合并时，不再把“已有视频镜头”的本地旧 submitId 回灌到最新项目**（`h5-video-tool/src/studio/productionWizardStorage.ts`）：修复刷新/重进高级制片后，已完成镜头又被错误标成后台生成中的根因。
 
 ### v0.97 — 2026-04-22
 
@@ -1388,4 +1398,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.97）*
+*最后更新：2026-04-22（v0.98）*

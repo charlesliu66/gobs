@@ -5,6 +5,7 @@
   SceneSheet,
 } from '../productionTypes';
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
+import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
 import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
 import { useProductionContext } from '../ProductionContext';
@@ -235,6 +236,7 @@ export function StepStoryboardWorkspace({
               shotMediaBusy={shotMediaBusy}
               dreaminaAsync={dreaminaAsync}
               hasProductionDesign={hasProductionDesign}
+              hasVideo={hasProductionShotPreviewMedia(shot)}
               activeJob={selectedShotJob}
               cancelBusy={cancelBusy}
               pendingVideoSubmitId={shot.pendingVideoSubmitId}

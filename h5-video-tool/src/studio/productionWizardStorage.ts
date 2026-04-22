@@ -1,6 +1,7 @@
 import {
   PRODUCTION_STORAGE_KEY,
   type CharacterSheet,
+  hasProductionShotPreviewMedia,
   type ProductionProject,
   type ProductionShot,
   type ProductionShotVideoVersion,
@@ -159,14 +160,17 @@ export function mergeShotVideoVersions(
       const selected = localVersions.find(
         (v) => v.id === localShot.selectedPreviewVideoVersionId,
       ) ?? localVersions[0];
-      return {
+      const mergedShot = {
         ...serverShot,
         previewVideoVersions: localVersions,
         selectedPreviewVideoVersionId: selected?.id,
         previewVideoPath: selected?.videoPath,
         previewVideoUrl: selected?.videoUrl,
+      } as ProductionShot;
+      return {
+        ...mergedShot,
         pendingVideoSubmitId:
-          serverShot.pendingVideoSubmitId || localShot.pendingVideoSubmitId,
+          serverShot.pendingVideoSubmitId || (hasProductionShotPreviewMedia(mergedShot) ? undefined : localShot.pendingVideoSubmitId),
       } as ProductionShot;
     }
 
@@ -185,14 +189,18 @@ export function mergeShotVideoVersions(
       : serverShot.selectedPreviewVideoVersionId;
     const selected = union.find((v) => v.id === preferredSelectedId) ?? union[0];
 
-    return {
+    const mergedShot = {
       ...serverShot,
       previewVideoVersions: union,
       selectedPreviewVideoVersionId: selected?.id,
       previewVideoPath: selected?.videoPath,
       previewVideoUrl: selected?.videoUrl,
+    } as ProductionShot;
+
+    return {
+      ...mergedShot,
       pendingVideoSubmitId:
-        serverShot.pendingVideoSubmitId || localShot.pendingVideoSubmitId,
+        serverShot.pendingVideoSubmitId || (hasProductionShotPreviewMedia(mergedShot) ? undefined : localShot.pendingVideoSubmitId),
     } as ProductionShot;
   });
 }

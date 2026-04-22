@@ -178,6 +178,16 @@ export interface ProductionShot {
   };
 }
 
+export function hasProductionShotPreviewMedia(shot: Pick<
+  ProductionShot,
+  'previewVideoUrl' | 'previewVideoPath' | 'previewVideoVersions'
+>): boolean {
+  if (shot.previewVideoPath?.trim()) return true;
+  if (shot.previewVideoUrl?.trim()) return true;
+  if (!Array.isArray(shot.previewVideoVersions)) return false;
+  return shot.previewVideoVersions.some((version) => !!(version?.videoPath?.trim() || version?.videoUrl?.trim()));
+}
+
 export interface CharacterVisualProfile {
   silhouette: string;
   faceHair: string;

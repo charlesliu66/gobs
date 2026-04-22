@@ -11,6 +11,7 @@ export function StepStoryboardGenerateActions({
   shotMediaBusy,
   dreaminaAsync,
   hasProductionDesign,
+  hasVideo,
   activeJob,
   cancelBusy,
   pendingVideoSubmitId,
@@ -23,6 +24,7 @@ export function StepStoryboardGenerateActions({
   shotMediaBusy: 'frame' | 'video' | null;
   dreaminaAsync: boolean;
   hasProductionDesign: boolean;
+  hasVideo?: boolean;
   activeJob?: BatchJobDto | null;
   cancelBusy?: boolean;
   pendingVideoSubmitId?: string;
@@ -34,7 +36,7 @@ export function StepStoryboardGenerateActions({
 }) {
   const isSubmitting = shotMediaBusy === 'video';
   const hasActiveJob = !!activeJob;
-  const hasPendingBackend = !!pendingVideoSubmitId || hasActiveJob;
+  const hasPendingBackend = (!hasVideo && !!pendingVideoSubmitId) || hasActiveJob;
   const videoButtonDisabled = isSubmitting || hasActiveJob;
 
   function videoButtonLabel() {
@@ -46,7 +48,7 @@ export function StepStoryboardGenerateActions({
     }
     if (activeJob?.status === 'pending' || activeJob?.status === 'queuing') return '后台排队中';
     if (activeJob?.status === 'processing') return '即梦生成中';
-    if (pendingVideoSubmitId) return '后台生成中';
+    if (!hasVideo && pendingVideoSubmitId) return '后台生成中';
     return '生成分镜视频';
   }
 
@@ -120,7 +122,7 @@ export function StepStoryboardGenerateActions({
           即梦正在渲染本镜头；现在取消会停止后续跟进，但积分通常无法追回。
         </p>
       )}
-      {!activeJob && pendingVideoSubmitId && (
+      {!activeJob && !hasVideo && pendingVideoSubmitId && (
         <p className="mt-2 text-[10px] text-amber-400/80">
           视频已提交到即梦，后台会继续轮询；如果状态滞后，可以手动检查一次。
         </p>

@@ -6,6 +6,7 @@ import {
 import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
 import {
   emptyProductionProject,
+  hasProductionShotPreviewMedia,
   PRODUCTION_STORAGE_KEY,
   type ProductionProject,
   type StructureTemplate,
@@ -526,6 +527,38 @@ export function ProductionWizard() {
       try { localStorage.removeItem(batchKey); } catch { /* ignore */ }
     }
   }, [clearShotBusy, isServerBootstrapping, project.shots, projectJobs, saveShotVideo, serverProjectId, setProject]);
+
+  useEffect(() => {
+    if (isServerBootstrapping || projectJobs.length === 0) return;
+    const activeStatuses = new Set(['awaiting_submit', 'pending', 'queuing', 'processing']);
+    const terminalStatuses = new Set(['done', 'failed', 'cancelled']);
+    const activeByShot = new Set(
+      projectJobs
+        .filter((job) => activeStatuses.has(job.status))
+        .map((job) => String(job.shotIndex)),
+    );
+    const terminalSubmitIds = new Set(
+      projectJobs
+        .filter((job) => terminalStatuses.has(job.status) && job.submitId)
+        .map((job) => job.submitId),
+    );
+
+    setProject((current) => {
+      let changed = false;
+      const shots = current.shots.map((shot) => {
+        const pendingSubmitId = shot.pendingVideoSubmitId?.trim();
+        if (!pendingSubmitId) return shot;
+        if (activeByShot.has(String(shot.shotIndex))) return shot;
+        if (!hasProductionShotPreviewMedia(shot) && !terminalSubmitIds.has(pendingSubmitId)) return shot;
+        changed = true;
+        return { ...shot, pendingVideoSubmitId: undefined };
+      });
+      if (!changed) return current;
+      // Flush once so the server copy stops reviving stale submitId state on reload.
+      needsFlushRef.current = true;
+      return { ...current, shots };
+    });
+  }, [isServerBootstrapping, projectJobs, setProject]);
 
   useEffect(() => {
     requestNotificationPermission();

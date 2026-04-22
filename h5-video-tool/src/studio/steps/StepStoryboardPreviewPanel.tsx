@@ -1,4 +1,4 @@
-import type { ProductionShot, ProductionShotVideoVersion } from '../productionTypes';
+import { hasProductionShotPreviewMedia, type ProductionShot, type ProductionShotVideoVersion } from '../productionTypes';
 import { VersionTimeline } from '../components/VersionTimeline';
 
 export function StepStoryboardPreviewPanel({
@@ -22,6 +22,8 @@ export function StepStoryboardPreviewPanel({
   onKeepOnlyCurrentVersion: (id: string) => void;
   onSelectVideoVersion: (id: string) => void;
 }) {
+  const hasVideo = hasProductionShotPreviewMedia(shot);
+
   return (
     <aside className="w-full shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 lg:w-72">
       <div className="text-xs font-medium text-[var(--color-text)]">本镜预览</div>
@@ -49,7 +51,7 @@ export function StepStoryboardPreviewPanel({
       )}
       <div className="mt-3">
         <div className="text-[10px] font-medium text-[var(--color-text-muted)]">分镜视频</div>
-        {(shotMediaBusy === 'video' || (!shotPreviewPlaySrc && shot.pendingVideoSubmitId)) ? (
+        {(shotMediaBusy === 'video' || (!shotPreviewPlaySrc && !hasVideo && shot.pendingVideoSubmitId)) ? (
           <div className="mt-1.5 overflow-hidden rounded-xl border border-amber-500/35 bg-[linear-gradient(145deg,rgba(120,80,20,0.22),rgba(20,20,28,0.95))] shadow-inner">
             <div className="flex items-center gap-2 border-b border-amber-500/20 px-3 py-2">
               <span className="relative flex h-2 w-2 shrink-0">

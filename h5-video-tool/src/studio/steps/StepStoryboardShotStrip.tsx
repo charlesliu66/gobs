@@ -1,5 +1,5 @@
 ﻿import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
-import type { ProductionShot, SceneSheet } from '../productionTypes';
+import { hasProductionShotPreviewMedia, type ProductionShot, type SceneSheet } from '../productionTypes';
 
 export type ShotJobStatus = 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled';
 
@@ -72,7 +72,7 @@ export function StepStoryboardShotStrip({
           const isThisShotBusy = shotBusyMap[shotKey];
           const activeJob = shotActiveJobMap?.[shotKey];
           const jobStatus = shotJobStatusMap?.[shotKey];
-          const hasVideo = !!(s.previewVideoUrl || s.previewVideoPath || (s.previewVideoVersions && s.previewVideoVersions.length > 0));
+          const hasVideo = hasProductionShotPreviewMedia(s);
           const showFailed = !hasVideo && jobStatus === 'failed';
           const showCancelled = !hasVideo && jobStatus === 'cancelled';
           const canCancel = !!activeJob && (
@@ -148,7 +148,7 @@ export function StepStoryboardShotStrip({
                       <span className="h-4 w-4 rounded-full border-2 border-white/20 border-t-violet-400 animate-pulse" />
                       <span className="px-1 text-[8px] font-medium text-violet-200">等待调度</span>
                     </div>
-                  ) : s.pendingVideoSubmitId ? (
+                  ) : !hasVideo && s.pendingVideoSubmitId ? (
                     <div
                       className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50"
                       title="后台已记录 submitId，等待状态同步"
