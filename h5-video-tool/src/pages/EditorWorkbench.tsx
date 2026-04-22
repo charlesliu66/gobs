@@ -14,6 +14,7 @@ import { TextOverlayRenderer } from '../editor/components/TextOverlayRenderer';
 import { EditorProjectManager } from '../editor/components/EditorProjectManager';
 import { ImportGuideModal } from '../editor/components/ImportGuideModal';
 import { SyncProductionModal } from '../editor/components/SyncProductionModal';
+import { projectMemoryToChatTurns } from '../editor/types/agentMemory';
 import type { AudioClip, MediaAsset, TimelineProject, VideoClip } from '../editor/types/timeline';
 import type { TextClip } from '../editor/types/timeline';
 import {
@@ -145,6 +146,8 @@ export function EditorWorkbench() {
     setProject,
     assets,
     setAssets,
+    projectMemory,
+    setProjectMemory,
     currentTime,
     setCurrentTime,
     isPlaying,
@@ -227,6 +230,17 @@ export function EditorWorkbench() {
   const pushLog = useCallback((line: string) => {
     setAgentLogs((prev) => [...prev, line]);
   }, []);
+
+  useEffect(() => {
+    setAgentChatHistory(projectMemoryToChatTurns(projectMemory));
+  }, [projectMemory]);
+
+  useEffect(() => {
+    setAgentLogs([]);
+    setAgentDeliverable(null);
+    setAgentCreativeStrategy(null);
+    setAgentJobProgress(null);
+  }, [projectId]);
 
   /** 自动打开最近项目：没有 URL project 参数时，首次加载项目列表后自动跳到最新项目 */
   useEffect(() => {
@@ -410,13 +424,9 @@ export function EditorWorkbench() {
         }
         if (route.intent === 'chat') {
           try {
-            const { reply } = await chatEditorAgent(userMessage);
+            const { reply, projectMemory: nextProjectMemory } = await chatEditorAgent(userMessage, projectMemory);
             pushLog(`助手：${reply}`);
-            setAgentChatHistory((prev) => [
-              ...prev,
-              { role: 'user', content: userMessage },
-              { role: 'assistant', content: reply },
-            ]);
+            setProjectMemory(nextProjectMemory ?? projectMemory);
           } catch (e) {
             pushLog(`错误：对话失败：${e instanceof Error ? e.message : String(e)}`);
           }
@@ -475,13 +485,14 @@ export function EditorWorkbench() {
 
         const ctrl = new AbortController();
         agentAbortRef.current = ctrl;
-        const { summary, project: nextProject, llmUsage } = await applyEditorAgentStream(
+        const { summary, project: nextProject, projectMemory: nextProjectMemory, llmUsage } = await applyEditorAgentStream(
           {
             userMessage,
             aspectRatio,
             selectedAssetIds: ids,
             assets: assetPayload,
             currentProject: project,
+            projectMemory,
           },
           (p) => setAgentJobProgress(p),
           ctrl.signal,
@@ -490,6 +501,7 @@ export function EditorWorkbench() {
           snapVideoClipsSequential(normalizeTimelineProject(nextProject)),
         );
         setProject(syncedProject);
+        setProjectMemory(nextProjectMemory ?? projectMemory);
         mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
         setCurrentTime(0);
         setIsPlaying(false);
@@ -517,10 +529,12 @@ export function EditorWorkbench() {
     [
       selectedAssetIds,
       project,
+      projectMemory,
       aspectRatio,
       assets,
       libraryItems,
       setAssets,
+      setProjectMemory,
       setProject,
       setCurrentTime,
       setIsPlaying,
@@ -554,13 +568,9 @@ export function EditorWorkbench() {
 
           if (route.intent === 'chat') {
             try {
-              const { reply } = await chatEditorAgent(trimmedMessage);
+              const { reply, projectMemory: nextProjectMemory } = await chatEditorAgent(trimmedMessage, projectMemory);
               pushLog(`助手：${reply}`);
-              setAgentChatHistory((prev) => [
-                ...prev,
-                { role: 'user', content: trimmedMessage },
-                { role: 'assistant', content: reply },
-              ]);
+              setProjectMemory(nextProjectMemory ?? projectMemory);
             } catch (error) {
               pushLog(`错误：对话失败：${error instanceof Error ? error.message : String(error)}`);
             }
@@ -625,6 +635,7 @@ export function EditorWorkbench() {
         const {
           summary,
           project: nextProject,
+          projectMemory: nextProjectMemory,
           llmUsage,
           creativeStrategy,
         } = await applyEditorAgentCreativeStream(
@@ -634,6 +645,7 @@ export function EditorWorkbench() {
             selectedAssetIds: ids,
             assets: assetPayload,
             currentProject: project,
+            projectMemory,
             creativeBrief,
           },
           (progress) => setAgentJobProgress(progress),
@@ -644,6 +656,7 @@ export function EditorWorkbench() {
           snapVideoClipsSequential(normalizeTimelineProject(nextProject)),
         );
         setProject(syncedProject);
+        setProjectMemory(nextProjectMemory ?? projectMemory);
         mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
         setCurrentTime(0);
         setIsPlaying(false);
@@ -673,10 +686,12 @@ export function EditorWorkbench() {
     [
       selectedAssetIds,
       project,
+      projectMemory,
       aspectRatio,
       assets,
       libraryItems,
       setAssets,
+      setProjectMemory,
       setProject,
       setCurrentTime,
       setIsPlaying,

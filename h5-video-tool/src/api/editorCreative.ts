@@ -4,6 +4,7 @@ import type {
   EditorAgentJobProgress,
   EditorVisionFocus,
 } from './editor';
+import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import type { AspectRatioPreset, TimelineProject } from '../editor/types/timeline';
 import {
   normalizeEditorCreativeBriefForRequest,
@@ -31,6 +32,7 @@ export interface ApplyEditorCreativeAgentBody {
   selectedAssetIds: string[];
   assets: Array<{ id: string; originalName: string; durationSec: number }>;
   currentProject: TimelineProject;
+  projectMemory?: EditorProjectMemory;
   creativeBrief?: EditorCreativeBrief;
   visionFocus?: EditorVisionFocus;
 }
@@ -101,6 +103,8 @@ export async function applyEditorAgentCreativeStream(
         etaSec?: number;
         summary?: string;
         project?: TimelineProject;
+        projectMemory?: EditorProjectMemory;
+        userCommunicationProfile?: EditorUserCommunicationProfile;
         llmUsage?: ApplyEditorAgentResponse['llmUsage'];
         creativeStrategy?: EditorCreativeStrategy;
         error?: string;
@@ -125,6 +129,8 @@ export async function applyEditorAgentCreativeStream(
         finalResult = {
           summary: payload.summary ?? '',
           project: payload.project,
+          projectMemory: payload.projectMemory,
+          userCommunicationProfile: payload.userCommunicationProfile,
           llmUsage: payload.llmUsage,
           creativeStrategy: payload.creativeStrategy,
         };

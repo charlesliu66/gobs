@@ -14,6 +14,12 @@ import {
   loadPreference,
   type ExportBehaviorReport,
 } from '../services/userPreferenceService.js';
+import {
+  appendAgentMessageEvent,
+  promoteProjectMemory,
+  type ProjectMemoryPromotionInput,
+} from '../services/editorAgentMemoryStore.js';
+import { updateEditorUserCommunicationProfileForUser } from '../services/editorUserProfileService.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
@@ -29,6 +35,54 @@ function videoAssetIdsFromProject(project: TimelineProject): string[] {
   return [...ids];
 }
 
+function buildInstructionMemoryPromotion(
+  message: string,
+  creativeBrief: ReturnType<typeof normalizeEditorCreativeBrief>,
+): ProjectMemoryPromotionInput {
+  const stableFacts: ProjectMemoryPromotionInput['stableFacts'] = [];
+  const preferenceSignals: ProjectMemoryPromotionInput['preferenceSignals'] = [];
+  const negativePreferenceSignals: ProjectMemoryPromotionInput['negativePreferenceSignals'] = [];
+
+  if (creativeBrief) {
+    stableFacts?.push({ key: 'creative_mode', value: creativeBrief.mode });
+    stableFacts?.push({ key: 'platform_goal', value: creativeBrief.platform });
+    if (creativeBrief.objective) {
+      stableFacts?.push({ key: 'objective', value: creativeBrief.objective });
+    }
+    if (creativeBrief.audience) {
+      stableFacts?.push({ key: 'target_audience', value: creativeBrief.audience });
+    }
+    if (creativeBrief.cta) {
+      stableFacts?.push({ key: 'cta', value: creativeBrief.cta });
+    }
+    if (creativeBrief.referenceStyle) {
+      preferenceSignals?.push({ key: 'reference_style', value: creativeBrief.referenceStyle });
+    }
+    creativeBrief.sellingPoints.slice(0, 3).forEach((value, index) => {
+      stableFacts?.push({ key: `selling_point_${index + 1}`, value });
+    });
+  }
+
+  if (/快节奏|快一点|更快|节奏再快/u.test(message)) {
+    preferenceSignals?.push({ key: 'pace', value: 'fast' });
+  }
+  if (/大字字幕|bold subtitles|大标题/u.test(message)) {
+    preferenceSignals?.push({ key: 'subtitle_style', value: 'big_bold' });
+  }
+  if (/不要慢节奏开头|别慢开头|slow intro/i.test(message)) {
+    negativePreferenceSignals?.push({ key: 'hook', value: 'slow_intro' });
+  }
+  if (/不要太长解释|别讲太多原因|不用讲太多原因/u.test(message)) {
+    negativePreferenceSignals?.push({ key: 'response_style', value: 'long_explanations' });
+  }
+
+  return {
+    stableFacts,
+    preferenceSignals,
+    negativePreferenceSignals,
+  };
+}
+
 router.post('/agent/chat', async (req, res) => {
   const msg =
     typeof (req.body as { userMessage?: string }).userMessage === 'string'
@@ -39,8 +93,24 @@ router.post('/agent/chat', async (req, res) => {
     return;
   }
   try {
+    const username = sanitizeUsername(req.user?.username);
     const reply = await runEditorAgentChat(msg);
-    res.json({ reply });
+    const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
+      userMessage: msg,
+    });
+    const withUserEvent = appendAgentMessageEvent((req.body as { projectMemory?: unknown }).projectMemory, {
+      role: 'user',
+      kind: 'chat',
+      route: 'chat',
+      content: msg,
+    });
+    const projectMemory = appendAgentMessageEvent(withUserEvent, {
+      role: 'assistant',
+      kind: 'chat',
+      route: 'chat',
+      content: reply,
+    });
+    res.json({ reply, projectMemory, userCommunicationProfile });
   } catch (error) {
     console.error('[editor/agent/chat]', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Chat failed' });
@@ -71,6 +141,7 @@ interface ApplyBody {
   selectedAssetIds?: string[];
   assets?: Array<{ id: string; originalName: string; durationSec?: number }>;
   currentProject?: TimelineProject;
+  projectMemory?: unknown;
   creativeBrief?: unknown;
   visionFocus?: unknown;
 }
@@ -162,10 +233,32 @@ router.post('/agent/apply', async (req, res) => {
 
   try {
     const username = sanitizeUsername(req.user?.username);
+    const body = req.body as ApplyBody;
     const { summary, project, llmUsage, creativeStrategy } = await runEditorAgentApply(parsed.input, {
       username,
     });
-    res.json({ summary, project, llmUsage, creativeStrategy });
+    const promotedMemory = promoteProjectMemory(
+      appendAgentMessageEvent(body.projectMemory, {
+        role: 'user',
+        kind: 'apply_request',
+        route: 'apply',
+        content: parsed.input.userMessage,
+      }),
+      {
+        ...buildInstructionMemoryPromotion(parsed.input.userMessage, parsed.input.creativeBrief),
+        decisions: [{ decision: summary, outcome: 'accepted' }],
+      },
+    );
+    const projectMemory = appendAgentMessageEvent(promotedMemory, {
+      role: 'assistant',
+      kind: 'apply_result',
+      route: 'apply',
+      content: summary,
+    });
+    const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
+      userMessage: body.userMessage,
+    });
+    res.json({ summary, project, llmUsage, creativeStrategy, projectMemory, userCommunicationProfile });
   } catch (error) {
     console.error('[editor/agent/apply]', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Agent apply failed' });
@@ -191,15 +284,39 @@ router.post('/agent/apply-stream', async (req, res) => {
 
   try {
     const username = sanitizeUsername(req.user?.username);
+    const body = req.body as ApplyBody;
     const result = await runEditorAgentApply(parsed.input, {
       onProgress: (progress) => send({ type: 'progress', ...progress }),
       username,
+    });
+    const promotedMemory = promoteProjectMemory(
+      appendAgentMessageEvent(body.projectMemory, {
+        role: 'user',
+        kind: 'apply_request',
+        route: 'apply_stream',
+        content: parsed.input.userMessage,
+      }),
+      {
+        ...buildInstructionMemoryPromotion(parsed.input.userMessage, parsed.input.creativeBrief),
+        decisions: [{ decision: result.summary, outcome: 'accepted' }],
+      },
+    );
+    const projectMemory = appendAgentMessageEvent(promotedMemory, {
+      role: 'assistant',
+      kind: 'apply_result',
+      route: 'apply_stream',
+      content: result.summary,
+    });
+    const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
+      userMessage: body.userMessage,
     });
 
     send({
       type: 'done',
       summary: result.summary,
       project: result.project,
+      projectMemory,
+      userCommunicationProfile,
       llmUsage: result.llmUsage,
       creativeStrategy: result.creativeStrategy,
     });

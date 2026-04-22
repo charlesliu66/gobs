@@ -1,4 +1,5 @@
 import { apiGet, apiPost, redirectToLogin } from './client';
+import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../editor/types/timeline';
 import { generateUUID } from '../utils/uuid';
 
@@ -152,6 +153,7 @@ export interface EditorProjectRecord {
   aspectRatio: AspectRatioPreset;
   project: TimelineProject;
   assets: Record<string, MediaAsset>;
+  memory: EditorProjectMemory;
 }
 
 export async function listEditorProjects(): Promise<{ projects: Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'> & { sourceProductionProjectId?: string }> }> {
@@ -169,6 +171,7 @@ export async function saveEditorProject(input: {
   aspectRatio: AspectRatioPreset;
   project: TimelineProject;
   assets: Record<string, MediaAsset>;
+  memory?: EditorProjectMemory;
 }): Promise<EditorProjectRecord> {
   const out = await apiPost<{ success: boolean; data: EditorProjectRecord }>('/api/editor/projects', input);
   return out.data;
@@ -313,6 +316,7 @@ export interface ApplyEditorAgentBody {
   selectedAssetIds: string[];
   assets: Array<{ id: string; originalName: string; durationSec: number }>;
   currentProject: TimelineProject;
+  projectMemory?: EditorProjectMemory;
   visionFocus?: EditorVisionFocus;
 }
 
@@ -331,6 +335,8 @@ export interface LlmUsageCallRecord {
 export interface ApplyEditorAgentResponse {
   summary: string;
   project: TimelineProject;
+  projectMemory?: EditorProjectMemory;
+  userCommunicationProfile?: EditorUserCommunicationProfile;
   /** 单次「智能剪辑」请求内各阶段 LLM 用量；totals 为合计 */
   llmUsage?: {
     byCall: LlmUsageCallRecord[];
@@ -407,6 +413,8 @@ export async function applyEditorAgentStream(
         etaSec?: number;
         summary?: string;
         project?: TimelineProject;
+        projectMemory?: EditorProjectMemory;
+        userCommunicationProfile?: EditorUserCommunicationProfile;
         llmUsage?: ApplyEditorAgentResponse['llmUsage'];
         error?: string;
       };
@@ -427,6 +435,8 @@ export async function applyEditorAgentStream(
         finalResult = {
           summary: payload.summary ?? '',
           project: payload.project,
+          projectMemory: payload.projectMemory,
+          userCommunicationProfile: payload.userCommunicationProfile,
           llmUsage: payload.llmUsage,
         };
       }
@@ -450,8 +460,19 @@ export async function routeEditorAgentMessage(userMessage: string): Promise<Rout
 }
 
 /** 独立对话：大模型闲聊（需在 route 为 chat 后调用） */
-export async function chatEditorAgent(userMessage: string): Promise<{ reply: string }> {
-  return apiPost<{ reply: string }>('/api/editor/agent/chat', { userMessage });
+export async function chatEditorAgent(
+  userMessage: string,
+  projectMemory?: EditorProjectMemory,
+): Promise<{
+  reply: string;
+  projectMemory?: EditorProjectMemory;
+  userCommunicationProfile?: EditorUserCommunicationProfile;
+}> {
+  return apiPost<{
+    reply: string;
+    projectMemory?: EditorProjectMemory;
+    userCommunicationProfile?: EditorUserCommunicationProfile;
+  }>('/api/editor/agent/chat', { userMessage, projectMemory });
 }
 
 // ---------------------------------------------------------------------------

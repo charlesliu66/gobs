@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createEmptyEditorProjectMemory, type EditorProjectMemory } from '../types/agentMemory';
 import type { AspectRatioPreset, MediaAsset, TimelineProject, VideoClip } from '../types/timeline';
 import {
   computeDurationSec,
@@ -37,6 +38,7 @@ export function useTimelineState() {
   const project = undoRedo.state;
   const setProject = undoRedo.setState;
   const [assets, setAssets] = useState<Record<string, MediaAsset>>({});
+  const [projectMemory, setProjectMemory] = useState<EditorProjectMemory>(() => createEmptyEditorProjectMemory());
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [projectId, setProjectId] = useState<string>(project.id);
@@ -75,6 +77,7 @@ export function useTimelineState() {
         const normalized = normalizeTimelineProject(rec.project ?? emptyTimelineProject(rec.aspectRatio ?? '9:16'));
         undoRedo.reset(normalized);
         setAssets(rec.assets ?? {});
+        setProjectMemory(rec.memory ?? createEmptyEditorProjectMemory());
         setAspectRatioState((rec.aspectRatio as AspectRatioPreset) || normalized.aspectRatio || '9:16');
         setProjectId(rec.id);
         setProjectName(rec.name || '未命名剪辑项目');
@@ -97,6 +100,7 @@ export function useTimelineState() {
       const next = normalizeTimelineProject(emptyTimelineProject(aspectRatio));
       undoRedo.reset(next);
       setAssets({});
+      setProjectMemory(createEmptyEditorProjectMemory());
       setProjectId(next.id);
       setProjectName(name?.trim() || '未命名剪辑项目');
       setCurrentTime(0);
@@ -140,7 +144,13 @@ export function useTimelineState() {
     const hasContent =
       project.tracks.some((t) => t.clips.length > 0) ||
       (project.subtitles?.length ?? 0) > 0 ||
-      Object.keys(assets).length > 0;
+      Object.keys(assets).length > 0 ||
+      projectMemory.rawEvents.length > 0 ||
+      projectMemory.stableFacts.length > 0 ||
+      projectMemory.preferenceSignals.length > 0 ||
+      projectMemory.negativePreferenceSignals.length > 0 ||
+      projectMemory.decisionLog.length > 0 ||
+      projectMemory.openIssues.length > 0;
     if (hasContent) hasContentRef.current = true;
     if (!hasContentRef.current) return;
 
@@ -155,6 +165,7 @@ export function useTimelineState() {
             aspectRatio,
             project,
             assets,
+            memory: projectMemory,
           });
           setProjectId(rec.id);
           setProjectName(rec.name || projectName);
@@ -168,7 +179,7 @@ export function useTimelineState() {
     return () => {
       if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
     };
-  }, [project, assets, aspectRatio, projectId, projectName, refreshProjectList]);
+  }, [project, assets, projectMemory, aspectRatio, projectId, projectName, refreshProjectList]);
 
   const durationSec = useMemo(() => {
     const d = computeDurationSec(project);
@@ -243,6 +254,8 @@ export function useTimelineState() {
     endProjectBatch: undoRedo.endBatch,
     assets,
     setAssets,
+    projectMemory,
+    setProjectMemory,
     currentTime,
     setCurrentTime,
     isPlaying,

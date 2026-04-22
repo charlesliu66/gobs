@@ -80,6 +80,7 @@
 - 鐢熸垚瀹屾垚鍚庢樉绀哄紩鎿庢潵婧?badge锛堢传鑹?Suno / 钃濊壊 Lyria锛?- 楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩棰勫～鍒剁墖闃舵鐨勯煶涔愰鏍兼弿杩帮紙鏉ヨ嚜 SoundMusicPlan锛夛紝涓€閿嵆鍙敓鎴愬尮閰嶉厤涔?- 鍙皟鏁撮煶閲忋€丅PM銆侀鏍?- 瀵煎嚭鏃舵敮鎸佹贰鍏ワ紙1s锛? 娣″嚭锛堝彲璋?0-3s锛?
 #### 3.6 AI 鍓緫 Agent
 
+- 记忆系统 P0 首批（v0.94）：同项目聊天/剪辑历史会随工程一起保存，重新打开项目时可恢复最近对话；系统也会开始为当前用户累积跨项目的沟通方式画像，为后续“更懂你怎么协作”的 Agent 打底。
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
 - 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
@@ -164,7 +165,18 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.94 -->
+<!-- NEXT_VERSION: v0.95 -->
+
+### v0.94 — 2026-04-22
+
+**剪辑 Agent 记忆系统 P0 首批落地**
+
+**Editor Agent / Memory / Project Persistence:**
+- **[api] 新增 `editorAgentMemory` 类型层与默认归一化**（`h5-video-tool-api/src/types/editorAgentMemory.ts`, `h5-video-tool-api/tests/editorAgentMemorySchema.test.ts`）：后端现在有了项目记忆、用户级沟通画像、摘要快照的统一结构，旧项目缺失字段时也会自动补齐为合法 memory。
+- **[api] 新增 `editorAgentMemoryStore` 规则层**（`h5-video-tool-api/src/services/editorAgentMemoryStore.ts`, `h5-video-tool-api/tests/editorAgentMemoryStore.test.ts`）：支持原始事件追加、最近 N 轮截断、结构化偏好沉淀，以及把 memory 与剪辑项目 JSON 一起读写。
+- **[frontend+api] 剪辑项目开始随工程保存/打开 `memory`**（`h5-video-tool/src/editor/hooks/useTimelineState.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool-api/src/routes/editorProjects.ts`）：同一个项目里的 Agent 对话和结构化记忆不再只存在页面内存里，项目重新打开时可以恢复最近对话。
+- **[api] 新增 `editorUserProfileService` 用户级沟通画像服务**（`h5-video-tool-api/src/services/editorUserProfileService.ts`, `h5-video-tool-api/tests/editorUserProfileService.test.ts`）：系统开始按显式表达提取“直接给结果 / 先给方案 / 不要长解释”等沟通信号；重复表达会提高 confidence，最近矛盾表达会降低旧偏好的权重。
+- **[agent] 聊天与剪辑请求开始返回最新 `projectMemory` 并增量更新用户画像**（`h5-video-tool-api/src/routes/editorAgent.ts`, `h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool/src/api/editorCreative.ts`）：Agent 每次聊天或剪辑后，前端都会拿到更新后的项目记忆并回写到当前工程，为下一批上下文压缩和记忆面板打基础。
 
 ### v0.93 — 2026-04-22
 
@@ -1347,4 +1359,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.93）*
+*最后更新：2026-04-22（v0.94）*

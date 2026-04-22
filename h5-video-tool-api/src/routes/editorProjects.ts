@@ -5,6 +5,7 @@ import path from 'path';
 import { nanoid } from 'nanoid';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import { normalizeEditorProjectMemory, type EditorProjectMemory } from '../types/editorAgentMemory.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
@@ -17,6 +18,7 @@ type EditorProjectDoc = {
   aspectRatio: string;
   project: unknown;
   assets: Record<string, unknown>;
+  memory?: EditorProjectMemory;
 };
 
 function getUserDir(req: Request): string {
@@ -34,16 +36,18 @@ function makeDefaultName(): string {
 }
 
 router.post('/projects', async (req: Request, res: Response) => {
-  const body = req.body as Partial<EditorProjectDoc> & { id?: string };
+  const body = req.body as Partial<EditorProjectDoc> & { id?: string; memory?: unknown };
   const id = typeof body.id === 'string' && isSafeId(body.id) ? body.id : `ep_${nanoid(10)}`;
   const now = new Date().toISOString();
   const dir = getUserDir(req);
   const file = path.join(dir, `${id}.json`);
 
   let createdAt = now;
+  let previousMemory: unknown;
   try {
     const old = JSON.parse(await fs.readFile(file, 'utf-8')) as Partial<EditorProjectDoc>;
     if (old.createdAt) createdAt = old.createdAt;
+    previousMemory = old.memory;
   } catch {
     // new project
   }
@@ -56,6 +60,7 @@ router.post('/projects', async (req: Request, res: Response) => {
     aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : '9:16',
     project: body.project ?? {},
     assets: (body.assets && typeof body.assets === 'object' ? body.assets : {}) as Record<string, unknown>,
+    memory: normalizeEditorProjectMemory(body.memory ?? previousMemory, now),
   };
 
   try {
@@ -105,8 +110,14 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const raw = await fs.readFile(path.join(getUserDir(req), `${id}.json`), 'utf-8');
-    res.json({ success: true, data: JSON.parse(raw) as EditorProjectDoc });
+    const raw = JSON.parse(await fs.readFile(path.join(getUserDir(req), `${id}.json`), 'utf-8')) as EditorProjectDoc;
+    res.json({
+      success: true,
+      data: {
+        ...raw,
+        memory: normalizeEditorProjectMemory(raw.memory),
+      } satisfies EditorProjectDoc,
+    });
   } catch {
     res.status(404).json({ success: false, error: '剪辑项目不存在' });
   }
@@ -435,4 +446,3 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
 });
 
 export default router;
-
