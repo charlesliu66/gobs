@@ -60,6 +60,24 @@ test('assembleTikTokHashtags builds a compact traffic plus topic mix', () => {
   assert.ok(tags.length <= 6);
 });
 
+test('assembleTikTokHashtags hard-filters internal system words and path residue', () => {
+  const result = assembleTikTokHashtags({
+    rawHashtags: '#fyp #viral #服务端成片 #output #admin #dreamina #fantasy',
+    contentTags: ['Ancient Wisdom', 'Dreamina render', 'output/admin/final.mp4'],
+    styleTags: ['Epic CGI'],
+  });
+
+  const tags = result.split(/\s+/);
+  assert.ok(tags.includes('#fyp'));
+  assert.ok(tags.includes('#viral'));
+  assert.ok(tags.includes('#fantasy'));
+  assert.ok(tags.includes('#EpicCGI'));
+  assert.ok(!tags.includes('#output'));
+  assert.ok(!tags.includes('#admin'));
+  assert.ok(!tags.includes('#dreamina'));
+  assert.ok(!tags.includes('#服务端成片'));
+});
+
 test('pickBestCaptionResult rejects low-quality template copy and picks the stronger candidate', () => {
   const picked = pickBestCaptionResult(
     [
@@ -78,4 +96,23 @@ test('pickBestCaptionResult rejects low-quality template copy and picks the stro
 
   assert.equal(picked.caption, 'He turns once and the pressure instantly spikes.');
   assert.equal(picked.hashtags, '#fyp #viral #samurai #movieedit');
+});
+
+test('pickBestCaptionResult strips inline hashtags and internal terms from publish output', () => {
+  const picked = pickBestCaptionResult(
+    [
+      {
+        caption: 'Ancient wisdom or a prophecy of war? Her journey begins. #Fantasy #Warrior #AncientWisdom #Dreamina',
+        hashtags: '#fyp #viral #服务端成片 #output #admin #dreamina',
+      },
+    ],
+    buildFallbackFromPrompt('fantasy warrior prophecy'),
+    'EN',
+    { contentTags: ['fantasy', 'warrior'], styleTags: ['epic storytelling'] },
+  );
+
+  assert.equal(picked.caption, 'Ancient wisdom or a prophecy of war? Her journey begins.');
+  assert.match(picked.hashtags, /#fantasy/i);
+  assert.match(picked.hashtags, /#warrior/i);
+  assert.doesNotMatch(picked.hashtags, /#output|#admin|#dreamina|#服务端成片/i);
 });

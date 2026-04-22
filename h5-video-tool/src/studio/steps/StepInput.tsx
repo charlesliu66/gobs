@@ -1,3 +1,6 @@
+import * as React from 'react';
+
+import type { LibraryAsset } from '../../api/assetLibraryApi';
 import type { StructureTemplate } from '../productionTypes';
 
 export function StepInput({
@@ -41,6 +44,60 @@ export function StepInput({
   busyL1: boolean;
   onGenerateStoryArc: () => void | Promise<void>;
 }) {
+  const { useCallback, useState } = React;
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [assetPickerError, setAssetPickerError] = useState<string | null>(null);
+  const [assetList, setAssetList] = useState<LibraryAsset[]>([]);
+  const [selectingAssetId, setSelectingAssetId] = useState<string | null>(null);
+
+  const handleOpenAssetPicker = useCallback(async () => {
+    setShowAssetPicker(true);
+    setLoadingAssets(true);
+    setAssetPickerError(null);
+    try {
+      const { listAssets } = await import('../../api/assetLibraryApi');
+      const result = await listAssets({ type: 'image', pageSize: '100' });
+      const images = result.assets.filter((asset) => {
+        const mime = asset.mimetype ?? asset.mime_type ?? '';
+        return mime.startsWith('image/');
+      });
+      setAssetList(images);
+    } catch (error) {
+      setAssetPickerError(error instanceof Error ? error.message : '加载素材库失败');
+    } finally {
+      setLoadingAssets(false);
+    }
+  }, []);
+
+  const handleSelectAsset = useCallback(async (asset: LibraryAsset) => {
+    setSelectingAssetId(asset.id);
+    setAssetPickerError(null);
+    try {
+      const { buildAssetFileUrl, recordUsage } = await import('../../api/assetLibraryApi');
+      const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error('获取素材图片失败');
+      }
+      const blob = await response.blob();
+      const mime = blob.type || asset.mimetype || asset.mime_type || 'image/jpeg';
+      if (!mime.startsWith('image/')) {
+        throw new Error('只能选择图片素材作为参考图');
+      }
+      const fallbackExt = mime.split('/')[1] || 'jpg';
+      const filename = asset.filename?.trim() || `${asset.id}.${fallbackExt}`;
+      const file = new File([blob], filename, { type: mime });
+      onStyleRefFileChange(file);
+      setShowAssetPicker(false);
+      void recordUsage(asset.id, 'production');
+    } catch (error) {
+      setAssetPickerError(error instanceof Error ? error.message : '获取素材图片失败');
+    } finally {
+      setSelectingAssetId(null);
+    }
+  }, [onStyleRefFileChange]);
+
   return (
     <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 shadow-sm">
       <h2 className="text-sm font-semibold text-[var(--color-text)]">立项与梗概</h2>
@@ -84,10 +141,19 @@ export function StepInput({
         <input
           type="file"
           accept="image/*"
-          disabled={busyStyle}
+          disabled={busyStyle || selectingAssetId !== null}
           onChange={(e) => onStyleRefFileChange(e.target.files?.[0] ?? null)}
           className="text-sm"
         />
+        <button
+          type="button"
+          disabled={busyStyle || loadingAssets || selectingAssetId !== null}
+          onClick={() => void handleOpenAssetPicker()}
+          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loadingAssets && showAssetPicker ? '加载素材中…' : '从素材库选择'}
+        </button>
+        {selectingAssetId && <span className="text-xs text-[var(--color-text-muted)]">导入素材中…</span>}
         {busyStyle && <span className="text-xs text-[var(--color-text-muted)]">分析中…</span>}
       </div>
       <p className="text-xs text-[var(--color-text-muted)]">
@@ -140,6 +206,86 @@ export function StepInput({
       >
         {busyL1 ? '生成中…' : '生成剧本大纲'}
       </button>
+
+      {showAssetPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => {
+            if (selectingAssetId) return;
+            setShowAssetPicker(false);
+          }}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">从素材库选择参考图</h3>
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  选择后会自动走当前的风格反解析链路，更新预览和摘要。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAssetPicker(false)}
+                disabled={selectingAssetId !== null}
+                className="text-lg text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] disabled:opacity-40"
+                aria-label="关闭素材库选择"
+              >
+                ×
+              </button>
+            </div>
+
+            {assetPickerError && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {assetPickerError}
+              </div>
+            )}
+
+            {loadingAssets ? (
+              <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">正在加载素材库图片…</div>
+            ) : assetList.length === 0 ? (
+              <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+                素材库里还没有图片素材，请先到“素材库”导入图片。
+              </div>
+            ) : (
+              <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+                {assetList.map((asset) => {
+                  const thumbUrl = asset.thumbnail_url ?? asset.file_url;
+                  const displayName = asset.filename?.replace(/\.[^.]+$/, '') || asset.id;
+                  const isSelecting = selectingAssetId === asset.id;
+                  return (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => void handleSelectAsset(asset)}
+                      disabled={selectingAssetId !== null}
+                      className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] p-2 text-left transition hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <div className="aspect-square overflow-hidden rounded-lg bg-[var(--color-surface)]">
+                        {thumbUrl ? (
+                          <img src={thumbUrl} alt={displayName} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-[var(--color-text-muted)]">
+                            无预览
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-medium text-[var(--color-text)]">{displayName}</div>
+                        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                          {isSelecting ? '导入中…' : asset.ai_category || '图片素材'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

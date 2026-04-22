@@ -602,6 +602,67 @@ function countMatches(value: string, pattern: RegExp): number {
   return matches ? matches.length : 0;
 }
 
+const BLOCKED_PUBLISH_TOKEN_FRAGMENTS = [
+  'output',
+  'admin',
+  'dreamina',
+  'backend',
+  'server',
+  'api',
+  'compass',
+  'studio',
+  'upload',
+  'uploads',
+  '服务端成片',
+  '服务端',
+  '管理员',
+];
+
+function compactPublishToken(value: string): string {
+  return normalizeWhitespace(value)
+    .replace(/^#+/, '')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLowerCase();
+}
+
+function isBlockedPublishToken(value: string): boolean {
+  const compact = compactPublishToken(value);
+  if (!compact) return false;
+  return BLOCKED_PUBLISH_TOKEN_FRAGMENTS.some((fragment) => compact.includes(fragment));
+}
+
+function stripBlockedPublishText(value: string): string {
+  return normalizeWhitespace(
+    value
+      .replace(/\b[\w.-]+(?:[\\/][\w.-]+){1,}\b/g, ' ')
+      .replace(/\b(?:output|admin|dreamina|backend|server|api|compass|studio|upload|uploads)\b/gi, ' ')
+      .replace(/服务端成片|服务端|管理员/gu, ' '),
+  );
+}
+
+function extractInlineHashtags(value: string): string[] {
+  return value.match(/#[^\s#]+/g) ?? [];
+}
+
+function sanitizePromptIdeaText(value: string): string {
+  return stripBlockedPublishText(stripPromptArtifacts(value.replace(/#[^\s#]+/g, ' ')));
+}
+
+function sanitizeHashtagDraft(value: string): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  const extracted =
+    raw.match(/#[^\s#]+/g) ??
+    raw
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => (token.startsWith('#') ? token : `#${token}`));
+
+  const cleaned = extracted.filter((token) => !isBlockedPublishToken(token)).join(' ');
+  return cleaned ? normalizeHashtags(cleaned) : '';
+}
+
 function toHashtagToken(value: string): string | null {
   const raw = normalizeWhitespace(value).replace(/^#+/, '');
   if (!raw) return null;
@@ -613,6 +674,7 @@ function toHashtagToken(value: string): string | null {
   const cleaned = compact.replace(/[^\p{L}\p{N}_]/gu, '');
   if (cleaned.length < 3) return null;
   if (/^[a-z]{1,3}$/i.test(cleaned)) return null;
+  if (isBlockedPublishToken(cleaned)) return null;
   return `#${cleaned.slice(0, 24)}`;
 }
 
@@ -642,6 +704,7 @@ export function normalizeHashtags(hashtags: string): string {
     if (cleaned.length <= 1) continue;
     const key = cleaned.toLowerCase();
     if (key === '#shorts') continue;
+    if (isBlockedPublishToken(cleaned)) continue;
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push(cleaned);
@@ -657,8 +720,8 @@ export function normalizeHashtags(hashtags: string): string {
 
 /** LLM 解析失败时：从 prompt 抽关键词做极简 TikTok 风，避免整段粘贴 */
 export function buildFallbackFromPrompt(userText: string): CaptionResult {
-  const t = (userText || '').trim();
-  const baseWords = stripPromptArtifacts(t).match(/[\u4e00-\u9fa5]{2,8}|[a-zA-Z]{3,12}/g)?.slice(0, 4) || [];
+  const t = sanitizePromptIdeaText((userText || '').trim());
+  const baseWords = t.match(/[\u4e00-\u9fa5]{2,8}|[a-zA-Z]{3,12}/g)?.slice(0, 4) || [];
   const fallbackTopic = baseWords.slice(0, 2).join(' ') || 'this moment';
   return {
     caption: `Wait for it: ${fallbackTopic} hits way harder than you expect.`,
@@ -710,6 +773,7 @@ export function scoreCaptionQuality(caption: string, language: CaptionLanguage =
   if (PROMPT_ARTIFACT_PATTERN.test(text)) score -= 18;
   if (/it gets better every second/i.test(lower)) score -= 28;
   if (/\bpov:\s*/i.test(lower) && containsCjk(text)) score -= 18;
+  if (BLOCKED_PUBLISH_TOKEN_FRAGMENTS.some((fragment) => lower.includes(fragment))) score -= 40;
 
   if (language === 'EN') {
     if (containsCjk(text) && containsLatin(text)) score -= 18;
@@ -744,6 +808,7 @@ export function assembleTikTokHashtags(input: {
   const rawTokens = normalizeHashtags(input.rawHashtags || '').split(/\s+/).filter(Boolean);
   for (const token of rawTokens) {
     if (tags.length >= 6) break;
+    if (isBlockedPublishToken(token)) continue;
     if (/^#(?:fyp|viral|foryou|tiktok)$/i.test(token)) {
       uniquePush(tags, seen, token);
       continue;
@@ -765,11 +830,12 @@ export function assembleTikTokHashtags(input: {
 }
 
 function sanitizeCaptionText(caption: string): string {
-  return normalizeWhitespace(
+  return stripBlockedPublishText(
     caption
       .replace(/^["'“”]+|["'“”]+$/g, '')
       .replace(/^caption:\s*/i, '')
-      .replace(/^copy:\s*/i, ''),
+      .replace(/^copy:\s*/i, '')
+      .replace(/\s*#[^\s#]+/g, ''),
   );
 }
 
@@ -781,8 +847,11 @@ export function pickBestCaptionResult(
 ): CaptionResult {
   const ranked = candidates
     .map((candidate) => {
-      const caption = sanitizeCaptionText(typeof candidate.caption === 'string' ? candidate.caption : '');
-      const hashtags = typeof candidate.hashtags === 'string' ? candidate.hashtags : '';
+      const rawCaption = typeof candidate.caption === 'string' ? candidate.caption : '';
+      const caption = sanitizeCaptionText(rawCaption);
+      const hashtags = [typeof candidate.hashtags === 'string' ? candidate.hashtags : '', ...extractInlineHashtags(rawCaption)]
+        .filter(Boolean)
+        .join(' ');
       return { caption, hashtags, quality: scoreCaptionQuality(caption, language) };
     })
     .sort((a, b) => b.quality - a.quality);
@@ -1009,7 +1078,7 @@ function buildCaptionContextBlock(input: {
     `Requested language: ${input.language}`,
     input.platforms?.length ? `Target platforms: ${input.platforms.join(', ')}` : '',
     summarizeAccountContext(input.accountContext) ? `Selected accounts: ${summarizeAccountContext(input.accountContext)}` : '',
-    input.prompt ? `Source idea: ${input.prompt}` : '',
+    input.prompt ? `Source idea: ${sanitizePromptIdeaText(input.prompt)}` : '',
     input.vision?.subject ? `Visual subject: ${input.vision.subject}` : '',
     input.vision?.action ? `Visual action: ${input.vision.action}` : '',
     input.vision?.vibe ? `Visual vibe: ${input.vision.vibe}` : '',
@@ -1017,8 +1086,8 @@ function buildCaptionContextBlock(input: {
     input.vision?.audienceAngle ? `Audience angle: ${input.vision.audienceAngle}` : '',
     input.vision?.contentTags?.length ? `Content tags: ${input.vision.contentTags.join(', ')}` : '',
     input.vision?.styleTags?.length ? `Style tags: ${input.vision.styleTags.join(', ')}` : '',
-    input.existingCaption ? `Existing caption draft: ${input.existingCaption}` : '',
-    input.existingHashtags ? `Existing hashtags draft: ${input.existingHashtags}` : '',
+    input.existingCaption ? `Existing caption draft: ${sanitizeCaptionText(input.existingCaption)}` : '',
+    input.existingHashtags ? `Existing hashtags draft: ${sanitizeHashtagDraft(input.existingHashtags)}` : '',
   ];
   return lines.filter(Boolean).join('\n');
 }

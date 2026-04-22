@@ -32,6 +32,8 @@
 | 4 | 鍒嗛暅瑙嗛 | 姣忎釜鍒嗛暅鐢熸垚鍙傝€冭棰戯紙鏀寔鍗虫ⅵ澶氭ā鎬併€佹枃鐢熻棰戙€佸浘鐢熻棰戯級|
 | 5 | 瀵煎嚭 | 鏀炬槧瀹よ繛缁鐗?+ 涓€閿鍏ュ壀杈戝伐浣滃彴 |
 
+- Step 0 的“参考图反解析”支持两种入口：本地上传，或直接从素材库选择图片；选中后沿用现有预览、上传和风格反解析链路。
+
 **鍒嗛暅宸ヤ綔鍙板寮哄姛鑳斤紙v0.42+锛夛細**
 - 涓€閿敓鎴愭墍鏈夌己澶辫棰戯紙鎵归噺鎻愪氦鑷宠嚜閫傚簲闃熷垪锛?- AI 鑷姩瀹＄墖锛氬垎闀滅敓鎴愭椂鍚庣鑷姩浼樺寲 Prompt 璐ㄩ噺锛坴0.43 璧峰唴缃簬鐢熸垚娴佺▼锛夛紱鎵嬪姩瀹＄墖浠嶅彲鐢ㄤ簬浜屾妫€鏌?- 蹇€熻皟鏁撮潰鏉匡細杩愰暅/鑺傚/鍏夊奖棰勮鎸夐挳锛屼竴閿慨鏀圭粨鏋勫寲鍙傛暟
 - 杩炵画鎾斁瀹＄墖锛氬叏灞忔寜搴忔挱鏀炬墍鏈夐暅澶达紝閿洏蹇嵎閿帶鍒?- 鐗堟湰 A/B 瀵规瘮锛氬乏鍙冲垎灞忓悓姝ユ挱鏀?+ 澶囨敞鏍囩
@@ -151,7 +153,7 @@
 ### 9. 璐﹀彿绠＄悊
 
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
-- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签，并直接发往对应社媒平台
+- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布结果会自动硬过滤内部工程词、拆分 caption 内联标签，再直接发往对应社媒平台
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片与视频分发等高频页面已补齐英文壳层，便于本地英文同事直接进入英文 UI。
 
@@ -160,7 +162,25 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.84 -->
+<!-- NEXT_VERSION: v0.86 -->
+
+### v0.85 — 2026-04-22
+
+**视频分发文案/标签硬过滤收口**
+
+**Bug Fix / Quality Upgrade:**
+- **[api] 分发文案结果新增内部工程词硬过滤与路径残留清洗**（`h5-video-tool-api/src/services/promptPolish.ts`）：对 `output`、`admin`、`dreamina`、`服务端成片` 等系统词做统一黑名单过滤，并在 fallback 与提示上下文里同步去脏，避免内部路径/工程词继续混入发布结果。
+- **[api] caption 与 hashtags 结果正式拆分**（`h5-video-tool-api/src/services/promptPolish.ts`）：文案结果现在会主动剥离 caption 内联 hashtag，并把可用标签并回 hashtag 组合，同时继续保留 TikTok 流量标签与内容标签，减少“文案里带整串标签、标签框里又是脏词”的怪异结果。
+- **[test] 新增系统词污染回归测试**（`h5-video-tool-api/tests/promptCaptionRules.test.ts`）：覆盖内部词标签过滤、caption 内联标签剥离、路径残留清洗，防止后续模型或 prompt 变动把同类脏词再次带回分发页。
+
+### v0.84 — 2026-04-22
+
+**高级制片参考图反解析支持从素材库直接选图**
+
+**Feature / Usability:**
+- **[frontend] Step 0 增加“从素材库选择”入口**（`h5-video-tool/src/studio/steps/StepInput.tsx`）：高级制片输入页现在除了本地上传，还能直接打开素材库图片选择层，不用再先去素材库下载再回传。
+- **[frontend] 选中素材后复用既有参考图处理链路**（`h5-video-tool/src/studio/steps/StepInput.tsx`）：素材库图片会被转成 `File` 后交给现有 `onStyleRefFileChange`，继续走预览、`production/images` 上传和 `/api/studio/extract-style-reference` 反解析，不新增第二套逻辑。
+- **[test] 新增 StepInput 入口回归测试**（`h5-video-tool/tests/stepInput.test.tsx`）：锁定“从素材库选择”入口存在，避免后续 UI 回退。
 
 ### v0.83 — 2026-04-22
 
@@ -1253,4 +1273,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.83）*
+*最后更新：2026-04-22（v0.85）*

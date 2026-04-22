@@ -25,6 +25,12 @@ import type { VisionFrameScore } from './video/frameVisionRank.js';
 import { loadGameTaxonomy } from './video/gameTaxonomy.js';
 import { buildAovDslPlan, looksLikeAovRequest } from './aovDslPlanner.js';
 import { getActiveAovRuleset } from './aovRulesetService.js';
+import {
+  buildCreativeBriefPromptBlock,
+  buildCreativeStrategy,
+  type EditorCreativeBrief,
+  type EditorCreativeStrategy,
+} from './editorCreativeBrief.js';
 
 export interface EditorAgentAssetContext {
   id: string;
@@ -40,6 +46,7 @@ export interface EditorAgentApplyInput {
   selectedAssetIds: string[];
   assets: EditorAgentAssetContext[];
   currentProject: TimelineProject;
+  creativeBrief?: EditorCreativeBrief;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
 }
@@ -435,6 +442,7 @@ function buildPlanSystemPrompt(ctx: {
   contentManifest?: string;
   beatGuide?: string;
   currentClipsMetaBlock?: string;
+  creativeBriefBlock?: string;
 }): string {
   const sections: string[] = [];
   sections.push(`你是专业的「剪辑策划师」。根据用户指令和候选素材片段，输出一份**剪辑选段方案**。
@@ -463,6 +471,10 @@ ${ctx.narrativeTemplate ? `- 按「${ctx.narrativeTemplate.name}」叙事结构�
   if (ctx.contentManifest && ctx.contentManifest.trim()) {
     sections.push(`## 素材内容总览（用于挑选角色/场景/情绪）
 ${ctx.contentManifest.trim()}`);
+  }
+
+  if (ctx.creativeBriefBlock && ctx.creativeBriefBlock.trim()) {
+    sections.push(ctx.creativeBriefBlock.trim());
   }
 
   if (ctx.beatGuide && ctx.beatGuide.trim()) {
@@ -743,6 +755,7 @@ export async function runEditorAgentApply(
   summary: string;
   project: TimelineProject;
   llmUsage: { byCall: LlmUsageCallRecord[]; totals: CompassChatUsage };
+  creativeStrategy?: EditorCreativeStrategy;
 }> {
   const onProgress = options?.onProgress;
   const report = (p: EditorAgentProgressPayload) => onProgress?.(p);
@@ -757,6 +770,7 @@ export async function runEditorAgentApply(
   const usageSink = (stage: string, usage: CompassChatUsage | undefined) => {
     usageRecords.push({ stage, usage });
   };
+  const creativeStrategy = buildCreativeStrategy(input.creativeBrief);
 
   let effectiveUserMessage = input.userMessage;
   const combatLike = isCombatLikeIntent(effectiveUserMessage);
@@ -913,6 +927,8 @@ export async function runEditorAgentApply(
     targetTimelineSec,
     combatLikeIntent: combatLike,
     requestedRole,
+    creativeBrief: input.creativeBrief,
+    creativeStrategy,
   }, null, 2);
 
   // ─── 阶段 1: Plan（自然语言选段方案）────────────────────────────────────────
@@ -936,6 +952,7 @@ export async function runEditorAgentApply(
     contentManifest,
     beatGuide: beatGuideBlock,
     currentClipsMetaBlock,
+    creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy),
   });
 
   /**
@@ -1283,5 +1300,6 @@ ${planText}`;
     summary,
     project: sanitized,
     llmUsage: { byCall: usageRecords, totals: sumCompassUsage(usageRecords) },
+    creativeStrategy,
   };
 }
