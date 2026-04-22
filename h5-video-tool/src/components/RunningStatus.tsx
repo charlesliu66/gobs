@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import type { LoadingScene, Speaker } from './loading/types';
 import { pickCopy, SPEAKER_NAMES, getSceneSpeaker } from './loading/copyPool';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { pickUiText } from '../i18n/uiText.ts';
 
 interface RunningStatusProps {
   active: boolean;
@@ -15,11 +17,13 @@ const COPY_ROTATE_MS = 3500;
 
 export function RunningStatus({
   active,
-  label = '处理中',
+  label,
   stallAfterSec = 25,
   className = '',
   scene,
 }: RunningStatusProps) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
   const [theaterCopy, setTheaterCopy] = useState('');
@@ -75,7 +79,8 @@ export function RunningStatus({
   if (!active) return null;
 
   const stalled = elapsedSec >= stallAfterSec;
-  const showTheater = !!scene && elapsedSec >= 3 && theaterCopy;
+  const resolvedLabel = label ?? uiText('处理中', 'Processing');
+  const showTheater = uiLocale !== 'en' && !!scene && elapsedSec >= 3 && theaterCopy;
 
   // 升级模式：卡片式剧院文案
   if (showTheater) {
@@ -122,7 +127,9 @@ export function RunningStatus({
         <span className="absolute inline-block h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
       </span>
       <span>
-        {stalled ? `可能卡住（已运行 ${elapsedSec}s）` : `${label}（${elapsedSec}s）`}
+        {stalled
+          ? uiText(`可能卡住（已运行 ${elapsedSec}s）`, `Possibly stuck (${elapsedSec}s)`)
+          : uiText(`${resolvedLabel}（${elapsedSec}s）`, `${resolvedLabel} (${elapsedSec}s)`)}
       </span>
     </div>
   );

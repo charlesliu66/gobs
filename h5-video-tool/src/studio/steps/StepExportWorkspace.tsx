@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 import { useProductionContext } from '../ProductionContext';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 import { StepExportStoryboardOverview } from './StepExportStoryboardOverview';
 import { StepExportPromptConsistency } from './StepExportPromptConsistency';
 
@@ -45,11 +47,21 @@ export function StepExportWorkspace({
   productionProjectId?: string;
 }) {
   const { setStep } = useProductionContext();
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [activeTab, setActiveTab] = useState<ExportTab>('quick');
 
   const TABS: { id: ExportTab; label: string; desc: string }[] = [
-    { id: 'quick', label: '审片与剪辑', desc: '预览分镜视频，一键导入剪辑器精修' },
-    { id: 'advanced', label: 'AI 视频描述', desc: '组装和导出各镜头的 AI 视频描述文本' },
+    {
+      id: 'quick',
+      label: uiText('审片与剪辑', 'Review & edit'),
+      desc: uiText('预览分镜视频，一键导入剪辑器精修', 'Preview storyboard videos and send them into the editor for polish'),
+    },
+    {
+      id: 'advanced',
+      label: uiText('AI 视频描述', 'AI video prompts'),
+      desc: uiText('组装和导出各镜头的 AI 视频描述文本', 'Assemble and export AI video prompt text for each shot'),
+    },
   ];
 
   return (

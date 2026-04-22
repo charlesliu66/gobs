@@ -92,6 +92,7 @@ import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { apiPost } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
+import { pickUiText } from '../i18n/uiText.ts';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -131,7 +132,8 @@ interface BatchAssetGenState {
 }
 
 export function ProductionWizard() {
-  const { contentLocale } = useLocale();
+  const { contentLocale, uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
   const urlProjectId = searchParams.get('projectId');
@@ -213,6 +215,22 @@ export function ProductionWizard() {
       fallbackContentLocale: contentLocale,
     });
   }, [contentLocale]);
+
+  const localizedSteps = useMemo(
+    () => STEPS.map((stepItem) => {
+      const label = stepItem.id === 0
+        ? uiText('输入', 'Input')
+        : stepItem.id === 1
+          ? uiText('剧本大纲', 'Story outline')
+          : stepItem.id === 2
+            ? uiText('角色·场景·道具', 'Character · Scene · Prop')
+            : stepItem.id === 3
+              ? uiText('分镜', 'Storyboard')
+              : uiText('导出', 'Export');
+      return { ...stepItem, label };
+    }),
+    [uiLocale],
+  );
 
   const loadKnownBatchJobsById = useCallback(async () => {
     try {
@@ -1475,7 +1493,7 @@ export function ProductionWizard() {
   }, [clearStylePreview]);
 
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
-  const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  const goNext = () => setStep((s) => Math.min(localizedSteps.length - 1, s + 1));
   const handleProjectTitleChange = (nextTitle: string) => {
     setProject((p) => ({ ...p, meta: { ...p.meta, title: nextTitle } }));
     if (nextTitle.trim()) {
@@ -1867,14 +1885,14 @@ export function ProductionWizard() {
 
   const footerHint =
     step === 0
-      ? '填写立项信息后可生成剧本大纲'
+      ? uiText('填写立项信息后可生成剧本大纲', 'Fill in the project setup, then generate the story outline')
       : step === 1
-        ? '确认故事摘要后可生成角色与场景设定'
+        ? uiText('确认故事摘要后可生成角色与场景设定', 'Confirm the story summary, then generate character and scene design')
         : step === 2
-          ? '角色与场景将用于分镜引用，建议补全后再继续'
+          ? uiText('角色与场景将用于分镜引用，建议补全后再继续', 'Characters and scenes will be referenced in storyboard shots, so it is best to complete them before moving on')
           : step === 3
-            ? '检查分镜与 @ 引用后可导出 Prompt'
-            : '分镜整合与 Seedance 导出；成片可在「生成视频 → 历史内容」查看';
+            ? uiText('检查分镜与 @ 引用后可导出 Prompt', 'Review storyboard shots and @ references before exporting prompts')
+            : uiText('分镜整合与 Seedance 导出；成片可在「生成视频 → 历史内容」查看', 'Assemble storyboards and export Seedance prompts. Finished videos can be reviewed in “Generate Video → History”.');
 
   if (isServerBootstrapping) {
     return <ProductionBootstrappingView loadingProjectTitle={loadingProjectTitle} />;
@@ -1912,7 +1930,7 @@ export function ProductionWizard() {
           titleSaved={titleSaved}
           onOpenProjectList={handleLoadProjectList}
           onResetDraft={resetDraft}
-          steps={STEPS}
+          steps={localizedSteps}
           step={step}
           maxReachableStep={
             project.shots?.some((s) => (s as unknown as Record<string, unknown>).videoUrl || (s as unknown as Record<string, unknown>).videoPath || ((s as unknown as Record<string, unknown>).videoVersions as unknown[] | undefined)?.length) ? 4
@@ -2143,10 +2161,20 @@ export function ProductionWizard() {
           <p className="text-sm text-[var(--color-text-muted)]">请先在「输入」步骤生成剧本大纲。</p>
         )}
         {step === 2 && !project.productionDesign && (
-          <p className="text-sm text-[var(--color-text-muted)]">请先在「剧本大纲」步骤生成角色与场景设定。</p>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            {uiText(
+              '请先在「剧本大纲」步骤生成角色与场景设定。',
+              'Generate character and scene design in the Story Outline step first.',
+            )}
+          </p>
         )}
         {step === 3 && !project.shots.length && (
-          <p className="text-sm text-[var(--color-text-muted)]">请先在「角色与场景」中生成分镜表。</p>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            {uiText(
+              '请先在「角色与场景」中生成分镜表。',
+              'Generate the storyboard in the Character & Scene step first.',
+            )}
+          </p>
         )}
         </ProductionWizardShell>
       </ProductionProvider>

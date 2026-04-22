@@ -80,6 +80,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
+import { pickUiText } from '../i18n/uiText.ts';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -150,7 +151,8 @@ function mergeAssetsForTimelineClips(
 }
 
 export function EditorWorkbench() {
-  const { contentLocale } = useLocale();
+  const { contentLocale, uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const {
     aspectRatio,
     setAspectRatio,
@@ -407,7 +409,7 @@ export function EditorWorkbench() {
 
   const runAutoBgmFromAgentMessage = useCallback(
     async (userMessage: string) => {
-      pushLog('进度：检测到配乐需求，正在润色并生成 BGM…');
+      pushLog(uiText('进度：检测到配乐需求，正在润色并生成 BGM…', 'Progress: detected a music request, polishing the prompt and generating BGM…'));
       try {
         const out = await withTimeout(
           polishEditorMusicPrompt(userMessage),
@@ -443,13 +445,16 @@ export function EditorWorkbench() {
         }));
         setProject((p) => setBgmClipOnProject(p, item.id, item.durationSec));
         const providerName = res.provider === 'suno' ? 'Suno' : 'Lyria';
-        pushLog(`已根据对话自动完成配乐（引擎：${providerName}）；不满意可在左下「配乐生成」微调后再点「生成」。`);
+        pushLog(uiText(
+          `已根据对话自动完成配乐（引擎：${providerName}）；不满意可在左下「配乐生成」微调后再点「生成」。`,
+          `Music was generated automatically from the conversation (engine: ${providerName}). If it is not right yet, fine-tune it in the music panel and generate again.`,
+        ));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const hint = isLikelyQuotaOrRateLimitError(msg)
-          ? '（疑似模型限流/配额不足）'
+          ? uiText('（疑似模型限流/配额不足）', ' (possible model rate limit or quota issue)')
           : '';
-        pushLog(`自动配乐未成功：${msg}${hint}`);
+        pushLog(uiText(`自动配乐未成功：${msg}${hint}`, `Automatic music generation did not complete: ${msg}${hint}`));
       }
     },
     [pushLog, setAssets, setProject],
@@ -467,7 +472,10 @@ export function EditorWorkbench() {
         try {
           route = await routeEditorAgentMessage(userMessage);
         } catch (e) {
-          pushLog(`错误：意图识别失败：${e instanceof Error ? e.message : String(e)}`);
+          pushLog(uiText(
+            `错误：意图识别失败：${e instanceof Error ? e.message : String(e)}`,
+            `Error: intent detection failed: ${e instanceof Error ? e.message : String(e)}`,
+          ));
           return;
         }
         if (route.intent === 'chat') {
@@ -477,11 +485,14 @@ export function EditorWorkbench() {
               projectMemory: nextProjectMemory,
               userCommunicationProfile,
             } = await chatEditorAgent(userMessage, projectMemory, replyLocale);
-            pushLog(`助手：${reply}`);
+            pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
             setProjectMemory(nextProjectMemory ?? projectMemory);
             setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
           } catch (e) {
-            pushLog(`错误：对话失败：${e instanceof Error ? e.message : String(e)}`);
+            pushLog(uiText(
+              `错误：对话失败：${e instanceof Error ? e.message : String(e)}`,
+              `Error: chat failed: ${e instanceof Error ? e.message : String(e)}`,
+            ));
           }
           return;
         }
@@ -491,7 +502,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog('请先勾选左侧素材，或先在时间轴上加入至少一段视频。');
+          pushLog(uiText('请先勾选左侧素材，或先在时间轴上加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
           return;
         }
 
@@ -625,7 +636,10 @@ export function EditorWorkbench() {
           try {
             route = await routeEditorAgentMessage(trimmedMessage);
           } catch (error) {
-            pushLog(`错误：意图识别失败：${error instanceof Error ? error.message : String(error)}`);
+            pushLog(uiText(
+              `错误：意图识别失败：${error instanceof Error ? error.message : String(error)}`,
+              `Error: intent detection failed: ${error instanceof Error ? error.message : String(error)}`,
+            ));
             return;
           }
 
@@ -636,11 +650,14 @@ export function EditorWorkbench() {
                 projectMemory: nextProjectMemory,
                 userCommunicationProfile,
               } = await chatEditorAgent(trimmedMessage, projectMemory, replyLocale);
-              pushLog(`助手：${reply}`);
+              pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
               setProjectMemory(nextProjectMemory ?? projectMemory);
               setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
             } catch (error) {
-              pushLog(`错误：对话失败：${error instanceof Error ? error.message : String(error)}`);
+              pushLog(uiText(
+                `错误：对话失败：${error instanceof Error ? error.message : String(error)}`,
+                `Error: chat failed: ${error instanceof Error ? error.message : String(error)}`,
+              ));
             }
             return;
           }
@@ -651,7 +668,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog('请先勾选左侧素材，或先在时间轴中加入至少一段视频。');
+          pushLog(uiText('请先勾选左侧素材，或先在时间轴中加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
           return;
         }
 
@@ -775,49 +792,49 @@ export function EditorWorkbench() {
   const handleRememberDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning('请先保存当前剪辑项目，再记录 Agent 记忆');
+        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'remember', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(`系统：已记住偏好 - ${text}`);
+      pushLog(uiText(`系统：已记住偏好 - ${text}`, `System: remembered preference - ${text}`));
     },
-    [projectId, pushLog, setProjectMemory],
+    [projectId, pushLog, setProjectMemory, uiLocale],
   );
 
   const handleAvoidDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning('请先保存当前剪辑项目，再记录 Agent 记忆');
+        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'avoid', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(`系统：已记为避免 - ${text}`);
+      pushLog(uiText(`系统：已记为避免 - ${text}`, `System: marked to avoid - ${text}`));
     },
-    [projectId, pushLog, setProjectMemory],
+    [projectId, pushLog, setProjectMemory, uiLocale],
   );
 
   const handleDeleteProjectMemoryItem = useCallback(
     async (bucket: EditorProjectMemoryBucket, target: { id?: string; value?: string }) => {
       if (!projectId) {
-        toast.warning('当前项目还没有可编辑的记忆记录');
+        toast.warning(uiText('当前项目还没有可编辑的记忆记录', 'There is no editable project memory yet'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await deleteEditorProjectMemoryItem(projectId, bucket, target);
       setProjectMemory(nextProjectMemory);
-      pushLog('系统：已移除一条项目记忆');
+      pushLog(uiText('系统：已移除一条项目记忆', 'System: removed one project memory item'));
     },
-    [projectId, pushLog, setProjectMemory],
+    [projectId, pushLog, setProjectMemory, uiLocale],
   );
 
   const handleWeakenUserProfileDimension = useCallback(
     async (dimension: EditorUserProfileDimensionKey) => {
       const { userCommunicationProfile } = await weakenEditorUserProfileDimension(dimension);
       setAgentUserCommunicationProfile(userCommunicationProfile);
-      pushLog(`系统：已将 ${dimension} 降为更弱的提示`);
+      pushLog(uiText(`系统：已将 ${dimension} 降为更弱的提示`, `System: weakened ${dimension} into a lighter hint`));
     },
-    [pushLog],
+    [pushLog, uiLocale],
   );
 
   const handleAddToTimeline = useCallback(
@@ -1160,7 +1177,7 @@ export function EditorWorkbench() {
     (text: string, startSec: number, endSec: number) => {
       const id = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       applyTimelineProject(upsertSubtitleCue(project, { id, startSec, endSec, text }));
-      pushLog('已添加字幕。');
+      pushLog(uiText('已添加字幕。', 'Subtitle added.'));
     },
     [project, applyTimelineProject, pushLog],
   );
@@ -1168,7 +1185,7 @@ export function EditorWorkbench() {
   const handleRemoveSubtitle = useCallback(
     (cueId: string) => {
       applyTimelineProject(removeSubtitleCue(project, cueId));
-      pushLog('已删除字幕。');
+      pushLog(uiText('已删除字幕。', 'Subtitle removed.'));
     },
     [project, applyTimelineProject, pushLog],
   );
@@ -1185,20 +1202,20 @@ export function EditorWorkbench() {
   }, [project, applyTimelineProject, selectedTextClipId]);
 
   const handleAddIntro = useCallback(() => {
-    const p = addIntroTextClip(project, '片头标题', '副标题文字', 'intro-minimal');
+    const p = addIntroTextClip(project, uiText('片头标题', 'Title card'), uiText('副标题文字', 'Subtitle'), 'intro-minimal');
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[0].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject]);
+  }, [project, applyTimelineProject, uiLocale]);
 
   const handleAddOutro = useCallback(() => {
-    const p = addOutroTextClip(project, '关注我们', '获取更多精彩内容', 'outro-follow');
+    const p = addOutroTextClip(project, uiText('关注我们', 'Follow us'), uiText('获取更多精彩内容', 'See more highlights'), 'outro-follow');
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[clips.length - 1].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject]);
+  }, [project, applyTimelineProject, uiLocale]);
 
   const handleAddSubtitleText = useCallback(() => {
     const id = `text_${Date.now()}`;
@@ -1206,13 +1223,13 @@ export function EditorWorkbench() {
       id,
       timelineStart: currentTime,
       timelineEnd: Math.min(currentTime + 2, project.durationSec),
-      text: '字幕文字',
+      text: uiText('字幕文字', 'Subtitle text'),
       presetId: 'sub-bottom',
     };
     applyTimelineProject(upsertTextClip(project, clip));
     setSelectedTextClipId(id);
     setShowTextPanel(true);
-  }, [project, currentTime, applyTimelineProject]);
+  }, [project, currentTime, applyTimelineProject, uiLocale]);
 
   const activeTextClips = useMemo(
     () => getActiveTextClips(project, currentTime),
@@ -1307,13 +1324,13 @@ export function EditorWorkbench() {
           showTextPanel ? (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-                <span className="text-xs font-semibold text-[var(--color-text)]">文字编辑</span>
+                <span className="text-xs font-semibold text-[var(--color-text)]">{uiText('文字编辑', 'Text editing')}</span>
                 <button
                   type="button"
                   onClick={() => setShowTextPanel(false)}
                   className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs"
                 >
-                  ← 素材
+                  {uiText('← 素材', '← Media')}
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1353,7 +1370,7 @@ export function EditorWorkbench() {
             className="flex h-full min-h-0 flex-col bg-[var(--color-surface)] [&:fullscreen]:bg-black"
           >
             <div className="border-b border-[var(--color-border)] px-3 py-2">
-              <span className="text-xs font-medium text-[var(--color-text-muted)]">预览</span>
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('预览', 'Preview')}</span>
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black p-2">
               <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
@@ -1425,7 +1442,7 @@ export function EditorWorkbench() {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-xs text-white/50">
-                    加载示例、上传素材或 Agent 生成时间轴后预览
+                    {uiText('加载示例、上传素材或 Agent 生成时间轴后预览', 'Load the demo, upload media, or let the agent build a timeline to preview here')}
                   </div>
                 )}
                 {activeSubtitleText ? (
@@ -1463,7 +1480,7 @@ export function EditorWorkbench() {
             onAbort={() => {
               if (agentAbortRef.current) {
                 agentAbortRef.current.abort();
-                pushLog('已取消 Agent 任务');
+                pushLog(uiText('已取消 Agent 任务', 'Agent task cancelled.'));
               }
             }}
             jobProgress={agentJobProgress}
@@ -1553,9 +1570,9 @@ export function EditorWorkbench() {
                 <a
                   href={`/studio/production${project.sourceProductionProjectId ? `?projectId=${project.sourceProductionProjectId}` : ''}`}
                   className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
-                  title="打开来源制片项目"
+                  title={uiText('打开来源制片项目', 'Open source production project')}
                 >
-                  📎 来自「{project.sourceProductionTitle}」
+                  {uiText(`📎 来自「${project.sourceProductionTitle}」`, `📎 From “${project.sourceProductionTitle}”`)}
                   <span className="opacity-60">→</span>
                 </a>
                 {project.sourceProductionProjectId && projectId && (
@@ -1563,9 +1580,9 @@ export function EditorWorkbench() {
                     type="button"
                     onClick={() => setShowSyncModal(true)}
                     className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
-                    title="从制片项目同步最新版本"
+                    title={uiText('从制片项目同步最新版本', 'Sync the latest versions from production')}
                   >
-                    🔄 同步更新
+                    {uiText('🔄 同步更新', '🔄 Sync')}
                   </button>
                 )}
               </>
@@ -1575,16 +1592,16 @@ export function EditorWorkbench() {
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 className="w-[140px] bg-transparent text-xs text-[var(--color-text)] outline-none"
-                placeholder="项目名"
+                placeholder={uiText('项目名', 'Project name')}
               />
               <span className="text-[10px] text-[var(--color-text-muted)]">
                 {saveState === 'saving'
-                  ? '保存中...'
+                  ? uiText('保存中...', 'Saving...')
                   : saveState === 'saved'
-                    ? '已保存'
+                    ? uiText('已保存', 'Saved')
                     : saveState === 'error'
-                      ? '保存失败'
-                      : '未保存'}
+                      ? uiText('保存失败', 'Save failed')
+                      : uiText('未保存', 'Unsaved')}
               </span>
             </div>
             <button
@@ -1592,69 +1609,70 @@ export function EditorWorkbench() {
               onClick={() => setShowProjectManager(true)}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              我的项目{projectList.length > 0 ? ` (${projectList.length})` : ''}
+              {uiText('我的项目', 'My projects')}{projectList.length > 0 ? ` (${projectList.length})` : ''}
             </button>
             <button
               type="button"
               onClick={() => {
-                const defaultName = `剪辑-${new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace(/\//g, '')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+                const dateStamp = new Date().toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit' }).replace(/[/.]/g, '');
+                const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
                 setNewProjectModal({ open: true, name: defaultName });
               }}
               className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
             >
-              + 新建
+              {uiText('+ 新建', '+ New')}
             </button>
             <button
               type="button"
               onClick={undo}
               disabled={!canUndo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title="撤销 Ctrl+Z"
+              title={uiText('撤销 Ctrl+Z', 'Undo Ctrl+Z')}
             >
-              撤销
+              {uiText('撤销', 'Undo')}
             </button>
             <button
               type="button"
               onClick={redo}
               disabled={!canRedo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title="重做 Ctrl+Shift+Z"
+              title={uiText('重做 Ctrl+Shift+Z', 'Redo Ctrl+Shift+Z')}
             >
-              重做
+              {uiText('重做', 'Redo')}
             </button>
             <div className="flex items-center gap-1 border-r border-[var(--color-border)] pr-2 mr-1">
               <button
                 type="button"
                 onClick={handleAddIntro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title="在开头添加片头"
+                title={uiText('在开头添加片头', 'Add a title card at the beginning')}
               >
-                片头
+                {uiText('片头', 'Intro')}
               </button>
               <button
                 type="button"
                 onClick={handleAddSubtitleText}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title="在当前时间添加字幕"
+                title={uiText('在当前时间添加字幕', 'Add a subtitle at the current time')}
               >
-                + 字幕
+                {uiText('+ 字幕', '+ Subtitle')}
               </button>
               <button
                 type="button"
                 onClick={handleAddOutro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title="在末尾添加片尾"
+                title={uiText('在末尾添加片尾', 'Add an outro at the end')}
               >
-                片尾
+                {uiText('片尾', 'Outro')}
               </button>
             </div>
             <button
               type="button"
               onClick={handleCaptureCover}
-              title="截取当前帧为封面"
+              title={uiText('截取当前帧为封面', 'Capture the current frame as cover')}
               className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
-              📷 截帧
+              {uiText('📷 截帧', '📷 Capture')}
             </button>
             <ExportPanel
               project={project}
@@ -1679,7 +1697,8 @@ export function EditorWorkbench() {
           });
         }}
         onNew={() => {
-          const defaultName = `剪辑-${new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace(/\//g, '')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+          const dateStamp = new Date().toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit' }).replace(/[/.]/g, '');
+          const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
           setNewProjectModal({ open: true, name: defaultName });
           setShowProjectManager(false);
         }}
@@ -1714,7 +1733,7 @@ export function EditorWorkbench() {
           const negativePrompt = 'vocals, lyrics';
           setBgmFormSync({ prompt, negativePrompt, key });
           setBgmAutoGenerateRequest({ prompt, negativePrompt, key });
-          pushLog('🎵 已根据导入分镜触发一键智能配乐…');
+          pushLog(uiText('🎵 已根据导入分镜触发一键智能配乐…', '🎵 Triggered smart music generation from the imported storyboard…'));
         }}
         onPreview={() => {
           if (!isPlaying) togglePlay();
@@ -1730,8 +1749,8 @@ export function EditorWorkbench() {
         onClick={(e) => { if (e.target === e.currentTarget) setNewProjectModal({ open: false, name: '' }); }}
       >
         <div className="w-80 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
-          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">新建剪辑项目</h3>
-          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">为新项目起一个名字，之后可以随时修改</p>
+          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{uiText('新建剪辑项目', 'Create a new editing project')}</h3>
+          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">{uiText('为新项目起一个名字，之后可以随时修改', 'Give the new project a name. You can rename it later any time.')}</p>
           <input
             autoFocus
             type="text"
@@ -1750,7 +1769,7 @@ export function EditorWorkbench() {
               }
               if (e.key === 'Escape') setNewProjectModal({ open: false, name: '' });
             }}
-            placeholder="例：产品宣传片-0415"
+            placeholder={uiText('例：产品宣传片-0415', 'Example: Product launch cut - 0415')}
             className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
           />
           <div className="flex justify-end gap-2">
@@ -1759,7 +1778,7 @@ export function EditorWorkbench() {
               onClick={() => setNewProjectModal({ open: false, name: '' })}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              取消
+              {uiText('取消', 'Cancel')}
             </button>
             <button
               type="button"
@@ -1775,7 +1794,7 @@ export function EditorWorkbench() {
               }}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
-              创建
+              {uiText('创建', 'Create')}
             </button>
           </div>
         </div>
@@ -1789,20 +1808,20 @@ export function EditorWorkbench() {
         <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-bold text-[var(--color-text)]">
-              欢迎使用剪辑工作台
+              {uiText('欢迎使用剪辑工作台', 'Welcome to the editing workbench')}
             </h2>
             <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">1</span>
-                <p><strong className="text-[var(--color-text)]">告诉 AI 你想怎么剪</strong> — 右侧「AI 助手」面板支持自然语言指令，例如"帮我把第 2 段移到开头"、"加一段欢快的 BGM"。</p>
+                <p><strong className="text-[var(--color-text)]">{uiText('告诉 AI 你想怎么剪', 'Tell AI how you want to edit')}</strong> {uiText('— 右侧「AI 助手」面板支持自然语言指令，例如"帮我把第 2 段移到开头"、"加一段欢快的 BGM"。', '— The AI Assistant panel on the right accepts natural language instructions like “move clip 2 to the opening” or “add an upbeat BGM track.”')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">2</span>
-                <p><strong className="text-[var(--color-text)]">左侧添加素材</strong> — 上传视频或从素材库选择，点击即可加入时间轴。</p>
+                <p><strong className="text-[var(--color-text)]">{uiText('左侧添加素材', 'Add source media on the left')}</strong> {uiText('— 上传视频或从素材库选择，点击即可加入时间轴。', '— Upload videos or choose them from the asset library, then click to place them on the timeline.')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">3</span>
-                <p><strong className="text-[var(--color-text)]">一键导出</strong> — 满意后点击导出，AI 自动合成高清视频。</p>
+                <p><strong className="text-[var(--color-text)]">{uiText('一键导出', 'Export in one click')}</strong> {uiText('— 满意后点击导出，AI 自动合成高清视频。', '— When you are happy with the cut, export and let AI assemble the final HD video.')}</p>
               </div>
             </div>
             <button
@@ -1813,7 +1832,7 @@ export function EditorWorkbench() {
               }}
               className="w-full py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition"
             >
-              开始剪辑
+              {uiText('开始剪辑', 'Start editing')}
             </button>
           </div>
         </div>

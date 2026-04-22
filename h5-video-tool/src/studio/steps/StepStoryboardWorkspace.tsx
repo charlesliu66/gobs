@@ -7,6 +7,8 @@
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
 import { useProductionContext } from '../ProductionContext';
 import { StepStoryboardAssetsSidebar } from './StepStoryboardAssetsSidebar';
@@ -139,11 +141,13 @@ export function StepStoryboardWorkspace({
   projectTitle?: string;
 }) {
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
 
   if (busyL3 && (!shots || shots.length === 0)) {
     return (
       <div className="space-y-3 p-4">
-        <p className="animate-pulse text-sm text-[var(--color-text-muted)]">正在生成分镜表...</p>
+        <p className="animate-pulse text-sm text-[var(--color-text-muted)]">{uiText('正在生成分镜表...', 'Generating storyboard...')}</p>
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-24 animate-pulse rounded-xl bg-[var(--color-surface-elevated)]" />
         ))}
@@ -162,22 +166,31 @@ export function StepStoryboardWorkspace({
     if (queueSnapshot.totalActive === 0 && queueSnapshot.totalWaiting === 0) {
       return {
         className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
-        title: '平台空闲',
-        detail: `当前没有任务占用即梦配额，平均 ${avgSec} 秒/个。`,
+        title: uiText('平台空闲', 'Platform idle'),
+        detail: uiText(
+          `当前没有任务占用即梦配额，平均 ${avgSec} 秒/个。`,
+          `No Dreamina jobs are using capacity right now. Average pace is about ${avgSec} sec/job.`,
+        ),
       };
     }
     if (queueSnapshot.totalWaiting >= 4) {
       const etaMin = Math.max(1, Math.round((queueSnapshot.totalWaiting * avgSec) / 60));
       return {
         className: 'border-red-500/30 bg-red-500/10 text-red-200',
-        title: '平台繁忙',
-        detail: `队列 ${queueSnapshot.totalWaiting} 个，活跃 ${queueSnapshot.totalActive} 个，预计需要等待约 ${etaMin} 分钟。`,
+        title: uiText('平台繁忙', 'Platform busy'),
+        detail: uiText(
+          `队列 ${queueSnapshot.totalWaiting} 个，活跃 ${queueSnapshot.totalActive} 个，预计需要等待约 ${etaMin} 分钟。`,
+          `${queueSnapshot.totalWaiting} queued, ${queueSnapshot.totalActive} active. Estimated wait is about ${etaMin} minutes.`,
+        ),
       };
     }
     return {
       className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
-      title: '平台使用中',
-      detail: `生成 ${queueSnapshot.totalActive} 个，排队 ${queueSnapshot.totalWaiting} 个，平均 ${avgSec} 秒/个。`,
+      title: uiText('平台使用中', 'Platform in use'),
+      detail: uiText(
+        `生成 ${queueSnapshot.totalActive} 个，排队 ${queueSnapshot.totalWaiting} 个，平均 ${avgSec} 秒/个。`,
+        `${queueSnapshot.totalActive} rendering, ${queueSnapshot.totalWaiting} queued. Average pace is about ${avgSec} sec/job.`,
+      ),
     };
   })();
 
@@ -308,7 +321,7 @@ export function StepStoryboardWorkspace({
             onClick={onBatchGenerateAllVideos}
             className="rounded-lg border border-amber-500/40 bg-amber-600/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-600/25"
           >
-            一键生成所有缺失视频
+            {uiText('一键生成所有缺失视频', 'Generate all missing videos')}
           </button>
         )}
         {onCancelProjectQueue && (
@@ -318,7 +331,9 @@ export function StepStoryboardWorkspace({
             disabled={bulkCancelling || projectQueuedCount === 0}
             className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {bulkCancelling ? '取消中...' : `取消本项目排队（${projectQueuedCount}）`}
+            {bulkCancelling
+              ? uiText('取消中...', 'Cancelling...')
+              : uiText(`取消本项目排队（${projectQueuedCount}）`, `Cancel queued jobs for this project (${projectQueuedCount})`)}
           </button>
         )}
         {onShowContinuousPlay && (
@@ -327,7 +342,7 @@ export function StepStoryboardWorkspace({
             onClick={onShowContinuousPlay}
             className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
           >
-            连续播放
+            {uiText('连续播放', 'Continuous play')}
           </button>
         )}
         {onShowAbCompare && shotVideoVersions.length >= 2 && (
@@ -336,7 +351,7 @@ export function StepStoryboardWorkspace({
             onClick={onShowAbCompare}
             className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
           >
-            版本 A/B 对比
+            {uiText('版本 A/B 对比', 'Compare versions A/B')}
           </button>
         )}
         {onSyncBatchJobs && (
@@ -344,10 +359,13 @@ export function StepStoryboardWorkspace({
             type="button"
             onClick={onSyncBatchJobs}
             disabled={syncingBatchJobs}
-            title="立即拉取所有即梦任务最新状态，并兜底恢复丢失的 submitId。"
+            title={uiText(
+              '立即拉取所有即梦任务最新状态，并兜底恢复丢失的 submitId。',
+              'Fetch the latest Dreamina job states now and try to recover any missing submitId values.',
+            )}
             className="ml-auto rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {syncingBatchJobs ? '同步中...' : '同步即梦状态'}
+            {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步即梦状态', 'Sync Dreamina status')}
           </button>
         )}
       </div>
@@ -383,7 +401,7 @@ export function StepStoryboardWorkspace({
         onClick={() => setStep(4)}
         className="self-start rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white"
       >
-        进入导出
+        {uiText('进入导出', 'Go to export')}
       </button>
     </div>
   );

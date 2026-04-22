@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { pickUiText } from '../i18n/uiText.ts';
+
 export interface ProductionWizardStepItem {
   id: number;
   label: string;
@@ -38,6 +41,8 @@ export function ProductionWizardShell({
   onNext: () => void;
   children: ReactNode;
 }) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const maxStep = maxReachableStep ?? steps.length - 1;
   return (
     <div className="flex h-full min-h-0 flex-col bg-[radial-gradient(circle_at_top,rgba(124,141,255,0.1),transparent_35%)]">
@@ -48,12 +53,17 @@ export function ProductionWizardShell({
               <input
                 value={projectTitle}
                 onChange={(e) => onProjectTitleChange(e.target.value)}
-                placeholder="项目名称"
+                placeholder={uiText('项目名称', 'Project title')}
                 className="w-full max-w-xl border-0 bg-transparent text-lg font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
               />
-              {titleSaved && <span className="text-[10px] text-[var(--color-success)]">✓ 已保存</span>}
+              {titleSaved && <span className="text-[10px] text-[var(--color-success)]">{uiText('✓ 已保存', '✓ Saved')}</span>}
               <div className="mt-1 flex items-center gap-2">
-                <p className="text-xs text-[var(--color-text-muted)]">高级制片 · 故事构思 → 角色场景 → 分镜表 → 生成导出</p>
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  {uiText(
+                    '高级制片 · 故事构思 → 角色场景 → 分镜表 → 生成导出',
+                    'Advanced Production · Story Outline → Character & Scene Design → Storyboard → Export',
+                  )}
+                </p>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-primary)]/20 text-[var(--color-primary)]">BETA</span>
               </div>
             </div>
@@ -63,7 +73,7 @@ export function ProductionWizardShell({
                 onClick={() => void onOpenProjectList()}
                 className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
               >
-                📂 项目列表
+                {uiText('📂 项目列表', '📂 Projects')}
               </button>
               <Link to="/studio" className="text-sm text-[var(--color-primary)] hover:underline">
                 ← Studio
@@ -73,7 +83,7 @@ export function ProductionWizardShell({
                 onClick={onResetDraft}
                 className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               >
-                清空草稿
+                {uiText('清空草稿', 'Clear draft')}
               </button>
             </div>
           </div>
@@ -95,7 +105,7 @@ export function ProductionWizardShell({
                     onClick={() => !locked && onStepChange(i)}
                     disabled={locked}
                     className={`flex flex-col items-center gap-1 group ${locked ? 'cursor-not-allowed opacity-40' : ''}`}
-                    title={locked ? '请先完成前面的步骤' : s.label}
+                    title={locked ? uiText('请先完成前面的步骤', 'Complete the earlier steps first') : s.label}
                   >
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
@@ -161,7 +171,7 @@ export function ProductionWizardShell({
               disabled={step === 0}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm disabled:opacity-40"
             >
-              上一步
+              {uiText('上一步', 'Back')}
             </button>
             <button
               type="button"
@@ -169,7 +179,7 @@ export function ProductionWizardShell({
               disabled={step >= steps.length - 1}
               className="rounded-lg bg-[var(--color-text)] px-4 py-2 text-sm text-[var(--color-surface)] disabled:opacity-40"
             >
-              下一步
+              {uiText('下一步', 'Next')}
             </button>
           </div>
         </div>

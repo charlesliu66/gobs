@@ -1,4 +1,6 @@
 import type { StoryArcLayer, StoryBeat } from '../productionTypes';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 
 export function StepStoryArc({
   styleRefSummary,
@@ -21,11 +23,14 @@ export function StepStoryArc({
   busyL2: boolean;
   onGenerateL2: () => void | Promise<void>;
 }) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 sm:grid-cols-2">
         <label className="text-xs text-[var(--color-text-muted)] sm:col-span-2">
-          视频风格摘要（可与「输入」页一致）
+          {uiText('视频风格摘要（可与「输入」页一致）', 'Visual style summary (keep in sync with Input if needed)')}
           <textarea
             value={styleRefSummary}
             onChange={(e) => onStyleRefSummaryChange(e.target.value)}
@@ -34,25 +39,25 @@ export function StepStoryArc({
           />
         </label>
         <div>
-          <div className="text-xs font-medium text-[var(--color-text-muted)]">画面比例</div>
-          <p className="mt-1 text-sm text-[var(--color-text)]">{aspectRatioText}（在「输入」页修改）</p>
+          <div className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('画面比例', 'Aspect ratio')}</div>
+          <p className="mt-1 text-sm text-[var(--color-text)]">{aspectRatioText} {uiText('（在「输入」页修改）', '(edit in Input)')}</p>
         </div>
         <div>
-          <div className="text-xs font-medium text-[var(--color-text-muted)]">故事类型</div>
+          <div className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('故事类型', 'Genre')}</div>
           <input
             value={storyGenre}
             onChange={(e) => onStoryGenreChange(e.target.value)}
             className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-            placeholder="如：悬疑、都市"
+            placeholder={uiText('如：悬疑、都市', 'Examples: mystery, urban drama')}
           />
         </div>
       </div>
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-        <h3 className="text-sm font-semibold text-[var(--color-text)]">剧本摘要（可编辑）</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text)]">{uiText('剧本摘要（可编辑）', 'Story summary (editable)')}</h3>
         <div className="mt-3 space-y-4 text-sm">
           <label className="block text-xs text-[var(--color-text-muted)]">
-            一句话故事（logline）
+            {uiText('一句话故事（logline）', 'Logline')}
             <textarea
               value={story.logline}
               onChange={(e) => patchStory((s) => ({ ...s, logline: e.target.value }))}
@@ -61,7 +66,7 @@ export function StepStoryArc({
             />
           </label>
           <label className="block text-xs text-[var(--color-text-muted)]">
-            故事梗概
+            {uiText('故事梗概', 'Synopsis')}
             <textarea
               value={story.synopsis}
               onChange={(e) => patchStory((s) => ({ ...s, synopsis: e.target.value }))}
@@ -70,7 +75,7 @@ export function StepStoryArc({
             />
           </label>
           <label className="block text-xs text-[var(--color-text-muted)]">
-            节奏说明（可选）
+            {uiText('节奏说明（可选）', 'Pacing notes (optional)')}
             <textarea
               value={story.pacingNotes ?? ''}
               onChange={(e) => patchStory((s) => ({ ...s, pacingNotes: e.target.value }))}
@@ -83,7 +88,7 @@ export function StepStoryArc({
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--color-text)]">剧本节拍</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">{uiText('剧本节拍', 'Story beats')}</h3>
           <button
             type="button"
             onClick={() =>
@@ -93,7 +98,7 @@ export function StepStoryArc({
                   ...s.beats,
                   {
                     id: `b-${Date.now()}`,
-                    label: `节拍 ${s.beats.length + 1}`,
+                    label: uiText(`节拍 ${s.beats.length + 1}`, `Beat ${s.beats.length + 1}`),
                     storyPercent: Math.min(1, (s.beats.length + 1) * 0.1),
                     description: '',
                   } satisfies StoryBeat,
@@ -102,7 +107,7 @@ export function StepStoryArc({
             }
             className="text-xs text-[var(--color-primary)] hover:underline"
           >
-            + 添加节拍
+            {uiText('+ 添加节拍', '+ Add beat')}
           </button>
         </div>
         <div className="mt-3 space-y-3">
@@ -124,7 +129,7 @@ export function StepStoryArc({
                   className="min-w-[6rem] flex-1 rounded border border-[var(--color-border)] px-2 py-1 text-sm font-medium"
                 />
                 <label className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
-                  位置 %
+                  {uiText('位置 %', 'Position %')}
                   <input
                     type="number"
                     min={0}
@@ -151,7 +156,7 @@ export function StepStoryArc({
                   }
                   className="text-xs text-red-400 hover:underline"
                 >
-                  删除
+                  {uiText('删除', 'Remove')}
                 </button>
               </div>
               <textarea
@@ -165,7 +170,7 @@ export function StepStoryArc({
                   }))
                 }
                 rows={2}
-                placeholder="本节拍发生什么"
+                placeholder={uiText('本节拍发生什么', 'What happens in this beat')}
                 className="mt-2 w-full rounded border border-[var(--color-border)] px-2 py-1 text-sm"
               />
             </div>
@@ -179,7 +184,7 @@ export function StepStoryArc({
         onClick={() => void onGenerateL2()}
         className="rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
       >
-        {busyL2 ? '生成中…' : '生成角色与场景设定'}
+        {busyL2 ? uiText('生成中…', 'Generating…') : uiText('生成角色与场景设定', 'Generate character and scene design')}
       </button>
     </div>
   );

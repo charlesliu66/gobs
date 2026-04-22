@@ -34,6 +34,7 @@
 
 - Step 0 的“参考图反解析”支持两种入口：本地上传，或直接从素材库选择图片；选中后沿用现有预览、上传和风格反解析链路。
 - 剧本大纲、制片清单、分镜表、参考图反解析与提示词组装主链路已补齐“按本轮输入语言输出”的语言协议：英文输入优先得到英文结果，中文输入继续保持中文。
+- 高级制片主壳层继续补齐英文 UI：项目头部、步骤导航、输入页、剧本大纲页、角色/场景设计头部、分镜工作台、分镜预览、分镜状态条和导出页签现在都会跟随界面语言切换，英文同事进入主流程时不再一进来就掉回大段中文。
 
 **鍒嗛暅宸ヤ綔鍙板寮哄姛鑳斤紙v0.42+锛夛細**
 - 涓€閿敓鎴愭墍鏈夌己澶辫棰戯紙鎵归噺鎻愪氦鑷宠嚜閫傚簲闃熷垪锛?- AI 鑷姩瀹＄墖锛氬垎闀滅敓鎴愭椂鍚庣鑷姩浼樺寲 Prompt 璐ㄩ噺锛坴0.43 璧峰唴缃簬鐢熸垚娴佺▼锛夛紱鎵嬪姩瀹＄墖浠嶅彲鐢ㄤ簬浜屾妫€鏌?- 蹇€熻皟鏁撮潰鏉匡細杩愰暅/鑺傚/鍏夊奖棰勮鎸夐挳锛屼竴閿慨鏀圭粨鏋勫寲鍙傛暟
@@ -89,6 +90,7 @@
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
 - 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
 - 回复语言跟随（v0.99）：剪辑 Agent 的聊天回复、默认 brief 指令、创意策略卡与剪辑总结现在会优先跟随当前用户消息或 brief 的语言；英文提问默认回英文，中文提问继续回中文。
+- 剪辑工作台主壳层补齐英文 UI（v0.102）：右侧 Editing Agent 面板、Agent memory、项目管理弹窗、制片导入引导、同步制片更新弹窗、顶部项目操作区、文字编辑/预览区和新手引导现在都会跟随界面语言切换；共享 `RunningStatus` 在英文模式下也会回退到英文 inline 状态，不再展示中文剧场文案。
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
 - **蹇嵎鎸囦护妯℃澘锛坴0.58锛?*锛氶娆′娇鐢ㄦ椂灞曠ず棰勮鎸夐挳锛堟垬鏂楁贩鍓?/ 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝涓€閿彂閫?- **澶氭ā鍨?Plan 鈫?Build 涓ら樁娈垫灦鏋勶紙v0.58锛夛細**
   - Plan 闃舵锛欴eepSeek-R1 鑷劧璇█鎺ㄧ悊锛岃緭鍑洪€夋鏂规锛堜笉瑕佹眰 JSON锛岄伩鍏嶆牸寮忛敊璇級
@@ -172,7 +174,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.102 -->
+<!-- NEXT_VERSION: v0.103 -->
+
+### v0.102 — 2026-04-22
+
+**高级制片 / 剪辑工作台主壳层英文 UI 收口**
+
+**Feature / UX Polish:**
+- **[frontend] 高级制片主路径补齐英文壳层**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/studio/ProductionWizardShell.tsx`, `h5-video-tool/src/studio/steps/StepInput.tsx`, `StepStoryArc.tsx`, `StepDesignHeader.tsx`, `StepDesignActions.tsx`, `StepStoryboard*.tsx`, `StepExportWorkspace.tsx`）：项目头部、步骤导航、输入与大纲页、设计工作台头部、分镜工作台按钮/状态、分镜预览和导出页签全部接入 `uiLocale`，英文界面下的主流程不再被中文按钮和状态打断。
+- **[frontend] 剪辑工作台主壳层与 Agent 面板补齐英文 UI**（`h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool/src/editor/components/AgentPanel.tsx`, `AgentMemoryPanel.tsx`, `EditorProjectManager.tsx`, `ImportGuideModal.tsx`, `SyncProductionModal.tsx`）：右侧 Agent、项目弹窗、导入/同步提示、顶部项目操作区和 onboarding 统一支持英文壳层，英文用户可以独立完成“导入 → Agent 沟通 → 预览/编辑”的主路径。
+- **[frontend] 新增轻量 `uiText` helper 与共享运行状态英文回退**（`h5-video-tool/src/i18n/uiText.ts`, `h5-video-tool/src/components/RunningStatus.tsx`）：为渐进式英文化提供最小共用 helper，并让 `RunningStatus` 在英文模式下显示英文 inline 状态、关闭中文剧场轮播，避免处理中状态再次掉回中文。
 
 ### v0.101 — 2026-04-22
 
@@ -1431,4 +1442,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.101）*
+*最后更新：2026-04-22（v0.102）*

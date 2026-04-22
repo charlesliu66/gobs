@@ -1,4 +1,6 @@
 import React from 'react';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 import type {
   EditorProjectMemory,
   EditorUserCommunicationProfile,
@@ -31,10 +33,10 @@ type ProfileRow = {
   confidence?: number;
 };
 
-function confidenceLabel(confidence: number | undefined): string {
-  if ((confidence ?? 0) >= 0.75) return '强记忆';
-  if ((confidence ?? 0) >= 0.55) return '普通';
-  return '弱提示';
+function confidenceLabel(confidence: number | undefined, uiLocale: 'zh-CN' | 'en'): string {
+  if ((confidence ?? 0) >= 0.75) return uiLocale === 'en' ? 'Strong' : '强记忆';
+  if ((confidence ?? 0) >= 0.55) return uiLocale === 'en' ? 'Normal' : '普通';
+  return uiLocale === 'en' ? 'Hint' : '弱提示';
 }
 
 function signalClass(confidence: number | undefined): string {
@@ -47,6 +49,7 @@ function signalClass(confidence: number | undefined): string {
 
 function renderSignalList(
   title: string,
+  uiLocale: 'zh-CN' | 'en',
   bucket: EditorProjectMemoryBucket,
   items: Array<{ id: string; value: string; confidence?: number }>,
   onDeleteProjectItem: AgentMemoryPanelProps['onDeleteProjectItem'],
@@ -68,7 +71,7 @@ function renderSignalList(
               <span
                 className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] ${signalClass(item.confidence)}`}
               >
-                {confidenceLabel(item.confidence)}
+                {confidenceLabel(item.confidence, uiLocale)}
               </span>
             </div>
             <button
@@ -76,7 +79,7 @@ function renderSignalList(
               onClick={() => void onDeleteProjectItem(bucket, { id: item.id })}
               className="shrink-0 rounded border border-red-500/35 bg-red-500/10 px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20"
             >
-              删除
+              {uiLocale === 'en' ? 'Delete' : '删除'}
             </button>
           </div>
         ))}
@@ -95,6 +98,8 @@ export function AgentMemoryPanel({
   onDeleteProjectItem,
   onWeakenProfileDimension,
 }: AgentMemoryPanelProps) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const draft = draftInput.trim();
   const preferenceSignals = projectMemory?.preferenceSignals ?? [];
   const negativePreferenceSignals = projectMemory?.negativePreferenceSignals ?? [];
@@ -146,14 +151,17 @@ export function AgentMemoryPanel({
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold text-[var(--color-text)]">Agent 记忆</div>
+            <div className="text-[11px] font-semibold text-[var(--color-text)]">{uiText('Agent 记忆', 'Agent memory')}</div>
             <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
-              这里展示当前项目已记住的偏好，以及跨项目的沟通画像。
+              {uiText(
+                '这里展示当前项目已记住的偏好，以及跨项目的沟通画像。',
+                'This shows the project-level preferences already remembered, plus cross-project communication signals.',
+              )}
             </div>
           </div>
           <div className="text-right text-[10px] text-[var(--color-text-muted)]">
-            <div>项目记忆 {projectMemory?.summary.preferenceCount ?? 0}</div>
-            <div>负向偏好 {projectMemory?.summary.negativePreferenceCount ?? 0}</div>
+            <div>{uiText(`项目记忆 ${projectMemory?.summary.preferenceCount ?? 0}`, `Project memories ${projectMemory?.summary.preferenceCount ?? 0}`)}</div>
+            <div>{uiText(`负向偏好 ${projectMemory?.summary.negativePreferenceCount ?? 0}`, `Avoid signals ${projectMemory?.summary.negativePreferenceCount ?? 0}`)}</div>
           </div>
         </div>
 
@@ -164,7 +172,7 @@ export function AgentMemoryPanel({
             onClick={() => void onRememberDraft(draft)}
             className="rounded-full border border-emerald-500/35 bg-emerald-500/10 px-3 py-1 text-[10px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
           >
-            记住这个偏好
+            {uiText('记住这个偏好', 'Remember this preference')}
           </button>
           <button
             type="button"
@@ -172,7 +180,7 @@ export function AgentMemoryPanel({
             onClick={() => void onAvoidDraft(draft)}
             className="rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[10px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-40"
           >
-            不要再这样做
+            {uiText('不要再这样做', 'Avoid doing this')}
           </button>
         </div>
 
@@ -180,6 +188,7 @@ export function AgentMemoryPanel({
           <div className="mt-3 space-y-3">
             {renderSignalList(
               'Project Preferences',
+              uiLocale,
               'preferenceSignals',
               preferenceSignals.map((item) => ({
                 id: item.id,
@@ -190,6 +199,7 @@ export function AgentMemoryPanel({
             )}
             {renderSignalList(
               'Project Avoid',
+              uiLocale,
               'negativePreferenceSignals',
               negativePreferenceSignals.map((item) => ({
                 id: item.id,
@@ -200,6 +210,7 @@ export function AgentMemoryPanel({
             )}
             {renderSignalList(
               'Project Facts',
+              uiLocale,
               'stableFacts',
               stableFacts.map((item) => ({
                 id: item.id,
@@ -225,7 +236,7 @@ export function AgentMemoryPanel({
                       onClick={() => void onDeleteProjectItem('openIssues', { value: item })}
                       className="shrink-0 rounded border border-red-500/35 bg-red-500/10 px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20"
                     >
-                      删除
+                      {uiText('删除', 'Delete')}
                     </button>
                   </div>
                 ))}
@@ -248,7 +259,7 @@ export function AgentMemoryPanel({
                       <span
                         className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] ${signalClass(item.confidence)}`}
                       >
-                        {confidenceLabel(item.confidence)}
+                        {confidenceLabel(item.confidence, uiLocale)}
                       </span>
                     </div>
                     <button
@@ -256,7 +267,7 @@ export function AgentMemoryPanel({
                       onClick={() => void onWeakenProfileDimension(item.key)}
                       className="shrink-0 rounded border border-amber-500/35 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-500/20"
                     >
-                      减弱
+                      {uiText('减弱', 'Weaken')}
                     </button>
                   </div>
                 ))}
@@ -265,7 +276,10 @@ export function AgentMemoryPanel({
           </div>
         ) : (
           <div className="mt-3 rounded-xl border border-dashed border-[var(--color-border)] px-3 py-4 text-[10px] text-[var(--color-text-muted)]">
-            当前还没有沉淀出可见记忆。先多对话几轮，或直接用上面的反馈按钮告诉 Agent 你想记住什么。
+            {uiText(
+              '当前还没有沉淀出可见记忆。先多对话几轮，或直接用上面的反馈按钮告诉 Agent 你想记住什么。',
+              'No visible memory has formed yet. Keep chatting for a few more turns, or use the feedback buttons above to tell the agent what to remember.',
+            )}
           </div>
         )}
       </div>

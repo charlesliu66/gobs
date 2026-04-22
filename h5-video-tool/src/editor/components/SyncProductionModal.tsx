@@ -6,6 +6,8 @@ import {
   type ApplySyncReplacement,
 } from '../../api/editor';
 import { toast } from '../../components/Toast';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 
 interface SyncProductionModalProps {
   editorProjectId: string;
@@ -14,6 +16,8 @@ interface SyncProductionModalProps {
 }
 
 export function SyncProductionModal({ editorProjectId, onSynced, onClose }: SyncProductionModalProps) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,18 +37,23 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
         setSelected(updatedShots);
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : '同步检查失败');
+        setError(e instanceof Error ? e.message : uiText('同步检查失败', 'Failed to check sync updates'));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [editorProjectId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [editorProjectId, uiLocale]);
 
   const updatedCount = diffs.filter((d) => d.hasUpdate).length;
 
   const handleApply = useCallback(async () => {
-    if (selected.size === 0) { onClose(); return; }
+    if (selected.size === 0) {
+      onClose();
+      return;
+    }
     setApplying(true);
     try {
       const replacements: ApplySyncReplacement[] = diffs
@@ -54,14 +63,14 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
           newVersionId: d.latestVersionId,
         }));
       await applySyncReplacements(editorProjectId, replacements);
-      toast.success(`已同步 ${replacements.length} 个分镜`);
+      toast.success(uiText(`已同步 ${replacements.length} 个分镜`, `Synced ${replacements.length} shots`));
       onSynced();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '同步失败');
+      toast.error(e instanceof Error ? e.message : uiText('同步失败', 'Sync failed'));
     } finally {
       setApplying(false);
     }
-  }, [diffs, selected, editorProjectId, onSynced, onClose]);
+  }, [diffs, selected, editorProjectId, onSynced, onClose, uiLocale]);
 
   const toggleShot = (idx: number) => {
     setSelected((prev) => {
@@ -79,36 +88,38 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget && !applying) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !applying) onClose();
+      }}
     >
-      <div className="w-[480px] max-w-[92vw] max-h-[80vh] flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl">
-        {/* Header */}
-        <div className="shrink-0 px-6 pt-5 pb-3">
+      <div className="flex max-h-[80vh] w-[480px] max-w-[92vw] flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl">
+        <div className="shrink-0 px-6 pb-3 pt-5">
           <h3 className="text-sm font-semibold text-[var(--color-text)]">
-            🔄 同步制片更新
+            {uiText('🔄 同步制片更新', '🔄 Sync production updates')}
           </h3>
           {productionTitle && (
             <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
-              来源：「{productionTitle}」
+              {uiText(`来源：「${productionTitle}」`, `Source: “${productionTitle}”`)}
             </p>
           )}
         </div>
 
         <div className="h-px bg-[var(--color-border)]" />
 
-        {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-xs text-[var(--color-text-muted)]">
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] mr-2" />
-              正在对比版本…
+              <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)]" />
+              {uiText('正在对比版本…', 'Comparing versions…')}
             </div>
           ) : error ? (
             <div className="py-6 text-center text-xs text-red-400">{error}</div>
           ) : updatedCount === 0 ? (
             <div className="py-10 text-center">
               <span className="text-2xl">✅</span>
-              <p className="mt-2 text-xs text-[var(--color-text-muted)]">所有分镜已是最新版本</p>
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                {uiText('所有分镜已是最新版本', 'All storyboard shots are already up to date')}
+              </p>
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -126,17 +137,19 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
                     checked={selected.has(d.shotIndex)}
                     disabled={!d.hasUpdate}
                     onChange={() => toggleShot(d.shotIndex)}
-                    className="accent-[var(--color-primary)] h-3.5 w-3.5"
+                    className="h-3.5 w-3.5 accent-[var(--color-primary)]"
                   />
                   <span className="flex-1 text-xs text-[var(--color-text)]">
-                    镜 {d.shotIndex}
+                    {uiText(`镜 ${d.shotIndex}`, `Shot ${d.shotIndex}`)}
                   </span>
                   {d.hasUpdate ? (
                     <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                      有新版本
+                      {uiText('有新版本', 'New version')}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-[var(--color-text-muted)]">无变化</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">
+                      {uiText('无变化', 'No change')}
+                    </span>
                   )}
                   <span className="text-[10px] text-[var(--color-text-muted)]">
                     {d.latestDurationSec.toFixed(1)}s
@@ -149,12 +162,15 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
 
         <div className="h-px bg-[var(--color-border)]" />
 
-        {/* Footer */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-3">
+        <div className="flex shrink-0 items-center justify-between px-6 py-3">
           <div className="text-[10px] text-[var(--color-text-muted)]">
             {updatedCount > 0 && !loading && (
-              <button type="button" onClick={selectAll} className="underline hover:text-[var(--color-text)]">
-                全选 ({updatedCount})
+              <button
+                type="button"
+                onClick={selectAll}
+                className="underline hover:text-[var(--color-text)]"
+              >
+                {uiText(`全选 (${updatedCount})`, `Select all (${updatedCount})`)}
               </button>
             )}
           </div>
@@ -165,7 +181,7 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
               disabled={applying}
               className="rounded-lg border border-[var(--color-border)] px-4 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
             >
-              {updatedCount === 0 ? '关闭' : '跳过'}
+              {updatedCount === 0 ? uiText('关闭', 'Close') : uiText('跳过', 'Skip')}
             </button>
             {updatedCount > 0 && !loading && (
               <button
@@ -176,11 +192,11 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
               >
                 {applying ? (
                   <>
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white mr-1" />
-                    替换中…
+                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    {uiText('替换中…', 'Replacing…')}
                   </>
                 ) : (
-                  `替换 ${selected.size} 个分镜`
+                  uiText(`替换 ${selected.size} 个分镜`, `Replace ${selected.size} shots`)
                 )}
               </button>
             )}

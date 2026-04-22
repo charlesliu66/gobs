@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { EditorProjectRecord } from '../../api/editor';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 
 type ProjectListItem = Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>;
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, uiLocale: 'zh-CN' | 'en'): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}天前`;
-  return new Date(iso).toLocaleDateString('zh-CN');
+  if (diff < 60_000) return uiLocale === 'en' ? 'just now' : '刚刚';
+  if (diff < 3_600_000) return uiLocale === 'en' ? `${Math.floor(diff / 60_000)} min ago` : `${Math.floor(diff / 60_000)}分钟前`;
+  if (diff < 86_400_000) return uiLocale === 'en' ? `${Math.floor(diff / 3_600_000)} hr ago` : `${Math.floor(diff / 3_600_000)}小时前`;
+  if (diff < 7 * 86_400_000) return uiLocale === 'en' ? `${Math.floor(diff / 86_400_000)} days ago` : `${Math.floor(diff / 86_400_000)}天前`;
+  return new Date(iso).toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN');
 }
 
 interface EditorProjectManagerProps {
@@ -32,6 +34,8 @@ export function EditorProjectManager({
   onDelete,
   onClose,
 }: EditorProjectManagerProps) {
+  const { uiLocale } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -72,21 +76,21 @@ export function EditorProjectManager({
       <div className="flex h-[560px] w-[600px] max-w-[96vw] flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
-          <h2 className="text-sm font-semibold text-[var(--color-text)]">我的剪辑项目</h2>
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">{uiText('我的剪辑项目', 'My editing projects')}</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => { onNew(); onClose(); }}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
-              + 新建剪辑
+              {uiText('+ 新建剪辑', '+ New edit')}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              关闭
+              {uiText('关闭', 'Close')}
             </button>
           </div>
         </div>
@@ -95,7 +99,7 @@ export function EditorProjectManager({
         <div className="border-b border-[var(--color-border)] px-5 py-2.5">
           <input
             type="text"
-            placeholder="搜索项目名称…"
+            placeholder={uiText('搜索项目名称…', 'Search project name…')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
@@ -106,7 +110,7 @@ export function EditorProjectManager({
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
-              {search ? '没有匹配的项目' : '暂无剪辑项目'}
+              {search ? uiText('没有匹配的项目', 'No matching projects') : uiText('暂无剪辑项目', 'No editing projects yet')}
             </div>
           ) : (
             filtered.map((p) => {
@@ -139,33 +143,33 @@ export function EditorProjectManager({
                       <div className="truncate text-xs font-medium text-[var(--color-text)]">
                         {p.name}
                         {isCurrent && (
-                          <span className="ml-1.5 rounded bg-[var(--color-primary)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-primary)]">当前</span>
+                          <span className="ml-1.5 rounded bg-[var(--color-primary)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-primary)]">{uiText('当前', 'Current')}</span>
                         )}
                       </div>
                     )}
                     <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
-                      {relativeTime(p.updatedAt)}
+                      {relativeTime(p.updatedAt, uiLocale)}
                     </div>
                   </div>
 
                   {/* Actions */}
                   {isConfirmDelete ? (
                     <div className="flex shrink-0 items-center gap-1.5 text-xs">
-                      <span className="text-[var(--color-text-muted)]">确认删除？</span>
+                      <span className="text-[var(--color-text-muted)]">{uiText('确认删除？', 'Delete this project?')}</span>
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={() => void handleDeleteConfirm(p.id)}
                         className="rounded bg-red-500/10 px-2 py-0.5 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                       >
-                        {isBusy ? '删除中…' : '删除'}
+                        {isBusy ? uiText('删除中…', 'Deleting…') : uiText('删除', 'Delete')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        取消
+                        {uiText('取消', 'Cancel')}
                       </button>
                     </div>
                   ) : isRenaming ? (
@@ -176,14 +180,14 @@ export function EditorProjectManager({
                         onClick={() => void handleRenameConfirm(p.id)}
                         className="rounded bg-[var(--color-primary)]/10 px-2 py-0.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 disabled:opacity-50"
                       >
-                        {isBusy ? '保存…' : '保存'}
+                        {isBusy ? uiText('保存…', 'Saving…') : uiText('保存', 'Save')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setRenamingId(null)}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        取消
+                        {uiText('取消', 'Cancel')}
                       </button>
                     </div>
                   ) : (
@@ -194,7 +198,7 @@ export function EditorProjectManager({
                           onClick={() => { onOpen(p.id); onClose(); }}
                           className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                         >
-                          打开
+                          {uiText('打开', 'Open')}
                         </button>
                       )}
                       <button
@@ -202,14 +206,14 @@ export function EditorProjectManager({
                         onClick={() => { setRenamingId(p.id); setRenameValue(p.name); }}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        重命名
+                        {uiText('重命名', 'Rename')}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setConfirmDeleteId(p.id); setRenamingId(null); }}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-red-400"
                       >
-                        删除
+                        {uiText('删除', 'Delete')}
                       </button>
                     </div>
                   )}
