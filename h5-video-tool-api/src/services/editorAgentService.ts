@@ -2,6 +2,8 @@ import type { AspectRatioPreset, TimelineProject, Track, VideoClip, AudioClip } 
 import { compassChatCompletionWithUsage, type CompassChatUsage } from './promptPolish.js';
 import { buildPreferencePromptSnippet } from './userPreferenceService.js';
 import { sumCompassUsage, type LlmUsageCallRecord } from './editorLlmUsage.js';
+import { buildAgentMemoryContextBlock } from './editorMemoryCompression.js';
+import { loadEditorUserCommunicationProfile } from './editorUserProfileService.js';
 import {
   analyzeMusicBeat,
   isBeatAnalysisEnabled,
@@ -46,6 +48,7 @@ export interface EditorAgentApplyInput {
   selectedAssetIds: string[];
   assets: EditorAgentAssetContext[];
   currentProject: TimelineProject;
+  projectMemory?: unknown;
   creativeBrief?: EditorCreativeBrief;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
@@ -443,6 +446,7 @@ function buildPlanSystemPrompt(ctx: {
   beatGuide?: string;
   currentClipsMetaBlock?: string;
   creativeBriefBlock?: string;
+  memoryContextBlock?: string;
 }): string {
   const sections: string[] = [];
   sections.push(`你是专业的「剪辑策划师」。根据用户指令和候选素材片段，输出一份**剪辑选段方案**。
@@ -475,6 +479,10 @@ ${ctx.contentManifest.trim()}`);
 
   if (ctx.creativeBriefBlock && ctx.creativeBriefBlock.trim()) {
     sections.push(ctx.creativeBriefBlock.trim());
+  }
+
+  if (ctx.memoryContextBlock && ctx.memoryContextBlock.trim()) {
+    sections.push(ctx.memoryContextBlock.trim());
   }
 
   if (ctx.beatGuide && ctx.beatGuide.trim()) {
@@ -913,6 +921,12 @@ export async function runEditorAgentApply(
 
   const prefUsername = options?.username || 'default';
   const userPreferenceSnippet = await buildPreferencePromptSnippet(prefUsername).catch(() => '');
+  const userCommunicationProfile = await loadEditorUserCommunicationProfile(prefUsername).catch(() => null);
+  const memoryContextBlock = buildAgentMemoryContextBlock({
+    projectMemory: input.projectMemory,
+    userCommunicationProfile,
+    username: prefUsername,
+  });
   const models = getEditorAgentModels();
 
   // 候选窗只传 top 20，减少 token 消耗
@@ -953,6 +967,7 @@ export async function runEditorAgentApply(
     beatGuide: beatGuideBlock,
     currentClipsMetaBlock,
     creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy),
+    memoryContextBlock,
   });
 
   /**

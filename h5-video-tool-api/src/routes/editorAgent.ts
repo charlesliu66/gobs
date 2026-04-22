@@ -218,6 +218,7 @@ function buildEditorApplyInput(
       selectedAssetIds,
       assets,
       currentProject: body.currentProject,
+      projectMemory: body.projectMemory,
       creativeBrief,
       visionFocus,
     },

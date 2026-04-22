@@ -1,20 +1,30 @@
 # Release Decision - editor agent memory phase1
 
 > Run: `2026-04-22-editor-agent-memory-phase1`
-> Gate 5 产物
+> Gate 5 artifact
 
 ---
 
-## 发布结论
+## Decision
 
 GO
 
-本轮发布的是剪辑 Agent 记忆系统的第一批可上线骨架：
-- 同项目记忆可随工程保存 / 打开
-- Agent 聊天与剪辑结果开始沉淀为项目记忆
-- 用户级沟通画像开始按真实交互持续累积
+## Released Scope
 
-## 风险备注
+- project memory persists with editor projects
+- user communication profiles persist across projects
+- bounded memory compression now turns saved history into apply-time prompt context
+- low-confidence communication memories are treated as weak hints
+- the latest user instruction explicitly outranks older remembered preferences
 
-- 当前只做规则型画像提取，还没有接入模型级压缩和人工纠偏 UI，早期命中率依赖显式表达质量。
-- 浏览器交互的最终 smoke 仍需线上点测确认。
+## Known Gaps
+
+- user-visible memory controls are not shipped yet
+- users still cannot directly pin, delete, or weaken remembered items in UI
+- browser manual smoke is still needed for the full reopen -> apply loop
+
+## Integration Notes
+
+- `PRODUCT.md` updated
+- build artifacts must be rebuilt after commit so `build-info.json` matches the release commit
+- deploy requires local / GitHub / cloud sync

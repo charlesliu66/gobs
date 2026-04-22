@@ -80,6 +80,7 @@
 - 鐢熸垚瀹屾垚鍚庢樉绀哄紩鎿庢潵婧?badge锛堢传鑹?Suno / 钃濊壊 Lyria锛?- 楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩棰勫～鍒剁墖闃舵鐨勯煶涔愰鏍兼弿杩帮紙鏉ヨ嚜 SoundMusicPlan锛夛紝涓€閿嵆鍙敓鎴愬尮閰嶉厤涔?- 鍙皟鏁撮煶閲忋€丅PM銆侀鏍?- 瀵煎嚭鏃舵敮鎸佹贰鍏ワ紙1s锛? 娣″嚭锛堝彲璋?0-3s锛?
 #### 3.6 AI 鍓緫 Agent
 
+- 记忆上下文压缩与注入（v0.96）：剪辑 Agent 在真正生成时间轴前，会把项目级稳定事实、偏好、负向偏好、开放问题、用户级沟通画像和最近 10 轮原始对话按优先级压成记忆上下文；同时明确“当前用户新指令优先于历史记忆”，避免旧偏好把本次创意带偏。
 - 记忆系统 P0 首批（v0.94）：同项目聊天/剪辑历史会随工程一起保存，重新打开项目时可恢复最近对话；系统也会开始为当前用户累积跨项目的沟通方式画像，为后续“更懂你怎么协作”的 Agent 打底。
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
 - 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
@@ -165,7 +166,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.95 -->
+<!-- NEXT_VERSION: v0.97 -->
+
+### v0.96 — 2026-04-22
+
+**剪辑 Agent 记忆压缩与上下文注入落地**
+
+**Editor Agent / Memory / Prompt Assembly:**
+- **[api] 新增 `editorMemoryCompression` 压缩服务**（`h5-video-tool-api/src/services/editorMemoryCompression.ts`, `h5-video-tool-api/tests/editorMemoryCompression.test.ts`）：后端现在会把项目记忆拆成稳定事实、偏好、负向偏好、开放问题、决策记录和最近 10 轮原始对话，并把低置信度用户画像降级成 weak hints。
+- **[api] 剪辑 Agent 提示词开始注入记忆上下文**（`h5-video-tool-api/src/services/editorAgentService.ts`）：在 Plan 阶段会把项目记忆块和用户级沟通画像块插入到 creative brief 之后、当前时间轴之前，并明确“当前用户请求与最近明确指令高于历史记忆”。
+- **[api] `apply` 链路开始透传 `projectMemory`**（`h5-video-tool-api/src/routes/editorAgent.ts`）：前端当前项目里已经沉淀的记忆会真正进入本次剪辑请求，不再只保存在工程 JSON 里而没有参与模型推理。
 
 ### v0.95 — 2026-04-22
 
@@ -1368,4 +1378,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.95）*
+*最后更新：2026-04-22（v0.96）*
