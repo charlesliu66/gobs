@@ -39,6 +39,7 @@ export interface LatestPublishBatchItem extends PublishBatchResponseItem {
 export interface LatestPublishBatch {
   planName?: string;
   createdAt: number;
+  phase?: 'submitting' | 'tracking';
   items: LatestPublishBatchItem[];
 }
 
@@ -51,6 +52,7 @@ export function buildLatestPublishBatch(result: PublishResultLike, createdAt = D
   return {
     planName: result.batch?.planName ?? result.planName,
     createdAt,
+    phase: 'tracking',
     items: items.map((item) => {
       if (item.submitError) {
         return {
@@ -65,6 +67,36 @@ export function buildLatestPublishBatch(result: PublishResultLike, createdAt = D
         statusText: 'submitted',
         detailLoading: !!item.taskId,
       };
+    }),
+  };
+}
+
+export function buildSubmittingPreviewBatch(
+  accounts: Array<{
+    id: string;
+    username: string;
+    platform?: string;
+    region?: string;
+    remark?: string;
+  }>,
+  createdAt = Date.now(),
+): LatestPublishBatch | null {
+  if (!Array.isArray(accounts) || accounts.length === 0) return null;
+
+  return {
+    createdAt,
+    phase: 'submitting',
+    items: accounts.map((account) => {
+      const item: LatestPublishBatchItem = {
+        accountId: account.id,
+        username: account.username,
+        platform: account.platform,
+        region: account.region,
+        statusText: 'submitting',
+        detailLoading: true,
+      };
+      if (account.remark) item.remark = account.remark;
+      return item;
     }),
   };
 }

@@ -15,6 +15,7 @@ import { useLocale } from '../i18n/LocaleContext.tsx';
 import { formatDateTime } from '../i18n/locale.ts';
 import {
   buildLatestPublishBatch,
+  buildSubmittingPreviewBatch,
   getPendingTaskIds,
   isBatchComplete,
   mergeTaskDetailError,
@@ -207,6 +208,8 @@ export function TabDistribute() {
 
     setPushing(true);
     setPushError(null);
+    const selectedAccounts = accountsForPermission.filter((account) => selectedIds.has(account.id));
+    setLatestBatch(buildSubmittingPreviewBatch(selectedAccounts));
     try {
       const result = await publishVideo({
         videoPath: videoPath || undefined,
@@ -221,6 +224,7 @@ export function TabDistribute() {
         void refreshBatch(nextBatch);
       }
     } catch (e) {
+      setLatestBatch(null);
       const msg = e instanceof Error ? e.message : t('distribute.pushFailed');
       toast.error(`${t('distribute.pushFailed')}: ${msg}`);
     } finally {
@@ -486,6 +490,7 @@ export function TabDistribute() {
 }
 
 function getDisplayStatus(item: LatestPublishBatchItem, t: (key: string) => string): string {
+  if (item.statusText === 'submitting') return t('distribute.batchStatusSubmitting');
   if (item.statusText === 'submit_failed') return t('distribute.batchStatusSubmitFailed');
   if (item.statusText === 'submitted') return t('distribute.batchStatusSubmitted');
   if (item.detail?.statusText) return item.detail.statusText;
@@ -493,6 +498,7 @@ function getDisplayStatus(item: LatestPublishBatchItem, t: (key: string) => stri
 }
 
 function getStatusTone(item: LatestPublishBatchItem): string {
+  if (item.statusText === 'submitting') return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
   if (item.submitError) return 'border-red-500/30 bg-red-500/10 text-red-200';
   const status = Number(item.detail?.status ?? 0);
   if (status === 3) return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
@@ -513,7 +519,7 @@ function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }:
   const { t } = useLocale();
   const successCount = batch.items.filter((item) => Number(item.detail?.status ?? 0) === 3).length;
   const failedCount = batch.items.filter((item) => item.submitError || [4, 7].includes(Number(item.detail?.status ?? 0))).length;
-  const pendingCount = getPendingTaskIds(batch).length;
+  const pendingCount = batch.phase === 'submitting' ? batch.items.length : getPendingTaskIds(batch).length;
   const summaryText = `${t('distribute.batchSummaryTotal')} ${batch.items.length} · ${t('distribute.batchSummarySuccess')} ${successCount} · ${t('distribute.batchSummaryFailed')} ${failedCount} · ${t('distribute.batchSummaryPending')} ${pendingCount}`;
 
   return (
@@ -531,7 +537,7 @@ function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }:
           <button
             type="button"
             onClick={onRefresh}
-            disabled={refreshing}
+            disabled={refreshing || batch.phase === 'submitting'}
             className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
           >
             {refreshing ? t('distribute.batchRefreshing') : t('common.refresh')}
@@ -547,7 +553,11 @@ function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }:
       </div>
 
       <p className="text-xs text-[var(--color-text-subtle)]">
-        {pendingCount > 0 ? t('distribute.latestBatchHintRunning') : t('distribute.latestBatchHintDone')}
+        {batch.phase === 'submitting'
+          ? t('distribute.latestBatchHintSubmitting')
+          : pendingCount > 0
+            ? t('distribute.latestBatchHintRunning')
+            : t('distribute.latestBatchHintDone')}
       </p>
 
       <div className="space-y-3">

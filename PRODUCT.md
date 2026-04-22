@@ -164,7 +164,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.92 -->
+<!-- NEXT_VERSION: v0.93 -->
+
+### v0.92 — 2026-04-22
+
+**视频分发提交期进度可见**
+
+**UX / Bug Fix:**
+- **[frontend] 点击发布后立即展示提交中批次卡**（`h5-video-tool/src/pages/TabDistribute.tsx` + `h5-video-tool/src/utils/geelarkPublishBatch.ts`）：在 GeeLark 还未返回 `taskIds` 前，分发页会先按已选账号显示“提交中”状态，不再只剩按钮上的“发布中...”。
+- **[frontend] 分发结果面板新增提交阶段提示与状态文案**（`h5-video-tool/src/i18n/messages.ts`）：新增“正在启动设备、上传视频并创建任务”等提示，以及 `提交中` 状态标签，用户能更清楚地区分“请求尚未返回”与“任务已进入逐账号跟踪”。
+- **[test] 批次状态测试新增提交中预览覆盖**（`h5-video-tool/tests/geelarkPublishBatch.test.ts`）：覆盖提交期批次预览构造，避免后续再次回退成“点击后完全无进度面板”。
 
 ### v0.91 — 2026-04-22
 
@@ -1329,4 +1338,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.91）*
+*最后更新：2026-04-22（v0.92）*
