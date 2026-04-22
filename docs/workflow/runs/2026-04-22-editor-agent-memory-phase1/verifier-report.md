@@ -15,20 +15,25 @@
    Validates explicit preference extraction, negative preference capture, repeated-signal confidence lift, and contradiction downgrade.
 4. `tests/editorMemoryCompression.test.ts`
    Validates recent-turn retention, structured compression, latest-instruction priority, and weak-hint downgrade.
-5. `h5-video-tool-api`: `npx tsc --noEmit`
-6. `h5-video-tool`: `npx tsc --noEmit`
-7. `h5-video-tool-api`: `npm run build`
-8. `h5-video-tool`: `npm run build`
+5. `tests/editorMemoryControls.test.ts`
+   Validates manual remember/avoid feedback promotion, project-memory deletion, and user-profile weakening rules.
+6. `tests/agentMemoryPanel.test.tsx`
+   Validates the memory panel renders project/user memory and exposes the remember / avoid / delete / weaken controls.
+7. `h5-video-tool-api`: `npx tsc --noEmit`
+8. `h5-video-tool`: `npx tsc --noEmit`
+9. `h5-video-tool-api`: `npm run build`
+10. `h5-video-tool`: `npm run build`
 
 ## Result
 
 GO
 
-The bounded-memory batch is verified at the schema, store, profile, compression, compile, and build layers.
+The bounded-memory batch is now verified at the schema, store, profile, compression, manual-controls, compile, and build layers.
 
 ## Remaining Manual Smoke
 
 - open a real editor project in browser
 - confirm recent chat history is restored
-- trigger an apply request
-- confirm the new prompt-injection batch behaves correctly with remembered project context
+- open the `Agent 记忆` panel and verify persisted items render
+- save one draft as remember / avoid, then delete or weaken an item
+- trigger an apply request and confirm the updated memory still affects the next round correctly

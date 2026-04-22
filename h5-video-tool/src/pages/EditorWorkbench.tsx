@@ -63,12 +63,21 @@ import {
   type EditorCreativeStrategy,
 } from '../api/editorCreative';
 import {
+  deleteEditorProjectMemoryItem,
+  fetchEditorAgentMemory,
+  rememberEditorProjectFeedback,
+  weakenEditorUserProfileDimension,
+  type EditorProjectMemoryBucket,
+  type EditorUserProfileDimensionKey,
+} from '../api/editorMemory';
+import {
   buildAssetNameResolver,
   formatAgentDeliverableMarkdown,
 } from '../editor/utils/formatAgentDeliverable';
 import { detectBgmIntent } from '../editor/utils/bgmIntent';
 import { formatTimelineTime } from '../editor/utils/formatTimelineTime';
 import { useSearchParams } from 'react-router-dom';
+import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -192,6 +201,7 @@ export function EditorWorkbench() {
   /** Agent 流式请求的 abort 控制器，用于前端取消按钮 */
   const agentAbortRef = useRef<AbortController | null>(null);
   const [agentChatHistory, setAgentChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [agentUserCommunicationProfile, setAgentUserCommunicationProfile] = useState<EditorUserCommunicationProfile | null>(null);
   const [libraryItems, setLibraryItems] = useState<EditorAssetDto[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
@@ -240,7 +250,33 @@ export function EditorWorkbench() {
     setAgentDeliverable(null);
     setAgentCreativeStrategy(null);
     setAgentJobProgress(null);
+    setAgentUserCommunicationProfile(null);
   }, [projectId]);
+
+  useEffect(() => {
+    let disposed = false;
+    if (!projectId) {
+      setAgentUserCommunicationProfile(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const result = await fetchEditorAgentMemory(projectId);
+        if (disposed) return;
+        if (result.projectMemory) {
+          setProjectMemory(result.projectMemory);
+        }
+        setAgentUserCommunicationProfile(result.userCommunicationProfile ?? null);
+      } catch {
+        if (!disposed) {
+          setAgentUserCommunicationProfile(null);
+        }
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [projectId, setProjectMemory]);
 
   /** 自动打开最近项目：没有 URL project 参数时，首次加载项目列表后自动跳到最新项目 */
   useEffect(() => {
@@ -424,9 +460,14 @@ export function EditorWorkbench() {
         }
         if (route.intent === 'chat') {
           try {
-            const { reply, projectMemory: nextProjectMemory } = await chatEditorAgent(userMessage, projectMemory);
+            const {
+              reply,
+              projectMemory: nextProjectMemory,
+              userCommunicationProfile,
+            } = await chatEditorAgent(userMessage, projectMemory);
             pushLog(`助手：${reply}`);
             setProjectMemory(nextProjectMemory ?? projectMemory);
+            setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
           } catch (e) {
             pushLog(`错误：对话失败：${e instanceof Error ? e.message : String(e)}`);
           }
@@ -485,7 +526,13 @@ export function EditorWorkbench() {
 
         const ctrl = new AbortController();
         agentAbortRef.current = ctrl;
-        const { summary, project: nextProject, projectMemory: nextProjectMemory, llmUsage } = await applyEditorAgentStream(
+        const {
+          summary,
+          project: nextProject,
+          projectMemory: nextProjectMemory,
+          userCommunicationProfile,
+          llmUsage,
+        } = await applyEditorAgentStream(
           {
             userMessage,
             aspectRatio,
@@ -502,6 +549,7 @@ export function EditorWorkbench() {
         );
         setProject(syncedProject);
         setProjectMemory(nextProjectMemory ?? projectMemory);
+        setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
         mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
         setCurrentTime(0);
         setIsPlaying(false);
@@ -568,9 +616,14 @@ export function EditorWorkbench() {
 
           if (route.intent === 'chat') {
             try {
-              const { reply, projectMemory: nextProjectMemory } = await chatEditorAgent(trimmedMessage, projectMemory);
+              const {
+                reply,
+                projectMemory: nextProjectMemory,
+                userCommunicationProfile,
+              } = await chatEditorAgent(trimmedMessage, projectMemory);
               pushLog(`助手：${reply}`);
               setProjectMemory(nextProjectMemory ?? projectMemory);
+              setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
             } catch (error) {
               pushLog(`错误：对话失败：${error instanceof Error ? error.message : String(error)}`);
             }
@@ -636,6 +689,7 @@ export function EditorWorkbench() {
           summary,
           project: nextProject,
           projectMemory: nextProjectMemory,
+          userCommunicationProfile,
           llmUsage,
           creativeStrategy,
         } = await applyEditorAgentCreativeStream(
@@ -657,6 +711,7 @@ export function EditorWorkbench() {
         );
         setProject(syncedProject);
         setProjectMemory(nextProjectMemory ?? projectMemory);
+        setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
         mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
         setCurrentTime(0);
         setIsPlaying(false);
@@ -698,6 +753,54 @@ export function EditorWorkbench() {
       pushLog,
       runAutoBgmFromAgentMessage,
     ],
+  );
+
+  const handleRememberDraftMemory = useCallback(
+    async (text: string) => {
+      if (!projectId) {
+        toast.warning('请先保存当前剪辑项目，再记录 Agent 记忆');
+        return;
+      }
+      const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'remember', text);
+      setProjectMemory(nextProjectMemory);
+      pushLog(`系统：已记住偏好 - ${text}`);
+    },
+    [projectId, pushLog, setProjectMemory],
+  );
+
+  const handleAvoidDraftMemory = useCallback(
+    async (text: string) => {
+      if (!projectId) {
+        toast.warning('请先保存当前剪辑项目，再记录 Agent 记忆');
+        return;
+      }
+      const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'avoid', text);
+      setProjectMemory(nextProjectMemory);
+      pushLog(`系统：已记为避免 - ${text}`);
+    },
+    [projectId, pushLog, setProjectMemory],
+  );
+
+  const handleDeleteProjectMemoryItem = useCallback(
+    async (bucket: EditorProjectMemoryBucket, target: { id?: string; value?: string }) => {
+      if (!projectId) {
+        toast.warning('当前项目还没有可编辑的记忆记录');
+        return;
+      }
+      const { projectMemory: nextProjectMemory } = await deleteEditorProjectMemoryItem(projectId, bucket, target);
+      setProjectMemory(nextProjectMemory);
+      pushLog('系统：已移除一条项目记忆');
+    },
+    [projectId, pushLog, setProjectMemory],
+  );
+
+  const handleWeakenUserProfileDimension = useCallback(
+    async (dimension: EditorUserProfileDimensionKey) => {
+      const { userCommunicationProfile } = await weakenEditorUserProfileDimension(dimension);
+      setAgentUserCommunicationProfile(userCommunicationProfile);
+      pushLog(`系统：已将 ${dimension} 降为更弱的提示`);
+    },
+    [pushLog],
   );
 
   const handleAddToTimeline = useCallback(
@@ -1333,6 +1436,12 @@ export function EditorWorkbench() {
             logs={agentLogs}
             onPushLog={pushLog}
             onApply={handleCreativeAgentApply}
+            projectMemory={projectMemory}
+            userCommunicationProfile={agentUserCommunicationProfile}
+            onRememberDraftMemory={handleRememberDraftMemory}
+            onAvoidDraftMemory={handleAvoidDraftMemory}
+            onDeleteProjectMemoryItem={handleDeleteProjectMemoryItem}
+            onWeakenUserProfileDimension={handleWeakenUserProfileDimension}
             busy={agentBusy}
             onAbort={() => {
               if (agentAbortRef.current) {

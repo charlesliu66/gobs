@@ -2,7 +2,7 @@
 
 > Run ID: `2026-04-22-editor-agent-memory-phase1`
 > Scope: editor agent memory P0
-> Status: batches 1-2 delivered
+> Status: batches 1-3 delivered
 
 ---
 
@@ -22,13 +22,14 @@ Give the editor agent a usable layered memory foundation:
 | MEM-02 | Project memory persistence through save/open | `h5-video-tool-api/src/routes/editorProjects.ts`, `h5-video-tool/src/editor/hooks/useTimelineState.ts`, `h5-video-tool/src/api/editor.ts` |
 | MEM-03 | User communication profile extraction and persistence | `h5-video-tool-api/src/services/editorUserProfileService.ts`, `h5-video-tool-api/src/routes/editorAgent.ts` |
 | MEM-04 | Bounded compression and prompt injection | `h5-video-tool-api/src/services/editorMemoryCompression.ts`, `h5-video-tool-api/src/services/editorAgentService.ts`, `h5-video-tool-api/tests/editorMemoryCompression.test.ts` |
+| MEM-05 | User-visible memory panel and manual correction controls | `h5-video-tool/src/editor/components/AgentMemoryPanel.tsx`, `h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool-api/src/services/editorMemoryControls.ts`, `h5-video-tool-api/src/routes/editorAgent.ts` |
 
-## Batch 2 Acceptance
+## Batch 3 Acceptance
 
-- keep latest 8-12 turns in raw form
-- compress older context into structured memory sections
-- make the latest explicit user command outrank remembered preferences
-- downgrade low-confidence user-profile items into weak hints only
+- show project memory and user communication profile in the agent UI
+- let users remember or avoid the current draft input as project memory
+- let users delete project memory items directly
+- let users weaken an overfit user-profile dimension without deleting the whole profile
 
 ## Guardrails
 

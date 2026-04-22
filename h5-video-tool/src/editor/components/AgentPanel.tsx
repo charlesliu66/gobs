@@ -1,11 +1,17 @@
 import { useMemo, useState } from 'react';
 import type { EditorAgentJobProgress } from '../../api/editor';
+import type {
+  EditorProjectMemoryBucket,
+  EditorUserProfileDimensionKey,
+} from '../../api/editorMemory';
 import {
   normalizeEditorCreativeBriefForRequest,
   type EditorCreativeBrief,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
 } from '../../api/editorCreative';
+import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../types/agentMemory';
+import { AgentMemoryPanel } from './AgentMemoryPanel';
 
 type LogVariant = 'user' | 'agent' | 'progress' | 'token' | 'error' | 'system';
 
@@ -42,6 +48,15 @@ interface AgentPanelProps {
   logs: string[];
   onPushLog: (line: string) => void;
   onApply: (input: AgentPanelApplyRequest) => Promise<void>;
+  projectMemory?: EditorProjectMemory | null;
+  userCommunicationProfile?: EditorUserCommunicationProfile | null;
+  onRememberDraftMemory: (text: string) => Promise<void>;
+  onAvoidDraftMemory: (text: string) => Promise<void>;
+  onDeleteProjectMemoryItem: (
+    bucket: EditorProjectMemoryBucket,
+    target: { id?: string; value?: string },
+  ) => Promise<void>;
+  onWeakenUserProfileDimension: (dimension: EditorUserProfileDimensionKey) => Promise<void>;
   busy: boolean;
   jobProgress?: EditorAgentJobProgress | null;
   selectedCount: number;
@@ -60,6 +75,12 @@ export function AgentPanel({
   logs,
   onPushLog,
   onApply,
+  projectMemory,
+  userCommunicationProfile,
+  onRememberDraftMemory,
+  onAvoidDraftMemory,
+  onDeleteProjectMemoryItem,
+  onWeakenUserProfileDimension,
   busy,
   jobProgress,
   selectedCount,
@@ -254,6 +275,17 @@ export function AgentPanel({
           </div>
         </div>
       ) : null}
+
+      <AgentMemoryPanel
+        projectMemory={projectMemory}
+        userCommunicationProfile={userCommunicationProfile}
+        draftInput={input}
+        busy={busy}
+        onRememberDraft={onRememberDraftMemory}
+        onAvoidDraft={onAvoidDraftMemory}
+        onDeleteProjectItem={onDeleteProjectMemoryItem}
+        onWeakenProfileDimension={onWeakenUserProfileDimension}
+      />
 
       {recentHistory.length > 0 ? (
         <div className="border-b border-[var(--color-border)]">

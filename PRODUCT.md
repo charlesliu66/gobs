@@ -80,6 +80,7 @@
 - 鐢熸垚瀹屾垚鍚庢樉绀哄紩鎿庢潵婧?badge锛堢传鑹?Suno / 钃濊壊 Lyria锛?- 楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩棰勫～鍒剁墖闃舵鐨勯煶涔愰鏍兼弿杩帮紙鏉ヨ嚜 SoundMusicPlan锛夛紝涓€閿嵆鍙敓鎴愬尮閰嶉厤涔?- 鍙皟鏁撮煶閲忋€丅PM銆侀鏍?- 瀵煎嚭鏃舵敮鎸佹贰鍏ワ紙1s锛? 娣″嚭锛堝彲璋?0-3s锛?
 #### 3.6 AI 鍓緫 Agent
 
+- 记忆面板与手动纠偏（v0.97）：右侧 Agent 面板新增 `Agent 记忆` 区块，直接展示当前项目的偏好、避免项、稳定事实、开放问题和用户级沟通画像；用户还可以把当前输入一键记为“记住这个偏好 / 不要再这样做”，或删除某条项目记忆、减弱某个沟通画像维度。
 - 记忆上下文压缩与注入（v0.96）：剪辑 Agent 在真正生成时间轴前，会把项目级稳定事实、偏好、负向偏好、开放问题、用户级沟通画像和最近 10 轮原始对话按优先级压成记忆上下文；同时明确“当前用户新指令优先于历史记忆”，避免旧偏好把本次创意带偏。
 - 记忆系统 P0 首批（v0.94）：同项目聊天/剪辑历史会随工程一起保存，重新打开项目时可恢复最近对话；系统也会开始为当前用户累积跨项目的沟通方式画像，为后续“更懂你怎么协作”的 Agent 打底。
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
@@ -166,7 +167,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.97 -->
+<!-- NEXT_VERSION: v0.98 -->
+
+### v0.97 — 2026-04-22
+
+**剪辑 Agent 记忆面板与可控修正上线**
+
+**Editor Agent / Memory / Controls:**
+- **[frontend] 右侧 Agent 面板新增 `Agent 记忆` 区块**（`h5-video-tool/src/editor/components/AgentMemoryPanel.tsx`, `h5-video-tool/src/editor/components/AgentPanel.tsx`, `h5-video-tool/src/pages/EditorWorkbench.tsx`）：现在会直接展示当前项目沉淀出的偏好、负向偏好、稳定事实、开放问题，以及跨项目复用的用户级沟通画像，市场同学和剪辑师都能看到系统“记住了什么”。
+- **[frontend+api] 支持手动“记住这个偏好 / 不要再这样做”**（`h5-video-tool/src/api/editorMemory.ts`, `h5-video-tool-api/src/routes/editorAgent.ts`, `h5-video-tool-api/src/services/editorMemoryControls.ts`）：用户可以把当前输入草稿直接沉淀为项目记忆，不用再等多轮对话才让系统学会。
+- **[frontend+api] 支持删除项目记忆项和减弱用户画像维度**（`h5-video-tool/src/editor/components/AgentMemoryPanel.tsx`, `h5-video-tool-api/tests/editorMemoryControls.test.ts`, `h5-video-tool/tests/agentMemoryPanel.test.tsx`）：错记的偏好可以当场删除，过强的沟通画像也能降成更弱提示，避免错误长期污染后续剪辑。
 
 ### v0.96 — 2026-04-22
 
@@ -1378,4 +1388,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.96）*
+*最后更新：2026-04-22（v0.97）*

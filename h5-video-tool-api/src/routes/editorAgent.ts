@@ -1,7 +1,17 @@
+import fs from 'fs/promises';
+import path from 'path';
 import { Router } from 'express';
+import { getApiDataDir } from '../config/apiDataDir.js';
 import type { AspectRatioPreset, TimelineProject, VideoClip } from '../editor/timelineSchema.js';
 import { routeEditorAgentMessage } from '../services/editorAgentIntent.js';
 import { runEditorAgentChat } from '../services/editorAgentChat.js';
+import {
+  rememberProjectFeedback,
+  removeProjectMemoryItem,
+  weakenUserProfileDimension,
+  type ProjectMemoryBucket,
+  type UserProfileDimensionKey,
+} from '../services/editorMemoryControls.js';
 import {
   buildDefaultCreativeUserMessage,
   normalizeEditorCreativeBrief,
@@ -19,10 +29,39 @@ import {
   promoteProjectMemory,
   type ProjectMemoryPromotionInput,
 } from '../services/editorAgentMemoryStore.js';
-import { updateEditorUserCommunicationProfileForUser } from '../services/editorUserProfileService.js';
+import {
+  loadEditorUserCommunicationProfile,
+  saveEditorUserCommunicationProfile,
+  updateEditorUserCommunicationProfileForUser,
+} from '../services/editorUserProfileService.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
+
+function isSafeProjectId(id: string): boolean {
+  return /^[\w-]{1,64}$/.test(id);
+}
+
+function getEditorProjectFile(username: string, projectId: string): string {
+  return path.join(getApiDataDir(), 'editor-projects', sanitizeUsername(username), `${projectId}.json`);
+}
+
+async function readProjectDocForMemory(username: string, projectId: string): Promise<Record<string, unknown>> {
+  const raw = await fs.readFile(getEditorProjectFile(username, projectId), 'utf-8');
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+async function writeProjectDocForMemory(
+  username: string,
+  projectId: string,
+  doc: Record<string, unknown>,
+): Promise<void> {
+  await fs.writeFile(
+    getEditorProjectFile(username, projectId),
+    JSON.stringify(doc, null, 2),
+    'utf-8',
+  );
+}
 
 function videoAssetIdsFromProject(project: TimelineProject): string[] {
   const ids = new Set<string>();
@@ -114,6 +153,118 @@ router.post('/agent/chat', async (req, res) => {
   } catch (error) {
     console.error('[editor/agent/chat]', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Chat failed' });
+  }
+});
+
+router.get('/agent/memory', async (req, res) => {
+  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId.trim() : '';
+  if (!projectId || !isSafeProjectId(projectId)) {
+    res.status(400).json({ error: 'Please provide a valid projectId' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const doc = await readProjectDocForMemory(username, projectId);
+    const userCommunicationProfile = await loadEditorUserCommunicationProfile(username);
+    res.json({
+      projectMemory: doc.memory,
+      userCommunicationProfile,
+    });
+  } catch (error) {
+    console.error('[editor/agent/memory:get]', error);
+    res.status(404).json({ error: 'Memory state was not found for this project' });
+  }
+});
+
+router.post('/agent/memory/project-feedback', async (req, res) => {
+  const body = req.body as { projectId?: string; mode?: 'remember' | 'avoid'; text?: string };
+  const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!projectId || !isSafeProjectId(projectId) || !text || (body.mode !== 'remember' && body.mode !== 'avoid')) {
+    res.status(400).json({ error: 'Please provide projectId, mode, and text' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const doc = await readProjectDocForMemory(username, projectId);
+    const projectMemory = rememberProjectFeedback(doc.memory, {
+      mode: body.mode,
+      text,
+    });
+    await writeProjectDocForMemory(username, projectId, {
+      ...doc,
+      updatedAt: new Date().toISOString(),
+      memory: projectMemory,
+    });
+    res.json({ projectMemory });
+  } catch (error) {
+    console.error('[editor/agent/memory:project-feedback]', error);
+    res.status(404).json({ error: 'Unable to update project memory' });
+  }
+});
+
+router.post('/agent/memory/project-delete', async (req, res) => {
+  const body = req.body as { projectId?: string; bucket?: ProjectMemoryBucket; id?: string; value?: string };
+  const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
+  const allowedBuckets: ProjectMemoryBucket[] = [
+    'stableFacts',
+    'preferenceSignals',
+    'negativePreferenceSignals',
+    'decisionLog',
+    'openIssues',
+  ];
+  if (!projectId || !isSafeProjectId(projectId) || !body.bucket || !allowedBuckets.includes(body.bucket)) {
+    res.status(400).json({ error: 'Please provide projectId and a valid memory bucket' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const doc = await readProjectDocForMemory(username, projectId);
+    const projectMemory = removeProjectMemoryItem(doc.memory, {
+      bucket: body.bucket,
+      id: typeof body.id === 'string' ? body.id : undefined,
+      value: typeof body.value === 'string' ? body.value : undefined,
+    });
+    await writeProjectDocForMemory(username, projectId, {
+      ...doc,
+      updatedAt: new Date().toISOString(),
+      memory: projectMemory,
+    });
+    res.json({ projectMemory });
+  } catch (error) {
+    console.error('[editor/agent/memory:project-delete]', error);
+    res.status(404).json({ error: 'Unable to delete project memory item' });
+  }
+});
+
+router.post('/agent/memory/profile-weaken', async (req, res) => {
+  const body = req.body as { dimension?: UserProfileDimensionKey };
+  const allowedDimensions: UserProfileDimensionKey[] = [
+    'responseStyle',
+    'collaborationMode',
+    'controlPreference',
+    'pacePreference',
+    'platformLanguageStyle',
+  ];
+  if (!body.dimension || !allowedDimensions.includes(body.dimension)) {
+    res.status(400).json({ error: 'Please provide a valid communication dimension' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const existing = await loadEditorUserCommunicationProfile(username);
+    const userCommunicationProfile = weakenUserProfileDimension(existing, body.dimension, {
+      username,
+    });
+    await saveEditorUserCommunicationProfile(userCommunicationProfile);
+    res.json({ userCommunicationProfile });
+  } catch (error) {
+    console.error('[editor/agent/memory:profile-weaken]', error);
+    res.status(500).json({ error: 'Unable to weaken communication memory' });
   }
 });
 
