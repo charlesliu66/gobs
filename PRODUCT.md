@@ -164,7 +164,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.90 -->
+<!-- NEXT_VERSION: v0.91 -->
+
+### v0.90 — 2026-04-22
+
+**剪辑 Agent 记忆系统设计与实施计划补齐**
+
+**Product Design / Planning:**
+- **[docs] 新增剪辑 Agent 记忆系统设计文档**（`docs/plans/2026-04-22-editor-agent-memory-system-design.md`）：明确项目级记忆、用户级沟通画像、上下文保留长度、压缩策略与周期总结闭环，收敛“项目记忆管内容，用户画像管协作方式，周期总结管平台优化”的主设计。
+- **[docs] 新增记忆系统实施计划**（`docs/plans/2026-04-22-editor-agent-memory-system-implementation-plan.md`）：按 schema、持久化、压缩、用户可见控制、周期洞察五个方向拆解后续落地步骤，方便直接排期和研发执行。
 
 ### v0.89 — 2026-04-22
 
@@ -1310,4 +1318,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.89）*
+*最后更新：2026-04-22（v0.90）*
