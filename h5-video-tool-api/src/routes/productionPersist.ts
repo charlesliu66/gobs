@@ -92,10 +92,13 @@ function extractBatchJobId(version: Record<string, unknown>): string | undefined
 async function sanitizeShotVideoVersionsForProject(
   shots: Array<Record<string, unknown>> | undefined,
   projectId: string,
-): Promise<void> {
-  if (!Array.isArray(shots) || !projectId) return;
+  projectDir?: string,
+): Promise<boolean> {
+  if (!Array.isArray(shots) || !projectId) return false;
 
   const jobOwnerCache = new Map<string, { projectId: string; shotIndex: number } | null>();
+  const foreignShotVersionIdCache = new Map<string, Set<string>>();
+  let changed = false;
 
   const resolveJobOwner = async (jobId: string) => {
     if (jobOwnerCache.has(jobId)) return jobOwnerCache.get(jobId);
@@ -105,6 +108,38 @@ async function sanitizeShotVideoVersionsForProject(
     return owner;
   };
 
+  const loadForeignShotVersionIds = async (foreignProjectId: string, shotIndex: number) => {
+    const cacheKey = `${foreignProjectId}:${shotIndex}`;
+    if (foreignShotVersionIdCache.has(cacheKey)) {
+      return foreignShotVersionIdCache.get(cacheKey) ?? new Set<string>();
+    }
+
+    const ids = new Set<string>();
+    if (projectDir) {
+      try {
+        const raw = await fs.readFile(path.join(projectDir, `${foreignProjectId}.json`), 'utf-8');
+        const data = JSON.parse(raw) as Record<string, unknown>;
+        const project = data.project as Record<string, unknown> | undefined;
+        const foreignShots = project?.shots as Array<Record<string, unknown>> | undefined;
+        const foreignShot = Array.isArray(foreignShots)
+          ? foreignShots.find((item) => item.shotIndex === shotIndex)
+          : undefined;
+        const versions = Array.isArray(foreignShot?.previewVideoVersions)
+          ? foreignShot.previewVideoVersions as Array<Record<string, unknown>>
+          : [];
+        for (const version of versions) {
+          const versionId = typeof version.id === 'string' ? version.id.trim() : '';
+          if (versionId) ids.add(versionId);
+        }
+      } catch {
+        // ignore broken or missing foreign project file
+      }
+    }
+
+    foreignShotVersionIdCache.set(cacheKey, ids);
+    return ids;
+  };
+
   for (const shot of shots) {
     const shotIndex = typeof shot.shotIndex === 'number' ? shot.shotIndex : Number(shot.shotIndex);
     const rawVersions = Array.isArray(shot.previewVideoVersions)
@@ -112,33 +147,85 @@ async function sanitizeShotVideoVersionsForProject(
       : [];
     if (!rawVersions.length) continue;
 
+    const foreignProjectIds = new Set<string>();
     const filtered: Array<Record<string, unknown>> = [];
     for (const version of rawVersions) {
       const videoUrl = typeof version.videoUrl === 'string' ? version.videoUrl.trim() : '';
       const videoPath = typeof version.videoPath === 'string' ? version.videoPath.trim() : '';
-      if (!videoUrl && !videoPath) continue;
+      if (!videoUrl && !videoPath) {
+        changed = true;
+        continue;
+      }
 
       const versionProjectId = typeof version.sourceProjectId === 'string'
         ? version.sourceProjectId.trim()
         : '';
-      if (versionProjectId && versionProjectId !== projectId) continue;
+      if (versionProjectId && versionProjectId !== projectId) {
+        foreignProjectIds.add(versionProjectId);
+        changed = true;
+        continue;
+      }
 
       const versionShotIndex = typeof version.sourceShotIndex === 'number'
         ? version.sourceShotIndex
         : Number(version.sourceShotIndex);
-      if (Number.isFinite(versionShotIndex) && versionShotIndex !== shotIndex) continue;
+      if (Number.isFinite(versionShotIndex) && versionShotIndex !== shotIndex) {
+        changed = true;
+        continue;
+      }
 
       const batchJobId = extractBatchJobId(version);
       if (batchJobId) {
         const owner = await resolveJobOwner(batchJobId);
-        if (owner && (owner.projectId !== projectId || owner.shotIndex !== shotIndex)) continue;
+        if (owner && (owner.projectId !== projectId || owner.shotIndex !== shotIndex)) {
+          foreignProjectIds.add(owner.projectId);
+          changed = true;
+          continue;
+        }
       }
 
       filtered.push(version);
     }
 
+    let refined = filtered;
+    if (foreignProjectIds.size > 0 && projectDir) {
+      const foreignVersionIds = new Set<string>();
+      for (const foreignProjectId of foreignProjectIds) {
+        const ids = await loadForeignShotVersionIds(foreignProjectId, shotIndex);
+        for (const versionId of ids) foreignVersionIds.add(versionId);
+      }
+
+      refined = [];
+      for (const version of filtered) {
+        const versionId = typeof version.id === 'string' ? version.id.trim() : '';
+        if (!versionId || !foreignVersionIds.has(versionId)) {
+          refined.push(version);
+          continue;
+        }
+
+        const versionProjectId = typeof version.sourceProjectId === 'string'
+          ? version.sourceProjectId.trim()
+          : '';
+        if (versionProjectId === projectId) {
+          refined.push(version);
+          continue;
+        }
+
+        const batchJobId = extractBatchJobId(version);
+        if (batchJobId) {
+          const owner = await resolveJobOwner(batchJobId);
+          if (owner && owner.projectId === projectId && owner.shotIndex === shotIndex) {
+            refined.push(version);
+            continue;
+          }
+        }
+
+        changed = true;
+      }
+    }
+
     const deduped = new Map<string, Record<string, unknown>>();
-    for (const version of filtered.sort(
+    for (const version of refined.sort(
       (a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0),
     )) {
       const versionId = typeof version.id === 'string' ? version.id.trim() : '';
@@ -156,6 +243,16 @@ async function sanitizeShotVideoVersionsForProject(
       : '';
     const selected = normalized.find((version) => version.id === selectedVersionId) ?? normalized[0];
 
+    const previousVersionIds = rawVersions
+      .map((version) => (typeof version.id === 'string' ? version.id.trim() : ''))
+      .filter(Boolean)
+      .join('|');
+    const nextVersionIds = normalized
+      .map((version) => (typeof version.id === 'string' ? version.id.trim() : ''))
+      .filter(Boolean)
+      .join('|');
+    if (previousVersionIds !== nextVersionIds) changed = true;
+
     shot.selectedPreviewVideoVersionId = selected?.id;
     shot.previewVideoPath = selected?.videoPath;
     shot.previewVideoUrl = selected?.videoUrl;
@@ -165,6 +262,7 @@ async function sanitizeShotVideoVersionsForProject(
       shot.previewVideoUrl = undefined;
     }
   }
+  return changed;
 }
 
 /**
@@ -358,7 +456,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       }
     } catch { /* first save or file missing — no merge needed */ }
 
-    await sanitizeShotVideoVersionsForProject(incomingShots, id);
+    await sanitizeShotVideoVersionsForProject(incomingShots, id, projDir);
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
 
     // 写 sidecar 元数据（供 /list 快速读取，无需解析全量 JSON）
@@ -383,13 +481,17 @@ productionPersistRouter.get('/project/load', async (req: Request, res: Response)
     return;
   }
 
-  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+  const projectDir = getProductionProjDir(username);
+  const filePath = path.join(projectDir, `${id}.json`);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     const data = JSON.parse(raw) as Record<string, unknown>;
     const project = data.project as Record<string, unknown> | undefined;
     const shots = project?.shots as Array<Record<string, unknown>> | undefined;
-    await sanitizeShotVideoVersionsForProject(shots, id);
+    const cleaned = await sanitizeShotVideoVersionsForProject(shots, id, projectDir);
+    if (cleaned) {
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    }
     res.json(data);
   } catch {
     res.status(404).json({ error: '项目不存在' });

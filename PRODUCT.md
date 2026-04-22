@@ -48,6 +48,7 @@
 - 鏀寔骞跺彂鎻愪氦锛氬涓垎闀滃悓鏃惰繘鍏ラ槦鍒楋紝骞跺彂鏁伴€氳繃 `DREAMINA_MAX_CONCURRENT` 閰嶇疆
 - **鍚庣鏅鸿兘杞 + SSE 鎺ㄩ€侊紙v0.35a+锛?*锛氬嵆姊︿换鍔＄敱鏈嶅姟绔悗鍙拌疆璇紝瑙嗛灏辩华鍚?SSE 瀹炴椂閫氱煡鍓嶇锛涘叧闂祻瑙堝櫒涔熶笉涓㈠け鐢熸垚缁撴灉
 - **分镜状态口径收口（v0.98）**：分镜页优先按“是否已有真实视频 + 当前 batch-job 实时状态”判断，不再被历史残留 `pendingVideoSubmitId` 误导；刷新后若后台已完成/失败/取消，会自动清理旧 submitId，确保分镜页、导出页、即梦后台看到的是同一批真实状态。
+- **分镜视频项目隔离（v0.100）**：高级制片会给分镜视频版本补上项目/镜头归属，并在加载项目时清理不属于当前项目的旧版本；本地草稿也只会对同一个项目回灌分镜视频，避免不同项目的分镜时间线串台。
 - 骞跺彂瓒呴檺锛坮et=1310锛夎嚜鍔ㄧ瓑寰?45s 閲嶈瘯锛屾渶缁堝け璐ョ粰鍑哄弸濂戒腑鏂囨彁绀?- 鐢熸垚瀹屾垚瑙嗛閫氳繃鏈嶅姟 URL锛坄/api/video/file?path=...`锛夎闂紝涓嶄細鍦?localStorage 涓瓨鍌ㄥぇ浣撶Н data URL
 
 ---
@@ -171,7 +172,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.100 -->
+<!-- NEXT_VERSION: v0.101 -->
+
+### v0.100 — 2026-04-22
+
+**高级制片分镜视频项目归属隔离与脏版本清理**
+
+**Production Wizard / Storyboard Video Versions:**
+- **[frontend] 本地高级制片草稿开始记录所属项目 id，只允许同项目回灌分镜视频版本**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/studio/productionWizardStorage.ts`）：修复之前全局单份 localStorage 草稿按 `shotIndex` 直接 merge，导致 A 项目的分镜视频被带进 B 项目的问题。
+- **[frontend] 项目加载时会按版本归属和 batch-job 归属清理错项目视频版本**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/studio/productionTypes.ts`, `h5-video-tool/src/studio/productionWizardStorage.ts`）：分镜时间线现在会优先保留属于当前 `projectId + shotIndex` 的版本，把明显来自其他项目的 batch-job 视频和旧缓存版本挡在入口之外。
+- **[frontend+api] 新生成的视频版本会写入 `sourceProjectId / sourceShotIndex / batchJobId`，服务端保存与加载时也会做归属校验**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool-api/src/services/batchJobsQueue.ts`, `h5-video-tool-api/src/routes/productionPersist.ts`）：即使旧客户端或本地脏状态再次把错版本带上来，后端也会尽量在持久化前拦住，不再继续污染项目 JSON。
 
 ### v0.99 — 2026-04-22
 
@@ -1412,4 +1422,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.99）*
+*最后更新：2026-04-22（v0.100）*
