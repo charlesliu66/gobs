@@ -162,7 +162,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.86 -->
+<!-- NEXT_VERSION: v0.87 -->
+
+### v0.86 — 2026-04-22
+
+**高级制片素材库参考图预览修复**
+
+**Bug Fix:**
+- **[frontend] 参考图素材选择弹层缩略图统一改走受保护的素材文件 URL**（`h5-video-tool/src/studio/steps/StepInput.tsx`）：不再直接信任列表接口返回的 `thumbnail_url / file_url`，而是统一使用带 token 的素材访问地址，修复“从素材库选择”弹层里图片全部裂图、但素材实际存在的问题。
+- **[test] 新增预览 URL 选择回归测试**（`h5-video-tool/tests/stepInput.test.tsx`）：锁定素材卡片预览必须走受保护的文件 URL，避免后续再次回退到裸地址。
 
 ### v0.85 — 2026-04-22
 
@@ -1273,4 +1281,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.85）*
+*最后更新：2026-04-22（v0.86）*

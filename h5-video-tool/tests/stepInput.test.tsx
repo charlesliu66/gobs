@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { StepInput } from '../src/studio/steps/StepInput.tsx';
+import {
+  resolveStyleRefPickerPreviewUrl,
+  StepInput,
+} from '../src/studio/steps/StepInput.tsx';
 
 test('StepInput renders asset-library entry for style reference parsing', () => {
   const html = renderToStaticMarkup(
@@ -31,4 +34,13 @@ test('StepInput renders asset-library entry for style reference parsing', () => 
   );
 
   assert.match(html, /从素材库选择/);
+});
+
+test('style-ref picker preview uses protected asset file url', () => {
+  const url = resolveStyleRefPickerPreviewUrl(
+    { id: 'asset-123' },
+    (assetId) => `/api/asset-library/assets/${assetId}/file?token=demo-token`,
+  );
+
+  assert.equal(url, '/api/asset-library/assets/asset-123/file?token=demo-token');
 });

@@ -3,6 +3,13 @@ import * as React from 'react';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
 import type { StructureTemplate } from '../productionTypes';
 
+export function resolveStyleRefPickerPreviewUrl(
+  asset: Pick<LibraryAsset, 'id'>,
+  buildAssetFileUrl: (assetId: string) => string,
+): string {
+  return buildAssetFileUrl(asset.id);
+}
+
 export function StepInput({
   styleRefSummary,
   onStyleRefSummaryChange,
@@ -252,7 +259,10 @@ export function StepInput({
             ) : (
               <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
                 {assetList.map((asset) => {
-                  const thumbUrl = asset.thumbnail_url ?? asset.file_url;
+                  const thumbUrl = resolveStyleRefPickerPreviewUrl(
+                    asset,
+                    (assetId) => `/api/asset-library/assets/${encodeURIComponent(assetId)}/file?token=${encodeURIComponent(localStorage.getItem('gobs_token') ?? '')}`,
+                  );
                   const displayName = asset.filename?.replace(/\.[^.]+$/, '') || asset.id;
                   const isSelecting = selectingAssetId === asset.id;
                   return (
