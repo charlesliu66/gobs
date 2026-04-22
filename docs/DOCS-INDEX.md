@@ -44,7 +44,15 @@
 
 ---
 
-## E. 当前最重要的 5 份文档
+## E. 使用指南层
+
+| 文档 | 角色 | 说明 |
+|---|---|---|
+| [2026-04-22-gobs-ops-market-guideline.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/guides/2026-04-22-gobs-ops-market-guideline.md>) | 对运营/市场同学的对外使用指南 | 前半段可直接宣讲，后半段可作为会后上手手册 |
+
+---
+
+## F. 当前最重要的 5 份文档
 
 1. [AGENTS.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/AGENTS.md>)
 2. [.claude/memory/feedback.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/.claude/memory/feedback.md>)
@@ -54,7 +62,7 @@
 
 ---
 
-## F. 后续整合建议
+## G. 后续整合建议
 
 - `AGENTS.md` 和 `CLAUDE.md` 可以继续保留双份，但最好只保留“短版规则”，减少细节复制
 - `docs/CODEX-CLI-PROJECT-GUIDE.md` 作为长版说明，承接所有扩展细节
