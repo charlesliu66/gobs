@@ -157,14 +157,23 @@
 - **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
 - **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布结果会自动硬过滤内部工程词、拆分 caption 内联标签，再直接发往对应社媒平台
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片与视频分发等高频页面已补齐英文壳层，便于本地英文同事直接进入英文 UI。
+- **语言切换**：登录页和主站侧边栏底部支持 `中文界面 + 中文内容`、`English UI + 中文内容`、`English UI + English Content` 三种预设；登录前即可切换，侧边栏使用紧凑模式切换器，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层，便于本地英文同事直接进入英文 UI。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.88 -->
+<!-- NEXT_VERSION: v0.89 -->
+
+### v0.88 — 2026-04-22
+
+**Asset Library 英文界面补齐**
+
+**Bug Fix / i18n Completion:**
+- **[frontend] Asset Library 主链路补齐 locale 壳层**（`h5-video-tool/src/pages/AssetLibraryPage/index.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/AssetGallery.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/AssetCard.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/AssetDetailDrawer.tsx`）：素材中台标题、Tab、筛选、文件夹侧栏、批量操作、卡片悬浮动作和详情抽屉全部接入 UI locale，英文模式下不再出现整页中文操作文案。
+- **[frontend] 上传 / Drive / AI 标签评审面板同步国际化**（`h5-video-tool/src/pages/AssetLibraryPage/AssetUploadSheet.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/AssetImportPanel.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/AssetReviewQueue.tsx`, `h5-video-tool/src/pages/AssetLibraryPage/DriveBrowser.tsx`）：上传素材、导入进度、Google Drive 连接与缓存、待确认标签审核全部跟随语言模式切换，避免英文同事进入次级面板后又退回中文。
+- **[test] 新增 Asset Library locale helper 回归测试**（`h5-video-tool/src/pages/AssetLibraryPage/localize.ts`, `h5-video-tool/src/pages/AssetLibraryPage/localize.test.ts`）：锁定分类、筛选值、Tab 和标签 key 的中英映射，减少后续继续扩页面时的回退风险。
 
 ### v0.87 — 2026-04-22
 
@@ -1292,4 +1301,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.87）*
+*最后更新：2026-04-22（v0.88）*

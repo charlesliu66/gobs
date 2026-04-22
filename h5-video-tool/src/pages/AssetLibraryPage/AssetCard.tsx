@@ -1,15 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
 import type { LibraryAsset } from '../../api/assetLibraryApi';
-import { buildAssetFileUrl, addFavorite, removeFavorite, deleteAsset } from '../../api/assetLibraryApi';
+import { addFavorite, buildAssetFileUrl, deleteAsset, removeFavorite } from '../../api/assetLibraryApi';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { localizeAssetCategory } from './localize.ts';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  '角色': 'bg-blue-500/80',
-  '武器道具': 'bg-orange-500/80',
-  '场景': 'bg-green-500/80',
-  'UI素材': 'bg-purple-500/80',
-  '宣传图': 'bg-pink-500/80',
-  '视频片段': 'bg-cyan-500/80',
-  '未分类': 'bg-gray-500/60',
+  角色: 'bg-blue-500/80',
+  character: 'bg-blue-500/80',
+  场景: 'bg-green-500/80',
+  scene: 'bg-green-500/80',
+  道具: 'bg-orange-500/80',
+  武器道具: 'bg-orange-500/80',
+  prop: 'bg-orange-500/80',
+  物体: 'bg-teal-500/80',
+  object: 'bg-teal-500/80',
+  风格素材: 'bg-purple-500/80',
+  UI素材: 'bg-purple-500/80',
+  style: 'bg-purple-500/80',
+  宣传图: 'bg-pink-500/80',
+  poster: 'bg-pink-500/80',
+  视频片段: 'bg-cyan-500/80',
+  video: 'bg-cyan-500/80',
+  未分类: 'bg-gray-500/60',
+  uncategorized: 'bg-gray-500/60',
 };
 
 interface Props {
@@ -24,7 +37,31 @@ interface Props {
   draggable?: boolean;
 }
 
-export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onUseForGenerate, onFavoriteChange, onDelete, draggable = true }: Props) {
+export function AssetCard({
+  asset,
+  selected,
+  highlighted,
+  onSelect,
+  onClick,
+  onUseForGenerate,
+  onFavoriteChange,
+  onDelete,
+  draggable = true,
+}: Props) {
+  const { uiLocale } = useLocale();
+  const isEnglish = uiLocale === 'en';
+  const text = isEnglish
+    ? {
+        useForGenerate: 'Use In Generate',
+        delete: 'Delete',
+        deleteConfirm: (name: string) => `Delete "${name}"?`,
+      }
+    : {
+        useForGenerate: '用于生成',
+        delete: '删除',
+        deleteConfirm: (name: string) => `确认删除“${name}”？`,
+      };
+
   const [imgError, setImgError] = useState(false);
   const [isFav, setIsFav] = useState(asset.is_favorite ?? false);
   const [hovering, setHovering] = useState(false);
@@ -39,41 +76,43 @@ export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onU
   const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
   const thumbUrl = asset.thumbnail_url ?? fileUrl;
   const category = asset.ai_category ?? '未分类';
-  const catColor = CATEGORY_COLORS[category] ?? CATEGORY_COLORS['未分类'];
+  const catColor = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.未分类;
 
   useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
+    const element = cardRef.current;
+    if (!element) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
       { rootMargin: '200px' },
     );
-    observer.observe(el);
+    observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
-  function handleFavorite(e: React.MouseEvent) {
-    e.stopPropagation();
+  function handleFavorite(event: React.MouseEvent) {
+    event.stopPropagation();
     const next = !isFav;
     setIsFav(next);
     (next ? addFavorite(asset.id) : removeFavorite(asset.id)).catch(() => setIsFav(!next));
     onFavoriteChange?.(asset.id, next);
   }
 
-  function handleMouseEnter(_e: React.MouseEvent) {
+  function handleMouseEnter() {
     setHovering(true);
     if (isVideo && videoRef.current) {
       videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(() => {});
+      void videoRef.current.play().catch(() => {});
     }
     if (isImage && !imgError) {
       hoverTimer.current = setTimeout(() => {
         const rect = cardRef.current?.getBoundingClientRect();
-        if (rect) {
-          const x = rect.right + 12;
-          const y = Math.max(8, rect.top);
-          setPreviewPos({ x, y });
-        }
+        if (!rect) return;
+        setPreviewPos({ x: rect.right + 12, y: Math.max(8, rect.top) });
       }, 400);
     }
   }
@@ -81,15 +120,16 @@ export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onU
   function handleMouseLeave() {
     setHovering(false);
     setPreviewPos(null);
-    if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
-    if (isVideo && videoRef.current) {
-      videoRef.current.pause();
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
     }
+    if (isVideo && videoRef.current) videoRef.current.pause();
   }
 
-  function handleDragStart(e: React.DragEvent) {
-    e.dataTransfer.setData('application/x-asset-ids', JSON.stringify([asset.id]));
-    e.dataTransfer.effectAllowed = 'move';
+  function handleDragStart(event: React.DragEvent) {
+    event.dataTransfer.setData('application/x-asset-ids', JSON.stringify([asset.id]));
+    event.dataTransfer.effectAllowed = 'move';
   }
 
   return (
@@ -98,31 +138,30 @@ export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onU
         ref={cardRef}
         draggable={draggable}
         onDragStart={handleDragStart}
-        className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-150 ${
+        className={`group relative cursor-pointer overflow-hidden rounded-xl transition-all duration-150 ${
           highlighted
-            ? 'ring-2 ring-green-400 ring-offset-1 ring-offset-[var(--color-surface)] animate-pulse'
+            ? 'animate-pulse ring-2 ring-green-400 ring-offset-1 ring-offset-[var(--color-surface)]'
             : selected
-            ? 'ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-surface)]'
-            : 'hover:ring-2 hover:ring-[var(--color-primary)]/40 hover:ring-offset-1 hover:ring-offset-[var(--color-surface)]'
+              ? 'ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-surface)]'
+              : 'hover:ring-2 hover:ring-[var(--color-primary)]/40 hover:ring-offset-1 hover:ring-offset-[var(--color-surface)]'
         }`}
         onClick={() => onClick(asset)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Thumbnail */}
-        <div className="aspect-square bg-[var(--color-surface-hover)] relative overflow-hidden">
+        <div className="relative aspect-square overflow-hidden bg-[var(--color-surface-hover)]">
           {!visible ? (
-            <div className="w-full h-full bg-[var(--color-surface-hover)]" />
+            <div className="h-full w-full bg-[var(--color-surface-hover)]" />
           ) : imgError ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-4xl opacity-40">{isVideo ? '🎬' : '🖼'}</span>
+            <div className="flex h-full w-full items-center justify-center">
+              <span className="text-sm text-[var(--color-text-muted)]">{isVideo ? 'VIDEO' : 'IMAGE'}</span>
             </div>
           ) : isVideo ? (
             hovering ? (
               <video
                 ref={videoRef}
                 src={fileUrl}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover"
                 preload="metadata"
                 muted
                 playsInline
@@ -134,7 +173,7 @@ export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onU
               <img
                 src={thumbUrl}
                 alt={asset.filename}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover"
                 onError={() => setImgError(true)}
               />
             )
@@ -142,117 +181,109 @@ export function AssetCard({ asset, selected, highlighted, onSelect, onClick, onU
             <img
               src={thumbUrl}
               alt={asset.filename}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover"
               onError={() => setImgError(true)}
             />
           )}
 
-          {/* Video play badge (hidden when hovering/playing) */}
           {isVideo && !imgError && !hovering && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-9 h-9 bg-black/55 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <span className="text-white text-xs ml-0.5">▶</span>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
+                <span className="text-[11px] text-white">PLAY</span>
               </div>
             </div>
           )}
 
-          {/* Category badge top-right */}
-          {category !== '未分类' && (
-            <div className="absolute top-2 right-2 z-10">
-              <span className={`text-[10px] text-white px-1.5 py-0.5 rounded-md ${catColor} backdrop-blur-sm`}>
-                {category}
+          {category !== '未分类' && category !== 'uncategorized' && (
+            <div className="absolute right-2 top-2 z-10">
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm ${catColor}`}>
+                {localizeAssetCategory(uiLocale, category)}
               </span>
             </div>
           )}
 
-          {/* Checkbox top-left (hover or selected) */}
           <div
-            className={`absolute top-2 left-2 z-10 transition-opacity ${
-              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            }`}
-            onClick={(e) => { e.stopPropagation(); onSelect(asset.id); }}
+            className={`absolute left-2 top-2 z-10 transition-opacity ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(asset.id);
+            }}
           >
-            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-              selected
-                ? 'bg-[var(--color-primary)] border-[var(--color-primary)]'
-                : 'bg-black/50 border-white/70 backdrop-blur-sm'
-            }`}>
-              {selected && <span className="text-white text-[10px] font-bold">✓</span>}
+            <div
+              className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${
+                selected
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)]'
+                  : 'border-white/70 bg-black/50 backdrop-blur-sm'
+              }`}
+            >
+              {selected && <span className="text-[10px] font-bold text-white">OK</span>}
             </div>
           </div>
 
-          {/* Favorite star bottom-left */}
           <div
-            className={`absolute bottom-2 left-2 z-10 transition-opacity ${
-              isFav ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            }`}
+            className={`absolute bottom-2 left-2 z-10 transition-opacity ${isFav ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             onClick={handleFavorite}
           >
-            <span className={`text-lg drop-shadow-md cursor-pointer transition-transform hover:scale-125 ${
-              isFav ? 'text-yellow-400' : 'text-white/70'
-            }`}>
-              {isFav ? '★' : '☆'}
+            <span
+              className={`cursor-pointer text-base font-bold transition-transform hover:scale-125 ${
+                isFav ? 'text-yellow-400' : 'text-white/70'
+              }`}
+            >
+              {isFav ? '*' : '+'}
             </span>
           </div>
 
-          {/* Bottom overlay on hover */}
-          <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-0 left-0 right-0 opacity-0 transition-opacity group-hover:opacity-100">
             <div className="flex bg-gradient-to-t from-black/85 via-black/60 to-transparent pt-6">
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onUseForGenerate(asset); }}
-                className="flex-1 py-2 text-white text-xs font-semibold text-center hover:bg-white/10 transition-colors"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onUseForGenerate(asset);
+                }}
+                className="flex-1 py-2 text-center text-xs font-semibold text-white transition-colors hover:bg-white/10"
               >
-                用于生成
+                {text.useForGenerate}
               </button>
               {onDelete && (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!confirm(`确认删除「${asset.filename}」？`)) return;
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!window.confirm(text.deleteConfirm(asset.filename))) return;
                     void deleteAsset(asset.id).then(() => onDelete(asset.id)).catch(() => {});
                   }}
-                  className="px-3 py-2 text-red-400 text-xs font-semibold text-center hover:bg-red-500/20 transition-colors"
-                  title="删除"
+                  className="px-3 py-2 text-center text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/20"
+                  title={text.delete}
                 >
-                  🗑
+                  DEL
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Info bar */}
-        <div className="px-2 py-2 bg-[var(--color-surface-elevated)]">
-          <p
-            className="text-xs font-medium text-[var(--color-text)] truncate leading-snug"
-            title={asset.filename}
-          >
+        <div className="bg-[var(--color-surface-elevated)] px-2 py-2">
+          <p className="truncate text-xs font-medium leading-snug text-[var(--color-text)]" title={asset.filename}>
             {asset.filename}
           </p>
           {asset.ai_description && (
-            <p className="text-[10px] text-[var(--color-text-subtle)] mt-0.5 leading-snug truncate" title={asset.ai_description}>
+            <p
+              className="mt-0.5 truncate text-[10px] leading-snug text-[var(--color-text-subtle)]"
+              title={asset.ai_description}
+            >
               {asset.ai_description}
             </p>
           )}
         </div>
       </div>
 
-      {/* Hover preview popover for images */}
       {previewPos && isImage && !imgError && (
-        <div
-          className="fixed z-[9999] pointer-events-none"
-          style={{ left: previewPos.x, top: previewPos.y }}
-        >
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl overflow-hidden p-1.5">
-            <img
-              src={fileUrl}
-              alt={asset.filename}
-              className="max-w-[360px] max-h-[360px] object-contain rounded-xl"
-            />
+        <div className="pointer-events-none fixed z-[9999]" style={{ left: previewPos.x, top: previewPos.y }}>
+          <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-2xl">
+            <img src={fileUrl} alt={asset.filename} className="max-h-[360px] max-w-[360px] rounded-xl object-contain" />
             {asset.ai_description && (
-              <p className="text-[11px] text-[var(--color-text-muted)] text-center py-1.5 px-2 truncate max-w-[360px]">
+              <p className="max-w-[360px] truncate px-2 py-1.5 text-center text-[11px] text-[var(--color-text-muted)]">
                 {asset.ai_description}
               </p>
             )}

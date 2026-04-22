@@ -1,12 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  getDriveStatus, connectDrive, disconnectDrive,
-  listDriveFiles, cacheDriveFile, buildDriveThumbnailUrl,
+  buildDriveThumbnailUrl,
+  cacheDriveFile,
+  connectDrive,
+  disconnectDrive,
+  getDriveStatus,
+  listDriveFiles,
 } from '../../api/googleDriveApi';
 import type { DriveFile } from '../../api/googleDriveApi';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { toast } from '../../components/Toast';
 
+function formatFileSize(size?: string): string | null {
+  if (!size) return null;
+  const numeric = Number(size);
+  if (Number.isNaN(numeric)) return null;
+  if (numeric > 1024 * 1024) return `${(numeric / 1024 / 1024).toFixed(1)} MB`;
+  return `${(numeric / 1024).toFixed(1)} KB`;
+}
+
 export function DriveBrowser() {
+  const { uiLocale } = useLocale();
+  const isEnglish = uiLocale === 'en';
+  const text = isEnglish
+    ? {
+        loadFailed: 'Load failed',
+        connectFailed: 'Connect failed',
+        cached: (name: string) => `${name} cached to the server`,
+        cacheFailed: 'Caching failed',
+        connectTitle: 'Connect Google Drive',
+        connectHint: 'Authorize Drive once, then browse and cache materials directly from your Drive.',
+        connectAction: 'Connect Google Drive',
+        driveRoot: 'Drive',
+        disconnect: 'Disconnect',
+        folderEmpty: 'This folder is empty',
+        downloading: 'Caching...',
+        downloadToServer: 'Cache To Server',
+      }
+    : {
+        loadFailed: '加载失败',
+        connectFailed: '连接失败',
+        cached: (name: string) => `${name} 已缓存到服务器`,
+        cacheFailed: '缓存失败',
+        connectTitle: '连接 Google Drive',
+        connectHint: '授权一次后，就可以直接浏览 Drive 中的素材并缓存到服务器。',
+        connectAction: '连接 Google Drive',
+        driveRoot: 'Drive',
+        disconnect: '断开连接',
+        folderEmpty: '当前文件夹为空',
+        downloading: '缓存中...',
+        downloadToServer: '缓存到服务器',
+      };
+
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [files, setFiles] = useState<DriveFile[]>([]);
@@ -19,17 +64,18 @@ export function DriveBrowser() {
   const checkStatus = useCallback(async () => {
     setChecking(true);
     try {
-      const res = await getDriveStatus();
-      setConnected(res.connected);
-    } catch { /* ignore */ }
+      const response = await getDriveStatus();
+      setConnected(response.connected);
+    } catch {
+      // ignore
+    }
     setChecking(false);
   }, []);
 
   useEffect(() => {
     void checkStatus();
-
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type === 'drive-connected') {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'drive-connected') {
         setConnected(true);
         void loadFiles('root');
       }
@@ -38,16 +84,19 @@ export function DriveBrowser() {
     return () => window.removeEventListener('message', handler);
   }, [checkStatus]);
 
-  const loadFiles = useCallback(async (folderId: string) => {
-    setLoading(true);
-    try {
-      const res = await listDriveFiles(folderId);
-      setFiles(res.files);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '加载失败');
-    }
-    setLoading(false);
-  }, []);
+  const loadFiles = useCallback(
+    async (folderId: string) => {
+      setLoading(true);
+      try {
+        const response = await listDriveFiles(folderId);
+        setFiles(response.files);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : text.loadFailed);
+      }
+      setLoading(false);
+    },
+    [text.loadFailed],
+  );
 
   useEffect(() => {
     if (connected) void loadFiles(currentFolderId);
@@ -55,10 +104,10 @@ export function DriveBrowser() {
 
   async function handleConnect() {
     try {
-      const res = await connectDrive();
-      window.open(res.authUrl, 'google-auth', 'width=600,height=700');
+      const response = await connectDrive();
+      window.open(response.authUrl, 'google-auth', 'width=600,height=700');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '连接失败');
+      toast.error(err instanceof Error ? err.message : text.connectFailed);
     }
   }
 
@@ -69,33 +118,25 @@ export function DriveBrowser() {
     setFolderPath([]);
   }
 
-  function openFolder(file: DriveFile) {
-    setFolderPath((prev) => [...prev, { id: file.id, name: file.name }]);
-  }
-
-  function goToPathIndex(index: number) {
-    if (index < 0) {
-      setFolderPath([]);
-    } else {
-      setFolderPath((prev) => prev.slice(0, index + 1));
-    }
-  }
-
   async function handleCache(file: DriveFile) {
-    setCachingIds((prev) => new Set([...prev, file.id]));
+    setCachingIds((previous) => new Set([...previous, file.id]));
     try {
       await cacheDriveFile(file.id, file.name);
-      toast.success(`${file.name} 已缓存到服务器`);
+      toast.success(text.cached(file.name));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '缓存失败');
+      toast.error(err instanceof Error ? err.message : text.cacheFailed);
     }
-    setCachingIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+    setCachingIds((previous) => {
+      const next = new Set(previous);
+      next.delete(file.id);
+      return next;
+    });
   }
 
   if (checking) {
     return (
       <div className="flex items-center justify-center py-20">
-        <span className="inline-block w-5 h-5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+        <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
       </div>
     );
   }
@@ -103,17 +144,14 @@ export function DriveBrowser() {
   if (!connected) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="text-6xl mb-4 opacity-50">☁️</div>
-        <h3 className="text-lg font-semibold text-[var(--color-text)] mb-2">连接 Google Drive</h3>
-        <p className="text-sm text-[var(--color-text-muted)] mb-6 max-w-sm">
-          授权后可直接浏览 Drive 中的素材，使用时自动下载到服务器
-        </p>
+        <h3 className="mb-2 text-lg font-semibold text-[var(--color-text)]">{text.connectTitle}</h3>
+        <p className="mb-6 max-w-sm text-sm text-[var(--color-text-muted)]">{text.connectHint}</p>
         <button
           type="button"
           onClick={handleConnect}
-          className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition"
+          className="rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--color-primary-hover)]"
         >
-          连接 Google Drive
+          {text.connectAction}
         </button>
       </div>
     );
@@ -121,23 +159,22 @@ export function DriveBrowser() {
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb + disconnect */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 text-sm text-[var(--color-text-muted)] overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto text-sm text-[var(--color-text-muted)]">
           <button
             type="button"
-            onClick={() => goToPathIndex(-1)}
-            className="hover:text-[var(--color-primary)] transition whitespace-nowrap"
+            onClick={() => setFolderPath([])}
+            className="whitespace-nowrap transition hover:text-[var(--color-primary)]"
           >
-            Drive
+            {text.driveRoot}
           </button>
-          {folderPath.map((folder, i) => (
+          {folderPath.map((folder, index) => (
             <span key={folder.id} className="flex items-center gap-1">
               <span className="opacity-40">/</span>
               <button
                 type="button"
-                onClick={() => goToPathIndex(i)}
-                className="hover:text-[var(--color-primary)] transition whitespace-nowrap"
+                onClick={() => setFolderPath((previous) => previous.slice(0, index + 1))}
+                className="whitespace-nowrap transition hover:text-[var(--color-primary)]"
               >
                 {folder.name}
               </button>
@@ -146,79 +183,75 @@ export function DriveBrowser() {
         </div>
         <button
           type="button"
-          onClick={handleDisconnect}
-          className="text-xs text-[var(--color-text-muted)] hover:text-red-400 transition"
+          onClick={() => void handleDisconnect()}
+          className="text-xs text-[var(--color-text-muted)] transition hover:text-red-400"
         >
-          断开连接
+          {text.disconnect}
         </button>
       </div>
 
-      {/* File list */}
       {loading ? (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="rounded-xl overflow-hidden animate-pulse">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, index) => (
+            <div key={index} className="animate-pulse overflow-hidden rounded-xl">
               <div className="aspect-square bg-[var(--color-surface-hover)]" />
-              <div className="p-2 bg-[var(--color-surface-elevated)]">
-                <div className="h-2.5 bg-[var(--color-surface-hover)] rounded w-full" />
+              <div className="bg-[var(--color-surface-elevated)] p-2">
+                <div className="h-2.5 w-full rounded bg-[var(--color-surface-hover)]" />
               </div>
             </div>
           ))}
         </div>
       ) : files.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="text-5xl mb-3 opacity-40">📂</div>
-          <p className="text-sm text-[var(--color-text-muted)]">此文件夹为空</p>
+          <p className="text-sm text-[var(--color-text-muted)]">{text.folderEmpty}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
           {files.map((file) => (
             <div
               key={file.id}
-              className="group relative rounded-xl overflow-hidden cursor-pointer transition-all hover:ring-2 hover:ring-[var(--color-primary)]/40"
-              onClick={() => file.isFolder ? openFolder(file) : undefined}
+              className="group relative cursor-pointer overflow-hidden rounded-xl transition-all hover:ring-2 hover:ring-[var(--color-primary)]/40"
+              onClick={() => {
+                if (file.isFolder) setFolderPath((previous) => [...previous, { id: file.id, name: file.name }]);
+              }}
             >
-              <div className="aspect-square bg-[var(--color-surface-hover)] relative overflow-hidden flex items-center justify-center">
+              <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-[var(--color-surface-hover)]">
                 {file.isFolder ? (
-                  <span className="text-5xl opacity-60">📁</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">FOLDER</span>
                 ) : file.thumbnailLink ? (
                   <img
                     src={buildDriveThumbnailUrl(file.thumbnailLink)}
                     alt={file.name}
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                   />
                 ) : (
-                  <span className="text-4xl opacity-40">
-                    {file.mimeType.startsWith('video/') ? '🎬' : '🖼'}
-                  </span>
+                  <span className="text-xs text-[var(--color-text-muted)]">{file.mimeType.startsWith('video/') ? 'VIDEO' : 'IMAGE'}</span>
                 )}
 
-                {/* Cache button for non-folder files */}
                 {!file.isFolder && (
-                  <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute bottom-0 left-0 right-0 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); void handleCache(file); }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleCache(file);
+                      }}
                       disabled={cachingIds.has(file.id)}
-                      className="w-full py-2 bg-gradient-to-t from-black/85 via-black/60 to-transparent text-white text-xs font-semibold text-center pt-6 disabled:opacity-60"
+                      className="w-full bg-gradient-to-t from-black/85 via-black/60 to-transparent pb-2 pt-6 text-center text-xs font-semibold text-white disabled:opacity-60"
                     >
-                      {cachingIds.has(file.id) ? '下载中...' : '下载到服务器'}
+                      {cachingIds.has(file.id) ? text.downloading : text.downloadToServer}
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="px-2 py-2 bg-[var(--color-surface-elevated)]">
-                <p className="text-xs font-medium text-[var(--color-text)] truncate" title={file.name}>
+              <div className="bg-[var(--color-surface-elevated)] px-2 py-2">
+                <p className="truncate text-xs font-medium text-[var(--color-text)]" title={file.name}>
                   {file.name}
                 </p>
-                {file.size && (
-                  <p className="text-[10px] text-[var(--color-text-subtle)] mt-0.5">
-                    {Number(file.size) > 1024 * 1024
-                      ? `${(Number(file.size) / 1024 / 1024).toFixed(1)} MB`
-                      : `${(Number(file.size) / 1024).toFixed(1)} KB`}
-                  </p>
+                {formatFileSize(file.size) && (
+                  <p className="mt-0.5 text-[10px] text-[var(--color-text-subtle)]">{formatFileSize(file.size)}</p>
                 )}
               </div>
             </div>
