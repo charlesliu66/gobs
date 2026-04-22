@@ -241,8 +241,7 @@ export function ProductionWizard() {
   ) => {
     const nextProject = migrateProject(stored.project);
     const local = loadStored();
-    const shouldMergeLocalShots = local != null && shouldMergeStoredShotVideoVersions(local, projectId);
-    const mergedShots = shouldMergeLocalShots
+    const mergedShots = local && shouldMergeStoredShotVideoVersions(local, projectId)
       ? mergeShotVideoVersions(nextProject.shots, local.project.shots)
       : nextProject.shots;
     return {

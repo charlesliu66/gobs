@@ -12,6 +12,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import { getJobById } from '../services/batchJobsQueue.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export const productionPersistRouter = Router();
