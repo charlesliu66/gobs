@@ -177,14 +177,24 @@
 - **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
-- **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。仓库内同时补齐了单人多电脑发布 Runbook、本地状态切换脚本，以及 `AGENTS.md / CLAUDE.md / CODEX-CLI-PROJECT-GUIDE.md` 里的 staging-first 规则，后续发 `staging/prod` 不再依赖手工记忆步骤。
+- **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。仓库内同时补齐了单人多电脑发布 Runbook、本地状态切换脚本、`mark_release_ready.py`、以及 `deploy_all.py` 的 release guard automation，后续发 `staging/prod` 不再依赖手工记忆步骤。
 
 ---
 
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.113 -->
+<!-- NEXT_VERSION: v0.114 -->
+
+### v0.113 — 2026-04-23
+
+**发布门禁自动化与 staging verified 提升机制**
+
+**Ops / Infra:**
+- **[scripts] `deploy_all.py` 升级为带门禁的正式发布入口**（`scripts/deploy_all.py`, `scripts/tests/test_deploy_all.py`）：发布脚本现在会自动阻止 release-scope 脏改动、阻止未 push 到 `origin/main` 的 SHA 发布，并在 `prod` 发布前强制校验“当前本地 SHA = staging 线上 SHA = staging 已验证 SHA”；同时 `prod` 发布会自动切换 `preparing -> deploying -> verifying`，并把版本不一致从旧的 warning 提升为硬失败。
+- **[scripts] 新增 staging 验证确认脚本**（`scripts/mark_release_ready.py`, `scripts/release_guard.py`, `scripts/tests/test_release_guard.py`）：你在测试环境自测通过后，可以显式把当前 staging 版本标记为“可提升到正式”的 release-ready SHA，后续 prod 只允许提升这个 SHA。
+- **[scripts] 后端部署补齐 PM2 online 硬检查**（`scripts/deploy_api.py`, `scripts/tests/test_deploy_api.py`）：如果 PM2 重启后不是 `online` 或根本没找到目标进程，部署会直接失败，不再把“重启了但没起来”误判为成功。
+- **[docs] 发布 Runbook 与项目级规则同步更新**（`docs/guides/2026-04-23-single-owner-staging-prod-release-runbook.md`, `AGENTS.md`, `CLAUDE.md`, `docs/CODEX-CLI-PROJECT-GUIDE.md`, `docs/plans/2026-04-23-release-guard-automation-plan.md`）：仓库内现在明确写清 staging 自测、mark ready、一键 prod、紧急 bypass 的边界和操作方式。
 
 ### v0.112 — 2026-04-23
 
@@ -1545,4 +1555,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.112）*
+*最后更新：2026-04-23（v0.113）*

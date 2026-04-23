@@ -21,6 +21,25 @@ except ModuleNotFoundError:
 LOCAL_DIST = Path(__file__).parent.parent / 'h5-video-tool-api' / 'dist'
 
 
+class DeployRuntimeError(RuntimeError):
+    pass
+
+
+def ensure_pm2_online(processes: list[dict], pm2_name: str) -> None:
+    for process in processes:
+        env = process.get('pm2_env', {})
+        if env.get('name') != pm2_name:
+            continue
+        status = str(env.get('status', '')).strip()
+        restart_time = env.get('restart_time')
+        print(f"PM2 {env.get('name')} = {status} (restarts={restart_time})")
+        if status != 'online':
+            raise DeployRuntimeError(f'PM2 进程 {pm2_name} 状态异常: {status}')
+        return
+
+    raise DeployRuntimeError(f'未找到 PM2 进程 {pm2_name}')
+
+
 def main() -> bool:
     parser = argparse.ArgumentParser()
     parser.add_argument('--target', choices=['staging', 'prod'], default='prod')
@@ -74,11 +93,7 @@ def main() -> bool:
 
     raw = ssh('pm2 jlist')
     data = json.loads(raw)
-    for process in data:
-        env = process.get('pm2_env', {})
-        if env.get('name') != config.pm2_name:
-            continue
-        print(f"PM2 {env.get('name')} = {env.get('status')} (restarts={env.get('restart_time')})")
+    ensure_pm2_online(data, config.pm2_name)
 
     client.close()
     print('后端部署完成')

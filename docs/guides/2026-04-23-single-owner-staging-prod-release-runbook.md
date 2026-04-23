@@ -103,9 +103,10 @@ DEPLOY_PROD_VERSION_URL=http://43.134.186.196/api/system/version
 python scripts/set_deployment_state.py --target staging --show
 python scripts/set_deployment_state.py --target prod --show
 python scripts/deploy_all.py --help
+python scripts/mark_release_ready.py --help
 ```
 
-如果上面 3 条都能跑通，这台电脑就可以承担发布。
+如果上面 4 条都能跑通，这台电脑就可以承担发布。
 
 ---
 
@@ -163,6 +164,8 @@ git status --short
 要求：
 
 - 当前发布电脑用于发布的仓库应尽量干净
+- `deploy_all.py` 会自动阻止会影响发布的 release-scope 脏改动
+- 当前仓库如果只是历史归档脚本或临时目录有噪音，不一定会被拦；但前后端源码和发布脚本必须干净
 - 如果当前工作区有未完成改动，换一个干净 worktree 或干净 clone 再发布
 
 ### 5.4 记下本次准备发布的 commit
@@ -203,7 +206,7 @@ npm run build
 node --test tests/deploymentBanner.test.ts
 cd ..
 
-python -m unittest scripts.tests.test_deploy_config scripts.tests.test_server_layout scripts.tests.test_init_dual_env_server scripts.tests.test_set_deployment_state
+python -m unittest scripts.tests.test_deploy_config scripts.tests.test_server_layout scripts.tests.test_init_dual_env_server scripts.tests.test_set_deployment_state scripts.tests.test_release_guard scripts.tests.test_deploy_all scripts.tests.test_deploy_api
 ```
 
 如果这一步没过，不进入部署。
@@ -237,40 +240,34 @@ Invoke-WebRequest -UseBasicParsing http://43.134.186.196:8080/api/system/version
 
 只有 `staging` 验证通过，才能继续发 `prod`。
 
-### 6.4 第四步：正式发布前打开提醒
-
-先把正式环境切到 `preparing`，给正在使用的同学留 3 到 5 分钟缓冲。
+### 6.4 第四步：把当前 staging SHA 标记为“已验证可提升”
 
 ```powershell
-python scripts/set_deployment_state.py --target prod --phase preparing --updated-by wei.liu
+python scripts/mark_release_ready.py --updated-by wei.liu
 ```
 
-如果你想自定义文案，可以这样：
-
-```powershell
-python scripts/set_deployment_state.py --target prod --phase preparing --updated-by wei.liu --message-zh "系统将在 5 分钟后发布更新，请先保存当前工作。" --message-en "The system will be updated in about 5 minutes. Please save your current work first."
-```
-
-建议等待 3 到 5 分钟，再继续。
+这一步会把当前 `staging` 版本写入服务器侧的 `release-ready.json`。后续 `prod` 发布只允许提升这个已验证 SHA。
 
 ### 6.5 第五步：正式发布窗口
 
-正式开始发版时，先把状态切到 `deploying`：
+正式发版现在直接用一条命令：
 
 ```powershell
-python scripts/set_deployment_state.py --target prod --phase deploying --updated-by wei.liu
+python scripts/deploy_all.py --target prod --updated-by wei.liu
 ```
 
-然后发布正式环境：
+这条命令会自动完成：
+
+1. 检查 release-scope 工作区是否干净
+2. 检查当前 `HEAD` 是否已经在 `origin/main`
+3. 检查 `staging` 线上版本与 `release-ready.json` 是否都是当前 SHA
+4. 自动切换 `preparing -> deploying -> verifying`
+5. 发布完成后轮询 `/api/system/version`，要求环境和版本都匹配
+
+如果你想在已明确批准的紧急热修 / 紧急回滚里绕过 staging verified 校验，可以显式加：
 
 ```powershell
-python scripts/deploy_all.py --target prod
-```
-
-发布完成后，把状态切到 `verifying`：
-
-```powershell
-python scripts/set_deployment_state.py --target prod --phase verifying --updated-by wei.liu
+python scripts/deploy_all.py --target prod --updated-by wei.liu --prepare-wait-seconds 0 --emergency-bypass
 ```
 
 ### 6.6 第六步：正式环境验收
@@ -314,17 +311,22 @@ python scripts/set_deployment_state.py --target prod --phase idle --updated-by w
 git log --oneline -20
 ```
 
-### 7.2 切正式环境到 `deploying`
-
-```powershell
-python scripts/set_deployment_state.py --target prod --phase deploying --updated-by wei.liu --message-zh "系统正在回滚到上一稳定版本，请稍候。" --message-en "The system is rolling back to the previous stable version. Please wait."
-```
-
-### 7.3 切到目标 commit 并重新部署
+### 7.2 安全回滚：先让 staging 跑回目标版本
 
 ```powershell
 git checkout <good-sha>
-python scripts/deploy_all.py --target prod
+python scripts/deploy_all.py --target staging
+python scripts/mark_release_ready.py --updated-by wei.liu
+python scripts/deploy_all.py --target prod --updated-by wei.liu --prepare-wait-seconds 0
+```
+
+### 7.3 紧急回滚例外
+
+如果已经明确批准紧急绕过 staging 验证，可以这样：
+
+```powershell
+git checkout <good-sha>
+python scripts/deploy_all.py --target prod --updated-by wei.liu --prepare-wait-seconds 0 --emergency-bypass
 ```
 
 ### 7.4 回滚后验证
@@ -413,10 +415,10 @@ python scripts/set_deployment_state.py --target prod --phase preparing --updated
 python scripts/set_deployment_state.py --target prod --phase deploying --updated-by wei.liu
 ```
 
-### 标记正式环境进入验证期
+### 一键发布正式环境（自动 phase）
 
 ```powershell
-python scripts/set_deployment_state.py --target prod --phase verifying --updated-by wei.liu
+python scripts/deploy_all.py --target prod --updated-by wei.liu
 ```
 
 ### 关闭正式环境提醒
@@ -425,16 +427,22 @@ python scripts/set_deployment_state.py --target prod --phase verifying --updated
 python scripts/set_deployment_state.py --target prod --phase idle --updated-by wei.liu
 ```
 
+### 标记当前 staging SHA 已可提升
+
+```powershell
+python scripts/mark_release_ready.py --updated-by wei.liu
+```
+
 ### 发布测试环境
 
 ```powershell
 python scripts/deploy_all.py --target staging
 ```
 
-### 发布正式环境
+### 紧急绕过 staging verified 校验
 
 ```powershell
-python scripts/deploy_all.py --target prod
+python scripts/deploy_all.py --target prod --updated-by wei.liu --prepare-wait-seconds 0 --emergency-bypass
 ```
 
 ---
@@ -446,6 +454,6 @@ python scripts/deploy_all.py --target prod
 1. 这次准备发的 commit 是多少？
 2. 这个 commit 已经在 GitHub `main` 上了吗？
 3. `staging` 已经验证通过了吗？
-4. `prod` 的提醒已经提前打开了吗？
+4. 当前 `staging` SHA 已经执行过 `mark_release_ready.py` 了吗？
 
 这 4 句都能回答清楚，再发版，基本就不会乱。

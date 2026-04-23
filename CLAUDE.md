@@ -109,7 +109,7 @@ bash scripts/eval.sh <run-id>
 - PM2 进程名：`qas-api-staging`，运行 `/home/ubuntu/qas-h5/staging/api/index.js`
 - 服务器**无 git**，通过 SFTP 上传编译产物部署
 
-### 标准七步部署流程
+### 标准八步部署流程
 
 ```bash
 # 1. 本地 TypeScript 编译检查
@@ -135,14 +135,15 @@ python scripts/deploy_all.py --target staging
 #    打开 http://43.134.186.196:8080 自测
 #    确认环境标识、版本号、关键链路、数据隔离都正常
 
-# 6. 正式发布前先打开发布提示，再部署正式环境
-python scripts/set_deployment_state.py --target prod --phase preparing --updated-by <your-name>
-#    等待 3~5 分钟，让线上同学先看到提示
-python scripts/deploy_all.py --target prod
-python scripts/set_deployment_state.py --target prod --phase verifying --updated-by <your-name>
+# 6. staging 自测通过后，显式标记“这个 SHA 可以提升到 prod”
+python scripts/mark_release_ready.py --updated-by <your-name>
 
-# 7. 正式环境验证通过后恢复 idle
+# 7. 发布正式环境（脚本会自动做 release guard checks，并自动切换 preparing -> deploying -> verifying）
+python scripts/deploy_all.py --target prod --updated-by <your-name>
+
+# 8. 正式环境验证通过后恢复 idle
 python scripts/set_deployment_state.py --target prod --phase idle --updated-by <your-name>
+#    紧急热修 / 紧急回滚且已获明确批准时，才允许额外带 --emergency-bypass
 ```
 
 ### 违禁情形
@@ -151,10 +152,12 @@ python scripts/set_deployment_state.py --target prod --phase idle --updated-by <
 - 不得只 push GitHub、不部署服务器
 - 不得跳过 TypeScript 编译检查直接部署
 - 不得跳过 `staging` 验证直接发 `prod`
+- 不得在 `staging` 自测后漏掉 `mark_release_ready.py` 直接发 `prod`
 - 不得在正式发布前省略发布提示（除非用户明确批准紧急热修）
+- 不得在未获明确批准时使用 `--emergency-bypass`
 - **不得跳过 PRODUCT.md 更新**（功能文档必须与代码同步）
 - 不得在不同电脑上发布不同 commit 且不核对 SHA
-- AI 完成每个任务后必须主动执行上述七步，不等用户催
+- AI 完成每个任务后必须主动执行上述八步，不等用户催
 
 ---
 

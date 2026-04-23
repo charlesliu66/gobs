@@ -172,6 +172,7 @@ Run 目录：`docs/workflow/runs/YYYY-MM-DD-<feature-name>/`。
 - **默认顺序必须是**：`staging -> 验证 -> prod`
 - **禁止**跳过测试环境直接发布正式环境
 - **禁止**在不同电脑上用不同 commit 做“验证”和“正式发布”
+- **脚本级门禁**：`deploy_all.py` 会阻止 release-scope 脏改动、阻止未 push 到 `origin/main` 的 SHA 发布，并要求 `prod` 只能提升已通过 staging 验证的 SHA
 - **允许例外**：只有用户明确批准“紧急热修直接上正式”时，才允许跳过 `staging` 或缩短正式提示窗口
 - **单人多电脑 SOP**：见 `docs/guides/2026-04-23-single-owner-staging-prod-release-runbook.md`
 
@@ -212,17 +213,20 @@ cd ../h5-video-tool && npm run build
 # 3. 先发测试环境
 python scripts/deploy_all.py --target staging
 
-# 4. 测试通过后，先打开正式环境提示
-python scripts/set_deployment_state.py --target prod --phase preparing --updated-by <your-name>
+# 4. 测试通过后，显式标记 staging 当前 SHA 已验收
+python scripts/mark_release_ready.py --updated-by <your-name>
 
-# 5. 等待 3~5 分钟后发正式
-python scripts/deploy_all.py --target prod
-python scripts/set_deployment_state.py --target prod --phase verifying --updated-by <your-name>
+# 5. 发正式环境
+#    deploy_all.py 会自动做：
+#    - release guard checks
+#    - preparing -> deploying -> verifying
+python scripts/deploy_all.py --target prod --updated-by <your-name>
 
 # 6. 正式验证完成后恢复空闲
 python scripts/set_deployment_state.py --target prod --phase idle --updated-by <your-name>
 ```
 
+**紧急热修 / 回滚**：只有用户明确批准时，才允许在 `prod` 发布命令中额外使用 `--emergency-bypass`。
 **注意**：纯本地实验可跳过服务器；若用户明确要求「上生产」，必须完整执行上面的双环境流程，且 **TypeScript 构建通过**。
 
 ---
