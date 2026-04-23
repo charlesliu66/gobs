@@ -5,6 +5,7 @@ import {
   type DreaminaListedTask,
 } from './dreaminaVideo.js';
 import { persistVideoUrlToOutput } from './videoUtils.js';
+import { listOwnedDreaminaSubmitIds } from './dreaminaRecovery.js';
 import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
@@ -213,6 +214,7 @@ function pushDreaminaBackfillTasks(
     maxTasks: number;
     existingKeys: Set<string>;
     seenKeys: Set<string>;
+    allowedSubmitKeys?: Set<string>;
   },
 ): void {
   for (const task of tasks) {
@@ -223,6 +225,7 @@ function pushDreaminaBackfillTasks(
     }
     const submitKey = toDreaminaSubmitKey(task.submitId);
     if (!submitKey) continue;
+    if (options.allowedSubmitKeys && !options.allowedSubmitKeys.has(submitKey)) continue;
     if (options.existingKeys.has(submitKey) || options.seenKeys.has(submitKey)) continue;
     options.seenKeys.add(submitKey);
     target.push(task);
@@ -273,6 +276,7 @@ export function selectDreaminaTasksForBackfill(
     nowMs?: number;
     maxAgeMs?: number;
     maxTasks?: number;
+    allowedSubmitKeys?: Set<string>;
   } = {},
 ): DreaminaListedTask[] {
   const nowMs = options.nowMs ?? Date.now();
@@ -285,7 +289,7 @@ export function selectDreaminaTasksForBackfill(
   );
   const seenKeys = new Set<string>();
   const out: DreaminaListedTask[] = [];
-  pushDreaminaBackfillTasks(out, tasks, { nowMs, maxAgeMs, maxTasks, existingKeys, seenKeys });
+  pushDreaminaBackfillTasks(out, tasks, { nowMs, maxAgeMs, maxTasks, existingKeys, seenKeys, allowedSubmitKeys: options.allowedSubmitKeys });
   return out;
 }
 
@@ -297,6 +301,7 @@ export async function collectDreaminaBackfillCandidates(options: {
   maxTasks?: number;
   pageSize?: number;
   maxPages?: number;
+  allowedSubmitKeys?: Set<string>;
 }): Promise<DreaminaListedTask[]> {
   const nowMs = options.nowMs ?? Date.now();
   const maxAgeMs = options.maxAgeMs ?? DREAMINA_RECENT_WINDOW_MS;
@@ -315,7 +320,14 @@ export async function collectDreaminaBackfillCandidates(options: {
     const offset = pageIndex * pageSize;
     const tasks = await options.listPage({ limit: pageSize, offset });
     if (!tasks.length) break;
-    pushDreaminaBackfillTasks(out, tasks, { nowMs, maxAgeMs, maxTasks, existingKeys, seenKeys });
+    pushDreaminaBackfillTasks(out, tasks, {
+      nowMs,
+      maxAgeMs,
+      maxTasks,
+      existingKeys,
+      seenKeys,
+      allowedSubmitKeys: options.allowedSubmitKeys,
+    });
     if (tasks.length < pageSize) break;
   }
 
@@ -335,6 +347,15 @@ export async function syncRecentDreaminaOutputs(options: {
   }
 
   try {
+    const allowedSubmitKeys = new Set(
+      (await listOwnedDreaminaSubmitIds(options.username))
+        .map((item) => toDreaminaSubmitKey(item))
+        .filter((item): item is string => !!item),
+    );
+    if (options.username?.trim() && allowedSubmitKeys.size === 0) {
+      return { synced: 0, attempted: 0 };
+    }
+
     const requestedLimit = Math.max(1, Math.min(options.listLimit ?? DEFAULT_RECENT_LIST_LIMIT, DEFAULT_RECENT_LIST_LIMIT));
     const pageSize = Math.min(DEFAULT_LIST_PAGE_SIZE, requestedLimit);
     const maxPages = Math.max(1, Math.ceil(requestedLimit / pageSize));
@@ -344,6 +365,7 @@ export async function syncRecentDreaminaOutputs(options: {
       maxTasks: options.maxSync ?? DEFAULT_MAX_SYNC,
       pageSize,
       maxPages,
+      allowedSubmitKeys,
       listPage: async ({ limit, offset }) => {
         try {
           return await listDreaminaTasksPageViaWrapper({ limit, offset, genStatus: 'success' });

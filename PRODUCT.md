@@ -144,6 +144,7 @@
 - 「服务端文件」页刷新时会自动分页补同步最近几天即梦后台已完成但尚未落盘的成片；即便第一页都是旧片，后续分页里的新成片也会继续补拉回来。
 - 「服务端文件」新增范围说明、搜索框、来源/时间/保存状态筛选，以及“正常列表 / 已隐藏”视图切换；隐藏只影响当前 GOBS 账号下的展示，不删除服务器文件，也不影响即梦后台。
 - 服务端文件卡片会标记来源（即梦回补 / 服务端成片）和“已保存到我的成片”状态，便于运营同学快速找片、筛片和二次整理。
+- 即梦最近成片回补现在只会补回“当前账号已有归属证据”的 submitId，不再把共享即梦账号里的其他人任务自动补进当前账号目录。
 ---
 
 ### 7. 涓€閿垚鐗囷紙Quick Film锛?
@@ -178,7 +179,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.106 -->
+<!-- NEXT_VERSION: v0.107 -->
+
+### v0.106 — 2026-04-23
+
+**我的成片即梦回补改为按账号归属补回**
+
+**Bug Fix / Ownership Boundary:**
+- **[api] `dreaminaRecentSync` 只回补当前账号有归属证据的 submitId**（`h5-video-tool-api/src/services/dreaminaRecentSync.ts`, `h5-video-tool-api/src/services/dreaminaRecovery.ts`）：服务端文件页的“即梦最近成片回补”不再直接扫共享即梦账号的所有成功任务，而是先从当前 GOBS 用户名对应的 batch-jobs 和 dreamina intents 里提取已知 submitId，再只补回这些明确属于当前账号的即梦成片。
+- **[api] 新增 owner-gated 回补测试**（`h5-video-tool-api/tests/dreaminaRecentSync.test.ts`）：覆盖“只允许明确 owned 的 submit key 进入回补候选”的规则，防止后续再次把别人的即梦成片补进当前账号目录。
 
 ### v0.105 — 2026-04-23
 
@@ -1474,4 +1483,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.105）*
+*最后更新：2026-04-23（v0.106）*

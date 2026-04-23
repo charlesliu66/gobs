@@ -190,6 +190,28 @@ export async function listPendingIntents(username?: string): Promise<DreaminaSub
   });
 }
 
+export async function listOwnedDreaminaSubmitIds(username?: string): Promise<string[]> {
+  const trimmed = username?.trim();
+  if (!trimmed) return [];
+  const intents = await loadIntents();
+  const allJobs = await getAllJobs();
+  const out = new Set<string>();
+
+  for (const intent of intents) {
+    if (!intent.submitId) continue;
+    if ((intent.username ?? '').trim() !== trimmed) continue;
+    out.add(intent.submitId);
+  }
+
+  for (const job of allJobs) {
+    if (!job.submitId) continue;
+    if ((job.username ?? '').trim() !== trimmed) continue;
+    out.add(job.submitId);
+  }
+
+  return [...out];
+}
+
 // ── 匹配逻辑 ───────────────────────────────────────────────────────────────
 
 function tasksToCandidates(

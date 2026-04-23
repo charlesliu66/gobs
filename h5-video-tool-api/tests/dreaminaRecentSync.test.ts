@@ -82,6 +82,28 @@ test('selectDreaminaTasksForBackfill respects the maxTasks cap', () => {
   );
 });
 
+test('selectDreaminaTasksForBackfill can restrict candidates to explicitly owned submit keys', () => {
+  const nowMs = Date.UTC(2026, 3, 23, 12, 0, 0);
+  const selected = selectDreaminaTasksForBackfill(
+    [
+      { submitId: 'owned0000aaaa', genStatus: 'success', createMs: nowMs - 1_000, raw: {} },
+      { submitId: 'foreign111bbbb', genStatus: 'success', createMs: nowMs - 2_000, raw: {} },
+      { submitId: 'owned2222cccc', genStatus: 'success', createMs: nowMs - 3_000, raw: {} },
+    ],
+    [],
+    {
+      nowMs,
+      maxTasks: 5,
+      allowedSubmitKeys: new Set(['owned0000aaaa', 'owned2222cccc'].map((value) => value.slice(0, 12))),
+    },
+  );
+
+  assert.deepEqual(
+    selected.map((task) => task.submitId),
+    ['owned0000aaaa', 'owned2222cccc'],
+  );
+});
+
 test('dedupeOutputRecentVideoItems collapses repeated dreamina files by submit key and keeps the best copy', () => {
   const { items, collapsedCount } = dedupeOutputRecentVideoItems([
     {

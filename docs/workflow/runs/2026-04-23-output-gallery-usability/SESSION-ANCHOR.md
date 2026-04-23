@@ -18,6 +18,7 @@
 | OG-02 | 服务端文件支持“仅当前账号隐藏/恢复显示” | `h5-video-tool-api/src/routes/video.ts`, `h5-video-tool-api/src/services/outputGalleryService.ts` |
 | OG-03 | 前端补齐搜索栏、筛选 chips、隐藏入口、已保存状态 | `h5-video-tool/src/components/GalleryView.tsx`, `h5-video-tool/src/components/outputGalleryUtils.ts` |
 | OG-04 | 回归测试覆盖过滤与隐藏规则 | `h5-video-tool-api/tests/outputGalleryService.test.ts`, `h5-video-tool/tests/outputGalleryUtils.test.ts` |
+| OG-05 | 即梦最近成片回补按当前账号归属收口 | `h5-video-tool-api/src/services/dreaminaRecentSync.ts`, `h5-video-tool-api/src/services/dreaminaRecovery.ts` |
 
 ## 本轮禁区
 
