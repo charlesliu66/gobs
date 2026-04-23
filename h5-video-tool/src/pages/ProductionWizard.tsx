@@ -101,7 +101,6 @@ import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { apiPost } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
-import { pickUiText } from '../i18n/uiText.ts';
 import {
   hasMeaningfulProductionDraft,
   isUnnamedProductionProjectTitle,
@@ -131,8 +130,7 @@ interface BatchAssetGenState {
 }
 
 export function ProductionWizard() {
-  const { contentLocale, uiLocale, t } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { contentLocale, t } = useLocale();
   const formatText = useCallback((path: string, values?: Record<string, string | number>) => {
     let message = t(path);
     if (!values) return message;
@@ -147,6 +145,11 @@ export function ProductionWizard() {
     if (etaSec < 3600) return formatText('productionWizard.etaMinutes', { count: Math.max(1, Math.round(etaSec / 60)) });
     return formatText('productionWizard.etaHours', { count: Math.max(1, Math.round(etaSec / 3600)) });
   }, [formatText, t]);
+  const formatAssetKind = useCallback((kind: BatchTask['kind']) => {
+    if (kind === 'char') return t('productionWizard.assetKindCharacter');
+    if (kind === 'scene') return t('productionWizard.assetKindScene');
+    return t('productionWizard.assetKindProp');
+  }, [t]);
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
   const urlProjectId = searchParams.get('projectId');
@@ -405,16 +408,16 @@ export function ProductionWizard() {
         url.searchParams.delete('projectId');
         window.history.replaceState(null, '', url.toString());
         setServerProjectId(null);
-        setErr('原项目在当前环境中未找到，已清除失效项目引用。请重新选择项目。');
+        setErr(t('productionWizard.projectMissingInEnv'));
       } else {
-        setErr('加载项目失败，请重试');
+        setErr(t('productionWizard.projectLoadFailedRetry'));
       }
       setShowProjectList(true);
     } finally {
       setIsServerBootstrapping(false);
       setLoadingProjectTitle(null);
     }
-  }, [hydrateStoredProject, loadKnownBatchJobsById]);
+  }, [hydrateStoredProject, loadKnownBatchJobsById, t]);
 
   const handleRenameServerProject = useCallback(async (id: string, title: string) => {
     await renameProductionProject(id, title);
@@ -453,7 +456,7 @@ export function ProductionWizard() {
   const handleGovernUnnamedProjects = useCallback(async () => {
     const targets = projectList.filter((item) => isUnnamedProductionProjectTitle(item.title));
     if (targets.length === 0) {
-      toast.info('当前没有待治理的未命名项目');
+      toast.info(t('productionWizard.noUnnamedProjects'));
       return;
     }
     setProjectGovernanceBusy(true);
@@ -496,15 +499,15 @@ export function ProductionWizard() {
       setProjectList(refreshed.projects);
       toast.success(
         failed > 0
-          ? `未命名项目治理完成：重命名 ${renamed} 个，删除 ${deleted} 个，失败 ${failed} 个`
-          : `未命名项目治理完成：重命名 ${renamed} 个，删除 ${deleted} 个`,
+          ? formatText('productionWizard.governanceDoneWithFailed', { renamed, deleted, failed })
+          : formatText('productionWizard.governanceDone', { renamed, deleted }),
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '未命名项目治理失败');
+      toast.error(error instanceof Error ? error.message : t('productionWizard.governanceFailed'));
     } finally {
       setProjectGovernanceBusy(false);
     }
-  }, [buildSuggestedProductionTitle, handleDeleteServerProject, handleRenameServerProject, projectList]);
+  }, [buildSuggestedProductionTitle, formatText, handleDeleteServerProject, handleRenameServerProject, projectList, t]);
 
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
@@ -612,17 +615,21 @@ export function ProductionWizard() {
       const doneCount = data.results.filter((r) => r.status === 'done').length;
       const failCount = data.results.filter((r) => r.status === 'failed').length;
       const parts: string[] = [];
-      if (doneCount) parts.push(`${doneCount} 条已完成`);
-      if (failCount) parts.push(`${failCount} 条失败`);
-      if (data.scan?.matched?.length) parts.push(`兜底恢复 ${data.scan.matched.length} 条`);
-      if (data.polled === 0 && !parts.length) parts.push('当前没有活跃任务');
-      toast.success(`同步完成：${parts.join('，') || `已检查 ${data.polled} 条`}`);
+      if (doneCount) parts.push(formatText('productionWizard.syncDone', { count: doneCount }));
+      if (failCount) parts.push(formatText('productionWizard.syncFailedPart', { count: failCount }));
+      if (data.scan?.matched?.length) {
+        parts.push(formatText('productionWizard.syncFallbackRestored', { count: data.scan.matched.length }));
+      }
+      if (data.polled === 0 && !parts.length) parts.push(t('productionWizard.syncNoActiveTasks'));
+      toast.success(formatText('productionWizard.syncCompleted', {
+        summary: parts.join(' / ') || formatText('productionWizard.syncChecked', { count: data.polled }),
+      }));
     } catch (e) {
-      toast.error(`同步失败：${e instanceof Error ? e.message : String(e)}`);
+      toast.error(formatText('productionWizard.syncFailed', { reason: e instanceof Error ? e.message : String(e) }));
     } finally {
       setSyncing(false);
     }
-  }, [syncing]);
+  }, [formatText, syncing, t]);
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
       setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
@@ -688,17 +695,21 @@ export function ProductionWizard() {
         return { ...p, shots, assembled: null };
       });
       const line = buildProductionShotVideoStoryboardText(s);
-      const title = (project.meta.title || '未命名').trim();
+      const title = (project.meta.title || t('productionWizard.untitledHistoryProject')).trim();
       saveVideoToHistory({
         taskId: taskId || `production-shot-${s.shotIndex}-${Date.now()}`,
         videoPath: videoPath ?? '',
-        prompt: `[高级制片·${title}·镜${s.shotIndex}] ${line}`.slice(0, 12000),
+        prompt: formatText('productionWizard.historyPromptPrefix', {
+          title,
+          shotIndex: s.shotIndex,
+          line,
+        }).slice(0, 12000),
         ...(videoPath?.trim() ? {} : { videoUrl: url }),
       });
-      toast.success('分镜视频已填入本镜预览，并已写入「生成视频 → 历史内容」');
+      toast.success(t('productionWizard.shotVideoSavedToHistory'));
       needsFlushRef.current = true;
     },
-    [project.shots, project.meta.title, serverProjectId, setProject],
+    [formatText, project.shots, project.meta.title, serverProjectId, setProject, t],
   );
 
   const handledJobStateRef = useRef<Record<string, string>>({});
@@ -734,8 +745,8 @@ export function ProductionWizard() {
       if (job.status === 'failed' || job.status === 'cancelled') {
         handledJobStateRef.current[job.id] = stateKey;
         const reason = job.status === 'cancelled'
-          ? job.failReason || '用户已取消本次任务'
-          : job.failReason || '未知错误';
+          ? job.failReason || t('productionWizard.userCancelledTask')
+          : job.failReason || t('productionWizard.unknownFailure');
         setProject((p) => {
           const shots = [...p.shots];
           const shotCur = shots[idx];
@@ -755,8 +766,11 @@ export function ProductionWizard() {
         });
         clearShotBusy(String(job.shotIndex));
         needsFlushRef.current = true;
-        if (job.status === 'cancelled') toast.info(`分镜 ${job.shotIndex} 已取消：${reason}`);
-        else toast.error(`分镜 ${job.shotIndex} 生成失败：${reason}`);
+        if (job.status === 'cancelled') {
+          toast.info(formatText('productionWizard.shotCancelled', { shotIndex: job.shotIndex, reason }));
+        } else {
+          toast.error(formatText('productionWizard.shotGenerationFailed', { shotIndex: job.shotIndex, reason }));
+        }
       }
     }
     const hasActiveProductionJob = projectJobs.some((job) =>
@@ -769,7 +783,7 @@ export function ProductionWizard() {
       const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
       try { localStorage.removeItem(batchKey); } catch { /* ignore */ }
     }
-  }, [clearShotBusy, isServerBootstrapping, project.shots, projectJobs, saveShotVideo, serverProjectId, setProject]);
+  }, [clearShotBusy, formatText, isServerBootstrapping, project.shots, projectJobs, saveShotVideo, serverProjectId, setProject, t]);
 
   useEffect(() => {
     if (isServerBootstrapping || projectJobs.length === 0) return;
@@ -817,11 +831,11 @@ export function ProductionWizard() {
         const { imageDataUrl } = await generateCharacterPortrait(req);
         setPortraitJobs((prev) => ({ ...prev, [jobKey]: { status: 'done', previewDataUrl: imageDataUrl } }));
       } catch (e) {
-        const msg = e instanceof Error ? e.message : '生成失败';
+        const msg = e instanceof Error ? e.message : formatText('productionWizard.generateFailed');
         setPortraitJobs((prev) => ({ ...prev, [jobKey]: { status: 'error', error: msg } }));
       }
     })();
-  }, []);
+  }, [t]);
 
   /** 列表「AI」同款：缺图的角色定稿节点 + 场景主变体；跳过弹窗中待确认的肖像任务 */
   const [batchAssetGen, setBatchAssetGen] = useState<BatchAssetGenState | null>(null);
@@ -873,7 +887,7 @@ export function ProductionWizard() {
     }
 
     if (tasks.length === 0) {
-      setErr('没有可补全项：角色定稿/场景/道具主变体已有图，或肖像弹窗中有待确认预览。');
+      setErr(t('productionWizard.noMissingAssets'));
       return;
     }
 
@@ -901,7 +915,7 @@ export function ProductionWizard() {
     const runTask = async (t: Task) => {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
-      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${t.kind === 'char' ? '角色' : t.kind === 'scene' ? '场景' : '道具'} ${t.sheetId}` } : null);
+      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${formatAssetKind(t.kind)} ${t.sheetId}` } : null);
       try {
         const timeoutMs = 180_000;
         const res = await Promise.race([
@@ -913,7 +927,7 @@ export function ProductionWizard() {
             ...(g ? { globalStyleReferenceFrame: g } : {}),
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`生成超时（>${Math.round(timeoutMs / 1000)}s）`)), timeoutMs),
+            setTimeout(() => reject(new Error(formatText('productionWizard.generationTimeout', { seconds: Math.round(timeoutMs / 1000) }))), timeoutMs),
           ),
         ]);
         if (batchCancelRef.current) return;
@@ -950,7 +964,7 @@ export function ProductionWizard() {
         successCount++;
       } catch (e) {
         failedCount++;
-        const msg = e instanceof Error ? e.message : '生成失败';
+        const msg = e instanceof Error ? e.message : formatText('productionWizard.generateFailed');
         if (failMessages.length < 3) failMessages.push(msg);
         if (!batchCancelRef.current) {
           console.warn(`[batch] ${t.kind} ${t.sheetId} 生成失败:`, msg);
@@ -993,22 +1007,24 @@ export function ProductionWizard() {
       await Promise.all(workers);
 
       if (batchCancelRef.current) {
-        setErr('已取消补全缺图。');
+        setErr(t('productionWizard.missingAssetCancelled'));
       } else if (successCount === 0) {
-        setErr(`补全失败：${failMessages[0] ?? '请检查云端 API 的 Compass/Imagen 配置是否可用。'}`);
+        setErr(formatText('productionWizard.missingAssetFailed', {
+          reason: failMessages[0] ?? t('productionWizard.compassImagenHint'),
+        }));
       } else if (failedCount > 0) {
-        const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
-        setErr(`部分补全成功：${successCount} 项成功，${failedCount} 项失败${hint}`);
-        toast.error(`补全完成：${successCount} 成功，${failedCount} 失败`);
+        const hint = failMessages[0] ? formatText('productionWizard.firstErrorHint', { reason: failMessages[0] }) : '';
+        setErr(formatText('productionWizard.missingAssetPartial', { success: successCount, failed: failedCount, hint }));
+        toast.error(formatText('productionWizard.missingAssetDone', { success: successCount, failed: failedCount }));
         sendBrowserNotification(
-          successCount > 0 ? '生图完成' : '生图任务结束',
-          `成功 ${successCount} 项，失败 ${failedCount} 项`
+          successCount > 0 ? t('productionWizard.imageGenerationDone') : t('productionWizard.imageGenerationFinished'),
+          formatText('productionWizard.assetGenerationSummary', { success: successCount, failed: failedCount }),
         );
       } else {
-        toast.success(`已补全 ${successCount} 项缺图`);
+        toast.success(formatText('productionWizard.missingAssetCompleted', { count: successCount }));
         sendBrowserNotification(
-          successCount > 0 ? '生图完成' : '生图任务结束',
-          `成功 ${successCount} 项，失败 ${failedCount} 项`
+          successCount > 0 ? t('productionWizard.imageGenerationDone') : t('productionWizard.imageGenerationFinished'),
+          formatText('productionWizard.assetGenerationSummary', { success: successCount, failed: failedCount }),
         );
       }
     } finally {
@@ -1025,6 +1041,9 @@ export function ProductionWizard() {
     project.meta.styleRefImageDataUrl,
     portraitJobs,
     ar,
+    formatAssetKind,
+    formatText,
+    t,
   ]);
 
   const clearStylePreview = useCallback(() => {
@@ -1057,7 +1076,7 @@ export function ProductionWizard() {
     const runTask = async (t: BatchTask) => {
       if (batchCancelRef.current) return;
       setGenKey(`${t.kind}:${t.sheetId}:${t.variantId}`);
-      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${t.kind === 'char' ? '角色' : t.kind === 'scene' ? '场景' : '道具'} ${t.sheetId}` } : null);
+      setBatchAssetGen((prev) => prev ? { ...prev, currentLabel: `${formatAssetKind(t.kind)} ${t.sheetId}` } : null);
       try {
         const timeoutMs = 180_000;
         const res = await Promise.race([
@@ -1069,7 +1088,7 @@ export function ProductionWizard() {
             ...(g ? { globalStyleReferenceFrame: g } : {}),
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`生成超时（>${Math.round(timeoutMs / 1000)}s）`)), timeoutMs),
+            setTimeout(() => reject(new Error(formatText('productionWizard.generationTimeout', { seconds: Math.round(timeoutMs / 1000) }))), timeoutMs),
           ),
         ]);
         if (batchCancelRef.current) return;
@@ -1096,7 +1115,7 @@ export function ProductionWizard() {
         successCount++;
       } catch (e) {
         failedCount++;
-        const msg = e instanceof Error ? e.message : '生成失败';
+        const msg = e instanceof Error ? e.message : formatText('productionWizard.generateFailed');
         if (failMessages.length < 3) failMessages.push(msg);
         setBatchAssetGen((prev) => prev ? { ...prev, failedTasks: [...(prev.failedTasks ?? []), t] } : null);
         failedTasksRef.current = [...failedTasksRef.current, t];
@@ -1119,17 +1138,17 @@ export function ProductionWizard() {
       };
       await worker();
       if (failedCount > 0) {
-        const hint = failMessages[0] ? `；首个错误：${failMessages[0]}` : '';
-        setErr(`重试完成：${successCount} 成功，${failedCount} 仍失败${hint}`);
+        const hint = failMessages[0] ? formatText('productionWizard.firstErrorHint', { reason: failMessages[0] }) : '';
+        setErr(formatText('productionWizard.retryAssetPartial', { success: successCount, failed: failedCount, hint }));
       } else {
-        toast.success(`重试成功：${successCount} 项已补全`);
+        toast.success(formatText('productionWizard.retryAssetSuccess', { count: successCount }));
       }
     } finally {
       setGenKey(null);
       setBatchAssetGen(null);
       batchCancelRef.current = false;
     }
-  }, [project.meta.styleRefImageDataUrl, ar]);
+  }, [project.meta.styleRefImageDataUrl, ar, formatAssetKind, formatText, t]);
 
   // 优先从服务端加载（URL 参数 > localStorage 记录的上次 id）
   useEffect(() => {
@@ -1186,7 +1205,7 @@ export function ProductionWizard() {
         } else {
           // URL 指定项目加载失败时，暂停自动保存，避免把空白初始态覆盖回服务端
           setCanAutoPersist(false);
-          setErr('项目加载失败，已暂停自动保存以避免覆盖云端数据。请刷新重试。');
+          setErr(t('productionWizard.projectLoadAutoSavePaused'));
         }
       } finally {
         setIsServerBootstrapping(false);
@@ -1211,7 +1230,7 @@ export function ProductionWizard() {
         const resp = await fetch(fileUrl);
         const blob = await resp.blob();
         if (!blob.type.startsWith('image/')) {
-          toast.info('已选中素材（非图片类型），请在分镜步骤中使用');
+          toast.info(t('productionWizard.assetSelectedNonImage'));
           return;
         }
         const reader = new FileReader();
@@ -1224,12 +1243,12 @@ export function ProductionWizard() {
           uploadProductionImage(dataUrl, mime, 'style-ref')
             .then(({ url }) => {
               setProject((p) => ({ ...p, meta: { ...p.meta, styleRefImageDataUrl: url } }));
-              toast.success('已将素材设为风格参考图');
+              toast.success(t('productionWizard.styleReferenceSet'));
             })
             .catch(() => {
               // 退化：上传失败时仍存 data URL，至少功能可用
               setProject((p) => ({ ...p, meta: { ...p.meta, styleRefImageDataUrl: dataUrl } }));
-              toast.warning('已设为风格参考图（服务端上传失败，将占用较多草稿空间）');
+              toast.warning(t('productionWizard.styleReferenceSetUploadFailed'));
             });
         };
         reader.readAsDataURL(blob);
@@ -1239,7 +1258,7 @@ export function ProductionWizard() {
         url.searchParams.delete('assetId');
         window.history.replaceState(null, '', url.toString());
       } catch {
-        toast.error('素材加载失败');
+        toast.error(t('productionWizard.assetLoadFailed'));
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1346,7 +1365,7 @@ export function ProductionWizard() {
 
   const handleStoryArc = useCallback(async () => {
     if (!characterBible.trim() || !synopsis.trim()) {
-      setErr('请填写角色设定与故事梗概');
+      setErr(t('productionWizard.storyInputsRequired'));
       return;
     }
     setErr(null);
@@ -1378,7 +1397,7 @@ export function ProductionWizard() {
       }));
       setStep(1);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '生成失败');
+      setErr(e instanceof Error ? e.message : t('productionWizard.generateFailed'));
     } finally {
       setBusyL1(false);
     }
@@ -1390,11 +1409,12 @@ export function ProductionWizard() {
     project.meta.styleRefSummary,
     resolveStudioReplyLocale,
     structureTemplate,
+    t,
   ]);
 
   const handleL2 = useCallback(async () => {
     if (!project.story) {
-      setErr('请先生成故事结构');
+      setErr(t('productionWizard.storyStructureRequired'));
       return;
     }
     setErr(null);
@@ -1419,11 +1439,11 @@ export function ProductionWizard() {
       setStep(2);
       setL2Tab('characters');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '生成失败');
+      setErr(e instanceof Error ? e.message : t('productionWizard.generateFailed'));
     } finally {
       setBusyL2(false);
     }
-  }, [project.story, resolveStudioReplyLocale]);
+  }, [project.story, resolveStudioReplyLocale, t]);
 
   const handleL3 = useCallback(async () => {
     if (!project.story || !project.productionDesign) return;
@@ -1437,11 +1457,7 @@ export function ProductionWizard() {
         !!s.pendingVideoSubmitId,
     );
     if (hasExistingMedia) {
-      const ok = window.confirm(
-        '重新生成分镜表会用 LLM 重写每个镜头的文本字段（角度/运镜/动作等）。\n' +
-          '已生成的静帧、视频、版本记录将按分镜编号自动保留（不会丢）。\n' +
-          '是否继续？',
-      );
+      const ok = window.confirm(t('productionWizard.regenerateStoryboardConfirm'));
       if (!ok) return;
     }
     setErr(null);
@@ -1496,11 +1512,11 @@ export function ProductionWizard() {
       setStep(3);
       setSelectedShotIdx(0);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '生成失败');
+      setErr(e instanceof Error ? e.message : t('productionWizard.generateFailed'));
     } finally {
       setBusyL3(false);
     }
-  }, [project.story, project.productionDesign, project.shots, maxTotalDurationSec, resolveStudioReplyLocale]);
+  }, [project.story, project.productionDesign, project.shots, maxTotalDurationSec, resolveStudioReplyLocale, t]);
 
   const {
     runGenerateFrame,
@@ -1551,18 +1567,18 @@ export function ProductionWizard() {
           });
           setProject((p) => ({ ...p, characterVisualProfile, assembled: null }));
         } catch (e) {
-          setErr(e instanceof Error ? e.message : '视觉提取失败');
+          setErr(e instanceof Error ? e.message : t('productionWizard.visualExtractFailed'));
         } finally {
           setBusyVis(false);
         }
       })();
     };
     reader.readAsDataURL(file);
-  }, [characterBible, project, resolveStudioReplyLocale, storyGenre, synopsis]);
+  }, [characterBible, project, resolveStudioReplyLocale, storyGenre, synopsis, t]);
 
   const handleAssemble = useCallback(async () => {
     if (!project.shots.length) {
-      setErr('请先生成分镜表');
+      setErr(t('productionWizard.storyboardRequired'));
       return;
     }
     setErr(null);
@@ -1578,17 +1594,17 @@ export function ProductionWizard() {
       });
       setProject((p) => ({ ...p, assembled }));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '组装失败');
+      setErr(e instanceof Error ? e.message : t('productionWizard.assembleFailed'));
     } finally {
       setBusyAsm(false);
     }
-  }, [characterBible, project.characterVisualProfile, project.shots, resolveStudioReplyLocale, storyGenre, synopsis]);
+  }, [characterBible, project.characterVisualProfile, project.shots, resolveStudioReplyLocale, storyGenre, synopsis, t]);
 
   const copyAllSeedance = useCallback(() => {
     if (!project.assembled?.shots.length) return;
-    const text = project.assembled.shots.map((s) => `--- 镜${s.shotIndex} ---\n${s.seedanceBlock}`).join('\n\n');
+    const text = project.assembled.shots.map((s) => `${formatText('productionWizard.copySeedanceShotHeader', { shotIndex: s.shotIndex })}\n${s.seedanceBlock}`).join('\n\n');
     void navigator.clipboard.writeText(text);
-  }, [project.assembled]);
+  }, [formatText, project.assembled]);
 
   const handleStyleRefFile = useCallback(
     (file: File | null) => {
@@ -1637,7 +1653,7 @@ export function ProductionWizard() {
               },
             }));
           } catch (e) {
-            setErr(e instanceof Error ? e.message : '风格反解析失败');
+            setErr(e instanceof Error ? e.message : t('productionWizard.styleReverseFailed'));
           } finally {
             setBusyStyle(false);
           }
@@ -1645,11 +1661,11 @@ export function ProductionWizard() {
       };
       reader.readAsDataURL(file);
     },
-    [characterBible, clearStylePreview, project, resolveStudioReplyLocale, storyGenre, synopsis],
+    [characterBible, clearStylePreview, project, resolveStudioReplyLocale, storyGenre, synopsis, t],
   );
 
   const resetDraft = useCallback(() => {
-    if (!confirm('清空本地草稿并恢复初始状态？')) return;
+    if (!confirm(t('productionWizard.clearDraftConfirm'))) return;
     clearStylePreview();
     closeProjectNamingModal();
     setProject(emptyProductionProject());
@@ -1668,7 +1684,7 @@ export function ProductionWizard() {
     const url = new URL(window.location.href);
     url.searchParams.delete('projectId');
     window.history.replaceState(null, '', url.toString());
-  }, [clearStylePreview, closeProjectNamingModal]);
+  }, [clearStylePreview, closeProjectNamingModal, t]);
 
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
   const goNext = () => setStep((s) => Math.min(localizedSteps.length - 1, s + 1));
@@ -1682,12 +1698,12 @@ export function ProductionWizard() {
   const handleConfirmProjectNaming = useCallback(() => {
     const nextTitle = projectNamingModal.name.trim();
     if (!nextTitle) {
-      toast.error('请先填写项目名称');
+      toast.error(t('productionWizard.projectNameRequired'));
       return;
     }
     handleProjectTitleChange(nextTitle);
     closeProjectNamingModal();
-  }, [closeProjectNamingModal, handleProjectTitleChange, projectNamingModal.name]);
+  }, [closeProjectNamingModal, handleProjectTitleChange, projectNamingModal.name, t]);
 
   const patchStory = useCallback((fn: (s: StoryArcLayer) => StoryArcLayer) => {
     setProject((p) => {
@@ -1748,7 +1764,7 @@ export function ProductionWizard() {
       });
       patchShot(selectedShotIdx, { previewStillDataUrl: res.firstFrame });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '分镜图生成失败');
+      setErr(e instanceof Error ? e.message : t('productionWizard.storyboardFrameFailed'));
     } finally {
       clearShotBusy(shotId);
     }
@@ -1762,6 +1778,7 @@ export function ProductionWizard() {
     patchShot,
     setShotBusy,
     clearShotBusy,
+    t,
   ]);
 
   /** 核心：将镜头生成请求入队到后端全局调度器。 */
@@ -1769,8 +1786,8 @@ export function ProductionWizard() {
     const s = project.shots[shotIdx];
     if (!s) return;
     if (!serverProjectId) {
-      setErr('请先保存项目后再生成分镜视频');
-      toast.error('请先保存项目后再生成分镜视频');
+      setErr(t('productionWizard.saveProjectBeforeShotVideo'));
+      toast.error(t('productionWizard.saveProjectBeforeShotVideo'));
       return;
     }
     const shotId = String(s.shotIndex);
@@ -1794,17 +1811,17 @@ export function ProductionWizard() {
           s.manualRefOverrides,
         );
         if (!pack.multimodalImages.length) {
-          setErr('全能参考需要至少一张角色、场景或道具参考图：请在对应资产卡生成图，并确保本镜文案中出现角色姓名或道具名称。');
+          setErr(t('productionWizard.multimodalRefsRequired'));
           return;
         }
         const base = buildProductionShotVideoStoryboardText(s);
-        if (!base.trim()) { setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频'); return; }
+        if (!base.trim()) { setErr(t('productionWizard.shotPromptRequired')); return; }
         storyboardText = (s.videoStoryboardOverride?.trim() || pack.defaultVideoPrompt).trim();
         model = 'dreamina-multimodal';
         extraBody = { multimodalImages: pack.multimodalImages };
       } else {
         storyboardText = buildProductionShotVideoStoryboardText(s);
-        if (!storyboardText.trim()) { setErr('请先填写本镜的结构化 Prompt 或对白，再生成视频'); return; }
+        if (!storyboardText.trim()) { setErr(t('productionWizard.shotPromptRequired')); return; }
         const base64Raw = s.previewStillDataUrl?.replace(/^data:image\/\w+;base64,/, '');
         const hasStill = !!base64Raw?.trim();
         if (pref === 'dreamina-text2video' || pref === 'dreamina-image2video') {
@@ -1813,7 +1830,7 @@ export function ProductionWizard() {
           model = hasStill ? 'dreamina-image2video' : 'dreamina-text2video';
         }
         if (model === 'dreamina-image2video' && !hasStill) {
-          setErr('即梦图生视频需要本镜分镜静帧：请先「生成分镜图」，或在下拉里改选「即梦·文生视频」。');
+          setErr(t('productionWizard.imageToVideoRequiresStill'));
           return;
         }
         if (hasStill && model === 'dreamina-image2video') {
@@ -1825,9 +1842,9 @@ export function ProductionWizard() {
       const lighting = s.structuredStill?.sp_lighting?.trim();
       const color = s.structuredStill?.sp_style?.trim();
       const styleSuffix = [
-        lighting && !storyboardText.includes(lighting) ? `光影：${lighting}` : '',
-        color && !storyboardText.includes(color) ? `色调：${color}` : '',
-        styleRef && !storyboardText.includes(styleRef) ? `整体视觉风格：${styleRef}` : '',
+        lighting && !storyboardText.includes(lighting) ? formatText('productionWizard.lightingPromptPrefix', { value: lighting }) : '',
+        color && !storyboardText.includes(color) ? formatText('productionWizard.colorPromptPrefix', { value: color }) : '',
+        styleRef && !storyboardText.includes(styleRef) ? formatText('productionWizard.visualStylePromptPrefix', { value: styleRef }) : '',
       ].filter(Boolean).join('\n');
       if (styleSuffix) storyboardText = `${storyboardText}\n${styleSuffix}`;
 
@@ -1895,16 +1912,16 @@ export function ProductionWizard() {
         !shotActiveJobMap[String(s.shotIndex)],
       );
     if (missing.length === 0) {
-      toast.info('所有分镜已有视频，无需生成');
+      toast.info(t('productionWizard.allShotsHaveVideos'));
       return;
     }
     const batchKey = `gobs_batch_gen_${serverProjectId ?? 'local'}`;
     try { localStorage.setItem(batchKey, '1'); } catch { /* ignore */ }
-    toast.info(`开始批量生成 ${missing.length} 个分镜视频…`);
+    toast.info(formatText('productionWizard.batchGenerateVideosStart', { count: missing.length }));
     for (const { i } of missing) {
       void generateVideoForShotIdx(i);
     }
-  }, [generateVideoForShotIdx, project.shots, serverProjectId, shotActiveJobMap]);
+  }, [formatText, generateVideoForShotIdx, project.shots, serverProjectId, shotActiveJobMap, t]);
 
   // ── 手动检查视频生成进度 ─────────────────────────────────────────────────
   const [checkingProgress, setCheckingProgress] = useState(false);
@@ -1920,9 +1937,12 @@ export function ProductionWizard() {
         const { job } = await pollBatchJobNow(bj.id);
         if (job.status === 'done' && job.videoUrl) {
           saveShotVideo(selectedShotIdx, job.videoUrl, job.taskId || `dreamina-${s.pendingVideoSubmitId}`, undefined, bj.id);
-          toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
+          toast.success(formatText('productionWizard.shotVideoReady', { shotIndex: s.shotIndex }));
         } else if (job.status === 'cancelled') {
-          toast.info(`分镜 ${s.shotIndex} 已取消：${job.failReason || '后台已停止跟进'}`);
+          toast.info(formatText('productionWizard.shotCancelled', {
+            shotIndex: s.shotIndex,
+            reason: job.failReason || t('productionWizard.backgroundStopped'),
+          }));
           setProject((p) => {
             const shots = [...p.shots];
             const cur = shots[selectedShotIdx];
@@ -1934,14 +1954,17 @@ export function ProductionWizard() {
                 submitId: job.submitId || cur.pendingVideoSubmitId,
                 jobId: job.id,
                 cancelled: true,
-                reason: job.failReason || '用户已取消本次任务',
+                reason: job.failReason || t('productionWizard.userCancelledTask'),
                 at: job.cancelledAt || job.updatedAt,
               },
             };
             return { ...p, shots };
           });
         } else if (job.status === 'failed') {
-          toast.error(`分镜 ${s.shotIndex} 生成失败：${job.failReason || '未知'}`);
+          toast.error(formatText('productionWizard.shotGenerationFailed', {
+            shotIndex: s.shotIndex,
+            reason: job.failReason || t('productionWizard.unknownFailure'),
+          }));
           setProject((p) => {
             const shots = [...p.shots];
             const cur = shots[selectedShotIdx];
@@ -1950,16 +1973,19 @@ export function ProductionWizard() {
             return { ...p, shots };
           });
         } else {
-          toast.info(`分镜 ${s.shotIndex} 仍在生成中（${job.status}）`);
+          toast.info(formatText('productionWizard.shotStillGeneratingWithStatus', { shotIndex: s.shotIndex, status: job.status }));
         }
       } else {
         // 没有 batch-job 记录——直接查即梦
         const st = await getDreaminaTaskStatus(s.pendingVideoSubmitId);
         if (st.status === 'completed' && st.videoUrl) {
           saveShotVideo(selectedShotIdx, st.videoUrl, st.taskId || `dreamina-${s.pendingVideoSubmitId}`, st.videoPath);
-          toast.success(`分镜 ${s.shotIndex} 视频已就绪`);
+          toast.success(formatText('productionWizard.shotVideoReady', { shotIndex: s.shotIndex }));
         } else if (st.status === 'failed') {
-          toast.error(`分镜 ${s.shotIndex} 生成失败：${st.failReason || '未知'}`);
+          toast.error(formatText('productionWizard.shotGenerationFailed', {
+            shotIndex: s.shotIndex,
+            reason: st.failReason || t('productionWizard.unknownFailure'),
+          }));
           setProject((p) => {
             const shots = [...p.shots];
             const cur = shots[selectedShotIdx];
@@ -1968,15 +1994,17 @@ export function ProductionWizard() {
             return { ...p, shots };
           });
         } else {
-          toast.info(`分镜 ${s.shotIndex} 仍在生成中`);
+          toast.info(formatText('productionWizard.shotStillGenerating', { shotIndex: s.shotIndex }));
         }
       }
     } catch (e) {
-      toast.error(`检查失败：${e instanceof Error ? e.message : '网络异常'}`);
+      toast.error(formatText('productionWizard.checkFailed', {
+        reason: e instanceof Error ? e.message : t('productionWizard.networkError'),
+      }));
     } finally {
       setCheckingProgress(false);
     }
-  }, [project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject]);
+  }, [formatText, project.shots, selectedShotIdx, serverProjectId, saveShotVideo, setProject, t]);
 
   const selectedShotJob = project.shots[selectedShotIdx]
     ? shotActiveJobMap[String(project.shots[selectedShotIdx].shotIndex)] ?? null
@@ -1986,36 +2014,38 @@ export function ProductionWizard() {
   const handleCancelActiveJob = useCallback(async (job: BatchJobDto) => {
     if (!job?.id) return;
     if (job.status === 'processing') {
-      const confirmed = window.confirm('任务正在渲染中，取消后本次积分通常无法退回。确定继续吗？');
+      const confirmed = window.confirm(t('productionWizard.confirmCancelRendering'));
       if (!confirmed) return;
     }
     setCancellingJobId(job.id);
     try {
       const result = await cancelBatchJob(job.id);
       if (!result.ok && result.reason === 'already_terminal') {
-        toast.info('任务已经结束，无需再取消');
+        toast.info(t('productionWizard.taskAlreadyFinished'));
         return;
       }
       toast.info(result.note);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '取消失败');
+      toast.error(e instanceof Error ? e.message : t('productionWizard.cancelFailed'));
     } finally {
       setCancellingJobId((current) => (current === job.id ? null : current));
     }
-  }, []);
+  }, [t]);
 
   const handleCancelQueuedByProject = useCallback(async () => {
     if (!serverProjectId) return;
     setBulkCancelling(true);
     try {
       const result = await cancelBatchByProject(serverProjectId);
-      toast.info(result.cancelled > 0 ? `已取消 ${result.cancelled} 个排队任务` : '当前没有可取消的排队任务');
+      toast.info(result.cancelled > 0
+        ? formatText('productionWizard.cancelledQueuedCount', { count: result.cancelled })
+        : t('productionWizard.noQueuedTasks'));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '批量取消失败');
+      toast.error(e instanceof Error ? e.message : t('productionWizard.bulkCancelFailed'));
     } finally {
       setBulkCancelling(false);
     }
-  }, [serverProjectId]);
+  }, [formatText, serverProjectId, t]);
 
   // ── AI 审片助手 ──────────────────────────────────────────────────────────
   // ── AI 审片 + 一致性检查 ────────────────────────────────────────────────────
@@ -2354,22 +2384,16 @@ export function ProductionWizard() {
         )}
 
         {step === 1 && !story && (
-          <p className="text-sm text-[var(--color-text-muted)]">请先在「输入」步骤生成剧本大纲。</p>
+          <p className="text-sm text-[var(--color-text-muted)]">{t('productionWizard.stepInputRequired')}</p>
         )}
         {step === 2 && !project.productionDesign && (
           <p className="text-sm text-[var(--color-text-muted)]">
-            {uiText(
-              '请先在「剧本大纲」步骤生成角色与场景设定。',
-              'Generate character and scene design in the Story Outline step first.',
-            )}
+            {t('productionWizard.stepStoryRequired')}
           </p>
         )}
         {step === 3 && !project.shots.length && (
           <p className="text-sm text-[var(--color-text-muted)]">
-            {uiText(
-              '请先在「角色与场景」中生成分镜表。',
-              'Generate the storyboard in the Character & Scene step first.',
-            )}
+            {t('productionWizard.stepDesignRequired')}
           </p>
         )}
         </ProductionWizardShell>
@@ -2393,9 +2417,9 @@ export function ProductionWizard() {
           }}
         >
           <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-[var(--color-text)]">先命名再保存项目</h3>
+            <h3 className="text-base font-semibold text-[var(--color-text)]">{t('productionWizard.namingModalTitle')}</h3>
             <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-              当前草稿已经开始生成有效内容了。命名后，它才会进入正式项目列表并同步到云端。
+              {t('productionWizard.namingModalDesc')}
             </p>
             <input
               autoFocus
@@ -2406,7 +2430,7 @@ export function ProductionWizard() {
                 if (event.key === 'Enter') handleConfirmProjectNaming();
                 if (event.key === 'Escape') closeProjectNamingModal();
               }}
-              placeholder="例如：冰原女王活动分镜"
+              placeholder={t('productionWizard.namingPlaceholder')}
               className="mt-4 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
             />
             <div className="mt-4 flex justify-end gap-2">
@@ -2415,14 +2439,14 @@ export function ProductionWizard() {
                 onClick={closeProjectNamingModal}
                 className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)]"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmProjectNaming}
                 className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
               >
-                命名并保存
+                {t('productionWizard.nameAndSave')}
               </button>
             </div>
           </div>

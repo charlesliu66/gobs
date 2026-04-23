@@ -1,190 +1,231 @@
-﻿# GOBS / QAS 鍔熻兘鏂囨。 & Changelog
+# GOBS / QAS 功能文档 & Changelog
 
-> 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?> 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
+> 本文件记录平台所有功能模块及其用法，并追踪每次发布的变更历史。
+> 维护规则：每次功能上线或 bug 修复后，同步更新 Changelog 章节。
+
 ---
 
-## 涓€銆佸姛鑳芥ā鍧楁€昏
+## 一、功能模块总览
 
-### 1. 瑙嗛鐢熸垚锛圓I 鐭棰戯級
+### 1. 视频生成（AI 短视频）
 
-**鍏ュ彛锛?* 棣栭〉銆岀敓鎴愩€峊ab 鈫?`/generate`
+**入口：** 首页「生成」Tab → `/generate`
 
-**鍔熻兘锛?*
-- 杈撳叆鏂囨/鑴氭湰锛岄€夋嫨鏃堕暱銆佺敾骞呮瘮渚嬶紙9:16 / 16:9 / 1:1锛夛紝涓€閿皟鐢?AI 鐢熸垚鐭棰?- 鏀寔澶氬悗绔細Compass/VEO锛坄veo-2`锛夈€丏reamina銆並ling
-- 鐢熸垚瀹屾垚鍚庡彲鍦ㄣ€屽巻鍙层€嶉〉闈㈡煡鐪嬪拰涓嬭浇
-- 鏀寔灏侀潰甯ф埅鍙?
-**浣跨敤鏂规硶锛?*
-1. 杩涘叆銆岀敓鎴愩€嶉〉闈?2. 濉啓瑙嗛鑴氭湰锛堟敮鎸佸垎闀滄弿杩帮級
-3. 閫夋嫨鏃堕暱锛?s / 10s 绛夛級鍜岀敾骞?4. 鐐瑰嚮銆岀敓鎴愩€嶏紝绛夊緟瀹屾垚锛堝紓姝ヨ疆璇級
-5. 瀹屾垚鍚庡湪銆屽巻鍙层€嶆垨銆岀敾寤娿€嶆煡鐪?
+**功能：**
+- 输入文案/脚本，选择时长、画幅比例（9:16 / 16:9 / 1:1），一键调用 AI 生成短视频
+- 支持多后端：Compass/VEO（`veo-2`）、Dreamina、Kling
+- 生成完成后可在「历史」页面查看和下载
+- 支持封面帧截取
+
+**使用方法：**
+1. 进入「生成」页面
+2. 填写视频脚本（支持分镜描述）
+3. 选择时长（5s / 10s 等）和画幅
+4. 点击「生成」，等待完成（异步轮询）
+5. 完成后在「历史」或「画廊」查看
+
 ---
 
-### 2. AI 鍒嗛暅宸ヤ綔鍙帮紙Production Wizard锛?
-**鍏ュ彛锛?* 棣栭〉銆岄」鐩€嶁啋 銆屽垱寤洪」鐩€嶁啋 `/studio/projects` 鈫?杩涘叆椤圭洰 鈫?`/studio/wizard`
+### 2. AI 分镜工作台（Production Wizard）
 
-**鍔熻兘锛堥€?Step锛夛細**
+**入口：** 首页「项目」→ 「创建项目」→ `/studio/projects` → 进入项目 → `/studio/wizard`
 
-| Step | 鍚嶇О | 鍔熻兘 |
+**功能（逐 Step）：**
+
+| Step | 名称 | 功能 |
 |---|---|---|
-| 1 | 鑴氭湰璁惧畾 | 杈撳叆鏁呬簨寮с€侀鏍煎弬鑰冦€佽鑹茶瀹?|
-| 2 | 鍒朵綔娓呭崟 | AI 鑷姩鐢熸垚瑙掕壊瀹氬銆佸満鏅編鏈€侀亾鍏锋竻鍗曪紱瑙掕壊鐘舵€佽。姗辨敮鎸佽嚜瀹氫箟 prompt 鐢熸垚鍙椾激/绔ュ勾/鎹㈣绛夊鐘舵€佸彉浣撳浘 |
-| 3 | 鍒嗛暅琛?| AI 鑷姩鐢熸垚閫愰暅鍒嗛暅锛屽彲鎵嬪姩缂栬緫 |
-| 4 | 鍒嗛暅瑙嗛 | 姣忎釜鍒嗛暅鐢熸垚鍙傝€冭棰戯紙鏀寔鍗虫ⅵ澶氭ā鎬併€佹枃鐢熻棰戙€佸浘鐢熻棰戯級|
-| 5 | 瀵煎嚭 | 鏀炬槧瀹よ繛缁鐗?+ 涓€閿鍏ュ壀杈戝伐浣滃彴 |
+| 1 | 脚本设定 | 输入故事弧、风格参考、角色设定 |
+| 2 | 制作清单 | AI 自动生成角色定妆、场景美术、道具清单；角色状态衣橱支持自定义 prompt 生成受伤/童年/换装等多状态变体图 |
+| 3 | 分镜表 | AI 自动生成逐镜分镜，可手动编辑 |
+| 4 | 分镜视频 | 每个分镜生成参考视频（支持即梦多模态、文生视频、图生视频）|
+| 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
 
-- Step 0 的“参考图反解析”支持两种入口：本地上传，或直接从素材库选择图片；选中后沿用现有预览、上传和风格反解析链路。
-- 剧本大纲、制片清单、分镜表、参考图反解析与提示词组装主链路已补齐“按本轮输入语言输出”的语言协议：英文输入优先得到英文结果，中文输入继续保持中文。
-- 高级制片主壳层继续补齐英文 UI：项目头部、步骤导航、输入页、剧本大纲页、角色/场景设计头部、分镜工作台、分镜预览、分镜状态条和导出页签现在都会跟随界面语言切换，英文同事进入主流程时不再一进来就掉回大段中文。
+**分镜工作台增强功能（v0.42+）：**
+- **英文界面深层状态收口（v0.120）**：项目列表、命名弹窗、未命名项目治理、同步批量任务、补全缺图、分镜视频生成/取消/检查等状态提示已接入 `productionWizard.*` key，并改用 locale-aware 时间格式。
+- 一键生成所有缺失视频（批量提交至自适应队列）
+- AI 自动审片：分镜生成时后端自动优化 Prompt 质量（v0.43 起内置于生成流程）；手动审片仍可用于二次检查
+- 快速调整面板：运镜/节奏/光影预设按钮，一键修改结构化参数
+- 连续播放审片：全屏按序播放所有镜头，键盘快捷键控制
+- 版本 A/B 对比：左右分屏同步播放 + 备注标签
+- 分镜间一致性检查：AI 检查相邻镜头连贯性，按严重程度分级展示
+- 分镜参数折叠：默认收起字段编辑器，只显示摘要行（v0.43）
 
-**鍒嗛暅宸ヤ綔鍙板寮哄姛鑳斤紙v0.42+锛夛細**
-- **项目生命周期收口（v0.108）**：高级制片进入页面时先停留在本地草稿态，不会因为空标题自动生成正式“未命名项目”；只有在出现有效内容并完成命名后，才会同步到服务端并进入项目列表。项目列表也补齐了搜索、重命名、删除和“治理未命名项目”的批量入口。
-- 涓€閿敓鎴愭墍鏈夌己澶辫棰戯紙鎵归噺鎻愪氦鑷宠嚜閫傚簲闃熷垪锛?- AI 鑷姩瀹＄墖锛氬垎闀滅敓鎴愭椂鍚庣鑷姩浼樺寲 Prompt 璐ㄩ噺锛坴0.43 璧峰唴缃簬鐢熸垚娴佺▼锛夛紱鎵嬪姩瀹＄墖浠嶅彲鐢ㄤ簬浜屾妫€鏌?- 蹇€熻皟鏁撮潰鏉匡細杩愰暅/鑺傚/鍏夊奖棰勮鎸夐挳锛屼竴閿慨鏀圭粨鏋勫寲鍙傛暟
-- 杩炵画鎾斁瀹＄墖锛氬叏灞忔寜搴忔挱鏀炬墍鏈夐暅澶达紝閿洏蹇嵎閿帶鍒?- 鐗堟湰 A/B 瀵规瘮锛氬乏鍙冲垎灞忓悓姝ユ挱鏀?+ 澶囨敞鏍囩
-- 鍒嗛暅闂翠竴鑷存€ф鏌ワ細AI 妫€鏌ョ浉閭婚暅澶磋繛璐€э紝鎸変弗閲嶇▼搴﹀垎绾у睍绀?- 鍒嗛暅鍙傛暟鎶樺彔锛氶粯璁ゆ敹璧峰瓧娈电紪杈戝櫒锛屽彧鏄剧ず鎽樿琛岋紙v0.43锛?
-**瀵煎嚭椤典綋楠岋紙v0.30+锛夛細**
-- **鏀炬槧瀹?*锛氶粯璁よ鍥撅紝鍒嗛暅瑙嗛涓茶仈杩炵画鎾斁锛涜兌鐗囨潯妯悜瀵艰埅锛岀豢鐐?鐏扮偣鏍囨敞鐢熸垚鐘舵€侊紝钃濊壊 vN 瑙掓爣鏄剧ず澶氱増鏈暟閲?- **缃戞牸瑙嗗浘**锛? 鍒楀崱鐗囨€昏锛屾湁瑙嗛鐨勯暅澶寸洿鎺ユ挱鏀撅紙闈欏抚浣?poster锛?- **鍦ㄥ壀杈戝櫒涓墦寮€**锛氫竴閿皢宸茬敓鎴愬垎闀滆棰戞寜椤哄簭瀵煎叆鍓緫宸ヤ綔鍙帮紝缁х画绮句慨閰嶉煶/BGM/杞満锛涜嚜鍔ㄦ惡甯﹀垎闀滃厓鏁版嵁锛堟櫙鍒?杩愰暅/涓讳綋/鍔ㄤ綔绛夛級鍜屾潵婧愰」鐩弻鍚戦摼鎺ワ紱宸叉湁鍏宠仈鍓緫椤圭洰鏃跺脊绐楁彁绀哄幓閲嶏紱瀵煎叆鍚庤嚜鍔ㄥ脊鍑哄紩瀵肩獥鍙ｆ帹鑽愪笅涓€姝ユ搷浣?- **澧為噺鍚屾**锛坴0.46锛夛細鍓緫鍣ㄩ《鏍忋€岎煍?鍚屾鏇存柊銆嶆寜閽紝瀵规瘮鍒剁墖绔渶鏂伴€夊畾鐗堟湰涓庡壀杈戝櫒鍐呯増鏈紝宸紓鍒楄〃鏀寔鍕鹃€夋壒閲忔浛鎹紱鏇挎崲鏃惰嚜鍔ㄨ皟鏁存椂闀垮拰鍚庣画 clip 浣嶇Щ
+**导出页体验（v0.30+）：**
+- **放映室**：默认视图，分镜视频串联连续播放；胶片条横向导航，绿点/灰点标注生成状态，蓝色 vN 角标显示多版本数量
+- **网格视图**：4 列卡片总览，有视频的镜头直接播放（静帧作 poster）
+- **在剪辑器中打开**：一键将已生成分镜视频按顺序导入剪辑工作台，继续精修配音/BGM/转场；自动携带分镜元数据（景别/运镜/主体/动作等）和来源项目双向链接；已有关联剪辑项目时弹窗提示去重；导入后自动弹出引导窗口推荐下一步操作
+- **增量同步**（v0.46）：剪辑器顶栏「🔄 同步更新」按钮，对比制片端最新选定版本与剪辑器内版本，差异列表支持勾选批量替换；替换时自动调整时长和后续 clip 位移
 
-**鍗虫ⅵ澶氭ā鎬侊紙Dreamina Multimodal锛夛細**
-- 鏈€澶?9 寮犲弬鑰冨浘锛堣鑹插畾濡?鐘舵€佸浘 + 鍦烘櫙 + 閬撳叿锛夛紝鑷姩鍘嬬缉涓?JPEG 768px 浠ュ唴锛岄伩鍏?TOS 涓婁紶澶辫触
-- **瑙掕壊鐘舵€佹劅鐭ワ紙v0.54锛?*锛氬垎闀滃紩鐢ㄨ鑹叉椂鑷姩鍖归厤鐘舵€佸浘锛堝彈浼?鎴樻枟/绔ュ勾绛夛級锛屼紭鍏堢骇锛氬垎闀滄墜鍔ㄨ鐩?> 瑙掕壊榛樿婵€娲荤姸鎬?> 瀹氱褰㈣薄
-- 鏀寔骞跺彂鎻愪氦锛氬涓垎闀滃悓鏃惰繘鍏ラ槦鍒楋紝骞跺彂鏁伴€氳繃 `DREAMINA_MAX_CONCURRENT` 閰嶇疆
-- **鍚庣鏅鸿兘杞 + SSE 鎺ㄩ€侊紙v0.35a+锛?*锛氬嵆姊︿换鍔＄敱鏈嶅姟绔悗鍙拌疆璇紝瑙嗛灏辩华鍚?SSE 瀹炴椂閫氱煡鍓嶇锛涘叧闂祻瑙堝櫒涔熶笉涓㈠け鐢熸垚缁撴灉
-- **分镜状态口径收口（v0.98）**：分镜页优先按“是否已有真实视频 + 当前 batch-job 实时状态”判断，不再被历史残留 `pendingVideoSubmitId` 误导；刷新后若后台已完成/失败/取消，会自动清理旧 submitId，确保分镜页、导出页、即梦后台看到的是同一批真实状态。
-- **分镜视频项目归位（v0.101）**：高级制片分镜视频版本现在会优先按 `batch-job / sourceProjectId / sourceShotIndex / version.id` 判断真实归属；若历史版本误串到别的项目，后端会在保存/加载时把它归位到正确项目的对应镜头历史里，而不是简单清掉。
-- **平台排位可见（v0.104）**：分镜工作台顶部摘要、生成操作区、右侧预览面板与缩略图条现在会在 `awaiting_submit` 阶段直接显示“平台排队第 N 位”；一旦平台排到你，就明确切换成“已提交到即梦 / 正在生成”的口径，用户能一眼知道任务还在排队、还是已经开始生成。
-- 骞跺彂瓒呴檺锛坮et=1310锛夎嚜鍔ㄧ瓑寰?45s 閲嶈瘯锛屾渶缁堝け璐ョ粰鍑哄弸濂戒腑鏂囨彁绀?- 鐢熸垚瀹屾垚瑙嗛閫氳繃鏈嶅姟 URL锛坄/api/video/file?path=...`锛夎闂紝涓嶄細鍦?localStorage 涓瓨鍌ㄥぇ浣撶Н data URL
-
----
-
-### 3. 瑙嗛鍓緫宸ヤ綔鍙帮紙Editor锛?
-**鍏ュ彛锛?* 棣栭〉銆屽壀杈戙€嶁啋 `/editor`
-
-#### 3.1 椤圭洰绠＄悊
-
-- **项目生命周期收口（v0.108）**：剪辑器现在先工作在草稿态，不会一进页面就往“我的项目”里写正式记录；当时间轴、素材或 Agent 结果开始形成有效内容时，系统会要求先命名，再进入正式项目列表并开始自动保存。项目管理弹窗新增“治理未命名项目”，会按“空项目删除 / 有内容项目智能重命名”的规则批量清理历史遗留。
-
-- **杩涘叆 `/editor` 鑷姩鎵撳紑鏈€杩戦」鐩?*锛氭湁宸蹭繚瀛橀」鐩椂鑷姩閫氳繃 URL param `?project=xxx` 鎵撳紑鏈€杩戠紪杈戠殑椤圭洰锛涙棤鍘嗗彶椤圭洰鏃跺睍绀虹┖鐧界紪杈戝櫒
-- 椤堕儴鏍忥細椤圭洰鍚嶈緭鍏ユ锛堢紪杈戝悗 3 绉掕嚜鍔ㄤ繚瀛橈級+ 淇濆瓨鐘舵€佹寚绀?- 銆屾垜鐨勯」鐩?(N)銆嶆寜閽細鏄剧ず椤圭洰鏁伴噺锛屾墦寮€椤圭洰绠＄悊寮圭獥
-  - 椤圭洰鍒楄〃鎸夋渶杩戜慨鏀规帓搴忥紝鏄剧ず鐩稿鏃堕棿锛?3鍒嗛挓鍓?/"鏄ㄥぉ"绛夛級
-  - 鏀寔琛屽唴閲嶅懡鍚嶏紙鐐瑰嚮銆岄噸鍛藉悕銆嶁啋 杈撳叆 鈫?鍥炶溅/淇濆瓨锛?  - 鍒犻櫎鍓嶆湁纭姝ラ锛屼笉浼氳鍒?  - 鎼滅储杩囨护
-  - 銆? 鏂板缓鍓緫銆嶁啋 寮瑰嚭鍛藉悕瀵硅瘽妗?- 銆? 鏂板缓銆嶆寜閽細鐐瑰嚮鍚庡脊鍑?*鍛藉悕瀵硅瘽妗?*锛屾敮鎸侀粯璁ゅ悕绉帮紙鍚棩鏈熸椂闂达級锛屽洖杞?鐐广€屽垱寤恒€嶅悗鐢熸晥锛汦sc 鍙栨秷
-
-#### 3.2 绱犳潗搴?
-- 鏀寔涓婁紶瑙嗛鏂囦欢锛堟渶澶?2GB锛屽彲鍦ㄨ缃腑璋冩暣锛?- **鎵归噺涓婁紶锛坴0.57锛?*锛氭枃浠堕€夋嫨鍣ㄦ敮鎸佸閫夛紙Ctrl/Shift 澶氶€夛級锛屼篃鍙洿鎺ユ嫋鎷藉涓棰戞枃浠跺埌绱犳潗鍖哄煙锛涗笂浼犺繃绋嬩腑鏄剧ず鎵归噺闃熷垪闈㈡澘锛堟€昏繘搴︽潯 + 姣忎釜鏂囦欢鐨勭嫭绔嬬姸鎬?杩涘害锛夛紝閫愪釜椤哄簭涓婁紶骞跺疄鏃舵洿鏂板垪琛?- 鎮仠瑙嗛鍗＄墖 300ms 鍚庡脊鍑洪瑙堬紙闈欓煶銆佽嚜鍔ㄥ惊鐜級
-- 鐐瑰嚮绱犳潗鍗冲彲鍔犲叆鏃堕棿杞?
-#### 3.3 鏃堕棿杞?
-- 瑙嗛杞紙V1锛夛細鏀寔澶氱墖娈垫帓鍒?- 闊抽杞紙A1 BGM / A2 閰嶉煶锛?- 鏂囧瓧杞紙鏂囧瓧鐗堝紡锛?- 闊抽娉㈠舰鍙鍖栵紙钃濈传鑹叉尝褰㈠浘鑳屾櫙锛?- 鎷栨嫿杈圭紭 Trim锛氭嫋鍔ㄧ墖娈靛乏/鍙宠竟缂樺彲绮捐皟鍏ュ嚭鐐癸紙瑁佸ご/鍘诲熬锛?- 鎾斁閫熷害瀹炴椂棰勮锛坄<video>.playbackRate` 鍚屾锛?- 杞満锛氭敮鎸併€岀‖鍒囥€嶅拰銆屽彔鍖栵紙crossfade锛夈€嶏紝瀵煎嚭鏃朵娇鐢?FFmpeg xfade 瀹炵幇
-- 鎾ら攢/閲嶅仛锛圕trl+Z / Ctrl+Shift+Z锛?
-#### 3.4 鏂囧瓧鐗堝紡
-
-棰勮鏍峰紡 8 绉嶏細
-- `intro-minimal`锛氱墖澶绰风畝娲佸眳涓?- `intro-impact`锛氱墖澶绰峰啿鍑荤传
-- `outro-brand`锛氱墖灏韭峰搧鐗岄粦妗?- `outro-follow`锛氱墖灏韭峰叧娉ㄧ传
-- `sub-bottom`锛氬瓧骞暵峰簳閮?- `sub-top`锛氬瓧骞暵烽《閮ㄩ粍
-- `sub-highlight`锛氬瓧骞暵烽珮浜?- `title-card`锛氭爣棰樎峰乏渚ц摑
-
-#### 3.5 閰嶄箰锛圔GM锛?
-- 鏀寔 AI 鐢熸垚 BGM锛歋uno API锛堜富寮曟搸锛? Compass/Lyria锛堝鐢ㄥ紩鎿庯級锛岃嚜鍔?fallback
-- 鐢熸垚瀹屾垚鍚庢樉绀哄紩鎿庢潵婧?badge锛堢传鑹?Suno / 钃濊壊 Lyria锛?- 楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩棰勫～鍒剁墖闃舵鐨勯煶涔愰鏍兼弿杩帮紙鏉ヨ嚜 SoundMusicPlan锛夛紝涓€閿嵆鍙敓鎴愬尮閰嶉厤涔?- 鍙皟鏁撮煶閲忋€丅PM銆侀鏍?- 瀵煎嚭鏃舵敮鎸佹贰鍏ワ紙1s锛? 娣″嚭锛堝彲璋?0-3s锛?
-#### 3.6 AI 鍓緫 Agent
-
-- 记忆面板与手动纠偏（v0.97）：右侧 Agent 面板新增 `Agent 记忆` 区块，直接展示当前项目的偏好、避免项、稳定事实、开放问题和用户级沟通画像；用户还可以把当前输入一键记为“记住这个偏好 / 不要再这样做”，或删除某条项目记忆、减弱某个沟通画像维度。
-- 记忆上下文压缩与注入（v0.96）：剪辑 Agent 在真正生成时间轴前，会把项目级稳定事实、偏好、负向偏好、开放问题、用户级沟通画像和最近 10 轮原始对话按优先级压成记忆上下文；同时明确“当前用户新指令优先于历史记忆”，避免旧偏好把本次创意带偏。
-- 记忆系统 P0 首批（v0.94）：同项目聊天/剪辑历史会随工程一起保存，重新打开项目时可恢复最近对话；系统也会开始为当前用户累积跨项目的沟通方式画像，为后续“更懂你怎么协作”的 Agent 打底。
-- TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
-- 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
-- 回复语言跟随（v0.99）：剪辑 Agent 的聊天回复、默认 brief 指令、创意策略卡与剪辑总结现在会优先跟随当前用户消息或 brief 的语言；英文提问默认回英文，中文提问继续回中文。
-- 英文剪辑请求稳态兜底（v0.103）：当英文指令让模型在 Build/校验阶段产出无效 clip 或错误 assetId 时，后端现在会先把精确 `assetId / candidateWindow.id` 再喂给 JSON 生成阶段；如果最终校验仍把片段全部过滤掉，就自动回退到候选窗重建时间轴，而不是直接给用户抛错。
-- 剪辑工作台主壳层补齐英文 UI（v0.102）：右侧 Editing Agent 面板、Agent memory、项目管理弹窗、制片导入引导、同步制片更新弹窗、顶部项目操作区、文字编辑/预览区和新手引导现在都会跟随界面语言切换；共享 `RunningStatus` 在英文模式下也会回退到英文 inline 状态，不再展示中文剧场文案。
-- 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
-- **蹇嵎鎸囦护妯℃澘锛坴0.58锛?*锛氶娆′娇鐢ㄦ椂灞曠ず棰勮鎸夐挳锛堟垬鏂楁贩鍓?/ 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝涓€閿彂閫?- **澶氭ā鍨?Plan 鈫?Build 涓ら樁娈垫灦鏋勶紙v0.58锛夛細**
-  - Plan 闃舵锛欴eepSeek-R1 鑷劧璇█鎺ㄧ悊锛岃緭鍑洪€夋鏂规锛堜笉瑕佹眰 JSON锛岄伩鍏嶆牸寮忛敊璇級
-  - Build 闃舵锛欸PT-4.1 灏嗛€夋鏂规杞负绮剧‘鐨?TimelineProject JSON
-  - 涓夌骇瀹归敊锛欱uild 澶辫触 鈫?澶囬€夋ā鍨?GPT-4o 閲嶈瘯 鈫?鍏滃簳鍗曢樁娈电敓鎴?  - 妯″瀷鍙厤缃細`EDITOR_AGENT_PLAN_MODEL` / `EDITOR_AGENT_BUILD_MODEL` / `EDITOR_AGENT_FALLBACK_MODEL`
-- **鏅鸿兘鍓緫鑳藉姏锛坴0.31+锛夛細**
-  - 琛屼负缁嗗寲鍒嗙被锛氫簩绾ц涓轰綋绯伙紙primary + secondary + intensity + isTurningPoint锛?  - 鍙欎簨缁撴瀯鎺掔墖锛氫笁濂楁ā鏉匡紙缁忓吀楂樺厜 / 瑙掕壊鏁呬簨 / 鑺傚娣峰壀锛夛紝鑷姩閫夋嫨
-  - 闊充箰鍏堣鑺傛媿鍒嗘瀽锛欱GM 鑺傛媿妫€娴嬶紙librosa锛夛紝娈佃惤-鎯呯华瀵归綈鍓緫
-  - 鍒囩偣璐ㄩ噺浼樺寲锛氬姩浣滈《鐐瑰抚妫€娴?+ 闀滃ご杩愬姩绫诲瀷璇嗗埆
-  - 鍐呭澶氭牱鎬х害鏉燂細鍚岀被琛屼负 鈮? 杩炵画銆佸揩鍒囨參闀?3:1銆侀灏剧墖娈典紭閫夎鍒?  - 鐢婚潰-闊充箰鎯呯华瀵归綈锛歵ension + emotionTag 缁村害锛孊GM 娈佃惤鑷姩鍖归厤鐢婚潰寮犲姏
-
-#### 3.7 瀵煎嚭
-
-- 鏀寔 720p / 1080p / 4K
-- 鏀寔 fast / balanced / high 璐ㄩ噺
-- 鏈嶅姟鍣ㄧ FFmpeg 鍚堟垚锛孲SE 瀹炴椂杩涘害
-- 鏂囧瓧鍙犲姞锛氬惎鍔ㄦ椂棰勬 FFmpeg 鏄惁鏀寔 `drawtext`锛堢粨鏋滅紦瀛橈級锛屼笉鏀寔鏃剁洿鎺ヨ烦杩囨枃瀛楀眰骞舵彁绀猴紝涓嶆姤閿欓€€鍑猴紱缁撴灉缂撳瓨鑷宠繘绋嬬敓鍛藉懆鏈燂紙涓嶉噸澶嶆娴嬶級
-- 导出成品下载前会优先补齐 `file-access-token`；若登录态失效，会先记住当前页面，重新登录后自动回到原页面继续操作，而不是把用户丢回首页。
-
-#### 3.8 AI 鍓緫 Agent 閿欒澶勭悊
-
-- Compass API 涓嶅彲杈炬椂锛堟湇鍔″櫒鍑虹綉闂锛夛紝缁欏嚭鏄庣‘鎻愮ず銆孉I 鏈嶅姟鏆傛椂涓嶅彲杈撅紝璇风◢鍚庨噸璇曘€嶈€岄潪鍘熷 `Network Error`
-- 娴忚鍣ㄧ缃戠粶璇锋眰澶辫触缁熶竴缈昏瘧涓恒€屾棤娉曡繛鎺ュ埌鏈嶅姟鍣紝璇锋鏌ョ綉缁滃悗閲嶈瘯銆?
----
-
-### 4. 绱犳潗搴擄紙Asset Library锛?
-**鍏ュ彛锛?* 椤堕儴瀵艰埅銆岀礌鏉愬簱銆嶁啋 `/asset-library`
-
-- **Tab 瀵艰埅**锛氭渶杩戜娇鐢?/ 鏀惰棌 / 鍏ㄩ儴绱犳潗 / Google Drive 鍥涗釜 Tab 鍒囨崲
-- 鍗曢〉鐢诲粖甯冨眬锛? 鍒楃湡瀹炵缉鐣ュ浘缃戞牸锛堝浘鐗?`<img>` / 瑙嗛棣栧抚 + 鎾斁鎸夐挳锛?- **AI 鏅鸿兘鍒嗙被**锛氫笂浼犳椂鑷姩璇嗗埆绱犳潗绫诲瀷锛堣鑹?姝﹀櫒閬撳叿/鍦烘櫙/UI绱犳潗/瀹ｄ紶鍥?瑙嗛鐗囨锛夛紝鐢熸垚 30 瀛椾互鍐呮弿杩?- **宸︿晶鏍?*锛欰I 鍒嗙被铏氭嫙鏂囦欢澶癸紙鎸?category 鍒嗙粍鏄剧ず鏁伴噺锛? 鑷畾涔夋枃浠跺す锛堟敮鎸佸垱寤?閲嶅懡鍚?鍒犻櫎锛?- **鏀惰棌**锛氱礌鏉愬崱鐗囨槦鏍囨敹钘忥紝鏀惰棌 Tab 蹇€熸煡鐪?- **鎷栨嫿鏁寸悊**锛氭嫋鎷界礌鏉愬崱鐗囧埌宸︿晶鏂囦欢澶瑰嵆鍙綊妗ｏ紱閫変腑澶氫釜绱犳潗鍚庝篃鍙壒閲忕Щ鍔?- **鍥剧墖鎮仠鏀惧ぇ**锛氶紶鏍囨偓鍋滃浘鐗囩礌鏉?400ms 寮瑰嚭澶у浘棰勮娴獥
-- **瑙嗛鎮仠鎾斁**锛氶紶鏍囨偓鍋滆棰戠礌鏉愯嚜鍔ㄩ潤闊虫挱鏀?- 鍙充晶璇︽儏鎶藉眽锛氬ぇ鍥鹃瑙堛€佹枃浠朵俊鎭€丄I 鍒嗙被/鎻忚堪銆佹爣绛俱€併€岀敤浜庣敓鎴愩€嶆寜閽?- 搴曢儴涓婁紶闈㈡澘锛氭嫋鎷戒笂浼狅紝瀹屾垚鍚庤嚜鍔ㄥ叧闂苟鍒锋柊
-- 鎼滅储 + 绛涢€夛細鍏抽敭璇嶏紙鏂囦欢鍚?+ AI 鎻忚堪锛夋悳绱?+ 姣斾緥/绫诲瀷/鏂瑰悜/鐢昏川 4 涓?dropdown
-- **Google Drive 闆嗘垚**锛歄Auth 杩炴帴鍚庡彲娴忚 Drive 鏂囦欢锛屾寜闇€缂撳瓨鍒版湇鍔″櫒浣跨敤
-- 澶氳处鍙锋暟鎹殧绂伙細涓嶅悓鐢ㄦ埛鐨勭礌鏉愪簰涓嶅彲瑙?
----
-
-### 5. 鍘嗗彶璁板綍锛圚istory锛?
-**鍏ュ彛锛?* 椤堕儴瀵艰埅銆屽巻鍙层€嶁啋 `/history`
-
-- 鏌ョ湅鎵€鏈?AI 鐢熸垚浠诲姟璁板綍
-- 鏀寔涓嬭浇銆佸垹闄?
----
-
-### 6. 鐢诲粖锛圙allery锛?
-**鍏ュ彛锛?* 椤堕儴瀵艰埅銆岀敾寤娿€嶁啋 `/gallery`
-
-- 灞曠ず宸插畬鎴愯棰戠殑鍗＄墖缃戞牸
-- 鍙挱鏀俱€佷笅杞?
-- 「服务端文件」页刷新时会自动分页补同步最近几天即梦后台已完成但尚未落盘的成片；即便第一页都是旧片，后续分页里的新成片也会继续补拉回来。
-- 「服务端文件」新增范围说明、搜索框、来源/时间/保存状态筛选，以及“正常列表 / 已隐藏”视图切换；隐藏只影响当前 GOBS 账号下的展示，不删除服务器文件，也不影响即梦后台。
-- 服务端文件卡片会标记来源（即梦回补 / 服务端成片）和“已保存到我的成片”状态，便于运营同学快速找片、筛片和二次整理。
-- 即梦最近成片回补现在只会补回“当前账号已有归属证据”的 submitId，不再把共享即梦账号里的其他人任务自动补进当前账号目录。
-- 服务端文件现在会优先按 submitId 回查当前账号的 batch-jobs 与 dreamina intents，把可回溯的提示词摘要直接展示在卡片上；保存到“我的成片”时也优先写入这份摘要，不再一律退回 `[服务端成片] 路径` 占位文案。
----
-
-### 7. 涓€閿垚鐗囷紙Quick Film锛?
-**鍏ュ彛锛?* 棣栭〉銆屽揩鎷嶃€嶁啋 `/quick-film`
-
-**鍔熻兘锛?*
-- 杈撳叆鏁呬簨涓婚銆佷富瑙掋€侀鏍硷紝AI 鑷姩鐢熸垚瀹屾暣鍒嗛暅鑴氭湰
-- 鏀寔涓婁紶瑙掕壊/鍦烘櫙鍙傝€冪礌鏉愶紝AI 鑷姩鍖归厤鍒板搴旈暅澶?- 鐢ㄦ埛鍙€愰暅棰勮鍜岀紪杈戝悗纭鎻愪氦
-- **涓茶鎻愪氦闃熷垪锛坴0.51锛?*锛氱‘璁ゅ悗鍙彁浜ょ涓€涓垎闀滃埌鍗虫ⅵ锛屽悗缁垎闀滄帓闃熺瓑寰咃紙`awaiting_submit`锛夛紝鍓嶄竴涓畬鎴愬悗鑷姩鎻愪氦涓嬩竴涓紝閬垮厤骞跺彂瓒呴檺锛坮et=1310锛?- **鎵归噺鍙栨秷锛坴0.51锛?*锛氭壒閲忎换鍔＄湅鏉挎敮鎸併€屽彇娑堝叏閮ㄦ帓闃熴€嶏紝涓€閿噴鏀惧嵆姊﹀苟鍙戜綅
-- 鏀寔淇濆瓨鑽夌銆佷細璇濇仮澶嶏紙鍒锋柊涓嶄涪澶憋級
-- 鐢熸垚缁撴灉鍦ㄣ€屽巻鍙?鈫?鎵归噺浠诲姟鐪嬫澘銆嶅疄鏃舵煡鐪?
----
-
-### 8. 骞冲彴杩愯惀涓績
-
-- **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
-- **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
-- **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?- **璁板繂搴?*锛坄/platform-memory`锛夛細骞冲彴鐭ヨ瘑璁板繂
+**即梦多模态（Dreamina Multimodal）：**
+- 最多 9 张参考图（角色定妆/状态图 + 场景 + 道具），自动压缩为 JPEG 768px 以内，避免 TOS 上传失败
+- **角色状态感知（v0.54）**：分镜引用角色时自动匹配状态图（受伤/战斗/童年等），优先级：分镜手动覆盖 > 角色默认激活状态 > 定稿形象
+- 支持并发提交：多个分镜同时进入队列，并发数通过 `DREAMINA_MAX_CONCURRENT` 配置
+- **后端智能轮询 + SSE 推送（v0.35a+）**：即梦任务由服务端后台轮询，视频就绪后 SSE 实时通知前端；关闭浏览器也不丢失生成结果
+- 并发超限（ret=1310）自动等待 45s 重试，最终失败给出友好中文提示
+- 生成完成视频通过服务 URL（`/api/video/file?path=...`）访问，不会在 localStorage 中存储大体积 data URL
 
 ---
 
-### 9. 璐﹀彿绠＄悊
+### 3. 视频剪辑工作台（Editor）
 
-- **璐﹀彿璁剧疆**锛坄/settings/accounts`锛夛細缁戝畾骞冲彴璐﹀彿
-- **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务；账号配置若补充 `profileUrl`，分发页和结果卡会直接展示该账号的 TikTok 主页入口
-- **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
-- **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发、Asset Library、Gallery / History / Batch Jobs、Generate Video 入口表单，以及高级制片主壳层已逐步收入口径一致的英文 key 库。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
-- **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。仓库内同时补齐了单人多电脑发布 Runbook、本地状态切换脚本、`mark_release_ready.py`、以及 `deploy_all.py` 的 release guard automation，后续发 `staging/prod` 不再依赖手工记忆步骤。
+**入口：** 首页「剪辑」→ `/editor`
+
+#### 3.1 项目管理
+
+- **进入 `/editor` 自动打开最近项目**：有已保存项目时自动通过 URL param `?project=xxx` 打开最近编辑的项目；无历史项目时展示空白编辑器
+- 顶部栏：项目名输入框（编辑后 3 秒自动保存）+ 保存状态指示
+- 「我的项目 (N)」按钮：显示项目数量，打开项目管理弹窗
+  - 项目列表按最近修改排序，显示相对时间（"3分钟前"/"昨天"等）
+  - 支持行内重命名（点击「重命名」→ 输入 → 回车/保存）
+  - 删除前有确认步骤，不会误删
+  - 搜索过滤
+  - 「+ 新建剪辑」→ 弹出命名对话框
+- 「+ 新建」按钮：点击后弹出**命名对话框**，支持默认名称（含日期时间），回车/点「创建」后生效；Esc 取消
+
+#### 3.2 素材库
+
+- 支持上传视频文件（最大 2GB，可在设置中调整）
+- **批量上传（v0.57）**：文件选择器支持多选（Ctrl/Shift 多选），也可直接拖拽多个视频文件到素材区域；上传过程中显示批量队列面板（总进度条 + 每个文件的独立状态/进度），逐个顺序上传并实时更新列表
+- 悬停视频卡片 300ms 后弹出预览（静音、自动循环）
+- 点击素材即可加入时间轴
+
+#### 3.3 时间轴
+
+- 视频轨（V1）：支持多片段排列
+- 音频轨（A1 BGM / A2 配音）
+- 文字轨（文字版式）
+- 音频波形可视化（蓝紫色波形图背景）
+- 拖拽边缘 Trim：拖动片段左/右边缘可精调入出点（裁头/去尾）
+- 播放速度实时预览（`<video>.playbackRate` 同步）
+- 转场：支持「硬切」和「叠化（crossfade）」，导出时使用 FFmpeg xfade 实现
+- 撤销/重做（Ctrl+Z / Ctrl+Shift+Z）
+
+#### 3.4 文字版式
+
+预设样式 8 种：
+- `intro-minimal`：片头·简洁居中
+- `intro-impact`：片头·冲击紫
+- `outro-brand`：片尾·品牌黑框
+- `outro-follow`：片尾·关注紫
+- `sub-bottom`：字幕·底部
+- `sub-top`：字幕·顶部黄
+- `sub-highlight`：字幕·高亮
+- `title-card`：标题·左侧蓝
+
+#### 3.5 配乐（BGM）
+
+- 支持 AI 生成 BGM：Suno API（主引擎）+ Compass/Lyria（备用引擎），自动 fallback
+- 生成完成后显示引擎来源 badge（紫色 Suno / 蓝色 Lyria）
+- 高级制片导出到剪辑器时，自动预填制片阶段的音乐风格描述（来自 SoundMusicPlan），一键即可生成匹配配乐
+- 可调整音量、BPM、风格
+- 导出时支持淡入（1s）/ 淡出（可调 0-3s）
+
+#### 3.6 AI 剪辑 Agent
+
+- 在「Agent」面板输入自然语言指令（"帮我把第 2 段移到第 1 段前"）
+- Agent 解析意图并操作时间轴
+- **智能剪辑能力（v0.31+）：**
+  - 行为细化分类：二级行为体系（primary + secondary + intensity + isTurningPoint）
+  - 叙事结构排片：三套模板（经典高光 / 角色故事 / 节奏混剪），自动选择
+  - 音乐先行节拍分析：BGM 节拍检测（librosa），段落-情绪对齐剪辑
+  - 切点质量优化：动作顶点帧检测 + 镜头运动类型识别
+  - 内容多样性约束：同类行为 ≤3 连续、快切慢镜 3:1、首尾片段优选规则
+  - 画面-音乐情绪对齐：tension + emotionTag 维度，BGM 段落自动匹配画面张力
+
+#### 3.7 导出
+
+- 支持 720p / 1080p / 4K
+- 支持 fast / balanced / high 质量
+- 服务器端 FFmpeg 合成，SSE 实时进度
+- 文字叠加：启动时预检 FFmpeg 是否支持 `drawtext`（结果缓存），不支持时直接跳过文字层并提示，不报错退出；结果缓存至进程生命周期（不重复检测）
+
+#### 3.8 AI 剪辑 Agent 错误处理
+
+- Compass API 不可达时（服务器出网问题），给出明确提示「AI 服务暂时不可达，请稍后重试」而非原始 `Network Error`
+- 浏览器端网络请求失败统一翻译为「无法连接到服务器，请检查网络后重试」
 
 ---
 
-## 浜屻€丆hangelog
+### 4. 素材库（Asset Library）
 
+**入口：** 顶部导航「素材库」→ `/asset-library`
 
-<!-- NEXT_VERSION: v0.119 -->
+- **Tab 导航**：最近使用 / 收藏 / 全部素材 / Google Drive 四个 Tab 切换
+- 单页画廊布局：6 列真实缩略图网格（图片 `<img>` / 视频首帧 + 播放按钮）
+- **AI 智能分类**：上传时自动识别素材类型（角色/武器道具/场景/UI素材/宣传图/视频片段），生成 30 字以内描述
+- **左侧栏**：AI 分类虚拟文件夹（按 category 分组显示数量）+ 自定义文件夹（支持创建/重命名/删除）
+- **收藏**：素材卡片星标收藏，收藏 Tab 快速查看
+- **拖拽整理**：拖拽素材卡片到左侧文件夹即可归档；选中多个素材后也可批量移动
+- **图片悬停放大**：鼠标悬停图片素材 400ms 弹出大图预览浮窗
+- **视频悬停播放**：鼠标悬停视频素材自动静音播放
+- 右侧详情抽屉：大图预览、文件信息、AI 分类/描述、标签、「用于生成」按钮
+- 底部上传面板：拖拽上传，完成后自动关闭并刷新
+- 搜索 + 筛选：关键词（文件名 + AI 描述）搜索 + 比例/类型/方向/画质 4 个 dropdown
+- **Google Drive 集成**：OAuth 连接后可浏览 Drive 文件，按需缓存到服务器使用
+- 多账号数据隔离：不同用户的素材互不可见
+
+---
+
+### 5. 历史记录（History）
+
+**入口：** 顶部导航「历史」→ `/history`
+
+- 查看所有 AI 生成任务记录
+- 支持下载、删除
+
+---
+
+### 6. 画廊（Gallery）
+
+**入口：** 顶部导航「画廊」→ `/gallery`
+
+- 展示已完成视频的卡片网格
+- 可播放、下载
+
+---
+
+### 7. 一键成片（Quick Film）
+
+**入口：** 首页「快拍」→ `/quick-film`
+
+**功能：**
+- 输入故事主题、主角、风格，AI 自动生成完整分镜脚本
+- 支持上传角色/场景参考素材，AI 自动匹配到对应镜头
+- 用户可逐镜预览和编辑后确认提交
+- **串行提交队列（v0.51）**：确认后只提交第一个分镜到即梦，后续分镜排队等待（`awaiting_submit`），前一个完成后自动提交下一个，避免并发超限（ret=1310）
+- **批量取消（v0.51）**：批量任务看板支持「取消全部排队」，一键释放即梦并发位
+- 支持保存草稿、会话恢复（刷新不丢失）
+- 生成结果在「历史 → 批量任务看板」实时查看
+
+---
+
+### 8. 平台运营中心
+
+- **舆情监测**（`/risk-sentiment`）：监控社媒舆情
+- **运营框架**（`/platform-framework`）：平台策略框架
+- **学习实验室**（`/platform-learning-lab`）：内容学习库
+- **记忆库**（`/platform-memory`）：平台知识记忆
+
+---
+
+### 9. 账号管理
+
+- **账号设置**（`/settings/accounts`）：绑定平台账号
+- **用量监控**（`/settings/usage-monitor`）：查看 API 用量
+
+---
+
+## 二、Changelog
+
+### v0.120 — 2026-04-23
+
+**高级制片项目与分镜状态英文收口**
+
+**Frontend / i18n:**
+- **[frontend] 高级制片项目弹窗改为 key 驱动**（`h5-video-tool/src/studio/components/ProductionProjectListModal.tsx`, `h5-video-tool/src/i18n/messages.ts`）：已保存项目、搜索、空状态、治理未命名项目、打开/重命名/删除确认与项目更新时间全部跟随 `uiLocale`，时间格式不再硬编码 `zh-CN`。
+- **[frontend] 高级制片运行状态提示补齐英文**（`h5-video-tool/src/pages/ProductionWizard.tsx`）：项目加载失败、命名保存、批量任务同步、补全缺图、重试缺图、风格参考、分镜图/视频生成、取消队列、手动检查进度等 toast / error / confirm 文案统一进入 `productionWizard.*` key。
+- **[frontend] 英文内容链路减少中文 prompt 前缀**（`h5-video-tool/src/pages/ProductionWizard.tsx`）：分镜视频提交时追加的光影、色调、整体视觉风格前缀改为跟随界面文案 key，避免英文模式下继续注入中文提示头。
+- **[test] 高级制片高频 key 加入回归断言**（`h5-video-tool/src/i18n/locale.test.ts`）：覆盖项目列表、命名弹窗、保存项目后生成分镜视频等英文 key。
 
 ### v0.119 — 2026-04-23
 
@@ -887,112 +928,135 @@ ole="presentation"
 - **[frontend] 高级制片导出去重增强**：「在剪辑器中打开」优先使用 sourceProductionProjectId 进行项目去重匹配
 - **[frontend] 制片向导步骤可达性**：根据项目完成度动态计算最大可达步骤，未解锁步骤显示禁用态
 
-### v0.58 鈥?2026-04-17
+### v0.58 - 2026-04-17
 
-**鍓緫 Agent 鏅鸿兘鍖栧崌绾э細澶氭ā鍨?Plan鈫払uild 涓ら樁娈?+ 涓夌骇瀹归敊**
+**Editor Agent intelligence upgrade: multi-model Plan -> Build pipeline with three-level fallback**
 
 **Feature:**
-- **[api] Plan 鈫?Build 涓ら樁娈垫灦鏋?*锛氬皢鍘熸潵鐨勫崟娆?LLM 璋冪敤鎷嗗垎涓?Plan锛堣嚜鐒惰瑷€鎺ㄧ悊锛夊拰 Build锛圝SON 鐢熸垚锛変袱涓樁娈点€侾lan 闃舵浣跨敤 DeepSeek-R1 杈撳嚭閫夋鏂规锛堜笉瑕佹眰 JSON 鏍煎紡锛夛紝Build 闃舵浣跨敤 GPT-4.1 灏嗘柟妗堣浆涓虹簿纭殑 TimelineProject JSON銆傚交搴曡В鍐?妯″瀷杩斿洖涓嶆槸鍚堟硶 JSON"鎶ラ敊
-- **[api] 涓夌骇瀹归敊鏈哄埗**锛欱uild 妯″瀷 JSON 鐢熸垚澶辫触 鈫?鑷姩鍒囨崲澶囬€夋ā鍨?GPT-4o 閲嶈瘯 鈫?浠嶅け璐ュ垯鐢ㄧ簿绠€ prompt 鍏滃簳鐢熸垚銆備笁娆℃満浼氾紝澶у箙闄嶄綆澶辫触鐜?- **[api] per-call model 瑕嗙洊**锛歚compassChatCompletionWithUsage` 鏂板 `model` 鍙傛暟锛屾敮鎸佹瘡娆¤皟鐢ㄦ寚瀹氫笉鍚屾ā鍨嬨€傛柊澧?3 涓幆澧冨彉閲?`EDITOR_AGENT_PLAN_MODEL` / `EDITOR_AGENT_BUILD_MODEL` / `EDITOR_AGENT_FALLBACK_MODEL`
-- **[api] Prompt 鐦﹁韩**锛歅lan 闃舵 prompt 浠?3000+ tokens 绮剧畝鍒?~500 tokens锛孊uild 闃舵 prompt 浠?~300 tokens锛堢函 JSON 缁撴瀯妯℃澘锛?- **[api] 鍊欓€夌獥鍘嬬缉**锛氫紶缁?LLM 鐨勫€欓€夌獥浠庡叏閲忔敼涓?top 20锛屽噺灏?token 娑堣€?- **[frontend] 蹇嵎鎸囦护妯℃澘**锛欰gent 闈㈡澘棣栨浣跨敤鏃跺睍绀?4 涓璁炬寜閽紙鎴樻枟娣峰壀 30s / 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝鐐瑰嚮鍗冲彂閫?
-**Benchmark锛堢浉鍚屼换鍔″姣旓級锛?*
-- 鍘熸柟妗堬紙gemini-2.5-flash 鍗曟锛夛細15.1s / 4388 tokens / JSON 澶辫触鐜囬珮
-- 鏂版柟妗堬紙DeepSeek-R1 Plan + GPT-4.1 Build锛夛細~8s / ~2500 tokens / 涓夌骇瀹归敊鍑犱箮涓嶄細澶辫触
+- **[api] Plan -> Build two-stage architecture**: Split the previous single LLM call into a Plan stage for natural-language reasoning and a Build stage for TimelineProject JSON generation. The Plan stage uses DeepSeek-R1, while the Build stage uses GPT-4.1.
+- **[api] Three-level fallback**: If the Build model fails to produce valid JSON, the API retries with GPT-4o, then falls back to a simplified prompt generation path.
+- **[api] Per-call model override**: `compassChatCompletionWithUsage` now accepts a `model` parameter, with `EDITOR_AGENT_PLAN_MODEL`, `EDITOR_AGENT_BUILD_MODEL`, and `EDITOR_AGENT_FALLBACK_MODEL` environment variables.
+- **[api] Prompt and candidate-window reduction**: The Plan prompt was reduced from 3000+ tokens to about 500 tokens, the Build prompt to about 300 tokens, and the candidate window to top 20.
+- **[frontend] Quick command templates**: The Agent panel shows first-use presets such as battle remix, character showcase, TikTok teaser, and high-energy remix with music.
+
+**Benchmark:**
+- Previous approach: gemini-2.5-flash single call, 15.1s / 4388 tokens / higher JSON failure rate.
+- New approach: DeepSeek-R1 Plan + GPT-4.1 Build, about 8s / about 2500 tokens / much lower failure rate after fallback.
 
 ---
 
-### v0.57 鈥?2026-04-17
+### v0.57 — 2026-04-17
 
-**鍓緫宸ヤ綔鍙帮細瑙嗛绱犳潗鎵归噺涓婁紶 + 鎷栨嫿涓婁紶**
+**剪辑工作台：视频素材批量上传 + 拖拽上传**
 
 **Feature:**
-- **[editor] 鎵归噺瑙嗛涓婁紶**锛氭枃浠堕€夋嫨鍣ㄦ敮鎸佸閫夛紙`<input multiple>`锛夛紝涓€娆￠€夋嫨澶氫釜瑙嗛鏂囦欢鍚庨€愪釜椤哄簭涓婁紶锛涗笂浼犺繃绋嬩腑鏄剧ず鎵归噺闃熷垪闈㈡澘锛屽寘鍚€昏繘搴︽潯銆佹瘡涓枃浠剁殑鐙珛鐘舵€佸浘鏍囷紙寰呬笂浼?涓婁紶涓?瀹屾垚/澶辫触锛夊拰瀹炴椂杩涘害鐧惧垎姣?- **[editor] 鎷栨嫿涓婁紶**锛氱礌鏉愬垪琛ㄥ尯鍩熸敮鎸?Drag & Drop锛屾嫋鍏ヨ棰戞枃浠舵椂鏄剧ず钃濊壊铏氱嚎瑕嗙洊鎻愮ず銆屾澗寮€榧犳爣涓婁紶瑙嗛銆嶏紱鑷姩杩囨护闈炶棰戞枃浠讹紝浠呭鐞嗚棰戞牸寮?- **[editor] 绌烘€佸紩瀵间紭鍖?*锛氱礌鏉愬簱涓虹┖鏃舵樉绀鸿櫄绾挎嫋鎷藉尯鍩燂紝寮曞鐢ㄦ埛鎷栨嫿鏂囦欢鎴栫偣鍑绘寜閽笂浼?- **[editor] 鏂囦欢澶у皬鏍￠獙澧炲己**锛氭壒閲忎笂浼犳椂閫愪釜鏍￠獙鏂囦欢澶у皬锛岃秴闄愭枃浠惰烦杩囧苟鎻愮ず鍏蜂綋鏂囦欢鍚嶅拰澶у皬锛屼笉褰卞搷鍏朵綑鏂囦欢涓婁紶
+- **[editor] 批量视频上传**：文件选择器支持多选（`<input multiple>`），一次选择多个视频文件后逐个顺序上传；上传过程中显示批量队列面板，包含总进度条、每个文件的独立状态图标（待上传/上传中/完成/失败）和实时进度百分比
+- **[editor] 拖拽上传**：素材列表区域支持 Drag & Drop，拖入视频文件时显示蓝色虚线覆盖提示「松开鼠标上传视频」；自动过滤非视频文件，仅处理视频格式
+- **[editor] 空态引导优化**：素材库为空时显示虚线拖拽区域，引导用户拖拽文件或点击按钮上传
+- **[editor] 文件大小校验增强**：批量上传时逐个校验文件大小，超限文件跳过并提示具体文件名和大小，不影响其余文件上传
 
 ---
 
-### v0.56 鈥?2026-04-17
+### v0.56 — 2026-04-17
 
-**绱犳潗搴?鈫?楂樼骇鍒剁墖 鏁版嵁鎵撻€?*
+**素材库 ↔ 高级制片 数据打通**
 
 **Bug Fix:**
-- **[frontend] 绱犳潗涓彴銆岀敤浜庣敓鎴愩€嶆棤娉曚緵楂樼骇鍒剁墖浣跨敤**锛氱礌鏉愯鎯呮娊灞夋柊澧炪€岀敤浜庨珮绾у埗鐗囥€嶆寜閽紝鐩存帴璺宠浆 `/studio/production?assetId=...`锛涘師銆岀敤浜庣敓鎴愩€嶆寜閽洿鍚嶄负銆岀敤浜庤棰戠敓鎴愩€嶄互鍖哄垎涓や釜鍏ュ彛
-- **[frontend] 楂樼骇鍒剁墖銆屼粠绱犳潗搴撻€夋嫨銆嶇湅涓嶅埌绱犳潗**锛歚CharacterWardrobePanel` 鍘熸潵璋冪敤鏃?`/api/assets` 绱㈠紩锛圝SON 鏂囦欢锛夛紝涓庢柊绱犳潗涓彴 `/api/asset-library` 鏄袱濂楁暟鎹簰涓嶇浉閫氥€傚凡鏀逛负浣跨敤 `listAssets()` 浠庢柊绱犳潗涓彴鍔犺浇鍥剧墖绫诲瀷绱犳潗锛岀缉鐣ュ浘鍜岄€夋嫨閫昏緫鍚屾閫傞厤 `buildAssetFileUrl`
+- **[frontend] 素材中台「用于生成」无法供高级制片使用**：素材详情抽屉新增「用于高级制片」按钮，直接跳转 `/studio/production?assetId=...`；原「用于生成」按钮更名为「用于视频生成」以区分两个入口
+- **[frontend] 高级制片「从素材库选择」看不到素材**：`CharacterWardrobePanel` 原来调用旧 `/api/assets` 索引（JSON 文件），与新素材中台 `/api/asset-library` 是两套数据互不相通。已改为使用 `listAssets()` 从新素材中台加载图片类型素材，缩略图和选择逻辑同步适配 `buildAssetFileUrl`
 
 ---
 
-### v0.55 鈥?2026-04-16
+### v0.55 — 2026-04-16
 
-**鐧捐€佹眹绛戞ⅵ甯?鈥?Loading 浣撻獙鍏ㄩ噺鎺ュ叆**
+**百老汇筑梦师 — Loading 体验全量接入**
 
 **Feature:**
-- **[frontend] Loading 缁勪欢浣撶郴閲嶆柊涓婚鍖?*锛坄src/components/loading/`锛夛細灏嗗湴鐗富棰樺叏闈㈡浛鎹负銆岀櫨鑰佹眹绛戞ⅵ甯堛€嶅墽闄㈤殣鍠汇€? 涓墽闄㈢┖闂达紙缂栧墽瀹?鎺掔粌鍘?绮句慨瀹?棣栨紨鍙?宸℃紨鍘?澶у巺/閬撳叿闂达級銆?1 涓箷鍚庤鑹诧紙鑱斿悎缂栧墽/鎽勫奖甯?鐏厜甯?鑸炲彴鐩戠潱/鍒剁墖浜?鍓緫甯?浣滄洸瀹?鍖栧甯?閬撳叿甯?缁忕邯浜?寮曞骇鍛橈級銆佷笁娈甸€掕繘鏂囨閾俱€佸墽闄富棰樺僵铔嬶紙鑱氬厜鐏嫋鍔?骞曞竷鎷夊紑/鎺屽０瑙﹀彂/鐏垫劅楠板瓙锛?- **[frontend] `TheaterLoadingScreen` 鍏ㄥ睆鍓ч櫌 Loading 缁勪欢**锛氭浛浠?`DungeonLoadingScreen`锛屽墽闄㈤噾+娣辩孩閰嶈壊浣撶郴銆佽仛鍏夌伅鎵繃鑸炲彴杩涘害鏉°€佸満鏅爣璇嗗窘绔?- **[frontend] `RunningStatus` 缁勪欢鍗囩骇**锛氭柊澧炲彲閫?`scene` prop锛屼紶鍏ュ墽闄㈠満鏅悗 >3s 鑷姩鍗囩骇涓哄崱鐗囧紡瑙掕壊鏂囨杞挱锛屼笉浼犳椂淇濇寔鍘熸湁琛屼负锛堝畬鍏ㄥ悜鍚庡吋瀹癸級
-- **[frontend] 10+ 涓瓑寰呭満鏅叏閲忔帴鍏ュ墽闄綋楠?*锛?  - 楂樹紭鍏堢骇锛歋tepVideo锛堣棰戠敓鎴愨啋鎺掔粌鍘咃級銆丵uickFilm锛堜竴閿垚鐗団啋缂栧墽瀹?棣栨紨鍙帮級銆丼tepDesignHeader锛堣ˉ鍏ㄧ己鍥锯啋閬撳叿闂达級
-  - 涓紭鍏堢骇锛欱gmMixPanel锛圔GM鈫掔簿淇锛夈€丠istory锛堣棰戝悎骞垛啋绮句慨瀹わ級銆丒xportPanel锛堝鍑衡啋棣栨紨鍙帮級銆丆haracterWardrobePanel锛堝畾濡嗗浘鈫掗亾鍏烽棿锛?  - 杞讳紭鍏堢骇锛歍abGenerate锛圥rompt 娑﹁壊鈫掔紪鍓у锛夈€乀abDistribute锛堟枃妗堢敓鎴愨啋宸℃紨鍘咃級銆丄ssetImportPanel锛堢礌鏉愪笂浼犫啋閬撳叿闂达級銆丳rojectList锛堥」鐩姞杞解啋澶у巺锛夈€丮ultiShotPromptInput锛堝垎闀滃抚鈫掓帓缁冨巺锛?- **[api] Loading 璧勪骇鐢熸垚鑴氭湰鍗囩骇**锛坄scripts/generate-loading-assets.ts`锛夛細Prompt 鍏ㄩ潰鏀逛负鍓ч櫌涓婚锛堢紪鍓у妗岄潰/鎺掔粌鍘呰垶鍙?绮句慨瀹ゆ贩闊冲彴/棣栨紨澶у箷/宸℃紨鍔炲叕瀹?鍓ч櫌澶у巺/閬撳叿闂达級锛孲UNO 闊虫晥鏀逛负鍓ч櫌鐜闊筹紙鎵撳瓧鏈哄０/鑸炲彴鍥炲搷/璁惧鍡￠福/棣栨紨搴忔洸/鐖靛＋閽㈢惔/鎵嬪伐姘涘洿锛夛紝鍦烘櫙浠?5鈫? 涓?
+- **[frontend] Loading 组件体系重新主题化**（`src/components/loading/`）：将地牢主题全面替换为「百老汇筑梦师」剧院隐喻。7 个剧院空间（编剧室/排练厅/精修室/首演台/巡演厅/大厅/道具间）、11 个幕后角色（联合编剧/摄影师/灯光师/舞台监督/制片人/剪辑师/作曲家/化妆师/道具师/经纪人/引座员）、三段递进文案链、剧院主题彩蛋（聚光灯拖动/幕布拉开/掌声触发/灵感骰子）
+- **[frontend] `TheaterLoadingScreen` 全屏剧院 Loading 组件**：替代 `DungeonLoadingScreen`，剧院金+深红配色体系、聚光灯扫过舞台进度条、场景标识徽章
+- **[frontend] `RunningStatus` 组件升级**：新增可选 `scene` prop，传入剧院场景后 >3s 自动升级为卡片式角色文案轮播，不传时保持原有行为（完全向后兼容）
+- **[frontend] 10+ 个等待场景全量接入剧院体验**：
+  - 高优先级：StepVideo（视频生成→排练厅）、QuickFilm（一键成片→编剧室/首演台）、StepDesignHeader（补全缺图→道具间）
+  - 中优先级：BgmMixPanel（BGM→精修室）、History（视频合并→精修室）、ExportPanel（导出→首演台）、CharacterWardrobePanel（定妆图→道具间）
+  - 轻优先级：TabGenerate（Prompt 润色→编剧室）、TabDistribute（文案生成→巡演厅）、AssetImportPanel（素材上传→道具间）、ProjectList（项目加载→大厅）、MultiShotPromptInput（分镜帧→排练厅）
+- **[api] Loading 资产生成脚本升级**（`scripts/generate-loading-assets.ts`）：Prompt 全面改为剧院主题（编剧室桌面/排练厅舞台/精修室混音台/首演大幕/巡演办公室/剧院大厅/道具间），SUNO 音效改为剧院环境音（打字机声/舞台回响/设备嗡鸣/首演序曲/爵士钢琴/手工氛围），场景从 5→7 个
+
 ---
 
-### v0.54 鈥?2026-04-16
+### v0.54 — 2026-04-16
 
-**楂樼骇鍒剁墖锛氳鑹茬姸鎬佸彉浣撲紭鍖?鈥?褰㈣薄婕斿寲 & 鐘舵€佽。姗卞姛鑳芥墦閫?*
+**高级制片：角色状态变体优化 — 形象演化 & 状态衣橱功能打通**
 
 **Feature:**
-- **[frontend] 鐘舵€佽。姗?statePrompt 缂栬緫**锛氭瘡涓鑹茬姸鎬佹柊澧?宸紓鎻忚堪"鏂囨湰妗嗭紙`statePrompt`锛夛紝AI 鐢熷浘鏃朵互姝や负鏍稿績宸紓鎻忚堪锛堣€岄潪浠呯敤 label锛夛紝澶у箙鎻愬崌鍙椾激/绔ュ勾/鎹㈣绛夌姸鎬佸浘鐢熸垚璐ㄩ噺
-- **[frontend] 棰勮妯℃澘澧炲己**锛氶璁句粠绾?label 鍗囩骇涓?`StatePresetItem`锛堝惈 label + statePrompt锛夛紝鏂板"骞撮緞鍙樺寲"棰勮缁勶紙绔ュ勾/闈掑勾/涓勾/鑰佸勾锛夛紝姣忎釜棰勮鑷甫璇︾粏宸紓鎻忚堪
-- **[frontend] 鑷畾涔夌姸鎬?UX 閲嶆瀯**锛?+ 鑷畾涔?闈㈡澘鍚屾椂杈撳叆鍚嶇О鍜屽樊寮傛弿杩帮紝娣诲姞鍚庤嚜鍔ㄥ睍寮€缂栬緫闈㈡澘锛涚姸鎬佸崱鐗囨樉绀?prompt 鎽樿棰勮锛屾棤鎻忚堪鐨勬樉绀?+ 娣诲姞鎻忚堪"寮曞
-- **[frontend] 鍒嗛暅瑙掕壊鐘舵€佸浘鎺ュ叆**锛歚buildShotMultimodalRefPack` 鍙婂叾寮傛鐗堟敼鐢?`getCharacterShotImage()`锛屾寜浼樺厛绾ч€夊彇鐘舵€佸浘锛堝垎闀滄墜鍔ㄨ鐩?> 瑙掕壊榛樿婵€娲荤姸鎬?> lookTree 瀹氱鍥撅級锛屽垎闀滀晶鏍忕缉鐣ュ浘鍜屽妯℃€佸紩鐢ㄩ潰鏉垮悓姝ュ垏鎹?- **[frontend] 缁熶竴鐘舵€佹ā鍨?*锛?+ 娣诲姞鐘舵€?鎸夐挳浠庡湪 lookTree 涓婂垱寤哄瓙鑺傜偣鏀逛负鍦?`states[]` 涓婂垱寤?`CharacterState`锛屾秷闄や袱濂楀苟琛屾暟鎹粨鏋勭殑姒傚康娣蜂贡
-- **[api] 褰㈣薄搴?lookTree 鎸佷箙鍖?*锛歚/api/character-library/save` 鍜?import 鎺ュ彛鎵╁睍 `lookTree` + `activeLookId` 瀛楁锛岃法椤圭洰瀵煎叆鏃惰嚜鍔ㄦ仮澶嶅舰璞℃紨鍖栨爲
+- **[frontend] 状态衣橱 statePrompt 编辑**：每个角色状态新增"差异描述"文本框（`statePrompt`），AI 生图时以此为核心差异描述（而非仅用 label），大幅提升受伤/童年/换装等状态图生成质量
+- **[frontend] 预设模板增强**：预设从纯 label 升级为 `StatePresetItem`（含 label + statePrompt），新增"年龄变化"预设组（童年/青年/中年/老年），每个预设自带详细差异描述
+- **[frontend] 自定义状态 UX 重构**："+ 自定义"面板同时输入名称和差异描述，添加后自动展开编辑面板；状态卡片显示 prompt 摘要预览，无描述的显示"+ 添加描述"引导
+- **[frontend] 分镜角色状态图接入**：`buildShotMultimodalRefPack` 及其异步版改用 `getCharacterShotImage()`，按优先级选取状态图（分镜手动覆盖 > 角色默认激活状态 > lookTree 定稿图），分镜侧栏缩略图和多模态引用面板同步切换
+- **[frontend] 统一状态模型**："+ 添加状态"按钮从在 lookTree 上创建子节点改为在 `states[]` 上创建 `CharacterState`，消除两套并行数据结构的概念混乱
+- **[api] 形象库 lookTree 持久化**：`/api/character-library/save` 和 import 接口扩展 `lookTree` + `activeLookId` 字段，跨项目导入时自动恢复形象演化树
 
 **Bugfix:**
-- **[api] 鐘舵€佽。姗?AI 鐢熷浘鎶?base64 padding 閿欒**锛氬綋 `baseImageDataUrl` 缁忚繃 `uploadProductionImage` 鍚庡彉涓?HTTP URL 鏃讹紝`dataUrlToRawBase64()` 鍘熸牱浼犵粰 Python 鑴氭湰瀵艰嚧 `binascii.Error: Incorrect padding`銆傛柊澧?`resolveToRawBase64()` 寮傛鍑芥暟锛岃嚜鍔ㄦ娴嬪苟 fetch HTTP URL 杞负 base64锛岃鐩?`/frames`锛堥闀?+ 闈為闀滐級鍜?`/portrait` 璺敱
+- **[api] 状态衣橱 AI 生图报 base64 padding 错误**：当 `baseImageDataUrl` 经过 `uploadProductionImage` 后变为 HTTP URL 时，`dataUrlToRawBase64()` 原样传给 Python 脚本导致 `binascii.Error: Incorrect padding`。新增 `resolveToRawBase64()` 异步函数，自动检测并 fetch HTTP URL 转为 base64，覆盖 `/frames`（首镜 + 非首镜）和 `/portrait` 路由
 
 ---
 
-### v0.53 鈥?2026-04-16
+### v0.53 — 2026-04-16
 
-**绱犳潗搴撴€ц兘浼樺寲锛氱缉鐣ュ浘 + ReviewQueue 鍒嗛〉 + 閿欒鏍囩娓呯悊**
+**素材库性能优化：缩略图 + ReviewQueue 分页 + 错误标签清理**
 
 **Feature:**
-- **[api] 缂╃暐鍥炬湇鍔?* (`assetThumbnailService.ts`)锛氫笂浼犳椂鑷姩鐢熸垚 300脳300 JPEG 缂╃暐鍥撅紙鍥剧墖鐢?sharp銆佽棰戠敤 ffmpeg 鍙栭甯э級锛屽瓨鏀句簬鍘熸枃浠跺悓鐩綍 `.thumbs/` 瀛愭枃浠跺す
-- **[api] `GET /assets/:id/thumb`** 绔偣锛氫笓闂ㄦ湇鍔＄缉鐣ュ浘锛屾敮鎸?token query 璁よ瘉锛?4h 娴忚鍣ㄧ紦瀛橈紱缂╃暐鍥句笉瀛樺湪鏃惰Е鍙戝紓姝ョ敓鎴愬苟鍥為€€鍘熸枃浠?- **[api] `POST /generate-thumbnails`** 绔偣锛氫竴閿壒閲忎负鎵€鏈夊瓨閲忕礌鏉愯ˉ鐢熸垚缂╃暐鍥?- **[api] `GET /pending-tags`** 绔偣锛氬垎椤佃繑鍥炲緟纭鏍囩锛堟浛浠ｅ師鏉ヤ竴娆℃媺 100 鏉″叏閲忔柟妗堬級
-- **[api] 鍏ㄩ儴 asset 鍒楄〃 API** 杩斿洖 `thumbnail_url` 瀛楁锛坅ssets/search/favorites/recent锛?- **[frontend] AssetCard** 缃戞牸瑙嗗浘浣跨敤缂╃暐鍥炬覆鏌擄紝瑙嗛绱犳潗浠?hover 鏃跺姞杞藉師濮嬭棰戞祦
-- **[frontend] ReviewQueue** 鍒嗛〉鍖栵紙姣忛〉 20 鏉★級锛屼笉鍐嶄竴娆″姞杞芥墍鏈夌礌鏉愮瓫閫?pending
-- **[data] 娓呯悊 28 涓?ai_tag_error 閿欒鏍囩**锛屼粠閿欒淇℃伅涓仮澶?9 涓礌鏉愮殑 AI 鍒嗙被
+- **[api] 缩略图服务** (`assetThumbnailService.ts`)：上传时自动生成 300×300 JPEG 缩略图（图片用 sharp、视频用 ffmpeg 取首帧），存放于原文件同目录 `.thumbs/` 子文件夹
+- **[api] `GET /assets/:id/thumb`** 端点：专门服务缩略图，支持 token query 认证，24h 浏览器缓存；缩略图不存在时触发异步生成并回退原文件
+- **[api] `POST /generate-thumbnails`** 端点：一键批量为所有存量素材补生成缩略图
+- **[api] `GET /pending-tags`** 端点：分页返回待确认标签（替代原来一次拉 100 条全量方案）
+- **[api] 全部 asset 列表 API** 返回 `thumbnail_url` 字段（assets/search/favorites/recent）
+- **[frontend] AssetCard** 网格视图使用缩略图渲染，视频素材仅 hover 时加载原始视频流
+- **[frontend] ReviewQueue** 分页化（每页 20 条），不再一次加载所有素材筛选 pending
+- **[data] 清理 28 个 ai_tag_error 错误标签**，从错误信息中恢复 9 个素材的 AI 分类
 
 ---
 
-### v0.52 鈥?2026-04-16
+### v0.52 — 2026-04-16
 
-**H5 鍦扮墷涓婚 Loading 浣撻獙缁勪欢 & 璧勪骇鐢熸垚宸ュ叿**
+**H5 地牢主题 Loading 体验组件 & 资产生成工具**
 
 **Feature:**
-- **[frontend] Loading 缁勪欢浣撶郴鏂板缓**锛坄src/components/loading/`锛夛細缁熶竴绛夊緟绠＄悊鍣?`useLoadingOrchestrator` Hook + 鍏ㄥ睆涓婚鍖栧睍绀虹粍浠?`DungeonLoadingScreen`锛屾敮鎸?5 涓満鏅紙鍦扮墷鍏ュ彛/閰掗/閾佸尃閾?缁撶畻鍙?鏂嚎閲嶈繛锛夈€佹椂闀垮垎绾ц嚜鍔ㄥ崌绾э紙0-1s/1-3s/3-8s/8-15s/15s+锛夈€侀潪绾挎€ц繘搴︽潯銆佽鑹插寲鏂囨涓夋閫掕繘锛堝畧闂ㄤ汉/閰掗鑰佹澘/閾佸尃/缁撶畻鍚?鏃佺櫧锛夈€佸僵铔嬬郴缁燂紙鏁查棬鍥炲槾/鐏妸鐐逛寒/浠婃棩鍛界/瀹夋姎绀煎寘锛?- **[api] Loading 璧勪骇鐢熸垚鑴氭湰**锛坄scripts/generate-loading-assets.ts`锛夛細璋冪敤 Compass/Imagen 鎵归噺鐢熸垚鍦烘櫙鑳屾櫙鍥撅紙16:9锛屾敮鎸佹父鎴忓師鐢荤敾椋庡弬鑰冮攣瀹氾級+ 璋冪敤 SUNO 鎵归噺鐢熸垚鍦烘櫙鐜闊虫晥锛堢函鍣ㄤ箰 MP3锛夛紝宸插瓨鍦ㄨ祫浜ц嚜鍔ㄨ烦杩囷紝鏀寔 `--images-only` / `--audio-only` 鍙傛暟
-- **[frontend] shimmer 鍔ㄧ敾鍏抽敭甯?*锛歚index.css` 鏂板杩涘害鏉″厜娉芥祦鍔ㄥ姩鐢?
-**璧勪骇娓呭崟锛坥utput/loading-assets/锛夛細**
-- 5 寮?16:9 鍦烘櫙鑳屾櫙鍥撅紙Imagen + Gold And Glory 鍘熺敾鐢婚鍙傝€冿級
-- 10 棣栧満鏅幆澧冮煶鏁堬紙SUNO V4.5 绾櫒涔愶紝姣忓満鏅?2 棣栧閫夛級
+- **[frontend] Loading 组件体系新建**（`src/components/loading/`）：统一等待管理器 `useLoadingOrchestrator` Hook + 全屏主题化展示组件 `DungeonLoadingScreen`，支持 5 个场景（地牢入口/酒馆/铁匠铺/结算台/断线重连）、时长分级自动升级（0-1s/1-3s/3-8s/8-15s/15s+）、非线性进度条、角色化文案三段递进（守门人/酒馆老板/铁匠/结算吏/旁白）、彩蛋系统（敲门回嘴/火把点亮/今日命签/安抚礼包）
+- **[api] Loading 资产生成脚本**（`scripts/generate-loading-assets.ts`）：调用 Compass/Imagen 批量生成场景背景图（16:9，支持游戏原画画风参考锁定）+ 调用 SUNO 批量生成场景环境音效（纯器乐 MP3），已存在资产自动跳过，支持 `--images-only` / `--audio-only` 参数
+- **[frontend] shimmer 动画关键帧**：`index.css` 新增进度条光泽流动动画
+
+**资产清单（output/loading-assets/）：**
+- 5 张 16:9 场景背景图（Imagen + Gold And Glory 原画画风参考）
+- 10 首场景环境音效（SUNO V4.5 纯器乐，每场景 2 首备选）
 
 ---
 
-### v0.51 鈥?2026-04-16
+### v0.51 — 2026-04-16
 
-**涓€閿垚鐗囦覆琛屾彁浜ら槦鍒?+ 鎵归噺鍙栨秷**
+**一键成片串行提交队列 + 批量取消**
 
 **Feature:**
-- **[api] QuickFilm 涓茶鎻愪氦闃熷垪**锛歚POST /quickfilm/:jobId/confirm` 鏀逛负鍙彁浜ょ涓€涓垎闀滃埌鍗虫ⅵ锛屽叾浣欏垎闀滀互 `awaiting_submit` 鐘舵€佸瓨鍏?`batchJobsQueue`銆傚綋鍓嶄竴涓换鍔″畬鎴愭垨澶辫触鏃讹紝闃熷垪鑷姩鎻愪氦涓嬩竴涓€傞伩鍏嶅鍒嗛暅鍚屾椂鎻愪氦瑙﹀彂鍗虫ⅵ骞跺彂瓒呴檺锛坮et=1310 ExceedConcurrencyLimit锛?- **[api] `batchJobsQueue` 澧炲己**锛氭柊澧?`awaiting_submit` 鐘舵€佸拰 `submitParams` 瀛楁锛涙柊澧?`submitNextQuickfilmShot()` 鑷姩鎻愪氦閫昏緫锛岀敱 `pollSingleJob` 鍦ㄤ换鍔＄粓鎬佹椂瑙﹀彂锛涙柊澧炴湇鍔″櫒閲嶅惎鎭㈠鏈哄埗锛坧oller tick 妫€娴嬪埌鏃犳椿璺冧换鍔′絾鏈?awaiting_submit 鏃惰嚜鍔ㄧ画鎺ワ級
-- **[api] 鎵归噺鍙栨秷鎺ュ彛**锛氭柊澧?`DELETE /api/batch-jobs/project/:projectId`锛屼竴娆″彇娑堥」鐩唴鎵€鏈夋湭瀹屾垚浠诲姟锛坧ending / queuing / processing / awaiting_submit锛?- **[frontend] 鎵归噺浠诲姟鐪嬫澘澧炲己**锛氭柊澧炪€屽彇娑堝叏閮ㄦ帓闃熴€嶆寜閽紱鐘舵€佹眹鎬昏鏂板銆屽緟鎻愪氦 N銆嶈鏁帮紱`awaiting_submit` 鐘舵€佹樉绀轰负銆岎煏?鎺掗槦寰呮彁浜ゃ€嶅苟鏀寔鍗曠嫭鍙栨秷
+- **[api] QuickFilm 串行提交队列**：`POST /quickfilm/:jobId/confirm` 改为只提交第一个分镜到即梦，其余分镜以 `awaiting_submit` 状态存入 `batchJobsQueue`。当前一个任务完成或失败时，队列自动提交下一个。避免多分镜同时提交触发即梦并发超限（ret=1310 ExceedConcurrencyLimit）
+- **[api] `batchJobsQueue` 增强**：新增 `awaiting_submit` 状态和 `submitParams` 字段；新增 `submitNextQuickfilmShot()` 自动提交逻辑，由 `pollSingleJob` 在任务终态时触发；新增服务器重启恢复机制（poller tick 检测到无活跃任务但有 awaiting_submit 时自动续接）
+- **[api] 批量取消接口**：新增 `DELETE /api/batch-jobs/project/:projectId`，一次取消项目内所有未完成任务（pending / queuing / processing / awaiting_submit）
+- **[frontend] 批量任务看板增强**：新增「取消全部排队」按钮；状态汇总行新增「待提交 N」计数；`awaiting_submit` 状态显示为「🕐 排队待提交」并支持单独取消
 
-**璁捐瀵归綈锛?* 澶嶇敤楂樼骇鍒剁墖锛圥roductionWizard锛夌殑涓茶鎻愪氦鎬濊矾鈥斺€斿墠涓€涓畬鎴愭墠鏀捐涓嬩竴涓€傞珮绾у埗鐗囬潬鍓嶇 Promise 閾?+ SSE 鎱㈤€熸ā寮忓疄鐜帮紱涓€閿垚鐗囬潬鍚庣 batchJobsQueue 浜嬩欢椹卞姩瀹炵幇锛岄€傞厤鏃犲墠绔暱杩炴帴鐨勫満鏅€?
+**设计对齐：** 复用高级制片（ProductionWizard）的串行提交思路——前一个完成才放行下一个。高级制片靠前端 Promise 链 + SSE 慢速模式实现；一键成片靠后端 batchJobsQueue 事件驱动实现，适配无前端长连接的场景。
+
 ---
 
-### v0.50 鈥?2026-04-16
+### v0.50 — 2026-04-16
 
-**P1-G 澶栭儴渚濊禆鐘舵€佹満鏍囧噯鍖栵紙绗竴闃舵锛?*
+**P1-G 外部依赖状态机标准化（第一阶段）**
 
 **Feature:**
-- **[api] `domain/job-status.ts` 澧炲己**锛氭柊澧?7 涓湇鍔￠€傞厤鍑芥暟 `fromBatchJobStatus`銆乣fromDreaminaPhase`銆乣fromKlingPhase`銆乣fromQuickFilmStatus`銆乣fromDreaminaHttpStatus`銆乣fromEditorExportStatus`銆乣fromRemixStatus`锛屽皢鍚勬湇鍔″師鐢熺姸鎬佹槧灏勫埌缁熶竴鏋氫妇 `queued | running | succeeded | failed | timeout | canceled`銆傛柊澧?`isTerminalStatus()` 鍒ゆ柇缁堟€佸伐鍏峰嚱鏁?- **[api] Batch Jobs SSE 鎺ㄩ€侀檮鍔?`unifiedStatus`**锛歚GET /api/batch-jobs/stream` 鍜?`GET /api/batch-jobs` 鍝嶅簲涓檮鍔?`unifiedStatus` 瀛楁锛堝悜鍚庡吋瀹癸紝涓嶆敼鍙樺師鏈?`status` 瀛楁锛夛紝鍓嶇鍙笎杩涘紡杩佺Щ
-- **[frontend] `types/jobStatus.ts` 鏂板缓**锛氬墠绔粺涓€浠诲姟鐘舵€佺被鍨嬪畾涔夛紝涓庡悗绔?`domain/job-status.ts` 瀵归綈锛屾彁渚?`toUnifiedStatus()` 閫氱敤閫傞厤鍑芥暟鍜?`isTerminalStatus()` 宸ュ叿鍑芥暟
-- **[frontend] `BatchJobDto.unifiedStatus` 鍙€夊瓧娈?*锛氬墠绔被鍨嬪畾涔変腑娣诲姞鍚庣鑷姩闄勫姞鐨勭粺涓€鐘舵€佸瓧娈?
-**鐘舵€佹槧灏勫鐓ц〃锛?*
-| 鍘熺敓鐘舵€?| 缁熶竴鐘舵€?|
+- **[api] `domain/job-status.ts` 增强**：新增 7 个服务适配函数 `fromBatchJobStatus`、`fromDreaminaPhase`、`fromKlingPhase`、`fromQuickFilmStatus`、`fromDreaminaHttpStatus`、`fromEditorExportStatus`、`fromRemixStatus`，将各服务原生状态映射到统一枚举 `queued | running | succeeded | failed | timeout | canceled`。新增 `isTerminalStatus()` 判断终态工具函数
+- **[api] Batch Jobs SSE 推送附加 `unifiedStatus`**：`GET /api/batch-jobs/stream` 和 `GET /api/batch-jobs` 响应中附加 `unifiedStatus` 字段（向后兼容，不改变原有 `status` 字段），前端可渐进式迁移
+- **[frontend] `types/jobStatus.ts` 新建**：前端统一任务状态类型定义，与后端 `domain/job-status.ts` 对齐，提供 `toUnifiedStatus()` 通用适配函数和 `isTerminalStatus()` 工具函数
+- **[frontend] `BatchJobDto.unifiedStatus` 可选字段**：前端类型定义中添加后端自动附加的统一状态字段
+
+**状态映射对照表：**
+| 原生状态 | 统一状态 |
 |---|---|
 | `pending` / `awaiting_submit` / `queued` | `queued` |
 | `running` / `processing` / `queuing` / `querying` / `rendering` | `running` |
@@ -1002,612 +1066,768 @@ ole="presentation"
 
 ---
 
-### v0.50 — 2026-04-16
+### v0.49 — 2026-04-16
 
-**视频剪辑器 P0 安全加固 + P1 体验与稳定性优化**
-
-**Security / P0:**
-- **[api] apply-sync 接口加固**（`editorProjects.ts`）：服务端自己从源制片 JSON 构造 `newVideoUrl`，客户端仅能提交 `{ shotIndex, newVersionId }`，校验 `newVersionId` 确实存在于该 shot 的 `previewVideoVersions` 后才写入素材库，彻底消除任意 URL 注入到素材 `url` 字段的可能。
-- **[api] 导出路径反解加用户域白名单**（`editorExport.ts`）：`resolveLocalPathFromUrl` 对 `/api/video/file?path=...` 解析出的本地路径做「必须落在当前用户输出目录 / uploads/editor 之下」的校验，与 `routes/video.ts` 权限模型对齐，堵住「导出流程读任意文件」的理论风险。
-- **[api] 导出状态接口加所有权校验**（`editorExport.ts`）：`ExportJob` 持久化 `username` 字段，`GET /api/editor/export/:jobId` 只返回当前 caller 自己提交的 job 状态/下载 URL；另加 24h/500 条的内存 `jobs` Map 淘汰策略，避免长期运行泄漏。
-- **[api] BGM 节拍分析选轨修正**（`editorAgentService.ts` → `findBgmAssetId`）：优先按 `track.id = a2 / bgm / music` 匹配，其次找「assetId ≠ 视频轨」的音频片段，最后兜底，修复过去把视频原声镜像轨（a1）当成 BGM 去分析节拍的 bug。
-- **[api] Agent 轨合并策略改写**（`editorAgentService.ts`）：大模型返回的 `tracks` 只用于覆盖 `v1` / `a1`，用户配置的 `a2`（BGM）/ `t1`（文字）/ `subtitles` / `mix` 一律保留自当前工程，消除"调用 Agent 一次、BGM 混音配置全没"的回归。
-
-**Feature / P1:**
-- **[frontend] 拖拽 Undo 合并**（`useUndoRedo.ts` + `TimelinePanel.tsx`）：新增 `beginBatch` / `endBatch`，`mousedown` 开始批量会话、期间所有高频 `setState` 不入历史栈，`mouseup` 才作为单条变更提交。修复过去"拖一次 clip 把 Undo 栈占满 50 条"的问题，拖拽 / Trim 现在一次撤销即可完全恢复。
-- **[frontend] Agent 停止按钮**（`AgentPanel.tsx` + `EditorWorkbench.tsx`）：生成中进度条旁新增「停止」按钮，基于 `AbortController.signal` 中断 SSE 流式请求；前端识别 `AbortError` 后展示"Agent 任务已取消"而不是"错误：..."。
-- **[frontend+api] 分片上传重试 + 总大小校验**（`api/editor.ts` + `editorAssets.ts`）：单片失败自动重试 2 次（指数退避 0.5/1s），前端组装请求带上 `expectedTotalSize`，后端在拼接前校验"分片总大小 ≈ 客户端声明大小"，防止客户端通过多分片绕过 multer 单文件上限。
-- **[frontend] 视频时长边界 Toast 提示**（`EditorWorkbench.tsx`）：加素材到时间轴时，若 `probeVideoDuration` 失败（跨域 / 不支持）弹 warning Toast 提示"已使用 10s 占位"；若原始时长 > 300s 提示"超过 300s 上限，已截断"，用户不再踩坑。
-- **[frontend] 导出前端轮询超时延长**（`ExportPanel.tsx`）：从 90×2s=3min 提到 600×2s=20min，与后端 `ffmpegExport` 长视频实际耗时匹配；超时时仅 warn "前端已停止轮询，任务可能仍在后台运行，请刷新历史查看"，不再误报"导出超时"。
-- **[api] `.mov` 真·重封装**（`ffmpegExport.ts` Step 5）：原来中间产物总是 MP4（libx264+aac），导出 `.mov` 只是 `copyFile + 改扩展名`；改为 `ffmpeg -c copy -f mov -movflags +faststart` 真正重封装到 QuickTime 容器，避免部分播放器/剪辑软件识别不了"改过扩展名的 MP4"。
-
-**Bug fix:**
-- 无。（本次无回归修复，均为主动强化。）
-
----
-
-### v0.49 鈥?2026-04-16
-
-**宸ㄧ煶鏂囦欢鎷嗗垎绗簩闃舵 鈥?LLM 瑙ｆ瀽鍑芥暟鎻愬彇 + 鍓嶇 hooks 鎷嗗垎**
+**巨石文件拆分第二阶段 — LLM 解析函数提取 + 前端 hooks 拆分**
 
 **Refactor:**
-- **[api] `riskSentimentParsing.ts` 鏂板缓**锛?47 琛岋級锛氫粠 `riskSentimentService.ts` 鎻愬彇 28 涓?LLM 瑙ｆ瀽/褰掍竴鍖?蹇収琛ュ叏鍑芥暟锛屽寘鎷?`parseJsonRelaxed`銆乣extractJsonObject`銆乣normalizePct3`銆乣deriveOverviewScoreFromPcts`銆乣parseKeywordMatrix`銆乣normalizeCreators`銆乣rehydrateSnapshot` 绛夈€備富鏂囦欢浠?1744 琛岄檷鑷?1051 琛岋紙鍑忓皯 693 琛岋級锛岃烦杩?Apify 閲囬泦鐩稿叧鍑芥暟
-- **[frontend] `useProductionShotReview.ts` 鏂板缓**锛?16 琛岋級锛欰I 瀹＄墖 + 鍒嗛暅闂翠竴鑷存€ф鏌?hook锛屽皝瑁?`handleAiReview`銆乣handleApplySuggestion`銆乣handleApplyAllAndRegenerate`銆乣handleContinuityCheck` 鍥涗釜鍥炶皟鍙婄浉鍏?state
-- **[frontend] `useProductionShotVersions.ts` 鏂板缓**锛?06 琛岋級锛氬垎闀滆棰戠増鏈鐞?hook锛屽皝瑁?`shotVideoVersions`銆乣selectShotVideoVersion`銆乣keepOnlyShotVideoVersion` 绛夌増鏈€夋嫨/娓呯悊閫昏緫銆俙ProductionWizard.tsx` 浠?1981 琛岄檷鑷?1851 琛?
-**鍚庣鏂囦欢鎷嗗垎杩涘害锛坮iskSentimentService.ts锛夛細**
-- `riskSentimentTypes.ts` 鈫?140 琛岋紙绫诲瀷瀹氫箟锛孭hase 1锛?- `riskSentimentParsing.ts` 鈫?747 琛岋紙瑙ｆ瀽/褰掍竴鍖栵紝Phase 2锛?- `riskSentimentService.ts` 鈫?1051 琛岋紙涓氬姟閫昏緫 + Apify 閲囬泦锛?- 鍘熷琛屾暟锛?889 琛?鈫?鎷嗗垎鍚庝富鏂囦欢锛?051 琛岋紙鍑忓皯 44%锛?
+- **[api] `riskSentimentParsing.ts` 新建**（747 行）：从 `riskSentimentService.ts` 提取 28 个 LLM 解析/归一化/快照补全函数，包括 `parseJsonRelaxed`、`extractJsonObject`、`normalizePct3`、`deriveOverviewScoreFromPcts`、`parseKeywordMatrix`、`normalizeCreators`、`rehydrateSnapshot` 等。主文件从 1744 行降至 1051 行（减少 693 行），跳过 Apify 采集相关函数
+- **[frontend] `useProductionShotReview.ts` 新建**（116 行）：AI 审片 + 分镜间一致性检查 hook，封装 `handleAiReview`、`handleApplySuggestion`、`handleApplyAllAndRegenerate`、`handleContinuityCheck` 四个回调及相关 state
+- **[frontend] `useProductionShotVersions.ts` 新建**（106 行）：分镜视频版本管理 hook，封装 `shotVideoVersions`、`selectShotVideoVersion`、`keepOnlyShotVideoVersion` 等版本选择/清理逻辑。`ProductionWizard.tsx` 从 1981 行降至 1851 行
+
+**后端文件拆分进度（riskSentimentService.ts）：**
+- `riskSentimentTypes.ts` → 140 行（类型定义，Phase 1）
+- `riskSentimentParsing.ts` → 747 行（解析/归一化，Phase 2）
+- `riskSentimentService.ts` → 1051 行（业务逻辑 + Apify 采集）
+- 原始行数：1889 行 → 拆分后主文件：1051 行（减少 44%）
+
 ---
 
-### v0.48 鈥?2026-04-16
+### v0.48 — 2026-04-16
 
-**绱犳潗搴?AI 涓€閿暣鐞?+ 鏂囦欢澶硅鍥?+ 鎬ц兘浼樺寲**
+**素材库 AI 一键整理 + 文件夹视图 + 性能优化**
 
 **Feature:**
-- **[asset-library] AI 涓€閿暣鐞?*锛氶《閮ㄦ柊澧炪€岎煪?AI 涓€閿暣鐞嗐€嶆寜閽紝涓€閿畬鎴愭湭鍒嗙被绱犳潗 AI 鎵撴爣 + 鎸夊垎绫?鏂囦欢鍚嶈嚜鍔ㄥ垱寤烘枃浠跺す + 褰掓。绱犳潗
-- **[asset-library] 鏂囦欢澶圭綉鏍艰鍥?*锛氬叏閮ㄧ礌鏉?Tab 榛樿鍏堝睍绀烘枃浠跺す鍗＄墖锛堢被浼?Finder锛夛紝鐐瑰嚮杩涘叆鏌ョ湅鏂囦欢澶瑰唴瀹癸紝鏈綊鍏ョ殑绱犳潗鏄剧ず鍦ㄤ笅鏂?鏈暣鐞嗙礌鏉?鍖哄煙
-- **[asset-library] IntersectionObserver 鎳掑姞杞?*锛氱礌鏉愬崱鐗囧彧鍦ㄨ繘鍏ヨ鍙?200px 鑼冨洿鍐呮墠寮€濮嬪姞杞藉浘鐗?瑙嗛锛屽ぇ骞呭噺灏戦灞忚姹傞噺
-- **[asset-library] 鏂囦欢澶瑰鍏?*锛氫笂浼犻潰鏉挎柊澧炪€岄€夋嫨鏂囦欢澶广€嶆寜閽紝鏀寔 webkitdirectory 鏁翠釜鏂囦欢澶瑰鍏?+ 鎷栨嫿鏂囦欢澶硅嚜鍔ㄩ€掑綊鎵弿
-- **[api] POST /auto-organize**锛氬悗绔嚜鍔ㄦ暣鐞嗘帴鍙ｏ紝绛栫暐 A锛圓I 鍒嗙被锛? 绛栫暐 B锛堟枃浠跺悕鍓嶇紑锛夊彔鍔?
+- **[asset-library] AI 一键整理**：顶部新增「🪄 AI 一键整理」按钮，一键完成未分类素材 AI 打标 + 按分类/文件名自动创建文件夹 + 归档素材
+- **[asset-library] 文件夹网格视图**：全部素材 Tab 默认先展示文件夹卡片（类似 Finder），点击进入查看文件夹内容，未归入的素材显示在下方"未整理素材"区域
+- **[asset-library] IntersectionObserver 懒加载**：素材卡片只在进入视口 200px 范围内才开始加载图片/视频，大幅减少首屏请求量
+- **[asset-library] 文件夹导入**：上传面板新增「选择文件夹」按钮，支持 webkitdirectory 整个文件夹导入 + 拖拽文件夹自动递归扫描
+- **[api] POST /auto-organize**：后端自动整理接口，策略 A（AI 分类）+ 策略 B（文件名前缀）叠加
+
 ---
 
-### v0.48a 鈥?2026-04-16
+### v0.48a — 2026-04-16
 
-**AI 鍓緫鏅鸿兘浼樺寲 路 鏂瑰悜7 鐢ㄦ埛鍙嶉瀛︿範锛堝熀纭€鐗堬級**
+**AI 剪辑智能优化 · 方向7 用户反馈学习（基础版）**
 
 **Feature:**
-- **[api] `userPreferenceService.ts` 鏂板缓**锛氳交閲忕骇鐢ㄦ埛鍋忓ソ鐢诲儚鏈嶅姟鈥斺€斿鍑烘椂鏀堕泦琛屼负缁熻锛堢墖娈?activity 绫诲瀷銆佸钩鍧囨椂闀裤€佹暟閲忥級锛屼娇鐢?EMA锛堟寚鏁扮Щ鍔ㄥ钩鍧囷紝伪=0.3锛夊钩婊戞洿鏂帮紝閬垮厤鍗曟瀵煎嚭瑕嗙洊鍘嗗彶鍋忓ソ
-- **[api] `POST /api/editor/preference/report`**锛氭帴鏀跺墠绔鍑烘椂鐨勮涓烘姤鍛婏紝鏇存柊鐢ㄦ埛鍋忓ソ JSON 鏂囦欢锛堟寜鐢ㄦ埛鍚嶉殧绂诲瓨鍌級
-- **[api] `GET /api/editor/preference`**锛氭煡鐪嬪綋鍓嶇敤鎴峰亸濂界敾鍍忥紙璋冭瘯鐢級
-- **[api] `buildPreferencePromptSnippet`**锛氭牴鎹敤鎴峰巻鍙插亸濂界敓鎴?LLM prompt 鐗囨锛堝"鍋忓ソ鐨勫唴瀹圭被鍨嬶細鍑绘潃鐬棿銆佸洟鎴?銆?骞冲潎鐗囨鏃堕暱 2.1绉掞紙鍋忓ソ蹇垏锛?锛夛紝鑷姩娉ㄥ叆鍓緫 Agent 鎺掔墖鏃剁殑 system prompt
-- **[editor-agent] 鍋忓ソ娉ㄥ叆**锛歚editorAgentService.ts` 鐨?`buildSystemPrompt` 鏂板 `userPreferenceSnippet` 鍙傛暟锛屾帓鐗囪皟鐢ㄦ椂鑷姩鍔犺浇褰撳墠鐢ㄦ埛鍋忓ソ锛沗runEditorAgentApply` 閫氳繃 `options.username` 浼犲叆鐢ㄦ埛韬唤
-- **[frontend] 瀵煎嚭琛屼负闈欓粯涓婃姤**锛歚ExportPanel` 瀵煎嚭鎴愬姛鍚?fire-and-forget 璋冪敤 preference/report锛屾敹闆嗚棰戣建 clips 鐨?activity銆佹椂闀裤€乵eta 鏁版嵁
+- **[api] `userPreferenceService.ts` 新建**：轻量级用户偏好画像服务——导出时收集行为统计（片段 activity 类型、平均时长、数量），使用 EMA（指数移动平均，α=0.3）平滑更新，避免单次导出覆盖历史偏好
+- **[api] `POST /api/editor/preference/report`**：接收前端导出时的行为报告，更新用户偏好 JSON 文件（按用户名隔离存储）
+- **[api] `GET /api/editor/preference`**：查看当前用户偏好画像（调试用）
+- **[api] `buildPreferencePromptSnippet`**：根据用户历史偏好生成 LLM prompt 片段（如"偏好的内容类型：击杀瞬间、团战"、"平均片段时长 2.1秒（偏好快切）"），自动注入剪辑 Agent 排片时的 system prompt
+- **[editor-agent] 偏好注入**：`editorAgentService.ts` 的 `buildSystemPrompt` 新增 `userPreferenceSnippet` 参数，排片调用时自动加载当前用户偏好；`runEditorAgentApply` 通过 `options.username` 传入用户身份
+- **[frontend] 导出行为静默上报**：`ExportPanel` 导出成功后 fire-and-forget 调用 preference/report，收集视频轨 clips 的 activity、时长、meta 数据
 
-**璁捐瑕佺偣锛?*
-- 鍋忓ソ鏁版嵁涓虹函 JSON 鏂囦欢锛坄{DATA_DIR}/.data/preferences/{username}.json`锛夛紝涓嶄緷璧栨暟鎹簱
-- LLM prompt 涓槑纭爣娉?鐢ㄦ埛褰撳墠鎸囦护浼樺厛绾ч珮浜庡巻鍙插亸濂?锛岄伩鍏嶅亸濂藉共鎵版樉寮忛渶姹?- 棣栨瀵煎嚭鍗冲缓绔嬬敾鍍忥紝鏃犻渶鐢ㄦ埛棰濆鎿嶄綔
+**设计要点：**
+- 偏好数据为纯 JSON 文件（`{DATA_DIR}/.data/preferences/{username}.json`），不依赖数据库
+- LLM prompt 中明确标注"用户当前指令优先级高于历史偏好"，避免偏好干扰显式需求
+- 首次导出即建立画像，无需用户额外操作
 
 ---
 
-### v0.47 鈥?2026-04-16
+### v0.47 — 2026-04-16
 
-**绱犳潗搴撴櫤鑳戒紭鍖栵紙Phase 0-4 鍏ㄩ噺锛?*
+**素材库智能优化（Phase 0-4 全量）**
 
 **Feature:**
-- **[asset-library] AI 鏅鸿兘鍒嗙被**锛氫笂浼犳椂鑷姩璇嗗埆 7 澶х被鍒紙瑙掕壊/姝﹀櫒閬撳叿/鍦烘櫙/UI绱犳潗/瀹ｄ紶鍥?瑙嗛鐗囨/鏈垎绫伙級+ 30 瀛楁弿杩帮紝缁撴灉瀛樺叆 assets 琛?`ai_category` / `ai_description`
-- **[asset-library] Tab 瀵艰埅**锛氭柊澧炪€屾渶杩戜娇鐢ㄣ€嶃€屾敹钘忋€峊ab锛屽姞涓婂師鏈夈€屽叏閮ㄧ礌鏉愩€嶅拰銆孏oogle Drive銆?- **[asset-library] 鏀惰棌绯荤粺**锛氱礌鏉愬崱鐗囨槦鏍囨敹钘?鍙栨秷鏀惰棌锛宍asset_favorites` 琛ㄦ寔涔呭寲
-- **[asset-library] 鏈€杩戜娇鐢?*锛歚asset_usage_log` 璁板綍浣跨敤鍘嗗彶锛屾渶杩戜娇鐢?Tab 灞曠ず
-- **[asset-library] AI 鍒嗙被铏氭嫙鏂囦欢澶?*锛氬乏渚ф爮鎸?ai_category 鍒嗙粍锛屾樉绀哄悇绫诲埆鏁伴噺锛岀偣鍑荤瓫閫?- **[asset-library] 鑷畾涔夋枃浠跺す CRUD**锛氫晶鏍忓垱寤?閲嶅懡鍚?鍒犻櫎鏂囦欢澶癸紝鏀寔 3 绾у祵濂?- **[asset-library] 鎷栨嫿褰掓。**锛氱礌鏉愬崱鐗囨敮鎸?HTML5 鍘熺敓鎷栨嫿鍒版枃浠跺す锛涢€変腑澶氫釜鍚庡彲鎵归噺绉诲姩
-- **[asset-library] 鍥剧墖鎮仠鏀惧ぇ**锛氶紶鏍囨偓鍋滃浘鐗?400ms 寮瑰嚭 360px 澶у浘棰勮娴獥锛坒ixed 瀹氫綅锛?- **[asset-library] 鎼滅储澧炲己**锛氭悳绱㈣寖鍥存墿灞曞埌 ai_description + ai_category
-- **[asset-library] Google Drive 闆嗘垚**锛歄Auth 2.0 杩炴帴銆佹枃浠舵祻瑙堛€佹寜闇€缂撳瓨銆佺缉鐣ュ浘浠ｇ悊
+- **[asset-library] AI 智能分类**：上传时自动识别 7 大类别（角色/武器道具/场景/UI素材/宣传图/视频片段/未分类）+ 30 字描述，结果存入 assets 表 `ai_category` / `ai_description`
+- **[asset-library] Tab 导航**：新增「最近使用」「收藏」Tab，加上原有「全部素材」和「Google Drive」
+- **[asset-library] 收藏系统**：素材卡片星标收藏/取消收藏，`asset_favorites` 表持久化
+- **[asset-library] 最近使用**：`asset_usage_log` 记录使用历史，最近使用 Tab 展示
+- **[asset-library] AI 分类虚拟文件夹**：左侧栏按 ai_category 分组，显示各类别数量，点击筛选
+- **[asset-library] 自定义文件夹 CRUD**：侧栏创建/重命名/删除文件夹，支持 3 级嵌套
+- **[asset-library] 拖拽归档**：素材卡片支持 HTML5 原生拖拽到文件夹；选中多个后可批量移动
+- **[asset-library] 图片悬停放大**：鼠标悬停图片 400ms 弹出 360px 大图预览浮窗（fixed 定位）
+- **[asset-library] 搜索增强**：搜索范围扩展到 ai_description + ai_category
+- **[asset-library] Google Drive 集成**：OAuth 2.0 连接、文件浏览、按需缓存、缩略图代理
 
-**Schema 鍙樻洿锛?*
-- `assets` 琛ㄦ柊澧?`ai_category TEXT`銆乣ai_description TEXT`銆乣folder_id TEXT`
-- 鏂板 `asset_folders`銆乣asset_favorites`銆乣asset_usage_log` 涓夊紶琛?
+**Schema 变更：**
+- `assets` 表新增 `ai_category TEXT`、`ai_description TEXT`、`folder_id TEXT`
+- 新增 `asset_folders`、`asset_favorites`、`asset_usage_log` 三张表
+
 ---
 
-### v0.47a 鈥?2026-04-16
+### v0.47a — 2026-04-16
 
-**宸ㄧ煶鏂囦欢鎷嗗垎绗竴闃舵锛歳iskSentimentService 绫诲瀷鎻愬彇**
+**巨石文件拆分第一阶段：riskSentimentService 类型提取**
 
 **Refactor:**
-- **[api] `riskSentimentTypes.ts` 鏂板缓**锛氫粠 `riskSentimentService.ts`锛?744琛岋級鎻愬彇鍏ㄩ儴绫诲瀷瀹氫箟锛坄RiskVideo`銆乣RiskCreator`銆乣CommentTask`銆乣RiskSnapshot`銆乣RiskStrategyBlock` 绛?12 涓被鍨嬶紝128琛岋級锛屼富鏂囦欢閫氳繃 `export type` 閲嶅鍑猴紝娑堣垂鏂归浂鏀瑰姩
-- 涓绘枃浠惰鏁?1744 鈫?1626锛?118琛岋級锛屽悗缁樁娈靛皢缁х画鎻愬彇 Apify 鏁版嵁閲囬泦鍜?LLM 瑙ｆ瀽鍑芥暟
+- **[api] `riskSentimentTypes.ts` 新建**：从 `riskSentimentService.ts`（1744行）提取全部类型定义（`RiskVideo`、`RiskCreator`、`CommentTask`、`RiskSnapshot`、`RiskStrategyBlock` 等 12 个类型，128行），主文件通过 `export type` 重导出，消费方零改动
+- 主文件行数 1744 → 1626（-118行），后续阶段将继续提取 Apify 数据采集和 LLM 解析函数
 
 ---
 
-### v0.46 鈥?2026-04-16
+### v0.46 — 2026-04-16
 
-**楂樼骇鍒剁墖 鈫?鍓緫鍣?澧為噺鍚屾锛圥hase 3锛?*
+**高级制片 → 剪辑器 增量同步（Phase 3）**
 
 **Feature:**
-- **[editor] 鍚屾鏇存柊鎸夐挳**锛氫粠鍒剁墖瀵煎叆鐨勫壀杈戦」鐩《鏍忔柊澧炪€岎煍?鍚屾鏇存柊銆嶆寜閽紝鐐瑰嚮瀵规瘮鍒剁墖绔渶鏂伴€夊畾瑙嗛鐗堟湰涓庡壀杈戝櫒鍐呯増鏈?- **[editor] SyncProductionModal 宸紓灞曠ず**锛氬脊绐楀紡宸紓鍒楄〃锛岄€愰暅鏄剧ず銆屾湁鏂扮増鏈?/ 鏃犲彉鍖栥€嶇姸鎬侊紝鏀寔鍕鹃€夋壒閲忔浛鎹㈡垨鍏ㄩ€?- **[api] POST /sync-production**锛氬悗绔姣斿埗鐗囬」鐩?`selectedPreviewVideoVersionId` 涓庡壀杈戝櫒 clip `meta.productionVersionId`锛岃繑鍥為€愰暅宸紓
-- **[api] PATCH /apply-sync**锛氬悗绔墽琛屾浛鎹⑩€斺€旀洿鏂扮礌鏉?URL銆乧lip sourceEnd銆乵eta.productionVersionId銆乵eta.syncedAt锛屽苟鑷姩浣嶇Щ鍚庣画 clip 閫傞厤鏃堕暱鍙樺寲
-- **[editor] 鏃堕暱鍙樺寲鑷姩澶勭悊**锛氬悓姝ユ浛鎹㈡椂鑻ユ柊瑙嗛鏃堕暱涓庢棫鐗堜笉鍚岋紝鑷姩璋冩暣褰撳墠 clip 鐨?sourceEnd 骞朵綅绉诲悗缁墍鏈?clip 鐨?timelineStart锛屼繚鎸佹椂闂磋酱杩炵画鎬?- **[editor] 鍚屾鍚庤嚜鍔ㄥ埛鏂?*锛氭浛鎹㈠畬鎴愬悗鑷姩閲嶆柊鍔犺浇缂栬緫鍣ㄩ」鐩紝纭繚 UI 涓庢寔涔呭寲鏁版嵁涓€鑷?
-**鏂板鏂囦欢锛?*
-- `h5-video-tool/src/editor/components/SyncProductionModal.tsx` 鈥?鍚屾宸紓寮圭獥缁勪欢
+- **[editor] 同步更新按钮**：从制片导入的剪辑项目顶栏新增「🔄 同步更新」按钮，点击对比制片端最新选定视频版本与剪辑器内版本
+- **[editor] SyncProductionModal 差异展示**：弹窗式差异列表，逐镜显示「有新版本 / 无变化」状态，支持勾选批量替换或全选
+- **[api] POST /sync-production**：后端对比制片项目 `selectedPreviewVideoVersionId` 与剪辑器 clip `meta.productionVersionId`，返回逐镜差异
+- **[api] PATCH /apply-sync**：后端执行替换——更新素材 URL、clip sourceEnd、meta.productionVersionId、meta.syncedAt，并自动位移后续 clip 适配时长变化
+- **[editor] 时长变化自动处理**：同步替换时若新视频时长与旧版不同，自动调整当前 clip 的 sourceEnd 并位移后续所有 clip 的 timelineStart，保持时间轴连续性
+- **[editor] 同步后自动刷新**：替换完成后自动重新加载编辑器项目，确保 UI 与持久化数据一致
+
+**新增文件：**
+- `h5-video-tool/src/editor/components/SyncProductionModal.tsx` — 同步差异弹窗组件
 
 ---
 
-### v0.46a 鈥?2026-04-16
+### v0.46a — 2026-04-16
 
-**闀滃ご鐗堟湰鍘嗗彶瀹屾暣瀹炵幇锛堢増鏈垏鎹?API + 鐗堟湰娓呯悊 + 涓婇檺鎻愮ず锛?*
+**镜头版本历史完整实现（版本切换 API + 版本清理 + 上限提示）**
 
 **Feature:**
-- **[api] PATCH `/api/production/project/:id/shots/:shotIndex/version`**锛氶暅澶寸増鏈垏鎹㈠嵆鏃舵寔涔呭寲鎺ュ彛鈥斺€斿垏鎹㈢増鏈椂涓嶅啀绛夊緟 auto-save锛?s 闃叉姈锛夛紝鑰屾槸绔嬪嵆灏?`selectedPreviewVideoVersionId` 鍐欏叆鏈嶅姟绔?JSON锛屾秷闄ゃ€屽垏鐗堟湰 鈫?鍒锋柊 鈫?鐗堟湰鍥為€€銆嶉棶棰?- **[api] DELETE `/api/production/project/:id/shots/:shotIndex/versions`**锛氱増鏈竻鐞嗘帴鍙ｂ€斺€斾繚鐣欐寚瀹氱増鏈紝鍒犻櫎璇ラ暅澶村叾浠栫増鏈殑瑙嗛鏂囦欢骞舵洿鏂伴」鐩?JSON锛涜矾寰勭┛瓒婇槻鎶ょ‘淇濆彧鑳藉垹闄?`API_DATA_DIR` 涓嬬殑鏂囦欢
-- **[frontend] `apiPatch` 閫氱敤璇锋眰鍑芥暟**锛歚api/client.ts` 鏂板 PATCH HTTP 鏂规硶鏀寔
-- **[frontend] 鐗堟湰鍒囨崲鍗虫椂鍚屾**锛歚selectShotVideoVersion` 鍥炶皟鍦ㄦ洿鏂版湰鍦?state 鐨勫悓鏃?fire-and-forget 璋冪敤 PATCH API
-- **[frontend] 鐗堟湰娓呯悊璋冪敤鍚庣**锛氥€屼粎淇濈暀褰撳墠銆嶆寜閽Е鍙戞椂鍚屾璋冪敤 DELETE API 娓呯悊鏈嶅姟鍣ㄤ笂鐨勬棫鐗堟湰瑙嗛鏂囦欢
-- **[frontend] 鐗堟湰涓婇檺鎻愮ず**锛氬綋鏌愰暅澶磋棰戠増鏈?>= 5 涓椂锛岀増鏈垪琛ㄤ笂鏂规樉绀洪粍鑹叉彁绀恒€岀増鏈凡杈?N 涓紝寤鸿娓呯悊鏃х増鏈互鑺傜渷纾佺洏绌洪棿銆?
+- **[api] PATCH `/api/production/project/:id/shots/:shotIndex/version`**：镜头版本切换即时持久化接口——切换版本时不再等待 auto-save（3s 防抖），而是立即将 `selectedPreviewVideoVersionId` 写入服务端 JSON，消除「切版本 → 刷新 → 版本回退」问题
+- **[api] DELETE `/api/production/project/:id/shots/:shotIndex/versions`**：版本清理接口——保留指定版本，删除该镜头其他版本的视频文件并更新项目 JSON；路径穿越防护确保只能删除 `API_DATA_DIR` 下的文件
+- **[frontend] `apiPatch` 通用请求函数**：`api/client.ts` 新增 PATCH HTTP 方法支持
+- **[frontend] 版本切换即时同步**：`selectShotVideoVersion` 回调在更新本地 state 的同时 fire-and-forget 调用 PATCH API
+- **[frontend] 版本清理调用后端**：「仅保留当前」按钮触发时同步调用 DELETE API 清理服务器上的旧版本视频文件
+- **[frontend] 版本上限提示**：当某镜头视频版本 >= 5 个时，版本列表上方显示黄色提示「版本已达 N 个，建议清理旧版本以节省磁盘空间」
+
 ---
 
-### v0.45 鈥?2026-04-16
+### v0.45 — 2026-04-16
 
-**楂樼骇鍒剁墖 鈫?鍓緫鍣?浣撻獙涓叉帴浼樺寲锛圥hase 1锛?*
+**高级制片 → 剪辑器 体验串接优化（Phase 1）**
 
 **Feature:**
-- **[editor] 瀵煎叆寮曞寮圭獥**锛氫粠楂樼骇鍒剁墖瀵煎叆鍓緫鍣ㄥ悗锛岃嚜鍔ㄥ脊鍑哄紩瀵肩獥鍙ｏ紝鏄剧ず瀵煎叆鍒嗛暅鏁板拰鎬绘椂闀匡紝鎺ㄨ崘銆屼竴閿敓鎴愰厤涔愩€嶅拰銆屽厛棰勮涓€閬嶃€嶄袱涓笅涓€姝ユ搷浣滐紱鍚屼竴椤圭洰浠呮樉绀轰竴娆★紙localStorage 璁板綍锛?- **[editor] 鏉ユ簮鍒剁墖椤圭洰鏍囪瘑**锛氫粠鍒剁墖瀵煎叆鐨勫壀杈戦」鐩紝椤堕儴鏍忔樉绀恒€岎煋?鏉ヨ嚜銆岄」鐩悕銆嶁啋銆嶆爣绛撅紝鐐瑰嚮鍙烦鍥炲埗鐗囧伐浣滃彴
-- **[editor] 鍘婚噸妫€鏌?*锛氱偣鍑汇€屽湪鍓緫鍣ㄤ腑鎵撳紑銆嶆椂锛屽鏋滃凡瀛樺湪鍚屽悕鍏宠仈鍓緫椤圭洰锛屽脊鍑虹‘璁ゅ璇濇鈥斺€斿彲閫夋嫨鎵撳紑宸叉湁椤圭洰鎴栧垱寤烘柊椤圭洰锛岄伩鍏嶉噸澶嶅垱寤?- **[studio鈫抏ditor] 鍒嗛暅鍏冩暟鎹紶閫?*锛氬鍏ュ壀杈戝櫒鏃讹紝姣忎釜 VideoClip 鐨?`meta` 瀛楁鑷姩濉厖鍒嗛暅缁撴瀯鍖栦俊鎭紙鏅埆銆佽繍闀溿€佷富浣撱€佸姩浣溿€佸満鏅€佹儏缁€佸厜褰便€佸彴璇嶏級锛屼负 AI Agent 鏅鸿兘鍓緫鎻愪緵涓婁笅鏂?- **[type] VideoClip 鎵╁睍**锛氬墠鍚庣 `VideoClip` 鎺ュ彛鏂板 `meta?: Record<string, unknown>` 瀛楁
-- **[type] TimelineProject 鎵╁睍**锛氬墠鍚庣 `TimelineProject` 鎺ュ彛鏂板 `sourceProductionProjectId` 鍜?`sourceProductionTitle` 瀛楁锛屾敮鎸佸弻鍚戦摼鎺?- **[studio] 鍒嗛暅鎻忚堪鎴柇**锛氬鍏ユ椂 note 鎴柇闀垮害浠?60 瀛楃鎻愬崌鍒?120 瀛楃锛屼繚鐣欐洿澶氬垎闀滄弿杩颁俊鎭?
-**鏂板鏂囦欢锛?*
-- `h5-video-tool/src/editor/components/ImportGuideModal.tsx` 鈥?鍒剁墖瀵煎叆寮曞寮圭獥缁勪欢
+- **[editor] 导入引导弹窗**：从高级制片导入剪辑器后，自动弹出引导窗口，显示导入分镜数和总时长，推荐「一键生成配乐」和「先预览一遍」两个下一步操作；同一项目仅显示一次（localStorage 记录）
+- **[editor] 来源制片项目标识**：从制片导入的剪辑项目，顶部栏显示「📎 来自「项目名」→」标签，点击可跳回制片工作台
+- **[editor] 去重检查**：点击「在剪辑器中打开」时，如果已存在同名关联剪辑项目，弹出确认对话框——可选择打开已有项目或创建新项目，避免重复创建
+- **[studio→editor] 分镜元数据传递**：导入剪辑器时，每个 VideoClip 的 `meta` 字段自动填充分镜结构化信息（景别、运镜、主体、动作、场景、情绪、光影、台词），为 AI Agent 智能剪辑提供上下文
+- **[type] VideoClip 扩展**：前后端 `VideoClip` 接口新增 `meta?: Record<string, unknown>` 字段
+- **[type] TimelineProject 扩展**：前后端 `TimelineProject` 接口新增 `sourceProductionProjectId` 和 `sourceProductionTitle` 字段，支持双向链接
+- **[studio] 分镜描述截断**：导入时 note 截断长度从 60 字符提升到 120 字符，保留更多分镜描述信息
+
+**新增文件：**
+- `h5-video-tool/src/editor/components/ImportGuideModal.tsx` — 制片导入引导弹窗组件
 
 ---
 
-### v0.44 鈥?2026-04-16
+### v0.44 — 2026-04-16
 
-**鍓嶇璁捐绯荤粺寤虹珛 & UI 鍏ㄩ潰鍗囩骇**
+**前端设计系统建立 & UI 全面升级**
 
 **Feature:**
-- **[design] DESIGN.md 璁捐绯荤粺**锛氬垱寤鸿瀺鍚?Framer锛堝伐鍏风簿搴︼級+ RunwayML锛堢數褰辫川鎰燂級鐨?GOBS 涓撳睘璁捐瑙勮寖锛屾兜鐩栬壊褰?Token銆佹帓鐗堝眰绾с€佺粍浠舵牱寮忋€佹繁搴︾郴缁熴€佸搷搴斿紡琛屼负鍏?9 绔犺妭
-- **[design] Cyan 鍙岃壊绯?*锛氭柊澧?`--color-accent: #22d3ee` 浣滀负绗簩鑹插僵缁村害锛岃疮绌?Hero 鍏夋檿銆佸揩鎹峰叆鍙ｃ€佺敤鎴峰ご鍍忔笎鍙樸€丯EW 鏍囩绛夛紝瑙嗚灞傛浠庡崟鑹插崌绾т负鍙岃壊绯?- **[css] Token 鍙屾簮鍐茬獊淇**锛氬垹闄?`@theme` 鍧椾腑涓?`:root` 閲嶅涓斾笉涓€鑷寸殑鍙橀噺瀹氫箟锛岀粺涓€涓哄崟涓€鏉ユ簮
-- **[css] 鑳屾櫙姘涘洿鍗囩骇**锛歜ody 鑳屾櫙浠庝袱灞傛笎鍙樺崌绾т负涓夊眰寰勫悜娓愬彉锛堜富鑹插乏涓?22% + cyan 鍙充笂 12% + 搴曢儴寰厜 8%锛夛紝娣辩┖鑸炲彴鎰?- **[css] 缁勪欢绫诲簱鎵╁厖**锛氭柊澧?`.btn-primary`锛堣嵂涓?鍏夋檿锛夈€乣.btn-secondary`锛堟瘺鐜荤拑锛夈€乣.btn-ghost`銆乣.chip` / `.chip-cyan`锛堟爣绛捐嵂涓革級銆乣.video-card`锛堥浂闃村奖鍐呭鍗＄墖锛夈€乣.section-overline`锛坲ppercase 寮曞璇嶏級
-- **[css] 鍔ㄧ敾浣撶郴**锛氭柊澧?`animate-fade-in-up`锛堝脊鍑烘劅锛夈€乣animate-glow-pulse`锛堝厜鏅曞懠鍚革級銆乣.stagger-children`锛堝瓙鍏冪礌閿欏紑鍏ュ満锛夈€乣.nav-stagger`锛堜晶鏍忓鑸叆鍦猴級锛岀粺涓€寮规€х紦鍔?`cubic-bezier(0.16, 1, 0.3, 1)`
-- **[layout] 渚ф爮閲嶈璁?*锛氬鑸垎缁勫姞 section-overline 鏍囩锛?鍒涗綔"/"鍚庢湡 & 绱犳潗"/"鍒嗗彂 & 宸ュ叿"锛夛紱Active 椤瑰乏渚?3px 鍙戝厜鎸囩ず鏉?+ 鍏夋檿闃村奖锛涘浘鏍囩粺涓€ 18px/1.8 stroke
-- **[layout] 鐢ㄦ埛鍖哄崌绾?*锛氭笎鍙樺ご鍍忓湀锛坧rimary鈫抍yan锛夋樉绀洪瀛楁瘝 + 鐢ㄦ埛淇℃伅 + 鍥炬爣宸ュ叿鏍忥紙璁剧疆/鐩戞帶/閫€鍑猴級锛岄€€鍑烘寜閽?hover 鍙樼孩
-- **[home] 棣栭〉鍗囩骇**锛欻ero 涓夊眰鍏夋檿锛堝惈鍛煎惛鍔ㄦ晥锛夛紱蹇嵎鍏ュ彛 emoji 鏇挎崲涓?5 涓粺涓€ SVG 鍥炬爣锛?瑙嗛鍒嗗彂"鐢?cyan accent 鑹插樊寮傚寲
-- **[studio] 椤甸潰 Header 鍗囩骇**锛氭瘺鐜荤拑 backdrop-blur + `.page-title` / `.page-subtitle` 鎺掔増绫?+ Tab 鎸囩ず鍣ㄦ敼涓虹粷瀵瑰畾浣嶅渾瑙掑皬鏉?
+- **[design] DESIGN.md 设计系统**：创建融合 Framer（工具精度）+ RunwayML（电影质感）的 GOBS 专属设计规范，涵盖色彩 Token、排版层级、组件样式、深度系统、响应式行为共 9 章节
+- **[design] Cyan 双色系**：新增 `--color-accent: #22d3ee` 作为第二色彩维度，贯穿 Hero 光晕、快捷入口、用户头像渐变、NEW 标签等，视觉层次从单色升级为双色系
+- **[css] Token 双源冲突修复**：删除 `@theme` 块中与 `:root` 重复且不一致的变量定义，统一为单一来源
+- **[css] 背景氛围升级**：body 背景从两层渐变升级为三层径向渐变（主色左上 22% + cyan 右上 12% + 底部微光 8%），深空舞台感
+- **[css] 组件类库扩充**：新增 `.btn-primary`（药丸+光晕）、`.btn-secondary`（毛玻璃）、`.btn-ghost`、`.chip` / `.chip-cyan`（标签药丸）、`.video-card`（零阴影内容卡片）、`.section-overline`（uppercase 引导词）
+- **[css] 动画体系**：新增 `animate-fade-in-up`（弹出感）、`animate-glow-pulse`（光晕呼吸）、`.stagger-children`（子元素错开入场）、`.nav-stagger`（侧栏导航入场），统一弹性缓动 `cubic-bezier(0.16, 1, 0.3, 1)`
+- **[layout] 侧栏重设计**：导航分组加 section-overline 标签（"创作"/"后期 & 素材"/"分发 & 工具"）；Active 项左侧 3px 发光指示条 + 光晕阴影；图标统一 18px/1.8 stroke
+- **[layout] 用户区升级**：渐变头像圈（primary→cyan）显示首字母 + 用户信息 + 图标工具栏（设置/监控/退出），退出按钮 hover 变红
+- **[home] 首页升级**：Hero 三层光晕（含呼吸动效）；快捷入口 emoji 替换为 5 个统一 SVG 图标，"视频分发"用 cyan accent 色差异化
+- **[studio] 页面 Header 升级**：毛玻璃 backdrop-blur + `.page-title` / `.page-subtitle` 排版类 + Tab 指示器改为绝对定位圆角小条
+
 ---
 
-### v0.43a 鈥?2026-04-16
+### v0.43a — 2026-04-16
 
-**鍓緫宸ヤ綔鍙扳€斺€斿鍑轰慨澶?& 鎾斁杩炵画鎬т慨澶?*
+**剪辑工作台——导出修复 & 播放连续性修复**
 
 **Fix:**
-- **[backend] 瀵煎嚭绱犳潗鎵句笉鍒?prod_shot_* 淇**锛歚editorExport.ts` 鏂板 `resolveLocalPathFromUrl()` 鍑芥暟锛屾敮鎸佷粠 `/api/video/file?path=xxx`銆乣/api/batch-jobs/video/<jobId>`銆乣/api/editor/assets/files/<id>` 涓夌 URL 鏍煎紡鍙嶈В鏈湴鏂囦欢璺緞锛岃В鍐抽珮绾у埗鐗囧垎闀滃鍏ュ壀杈戝櫒鍚庡鍑烘姤閿欍€岀礌鏉愭枃浠朵笉瀛樺湪銆?- **[frontend] 瀵煎嚭璇锋眰鎼哄甫 assets 鏄犲皠**锛歚ExportPanel` 鏂板 `assets` prop锛屽鍑烘椂涓€骞跺彂閫佺粰鍚庣锛屼娇鍚庣鑳介€氳繃 URL 瀹氫綅闈炴湰鍦颁笂浼犵殑绱犳潗鏂囦欢
-- **[backend] 瀵煎嚭鎺ュ彛 schema 鎵╁睍**锛歚EditorExportRequestBody` 鏂板鍙€?`assets` 瀛楁锛屽悜鍚庡吋瀹?- **[frontend] 鍒嗛暅闂存挱鏀句腑鏂慨澶?*锛氬壀杈戝伐浣滃彴鎾斁澶氭鍒嗛暅鏃讹紝鍒囨崲瑙嗛婧愬鑷?`play()` 琚?AbortError 涓柇浼氳璁?`isPlaying=false`锛涚幇蹇界暐 AbortError 骞舵柊澧?`onCanPlay` 鍥炶皟锛岃棰戝姞杞藉氨缁悗鑷姩鎭㈠鎾斁
-- **[backend] 瀵煎嚭缂哄け BGM 淇**锛欱GM 鏂囦欢瀛樺偍鍦?`uploads/editor/music/` 涓嬶紝浣嗗鍑烘椂鏈悳绱㈣鐩綍锛涙柊澧?`uploads/editor/music/` 鍒版悳绱㈣矾寰勶紝骞舵敮鎸?`/api/editor/music/files/<id>` URL 鍙嶈В
+- **[backend] 导出素材找不到 prod_shot_* 修复**：`editorExport.ts` 新增 `resolveLocalPathFromUrl()` 函数，支持从 `/api/video/file?path=xxx`、`/api/batch-jobs/video/<jobId>`、`/api/editor/assets/files/<id>` 三种 URL 格式反解本地文件路径，解决高级制片分镜导入剪辑器后导出报错「素材文件不存在」
+- **[frontend] 导出请求携带 assets 映射**：`ExportPanel` 新增 `assets` prop，导出时一并发送给后端，使后端能通过 URL 定位非本地上传的素材文件
+- **[backend] 导出接口 schema 扩展**：`EditorExportRequestBody` 新增可选 `assets` 字段，向后兼容
+- **[frontend] 分镜间播放中断修复**：剪辑工作台播放多段分镜时，切换视频源导致 `play()` 被 AbortError 中断会误设 `isPlaying=false`；现忽略 AbortError 并新增 `onCanPlay` 回调，视频加载就绪后自动恢复播放
+- **[backend] 导出缺失 BGM 修复**：BGM 文件存储在 `uploads/editor/music/` 下，但导出时未搜索该目录；新增 `uploads/editor/music/` 到搜索路径，并支持 `/api/editor/music/files/<id>` URL 反解
 
 ---
 
-### v0.43 鈥?2026-04-16
+### v0.43 — 2026-04-16
 
-**楂樼骇鍒剁墖鈥斺€斿垎闀滅紪杈戜綋楠?& 鐗堟湰鎸佷箙鍖栦慨澶?*
+**高级制片——分镜编辑体验 & 版本持久化修复**
 
 **Feature:**
-- **[frontend] 鍒嗛暅鍙傛暟鎶樺彔**锛歚StepStoryboardFieldsEditor` 榛樿鎶樺彔锛屽彧鏄剧ず鎽樿琛岋紙鍙傝€冨浘 + 涓讳綋 路 鏅埆 路 杩愰暅 路 鏃堕暱锛夛紝鐐瑰嚮銆屽睍寮€缂栬緫銆嶆墠鏄剧ず瀹屾暣瀛楁琛ㄥ崟锛屽ぇ骞呭噺灏戣瑙夊櫔闊?- **[backend] AI 瀹＄墖铻嶅叆鍒嗛暅鐢熸垚**锛歚/api/studio/storyboard-table` 璺敱鏂板 `autoRefineShots()` 鍚庡鐞嗏€斺€斿崟娆?LLM 璋冪敤鎵归噺瀹℃煡骞朵紭鍖栨墍鏈夐暅澶寸殑 `structuredStill` / `structuredMotion` 瀛楁锛岀敓鎴愭椂鍗冲畬鎴愯川閲忔妸鎺э紝鏃犻渶棰濆鎵嬪姩瀹＄墖姝ラ
+- **[frontend] 分镜参数折叠**：`StepStoryboardFieldsEditor` 默认折叠，只显示摘要行（参考图 + 主体 · 景别 · 运镜 · 时长），点击「展开编辑」才显示完整字段表单，大幅减少视觉噪音
+- **[backend] AI 审片融入分镜生成**：`/api/studio/storyboard-table` 路由新增 `autoRefineShots()` 后处理——单次 LLM 调用批量审查并优化所有镜头的 `structuredStill` / `structuredMotion` 字段，生成时即完成质量把控，无需额外手动审片步骤
 
 **Fix:**
-- **[backend] 瑙嗛鐗堟湰涓㈠け淇**锛歚productionPersist.ts` `/project/save` 鎺ュ彛鏀逛负淇濆瓨鍓嶅厛璇诲彇鐜版湁鏂囦欢锛屽姣忎釜 shot 鐨?`previewVideoVersions` 鍋?union merge by id锛岄槻姝㈠墠绔嚜鍔ㄤ繚瀛樿鐩栧悗绔?`writeBackToProject` 宸插啓鍏ョ殑瑙嗛鐗堟湰
+- **[backend] 视频版本丢失修复**：`productionPersist.ts` `/project/save` 接口改为保存前先读取现有文件，对每个 shot 的 `previewVideoVersions` 做 union merge by id，防止前端自动保存覆盖后端 `writeBackToProject` 已写入的视频版本
 
 ---
 
-### v0.42 鈥?2026-04-15
+### v0.42 — 2026-04-15
 
-**閰嶄箰閫昏緫淇锛歋uno 浼樺厛 + 鍐呭鎰熺煡閰嶄箰 + 楂樼骇鍒剁墖棰勫～**
+**配乐逻辑修复：Suno 优先 + 内容感知配乐 + 高级制片预填**
 
 **Fix:**
-- **[backend] Suno API callBackUrl 400 淇**锛歚sunoMusic.ts` 涓Щ闄ょ┖瀛楃涓?`callBackUrl` 瀛楁锛圫uno API 鎷掔粷绌哄€硷級锛孲uno 鐜板湪鍙甯歌皟鐢?- **[backend] 鏈嶅姟鍣?SUNO_API_KEY 閰嶇疆**锛氶儴缃茬幆澧?`.env` 琛ュ厖 `SUNO_API_KEY`锛屼竴閿厤涔愮幇鍦ㄧ湡姝ｄ紭鍏堣蛋 Suno API
-- **[editor] Agent 鑷姩閰嶄箰鏃ュ織纭紪鐮佷慨澶?*锛歚EditorWorkbench.runAutoBgmFromAgentMessage` 涓?Lyria"纭紪鐮佹敼涓哄姩鎬佽鍙?`res.provider`锛屾棩蹇楁纭樉绀哄疄闄呭紩鎿庯紙Suno/Lyria锛?
-**Feature:**
-- **[editor] 鍐呭鎰熺煡閰嶄箰**锛氫竴閿櫤鑳介厤涔愭椂鑷姩浠庢椂闂磋酱瑙嗛鐗囨鐨?note 瀛楁鎻愬彇鍐呭鎽樿锛堝垎闀滄弿杩般€佸満鏅鏄庯級锛屾嫾鍏?polish 璇锋眰锛涘悗绔?`editorMusicPromptPolish` 澧炲己涓虹悊瑙?瑙嗛鍐呭"涓婁笅鏂囷紝鐢熸垚鐨?BGM 椋庢牸鍖归厤瀹為檯鐢婚潰鍐呭
-- **[studio 鈫?editor] 楂樼骇鍒剁墖閰嶄箰棰勫～**锛氫粠楂樼骇鍒剁墖瀵煎嚭鍒板壀杈戝櫒鏃讹紝鑷姩浠?`SoundMusicPlan.music[].mood` 鎻愬彇閰嶄箰椋庢牸鎻忚堪锛屽啓鍏?`TimelineProject.mix.bgmPromptHint`锛汢gmMixPanel 棣栨鍔犺浇鏃堕濉鎻愮ず璇嶏紝鏄剧ず绱壊"鏉ヨ嚜鍒剁墖瑙勫垝"鏍囩
-- **[editor] `TimelineMix` 绫诲瀷鎵╁睍**锛氭柊澧?`bgmPromptHint?: string` 瀛楁锛屾壙杞芥潵鑷笂娓革紙楂樼骇鍒剁墖锛夌殑閰嶄箰椋庢牸鎻愮ず
-
----
-
-### v0.42a 鈥?2026-04-15
-
-**楂樼骇鍒剁墖鈥斺€斿垎闀滃伐浣滃彴浣撻獙浼樺寲锛? 椤规柊鍔熻兘锛?*
+- **[backend] Suno API callBackUrl 400 修复**：`sunoMusic.ts` 中移除空字符串 `callBackUrl` 字段（Suno API 拒绝空值），Suno 现在可正常调用
+- **[backend] 服务器 SUNO_API_KEY 配置**：部署环境 `.env` 补充 `SUNO_API_KEY`，一键配乐现在真正优先走 Suno API
+- **[editor] Agent 自动配乐日志硬编码修复**：`EditorWorkbench.runAutoBgmFromAgentMessage` 中"Lyria"硬编码改为动态读取 `res.provider`，日志正确显示实际引擎（Suno/Lyria）
 
 **Feature:**
-- **[P0] 鎵归噺鐢熸垚鎵€鏈夌己澶辫棰?*锛歋hotStrip 涓婃柟鏂板銆屼竴閿敓鎴愭墍鏈夌己澶辫棰戙€嶆寜閽紝鑷姩閬嶅巻鎵€鏈夊皻鏃犺棰戠殑鍒嗛暅骞堕€氳繃鑷€傚簲闃熷垪涓茶鎻愪氦銆傛牳蹇?`handleGenerateShotVideo` 閲嶆瀯涓哄弬鏁板寲 `generateVideoForShotIdx(idx)` 渚涘崟闀?鎵归噺鍏辩敤銆?- **[P0] AI 瀹＄墖鍔╂墜锛堣瘎璁虹敓鎴?+ 缂栬緫鐢熸垚锛?*锛氬悗绔柊澧?`POST /api/studio/shot-review`锛圕ompass LLM 鏂囨湰瀹＄墖锛夛紝鍒嗘瀽鍗曢暅缁撴瀯鍖?Prompt 鐨勫畬鏁存€т笌涓€鑷存€э紝杈撳嚭缁煎悎璇勫垎锛?-10锛夊拰閫愬瓧娈垫敼杩涘缓璁€傚墠绔睍绀哄缓璁崱鐗囷紝姣忔潯鍙€岄噰绾炽€嶄竴閿慨鏀瑰搴斿瓧娈碉紝鏀寔銆屽叏閮ㄩ噰绾冲苟閲嶆柊鐢熸垚銆嶅畬鎴愰棴鐜€?- **[P1] 蹇€熻皟鏁撮潰鏉?*锛氬垎闀滅紪杈戝尯鏂板杩愰暅锛堝浐瀹?缂撴帹/鎵嬫寔/鑸媿/鐜粫锛夈€佽妭濂忥紙鏋佹參~鏋侀€燂級銆佸厜褰憋紙鏄庝寒~闇撹櫣锛夈€佷竴閿皼鍥达紙鏇存垙鍓у寲/鏇村畨闈?鏇村揩鑺傚锛夐璁炬寜閽紝鐩存帴鏄犲皠鍒?`structuredStill` / `structuredMotion` 瀛楁銆?- **[P1] 杩炵画鎾斁瀹＄墖妯″紡**锛氬伐鍏锋爮鏂板銆岃繛缁挱鏀俱€嶆寜閽紝鍏ㄥ睆 overlay 鑷姩鎸夊簭鎾斁鎵€鏈夋湁瑙嗛鐨勫垎闀滐紝鏀寔閿洏蹇嵎閿紙鈫?鈫?鍒囬暅 / 绌烘牸鏆傚仠 / Esc 閫€鍑猴級鍜屽簳閮ㄧ缉鐣ュ浘瀵艰埅锛岀粺璁℃€绘椂闀夸笌缂哄け闀滃ご鏁般€?- **[P2] 鐗堟湰 A/B 瀵规瘮**锛氬綋鏈暅鏈?鈮? 涓増鏈椂鏄剧ず銆岀増鏈?A/B 瀵规瘮銆嶆寜閽紝鍏ㄥ睆宸﹀彸鍒嗗睆閫夋嫨涓嶅悓鐗堟湰鍚屾鎾斁锛屾敮鎸佷负姣忎釜鐗堟湰娣诲姞澶囨敞鏍囩銆?- **[P2] 鍒嗛暅闂翠竴鑷存€ф鏌?*锛氬悗绔柊澧?`POST /api/studio/continuity-check`锛圕ompass LLM锛夛紝妫€鏌ョ浉閭婚暅澶寸殑鑹茶皟/瑙掕壊澶栬/鍦烘櫙杩囨浮/鍔ㄤ綔杩炶疮/鍏夌嚎涓€鑷存€э紝鎸?warning/error 鍒嗙骇銆傚墠绔睍绀洪棶棰樺垪琛紝鏀寔璺宠浆鍒伴棶棰橀暅澶淬€?
-**鏂板鏂囦欢锛?*
-- `h5-video-tool-api/src/routes/shotReview.ts` 鈥?鍚庣 AI 瀹＄墖 + 涓€鑷存€ф鏌ヨ矾鐢?- `h5-video-tool/src/api/shotReview.ts` 鈥?鍓嶇 API 瀹㈡埛绔?- `h5-video-tool/src/studio/steps/StepStoryboardAiReview.tsx` 鈥?AI 瀹＄墖闈㈡澘缁勪欢
-- `h5-video-tool/src/studio/steps/StepStoryboardQuickAdjust.tsx` 鈥?蹇€熻皟鏁撮潰鏉跨粍浠?- `h5-video-tool/src/studio/steps/StepStoryboardContinuousPlay.tsx` 鈥?杩炵画鎾斁 overlay 缁勪欢
-- `h5-video-tool/src/studio/steps/StepStoryboardAbCompare.tsx` 鈥?A/B 鐗堟湰瀵规瘮 overlay 缁勪欢
-- `h5-video-tool/src/studio/steps/StepStoryboardContinuityCheck.tsx` 鈥?涓€鑷存€ф鏌ラ潰鏉跨粍浠?
+- **[editor] 内容感知配乐**：一键智能配乐时自动从时间轴视频片段的 note 字段提取内容摘要（分镜描述、场景说明），拼入 polish 请求；后端 `editorMusicPromptPolish` 增强为理解"视频内容"上下文，生成的 BGM 风格匹配实际画面内容
+- **[studio → editor] 高级制片配乐预填**：从高级制片导出到剪辑器时，自动从 `SoundMusicPlan.music[].mood` 提取配乐风格描述，写入 `TimelineProject.mix.bgmPromptHint`；BgmMixPanel 首次加载时预填该提示词，显示紫色"来自制片规划"标签
+- **[editor] `TimelineMix` 类型扩展**：新增 `bgmPromptHint?: string` 字段，承载来自上游（高级制片）的配乐风格提示
+
 ---
 
-### v0.41 鈥?2026-04-15
+### v0.42a — 2026-04-15
 
-**楂樼骇鍒剁墖鈥斺€旇嚜閫傚簲瑙嗛鐢熸垚闃熷垪 + 鍚庣淇″彿閲忔硠婕忎慨澶?*
+**高级制片——分镜工作台体验优化（6 项新功能）**
 
 **Feature:**
-- **[鍓嶇] `ProductionWizard.tsx` 鑷€傚簲闃熷垪**锛氳繛缁偣鍑诲涓垎闀溿€岀敓鎴愯棰戙€嶆椂锛屽墠绔覆琛岄槦鍒楄嚜鍔ㄨ皟搴︺€傞粯璁ゅ揩閫熸ā寮忥紙鎷垮埌 submitId 鍗虫斁琛屼笅涓€涓級锛屽鏋滃嵆姊﹁繑鍥炲苟鍙戦檺鍒讹紙ret=1310锛夛紝鑷姩鍒囨崲涓烘參閫熸ā寮忊€斺€旂瓑鍓嶄竴涓棰戝畬鍏ㄧ敓鎴愬畬姣曞啀鎻愪氦涓嬩竴涓紝杩炵画 2 娆℃垚鍔熷悗鑷姩鎭㈠蹇€熸ā寮忋€?- **[鍓嶇] 鎺掗槦鐘舵€佸彲瑙嗗寲**锛歋hot Strip 缂╃暐鏉″尯鍒嗕笁绉嶇姸鎬侊紙鎺掗槦涓?鎻愪氦涓?鍗虫ⅵ鐢熸垚涓級锛屾寜閽樉绀?鎺掗槦绛夊緟涓€︼紙鍓嶆柟 N 涓級"銆?
-**Fix:**
-- **[鍚庣] `videoDreamina.ts` 淇″彿閲忔硠婕忎慨澶?*锛歱roduction 婧愪换鍔℃彁浜ゆ垚鍔熷悗绔嬪嵆閲婃斁 Dreamina 淇″彿閲?slot锛堜箣鍓?slot 琚?hold 鍒板墠绔疆璇㈠畬鎴愶紝浣?production 浠诲姟宸叉敼涓哄悗绔?batch-job 杞锛屽鑷?slot 姘镐笉閲婃斁锛? 鍒嗛挓瓒呮椂鍚庢墠鍥炴敹锛夈€傛柊澧?`source` 璇锋眰鍙傛暟鍖哄垎鏉ユ簮銆?- **[鍓嶇] `VideoGenerateRequest` 鏂板 `source` 瀛楁**锛歱roduction 妯″紡鎻愪氦鏃舵惡甯?`source: 'production'`锛屽悗绔嵁姝ゅ喅瀹氭槸鍚︾珛鍗抽噴鏀句俊鍙烽噺銆?
----
+- **[P0] 批量生成所有缺失视频**：ShotStrip 上方新增「一键生成所有缺失视频」按钮，自动遍历所有尚无视频的分镜并通过自适应队列串行提交。核心 `handleGenerateShotVideo` 重构为参数化 `generateVideoForShotIdx(idx)` 供单镜/批量共用。
+- **[P0] AI 审片助手（评论生成 + 编辑生成）**：后端新增 `POST /api/studio/shot-review`（Compass LLM 文本审片），分析单镜结构化 Prompt 的完整性与一致性，输出综合评分（1-10）和逐字段改进建议。前端展示建议卡片，每条可「采纳」一键修改对应字段，支持「全部采纳并重新生成」完成闭环。
+- **[P1] 快速调整面板**：分镜编辑区新增运镜（固定/缓推/手持/航拍/环绕）、节奏（极慢~极速）、光影（明亮~霓虹）、一键氛围（更戏剧化/更安静/更快节奏）预设按钮，直接映射到 `structuredStill` / `structuredMotion` 字段。
+- **[P1] 连续播放审片模式**：工具栏新增「连续播放」按钮，全屏 overlay 自动按序播放所有有视频的分镜，支持键盘快捷键（← → 切镜 / 空格暂停 / Esc 退出）和底部缩略图导航，统计总时长与缺失镜头数。
+- **[P2] 版本 A/B 对比**：当本镜有 ≥2 个版本时显示「版本 A/B 对比」按钮，全屏左右分屏选择不同版本同步播放，支持为每个版本添加备注标签。
+- **[P2] 分镜间一致性检查**：后端新增 `POST /api/studio/continuity-check`（Compass LLM），检查相邻镜头的色调/角色外观/场景过渡/动作连贯/光线一致性，按 warning/error 分级。前端展示问题列表，支持跳转到问题镜头。
 
-### v0.40 鈥?2026-04-15
-
-**楂樼骇鍒剁墖鈥斺€旇棰戦鏍肩害鏉熶慨澶?*
-
-**Fix:**
-- **[鍓嶇] `productionAssets.ts` `buildProductionShotVideoStoryboardText`**锛氳ˉ鍏ュ師鏈仐婕忕殑 `sp_lighting`锛堝厜褰憋級鍜?`sp_style`锛堣壊璋?椋庢牸锛夊瓧娈碉紝纭繚瑙嗛 Prompt 鎼哄甫姣忛暅鐨勫厜褰变笌椋庢牸鎻忚堪銆傛柊澧炲彲閫夊弬鏁?`globalStyleRef`锛屽彲鍦?Prompt 鏈熬杩藉姞鍏ㄥ眬椋庢牸绾︽潫銆?- **[鍓嶇] `ProductionWizard.tsx` `handleGenerateShotVideo`**锛氬湪鎵€鏈夋ā寮忥紙multimodal / text2video / image2video锛夋彁浜ゅ嵆姊︿箣鍓嶏紝缁熶竴妫€鏌ュ苟杩藉姞缂哄け鐨?`sp_lighting`銆乣sp_style`銆乣styleRefSummary`锛堝叏灞€瑙嗚椋庢牸鎻忚堪锛夛紝閬垮厤鍗虫ⅵ鍥犵己灏戣壊璋冩寚浠よ€岀敓鎴愪笌椤圭洰椋庢牸涓嶇锛堝榛戠櫧椤圭洰鍑哄僵鑹诧級鐨勮棰戙€?
----
-
-### v0.39 鈥?2026-04-15
-
-**鍓緫 Agent JSON 瑙ｆ瀽椴佹鎬у寮?*
-
-**Fix:**
-- **[api] `editorAgentService.ts` extractJson 閲嶅啓**锛氫粠浠呭尮閰嶇涓€涓?code block 鏀逛负涓夊眰鎻愬彇绛栫暐鈥斺€旀壂鎻忔墍鏈?`` ```json ``` `` code block 鍙栨渶闀?鈫?鑺辨嫭鍙烽厤瀵规壘鏈€澶栧眰 `{鈥` 鈫?鍘熸枃鍏滃簳锛岃В鍐虫ā鍨嬭緭鍑哄甫棰濆瑙ｉ噴鏂囧瓧鏃舵彁鍙栧け璐ョ殑闂銆?- **[api] 鏂板 `repairJson` 淇灞?*锛氳嚜鍔ㄥ鐞?LLM 甯歌 JSON 缂洪櫡锛堝熬閫楀彿銆乣//` 琛屾敞閲娿€乼oken 鎴柇瀵艰嚧鐨勬湭闂悎鎷彿锛夛紝棣栨 parse 澶辫触鍚庤嚜鍔ㄤ慨澶嶉噸璇曘€?- **[api] Compass API 璋冪敤鍔?`response_format: { type: 'json_object' }`**锛氫粠 API 灞傜害鏉?Gemini 杈撳嚭绾?JSON锛屽ぇ骞呴檷浣庨潪娉?JSON 姒傜巼銆?- **[api] `promptPolish.ts`**锛歚compassChatCompletionWithUsage` 鏂板鍙€?`responseFormat` 鍙傛暟锛屾敮鎸佽皟鐢ㄦ柟鎸囧畾杈撳嚭鏍煎紡绾︽潫銆?- **[api] 閿欒淇℃伅澧炲己**锛氫慨澶嶄粛鐒跺け璐ユ椂锛岄敊璇秷鎭寘鍚ā鍨嬪師濮嬭緭鍑哄墠 300 瀛楃鐗囨锛屼究浜庡揩閫熷畾浣嶉棶棰樸€?
-**Root Cause锛?* Compass Gemini 妯″瀷鍋跺皵鍦?JSON 澶栧寘瑁?Markdown 璇存槑鏂囧瓧鎴?code block 鏍煎紡涓嶆爣鍑嗭紝鍘?`extractJson` 浠呭尮閰嶇涓€涓?`` ``` `` 瀵规棤娉曞簲瀵规墍鏈夊彉浣擄紝瀵艰嚧 `JSON.parse` 澶辫触鎶涘嚭"妯″瀷杩斿洖涓嶆槸鍚堟硶 JSON"銆?
----
-
-### v0.38 鈥?2026-04-15
-
-**鍗虫ⅵ ret=1310 ExceedConcurrencyLimit 鑷姩閲嶈瘯 + 鍙嬪ソ鎻愮ず**
-
-**Fix:**
-- **[api] `videoDreamina.ts` 鑷姩閲嶈瘯**锛氬妯℃€佸拰闈炲妯℃€佽矾寰勫潎鏂板 1310 閲嶈瘯鏈哄埗鈥斺€旈娆℃敹鍒?`ExceedConcurrencyLimit` 鏃惰嚜鍔ㄧ瓑寰?45s 鍚庨噸璇曚竴娆★紙涓嶉噴鏀惧苟鍙戞Ы锛夛紝閫忔槑瑙ｅ喅"鏈嶅姟閲嶅惎鍚庢棫浠诲姟娈嬬暀"鍦烘櫙锛涢噸璇曚粛澶辫触鍒欓噴鏀炬Ы骞舵姏鍑虹敤鎴峰弸濂介敊璇€?- **[api] 鍙嬪ソ閿欒鏂囨**锛氭渶缁堝け璐ユ敼涓烘姏 `"鍗虫ⅵ璐﹀彿褰撳墠鏈夌敓鎴愪换鍔℃帓闃熶腑锛岃 2-3 鍒嗛挓鍚庨噸璇?`锛屼笉鍐嶆毚闇插師濮?`ret=1310, logid=...` 缁欑敤鎴枫€?- **[frontend] `useVideoGeneration.ts` 鍏滃簳**锛歚normalizeError` 琛ュ厖 `ret=1310 / ExceedConcurrencyLimit` 璇嗗埆锛屽嵆浣垮悗绔湭澶勭悊涔熻兘鏄剧ず涓枃鎻愮ず銆?
-**Root Cause锛?* 鏈嶅姟鍣ㄩ噸鍚悗鍐呭瓨淇″彿閲忛噸缃负"绌洪棽"锛屼絾鍗虫ⅵ璐﹀彿涓婁粛鏈変笂涓€娆?session 鐣欎笅鐨勪换鍔″湪璺戯紝鎻愪氦鏂颁换鍔″嵆琚嵆姊︽嫆缁濓紱涔嬪墠浠ｇ爜鐩存帴灏嗗師濮?API 閿欒閫忎紶鍓嶇鏄剧ず銆?
----
-
-### v0.37 鈥?2026-04-15
-
-**楂樼骇鍒剁墖 路 鏀炬槧瀹ゅ鐗囦綋楠屼紭鍖?*
-
-- **[studio] 鍒嗛暅瑙嗛鍒囨崲鑷姩杩炴挱**锛氭斁鏄犲锛圫creeningRoomPlayer锛夊垏鍒颁笅涓€鍒嗛暅鍚庤棰戣嚜鍔ㄥ紑濮嬫挱鏀撅紝鏃犻渶鎵嬪姩鐐瑰嚮
-  - 鏂板 `onCanPlay` 鍥炶皟锛屽湪瑙嗛鏁版嵁灏辩华鏃惰Е鍙?`play()`锛屽彇浠ｆ棫鐨?`useEffect` 鏂瑰紡锛堟棫鏂规鍦?`key` 鍒囨崲閲嶅缓 `<video>` 鍚庢椂鏈鸿繃鏃╁鑷翠笉鐢熸晥锛?  - 娣诲姞 `autoPlay` 灞炴€т綔涓哄弻淇濋櫓
-  - 鎾斁閾捐矾锛歚onEnded` 鈫?`goNext` 鈫?`key` 鍙樺寲閲嶅缓 `<video>` 鈫?鏂版簮鍔犺浇 鈫?`onCanPlay` 鈫?鑷姩鎾斁
+**新增文件：**
+- `h5-video-tool-api/src/routes/shotReview.ts` — 后端 AI 审片 + 一致性检查路由
+- `h5-video-tool/src/api/shotReview.ts` — 前端 API 客户端
+- `h5-video-tool/src/studio/steps/StepStoryboardAiReview.tsx` — AI 审片面板组件
+- `h5-video-tool/src/studio/steps/StepStoryboardQuickAdjust.tsx` — 快速调整面板组件
+- `h5-video-tool/src/studio/steps/StepStoryboardContinuousPlay.tsx` — 连续播放 overlay 组件
+- `h5-video-tool/src/studio/steps/StepStoryboardAbCompare.tsx` — A/B 版本对比 overlay 组件
+- `h5-video-tool/src/studio/steps/StepStoryboardContinuityCheck.tsx` — 一致性检查面板组件
 
 ---
 
-### v0.36 鈥?2026-04-15
+### v0.41 — 2026-04-15
 
-**AI 鍓緫鏅鸿兘浼樺寲 路 绗笁鎵癸紙鏂瑰悜6 鐢婚潰-闊充箰鎯呯华瀵归綈锛?*
-
-- **[editor-agent] 鎯呯华寮犲姏缁村害锛堟柟鍚?锛?*锛?  - `VisionFrameScore` 鏂板 `tension`锛堟儏缁紶鍔?0鈥?0锛屼笌鍓緫浠峰€?score 鍒嗙锛夊拰 `emotionTag`锛坈alm/tense/triumphant/sad/exciting锛?  - Gemini 鎵撳垎 prompt 鏇存柊锛屾瘡甯у悓鏃惰緭鍑?tension + emotionTag
-  - 鍐呭鍦板浘锛圕ontent Manifest锛夌幇鍦ㄦ樉绀烘儏缁垎甯冪粺璁★紙濡?`exciting脳5 / tense脳3 | 骞冲潎寮犲姏锛?.2/10`锛?- **[editor-agent] BGM 娈佃惤 脳 鐢婚潰鎯呯华瀵归綈瑙勫垯**锛?  - drop锛坔igh energy锛夋 鈫?浼樺厛 tension 鈮?7銆乪motionTag=exciting/triumphant 鐨勭敾闈?  - build锛坢id energy锛夋 鈫?浼樺厛 tension 4-6銆乪motionTag=tense 鐨勭敾闈?  - intro/outro锛坙ow energy锛夋 鈫?浼樺厛 tension 鈮?3銆乪motionTag=calm/sad 鐨勭敾闈?  - 鏃?BGM 鏃舵寜鍙欎簨妯℃澘娈佃惤浣嶇疆鎺ㄦ柇寮犲姏鏈熸湜
-  - 寮哄埗绾︽潫锛氬悓涓€ BGM 娈佃惤鍐呯敾闈㈠紶鍔涘彉鍖栧箙搴?鈮?5
-
----
-
-### v0.35 鈥?2026-04-15
-
-**AI 鍓緫鏅鸿兘浼樺寲 路 绗簩鎵癸紙鏂瑰悜2 鍙欎簨缁撴瀯 + 鏂瑰悜4 鍒囩偣璐ㄩ噺锛?*
-
-- **[editor-agent] 涓ら樁娈靛彊浜嬬粨鏋勬帓鐗囷紙鏂瑰悜2锛?*锛?  - 鏂板涓夊鍙欎簨妯℃澘锛歚缁忓吀楂樺厜`锛堟贩鍓埥鐐癸級/ `瑙掕壊鏁呬簨`锛堣鑹插浼狅級/ `鑺傚娣峰壀`锛圔GM 鍏堣锛?  - 绯荤粺鏍规嵁鐢ㄦ埛鎰忓浘鑷姩閫夋ā鏉匡紙鏈?BGM 鈫?鑺傚娣峰壀锛涙垬鏂楃被 鈫?缁忓吀楂樺厜锛涘叾浠?鈫?瑙掕壊鏁呬簨锛?  - 鏂板 `buildContentManifest()` 灏嗚瑙夎瘎鍒嗙粍缁囦负銆屽唴瀹瑰湴鍥俱€嶏紝鎸?閽╁瓙/鍔ㄤ綔椤剁偣/鎴樻枟楂樺厜/閾哄灚/骞抽潤 浜旂被鍒嗙粍锛屽甫鏃堕棿鎴虫爣娉?  - LLM prompt 娉ㄥ叆鍙欎簨妯℃澘 + 鍐呭鍦板浘锛屽紩瀵?AI 鎸夊紑鍦衡啋閾哄灚鈫掗珮娼啋鏀跺熬缁撴瀯鎺掔墖锛屽憡鍒€岄珮鍒嗙墖娈靛爢鐮屻€?- **[editor-agent] 鍒囩偣璐ㄩ噺浼樺寲锛堟柟鍚?锛?*锛?  - `VisionFrameScore` 鏂板 `isActionPeak`锛堝姩浣滈《鐐瑰抚锛屽鍑绘潃鐬棿/鎶€鑳藉懡涓級鍜?`cameraMotion`锛堥暅澶磋繍鍔ㄧ被鍨嬶細static/pan/zoom/shake锛?  - Gemini 鎵撳垎 prompt 鏇存柊锛岀幇鍦ㄨ繑鍥炰袱涓柊瀛楁
-  - System prompt 娉ㄥ叆鍒囩偣瑙勫垯锛氬姩浣滈《鐐逛紭鍏堝垏鍏ャ€佸姩鎺ュ姩鍘熷垯銆佽繛缁潤鎬侀暅澶撮』鎻掑叆杩愬姩闀滃ご
-
----
-
-### v0.35a 鈥?2026-04-15
-
-**楂樼骇鍒剁墖 路 瑙嗛鐢熸垚鏋舵瀯鍗囩骇锛氬悗绔疆璇?+ SSE 鎺ㄩ€?*
-
-鏍稿績鍙樻洿锛氬嵆姊﹁棰戠敓鎴愪粠銆屽墠绔?10 鍒嗛挓姝昏疆璇€嶈縼绉昏嚦銆屽悗绔櫤鑳借疆璇?+ SSE 瀹炴椂閫氱煡銆嶏紝褰诲簳瑙ｅ喅闀挎椂闂寸敓鎴愬鑷寸殑瑙嗛涓㈠け銆?
-- **[arch] 鍚庣鏅鸿兘杞**锛歱roduction 鏉ユ簮鐨?batch-job 鎻愪氦鍚庡墠 10 鍒嗛挓涓嶈疆璇紝涔嬪悗姣?5 鍒嗛挓鑷姩妫€鏌ヤ竴娆″嵆姊︾姸鎬侊紱4 灏忔椂 TTL 闃插兊灏镐换鍔?- **[feat] 鑷姩鍥炲啓椤圭洰 JSON**锛氳棰戣惤鐩樺悗鑷姩鏇存柊鏈嶅姟绔」鐩枃浠剁殑 `previewVideoVersions`锛屽叧闂祻瑙堝櫒涔熶笉涓㈠け
-- **[feat] SSE 瀹炴椂鎺ㄩ€?*锛氳棰戝氨缁悗閫氳繃 batch-jobs SSE 閫氶亾鎺ㄩ€佸埌鍓嶇锛岃嚜鍔ㄥ～鍏ュ垎闀滈瑙堝苟 toast 鎻愮ず
-- **[feat] 鎵嬪姩妫€鏌ヨ繘搴?*锛氬垎闀滈潰鏉挎柊澧炪€屾墜鍔ㄦ鏌ヨ繘搴︺€嶆寜閽紝鐢ㄦ埛鍙殢鏃剁珛鍗虫煡璇㈠嵆姊︾姸鎬侊紙`POST /api/batch-jobs/:id/poll-now`锛?- **[fix] batch-jobs video 閴存潈鏀捐**锛歚GET /api/batch-jobs/video/:id` 鍔犲叆鍏嶉壌鏉冪櫧鍚嶅崟锛宍<video>` 鏍囩鍙洿鎺ユ挱鏀?
----
-
-### v0.34 鈥?2026-04-15
-
-**楂樼骇鍒剁墖 路 鍒嗛暅瑙嗛涓㈠け淇 & 鎸佷箙鍖栧仴澹€ф彁鍗?*
-
-- **[fix] 鍒嗛暅瑙嗛杞瓒呮椂**锛歚submitAsync` 鐨?10 鍒嗛挓瓒呮椂涓嶅啀鍖呭惈鍚庣淇″彿閲忔帓闃熺瓑寰呮椂闂达紝姣忎釜鍗虫ⅵ浠诲姟鎷ユ湁鐙珛瀹屾暣鐨勮疆璇㈢獥鍙ｏ紙淇 `DREAMINA_MAX_CONCURRENT=1` 鏃跺悗鎺掍换鍔¤秴鏃朵涪澶辫棰戠殑闂锛?- **[fix] 鍚庣瑙嗛涓嬭浇 fallback**锛歚persistVideoUrlToOutput` 钀界洏澶辫触鏃讹紝鑻ュ師濮嬪嵆姊?URL 涓?HTTPS锛岀洿鎺ヨ繑鍥炵粰鍓嶇浣滀负鎾斁 fallback锛屼笉鍐嶈繑鍥炵┖ videoUrl 瀵艰嚧杞姝诲惊鐜?- **[fix] 鍒锋柊淇濇姢 鈥?鍚堝苟 localStorage 瑙嗛鏁版嵁**锛氶〉闈㈠姞杞戒粠鏈嶅姟绔鍙栭」鐩椂锛岃嚜鍔ㄥ悎骞?localStorage 涓凡淇濆瓨浣嗘湇鍔＄灏氭湭鍚屾鐨勮棰戠増鏈紝闃叉 3 绉掗槻鎶栫獥鍙ｅ唴鍒锋柊瀵艰嚧瑙嗛涓㈠け
-- **[fix] 鍒囨崲瑙嗛鐗堟湰鍚屾椤跺眰瀛楁**锛歚selectShotVideoVersion` 鐜板湪鍚屾鏇存柊 `previewVideoPath`/`previewVideoUrl`锛屼慨澶嶅垏鎹㈢増鏈悗鍒嗛暅鏁村悎椤垫樉绀恒€屽皻鏈敓鎴愯棰戙€嶇殑闂
-- **[opt] 瑙嗛淇濆瓨绔嬪嵆鍚屾**锛氬垎闀滆棰戜繚瀛樺悗绔嬪嵆涓婁紶鏈嶅姟绔紙缁曡繃 3 绉掗槻鎶栵級锛屽ぇ骞呯缉灏忓埛鏂版暟鎹涪澶辩獥鍙?
----
-
-### v0.33 鈥?2026-04-15
-
-**鏋舵瀯浼樺寲浠诲姟鍏ㄩ儴瀹屾垚锛圱ASK-01 ~ TASK-06锛?*
-
-**宸插綊妗ｅ畬鎴愮殑鏋舵瀯浠诲姟锛?*
-- **[arch] TASK-01 ProductionWizard 鎷嗗垎**锛氫粠 3994 琛屽法鐭虫枃浠舵媶鍒嗕负澶氫釜 Step 瀛愮粍浠讹紙StepExportWorkspace銆丼tepStoryboardWorkspace 绛夛級
-- **[arch] TASK-02 缁熶竴瑙嗛鐢熸垚鏈嶅姟灞?*锛氭秷闄ゅ墠绔笁澶勯噸澶嶇殑鐢熸垚閫昏緫锛岀粺涓€閫氳繃 hook 璋冪敤
-- **[arch] TASK-03 鍓緫鍣ㄦ寔涔呭寲 + 鎾ら攢**锛氬埛鏂颁笉涓㈠け椤圭洰锛屾敮鎸?Ctrl+Z 鎾ら攢鎿嶄綔
-- **[arch] TASK-04 澶氶暅澶村紓姝ュ寲**锛氬垎闀滆棰戠敓鎴愪粠鍚屾闃诲鏀逛负 Job 闃熷垪锛屾敮鎸佸苟鍙戞彁浜?- **[arch] TASK-05 澶氱敤鎴锋暟鎹殧绂?*锛氭墍鏈夌敤鎴锋暟鎹寜 username 鍒嗙洰褰曞瓨鍌紝localStorage 闅旂
-- **[arch] TASK-06 鍗虫ⅵ鐧诲綍鎬佹娴?*锛氱敓鎴愬墠妫€娴?CLI 鐧诲綍鐘舵€侊紝闃叉"鍋囧畬鎴?闈欓粯澶辫触
-
----
-
-### v0.32 鈥?2026-04-15
-
-**楂樼骇鍒剁墖瀵煎嚭椤?路 P1 鐗堟湰瑙掓爣 + P2 鍦ㄥ壀杈戝櫒涓墦寮€**
+**高级制片——自适应视频生成队列 + 后端信号量泄漏修复**
 
 **Feature:**
-- **[studio] 鑳剁墖鏉＄増鏈鏍?*锛氬垎闀滄湁澶氭鐢熸垚鐗堟湰锛坴2銆乿3鈥︼級鏃讹紝鑳剁墖鏉＄缉鐣ュ浘宸︿笂瑙掓樉绀恒€寁N銆嶈摑鑹茶鏍?- **[studio] 鍦ㄥ壀杈戝櫒涓墦寮€**锛氬鍑洪〉鏂板涓绘搷浣滄寜閽紝涓€閿皢鎵€鏈夊凡鐢熸垚鍒嗛暅瑙嗛鎸夐『搴忓鍏ュ壀杈戝伐浣滃彴
-  - 鑷姩鏋勫缓 TimelineProject锛氭瘡涓垎闀滆棰戜綔涓?VideoClip 鎸?shotIndex 椤哄簭鎺掑垪锛岃嚜鍔ㄥ悓姝?A1 鍘熷０杞?  - 椤圭洰鍚嶇О鑷姩鍛藉悕涓恒€寋鍒剁墖椤圭洰鍚峿-鍓緫銆嶏紝淇濆瓨鍚庤烦杞?`/editor?project=<id>`
+- **[前端] `ProductionWizard.tsx` 自适应队列**：连续点击多个分镜「生成视频」时，前端串行队列自动调度。默认快速模式（拿到 submitId 即放行下一个），如果即梦返回并发限制（ret=1310），自动切换为慢速模式——等前一个视频完全生成完毕再提交下一个，连续 2 次成功后自动恢复快速模式。
+- **[前端] 排队状态可视化**：Shot Strip 缩略条区分三种状态（排队中/提交中/即梦生成中），按钮显示"排队等待中…（前方 N 个）"。
+
+**Fix:**
+- **[后端] `videoDreamina.ts` 信号量泄漏修复**：production 源任务提交成功后立即释放 Dreamina 信号量 slot（之前 slot 被 hold 到前端轮询完成，但 production 任务已改为后端 batch-job 轮询，导致 slot 永不释放，5 分钟超时后才回收）。新增 `source` 请求参数区分来源。
+- **[前端] `VideoGenerateRequest` 新增 `source` 字段**：production 模式提交时携带 `source: 'production'`，后端据此决定是否立即释放信号量。
 
 ---
 
-### v0.31 鈥?2026-04-15
+### v0.40 — 2026-04-15
 
-**AI 鍓緫鏅鸿兘浼樺寲锛堟柟鍚?+5+3 棣栨壒钀藉湴锛?*
+**高级制片——视频风格约束修复**
 
-**鏂瑰悜 1 路 琛屼负缁嗗寲鍒嗙被锛圔ehavior Taxonomy 浜岀骇浣撶郴锛夛細**
-- `gameTaxonomy.ts` 鏂板 `ActivityGroup` 鎺ュ彛锛屾敮鎸?`activityGroups`锛堜竴绾?浜岀骇锛夐厤缃€傚彧闇€鍦?`config/game-taxonomy.json` 鍔犲叆 `activityGroups` 瀛楁鍗冲彲鍚敤
-- `frameVisionRank.ts` 鎵╁睍 `VisionFrameScore`锛氭柊澧?`activitySecondary`锛堜簩绾ц涓虹粏鍒嗭級銆乣intensity`锛坙ow/mid/high 寮哄害锛夈€乣isTurningPoint`锛堝彊浜嬭浆鎶樼偣 flag锛?- Gemini prompt 鑷姩鏍规嵁鏄惁閰嶇疆 `activityGroups` 鍒囨崲杈撳嚭鏍煎紡锛堝崟鏍囩 鈫?缁撴瀯鍖栦笁瀛楁锛?- `editorAgentService.ts` 涓?`buildIntentPriorityWindows` 鍒╃敤鏂板瓧娈靛姞鏉冿細`isTurningPoint=true` +1.5鍒嗐€乣intensity=high` +0.5鍒嗭紝杞姌鐐瑰抚浼樺厛杩涘叆鍊欓€?
-**鏂瑰悜 5 路 鍐呭澶氭牱鎬х害鏉燂細**
-- LLM 鎺掔墖 prompt 鏂板寮哄埗澶氭牱鎬ц鍒欙細鍚岀被琛屼负杩炵画涓嶈秴杩?娆°€佹垬鏂楁蹇呴』绌挎彃缂撳啿鐗囨銆侀鐗囨浼橀€夐挬瀛?杞姌鐐广€佹湯鐗囨浼橀€夋渶楂樺垎銆佸揩鍒囦笌鎱㈤暅姣斾緥绾?3:1
+**Fix:**
+- **[前端] `productionAssets.ts` `buildProductionShotVideoStoryboardText`**：补入原本遗漏的 `sp_lighting`（光影）和 `sp_style`（色调/风格）字段，确保视频 Prompt 携带每镜的光影与风格描述。新增可选参数 `globalStyleRef`，可在 Prompt 末尾追加全局风格约束。
+- **[前端] `ProductionWizard.tsx` `handleGenerateShotVideo`**：在所有模式（multimodal / text2video / image2video）提交即梦之前，统一检查并追加缺失的 `sp_lighting`、`sp_style`、`styleRefSummary`（全局视觉风格描述），避免即梦因缺少色调指令而生成与项目风格不符（如黑白项目出彩色）的视频。
 
-**鏂瑰悜 3 路 闊充箰鍏堣 路 鑺傛媿鍒嗘瀽锛堝熀纭€鐗堬級锛?*
-- 鏂板缓 `scripts/beat_analysis.py`锛堜緷璧?`librosa`锛夛細杈撳叆闊抽璺緞锛岃緭鍑?BPM銆佽妭鎷嶆椂闂寸偣鏁扮粍銆佽兘閲忔钀斤紙intro/build/drop/outro锛?- 鏂板缓 `src/services/musicBeatAnalysis.ts`锛氳皟鐢?Python 鑴氭湰锛岃繑鍥?`BeatInfo`锛汸ython 鎴?librosa 涓嶅彲鐢ㄦ椂鑷姩闄嶇骇锛堣繑鍥?null锛屼笉褰卞搷姝ｅ父鍓緫锛?- `editorAgentService.ts` 闆嗘垚锛氬綋 `EDITOR_BEAT_ANALYSIS=1` 涓旈」鐩湁 BGM audio 杞ㄦ椂锛岃嚜鍔ㄥ垎鏋?BGM 骞跺湪 LLM prompt 涓敞鍏ヨ妭鎷嶇害鏉燂紙娈佃惤鏃堕棿鍒嗛厤銆佸垏鐐瑰榻愬缓璁€乨rop 娈靛揩鍒囪鍒欙級
-
-**鍚敤闊充箰鍏堣鍔熻兘锛?* 鍦?`.env` 涓姞 `EDITOR_BEAT_ANALYSIS=1`锛屽苟鍦ㄥ壀杈戝櫒閲屼负鏃堕棿杞存坊鍔?BGM 闊抽杞紝鍐嶈Е鍙?AI 鍓緫鍗冲彲銆?
 ---
 
-### v0.30 鈥?2026-04-15
+### v0.39 — 2026-04-15
 
-**楂樼骇鍒剁墖瀵煎嚭椤?路 鏀炬槧瀹よ繛缁挱鏀惧櫒锛圥0锛?*
+**剪辑 Agent JSON 解析鲁棒性增强**
+
+**Fix:**
+- **[api] `editorAgentService.ts` extractJson 重写**：从仅匹配第一个 code block 改为三层提取策略——扫描所有 `` ```json ``` `` code block 取最长 → 花括号配对找最外层 `{…}` → 原文兜底，解决模型输出带额外解释文字时提取失败的问题。
+- **[api] 新增 `repairJson` 修复层**：自动处理 LLM 常见 JSON 缺陷（尾逗号、`//` 行注释、token 截断导致的未闭合括号），首次 parse 失败后自动修复重试。
+- **[api] Compass API 调用加 `response_format: { type: 'json_object' }`**：从 API 层约束 Gemini 输出纯 JSON，大幅降低非法 JSON 概率。
+- **[api] `promptPolish.ts`**：`compassChatCompletionWithUsage` 新增可选 `responseFormat` 参数，支持调用方指定输出格式约束。
+- **[api] 错误信息增强**：修复仍然失败时，错误消息包含模型原始输出前 300 字符片段，便于快速定位问题。
+
+**Root Cause：** Compass Gemini 模型偶尔在 JSON 外包裹 Markdown 说明文字或 code block 格式不标准，原 `extractJson` 仅匹配第一个 `` ``` `` 对无法应对所有变体，导致 `JSON.parse` 失败抛出"模型返回不是合法 JSON"。
+
+---
+
+### v0.38 — 2026-04-15
+
+**即梦 ret=1310 ExceedConcurrencyLimit 自动重试 + 友好提示**
+
+**Fix:**
+- **[api] `videoDreamina.ts` 自动重试**：多模态和非多模态路径均新增 1310 重试机制——首次收到 `ExceedConcurrencyLimit` 时自动等待 45s 后重试一次（不释放并发槽），透明解决"服务重启后旧任务残留"场景；重试仍失败则释放槽并抛出用户友好错误。
+- **[api] 友好错误文案**：最终失败改为抛 `"即梦账号当前有生成任务排队中，请 2-3 分钟后重试"`，不再暴露原始 `ret=1310, logid=...` 给用户。
+- **[frontend] `useVideoGeneration.ts` 兜底**：`normalizeError` 补充 `ret=1310 / ExceedConcurrencyLimit` 识别，即使后端未处理也能显示中文提示。
+
+**Root Cause：** 服务器重启后内存信号量重置为"空闲"，但即梦账号上仍有上一次 session 留下的任务在跑，提交新任务即被即梦拒绝；之前代码直接将原始 API 错误透传前端显示。
+
+---
+
+### v0.37 — 2026-04-15
+
+**高级制片 · 放映室审片体验优化**
+
+- **[studio] 分镜视频切换自动连播**：放映室（ScreeningRoomPlayer）切到下一分镜后视频自动开始播放，无需手动点击
+  - 新增 `onCanPlay` 回调，在视频数据就绪时触发 `play()`，取代旧的 `useEffect` 方式（旧方案在 `key` 切换重建 `<video>` 后时机过早导致不生效）
+  - 添加 `autoPlay` 属性作为双保险
+  - 播放链路：`onEnded` → `goNext` → `key` 变化重建 `<video>` → 新源加载 → `onCanPlay` → 自动播放
+
+---
+
+### v0.36 — 2026-04-15
+
+**AI 剪辑智能优化 · 第三批（方向6 画面-音乐情绪对齐）**
+
+- **[editor-agent] 情绪张力维度（方向6）**：
+  - `VisionFrameScore` 新增 `tension`（情绪张力 0–10，与剪辑价值 score 分离）和 `emotionTag`（calm/tense/triumphant/sad/exciting）
+  - Gemini 打分 prompt 更新，每帧同时输出 tension + emotionTag
+  - 内容地图（Content Manifest）现在显示情绪分布统计（如 `exciting×5 / tense×3 | 平均张力：6.2/10`）
+- **[editor-agent] BGM 段落 × 画面情绪对齐规则**：
+  - drop（high energy）段 → 优先 tension ≥ 7、emotionTag=exciting/triumphant 的画面
+  - build（mid energy）段 → 优先 tension 4-6、emotionTag=tense 的画面
+  - intro/outro（low energy）段 → 优先 tension ≤ 3、emotionTag=calm/sad 的画面
+  - 无 BGM 时按叙事模板段落位置推断张力期望
+  - 强制约束：同一 BGM 段落内画面张力变化幅度 ≤ 5
+
+---
+
+### v0.35 — 2026-04-15
+
+**AI 剪辑智能优化 · 第二批（方向2 叙事结构 + 方向4 切点质量）**
+
+- **[editor-agent] 两阶段叙事结构排片（方向2）**：
+  - 新增三套叙事模板：`经典高光`（混剪爽点）/ `角色故事`（角色宣传）/ `节奏混剪`（BGM 先行）
+  - 系统根据用户意图自动选模板（有 BGM → 节奏混剪；战斗类 → 经典高光；其他 → 角色故事）
+  - 新增 `buildContentManifest()` 将视觉评分组织为「内容地图」，按 钩子/动作顶点/战斗高光/铺垫/平静 五类分组，带时间戳标注
+  - LLM prompt 注入叙事模板 + 内容地图，引导 AI 按开场→铺垫→高潮→收尾结构排片，告别「高分片段堆砌」
+- **[editor-agent] 切点质量优化（方向4）**：
+  - `VisionFrameScore` 新增 `isActionPeak`（动作顶点帧，如击杀瞬间/技能命中）和 `cameraMotion`（镜头运动类型：static/pan/zoom/shake）
+  - Gemini 打分 prompt 更新，现在返回两个新字段
+  - System prompt 注入切点规则：动作顶点优先切入、动接动原则、连续静态镜头须插入运动镜头
+
+---
+
+### v0.35a — 2026-04-15
+
+**高级制片 · 视频生成架构升级：后端轮询 + SSE 推送**
+
+核心变更：即梦视频生成从「前端 10 分钟死轮询」迁移至「后端智能轮询 + SSE 实时通知」，彻底解决长时间生成导致的视频丢失。
+
+- **[arch] 后端智能轮询**：production 来源的 batch-job 提交后前 10 分钟不轮询，之后每 5 分钟自动检查一次即梦状态；4 小时 TTL 防僵尸任务
+- **[feat] 自动回写项目 JSON**：视频落盘后自动更新服务端项目文件的 `previewVideoVersions`，关闭浏览器也不丢失
+- **[feat] SSE 实时推送**：视频就绪后通过 batch-jobs SSE 通道推送到前端，自动填入分镜预览并 toast 提示
+- **[feat] 手动检查进度**：分镜面板新增「手动检查进度」按钮，用户可随时立即查询即梦状态（`POST /api/batch-jobs/:id/poll-now`）
+- **[fix] batch-jobs video 鉴权放行**：`GET /api/batch-jobs/video/:id` 加入免鉴权白名单，`<video>` 标签可直接播放
+
+---
+
+### v0.34 — 2026-04-15
+
+**高级制片 · 分镜视频丢失修复 & 持久化健壮性提升**
+
+- **[fix] 分镜视频轮询超时**：`submitAsync` 的 10 分钟超时不再包含后端信号量排队等待时间，每个即梦任务拥有独立完整的轮询窗口（修复 `DREAMINA_MAX_CONCURRENT=1` 时后排任务超时丢失视频的问题）
+- **[fix] 后端视频下载 fallback**：`persistVideoUrlToOutput` 落盘失败时，若原始即梦 URL 为 HTTPS，直接返回给前端作为播放 fallback，不再返回空 videoUrl 导致轮询死循环
+- **[fix] 刷新保护 — 合并 localStorage 视频数据**：页面加载从服务端读取项目时，自动合并 localStorage 中已保存但服务端尚未同步的视频版本，防止 3 秒防抖窗口内刷新导致视频丢失
+- **[fix] 切换视频版本同步顶层字段**：`selectShotVideoVersion` 现在同步更新 `previewVideoPath`/`previewVideoUrl`，修复切换版本后分镜整合页显示「尚未生成视频」的问题
+- **[opt] 视频保存立即同步**：分镜视频保存后立即上传服务端（绕过 3 秒防抖），大幅缩小刷新数据丢失窗口
+
+---
+
+### v0.33 — 2026-04-15
+
+**架构优化任务全部完成（TASK-01 ~ TASK-06）**
+
+**已归档完成的架构任务：**
+- **[arch] TASK-01 ProductionWizard 拆分**：从 3994 行巨石文件拆分为多个 Step 子组件（StepExportWorkspace、StepStoryboardWorkspace 等）
+- **[arch] TASK-02 统一视频生成服务层**：消除前端三处重复的生成逻辑，统一通过 hook 调用
+- **[arch] TASK-03 剪辑器持久化 + 撤销**：刷新不丢失项目，支持 Ctrl+Z 撤销操作
+- **[arch] TASK-04 多镜头异步化**：分镜视频生成从同步阻塞改为 Job 队列，支持并发提交
+- **[arch] TASK-05 多用户数据隔离**：所有用户数据按 username 分目录存储，localStorage 隔离
+- **[arch] TASK-06 即梦登录态检测**：生成前检测 CLI 登录状态，防止"假完成"静默失败
+
+---
+
+### v0.32 — 2026-04-15
+
+**高级制片导出页 · P1 版本角标 + P2 在剪辑器中打开**
 
 **Feature:**
-- **[studio] ScreeningRoomPlayer 缁勪欢**锛氬鍑洪〉鏂板鏀炬槧瀹よ鍥撅紝灏嗘墍鏈夊垎闀滆棰戞寜椤哄簭涓茶仈杩炵画鎾斁
-  - 涓绘挱鏀惧尯锛?6:9锛夛細鏈夎棰戠殑闀滃ご鑷姩鎾斁锛岀粨鏉熷悗鑷姩鍒囦笅涓€闀滐紱鏃犺棰戦暅澶存樉绀洪潤甯э紝鍋滅暀 2 绉掕嚜鍔ㄨ烦涓嬩竴闀?  - 椤堕儴瑕嗙洊灞傦細鏄剧ず銆岄暅N / 鍏盢闀溿€?+ 涓婁竴闀?涓嬩竴闀滄寜閽?  - 搴曢儴瑕嗙洊灞傦細褰撳墠闀滃ご鎻忚堪鏂囧瓧
-  - 鑳剁墖鏉★紙filmstrip锛夛細妯悜婊氬姩缂╃暐鍥撅紝鐐瑰嚮璺宠浆锛屽綋鍓嶉暅楂樹寒钃濇锛岀豢鐐?鐏扮偣鏍囨敞瑙嗛鐢熸垚鐘舵€?  - 瀹炴椂杩涘害缁熻锛氥€屽凡鐢熸垚瑙嗛锛圢/N锛夈€?- **[studio] 鏀炬槧瀹?鈫?缃戞牸瑙嗗浘鍒囨崲**锛氬彸涓婅鎸夐挳鍦ㄤ袱绉嶈鍥鹃棿鍒囨崲锛岄粯璁よ繘鍏ユ斁鏄犲
+- **[studio] 胶片条版本角标**：分镜有多次生成版本（v2、v3…）时，胶片条缩略图左上角显示「vN」蓝色角标
+- **[studio] 在剪辑器中打开**：导出页新增主操作按钮，一键将所有已生成分镜视频按顺序导入剪辑工作台
+  - 自动构建 TimelineProject：每个分镜视频作为 VideoClip 按 shotIndex 顺序排列，自动同步 A1 原声轨
+  - 项目名称自动命名为「{制片项目名}-剪辑」，保存后跳转 `/editor?project=<id>`
 
 ---
 
-### v0.29 鈥?2026-04-15
+### v0.31 — 2026-04-15
 
-**銆屾垜鐨勬垚鐗囥€嶉〉闈?UX 鍏ㄩ潰绮剧畝**
+**AI 剪辑智能优化（方向1+5+3 首批落地）**
+
+**方向 1 · 行为细化分类（Behavior Taxonomy 二级体系）：**
+- `gameTaxonomy.ts` 新增 `ActivityGroup` 接口，支持 `activityGroups`（一级+二级）配置。只需在 `config/game-taxonomy.json` 加入 `activityGroups` 字段即可启用
+- `frameVisionRank.ts` 扩展 `VisionFrameScore`：新增 `activitySecondary`（二级行为细分）、`intensity`（low/mid/high 强度）、`isTurningPoint`（叙事转折点 flag）
+- Gemini prompt 自动根据是否配置 `activityGroups` 切换输出格式（单标签 → 结构化三字段）
+- `editorAgentService.ts` 中 `buildIntentPriorityWindows` 利用新字段加权：`isTurningPoint=true` +1.5分、`intensity=high` +0.5分，转折点帧优先进入候选
+
+**方向 5 · 内容多样性约束：**
+- LLM 排片 prompt 新增强制多样性规则：同类行为连续不超过3次、战斗段必须穿插缓冲片段、首片段优选钩子/转折点、末片段优选最高分、快切与慢镜比例约 3:1
+
+**方向 3 · 音乐先行 · 节拍分析（基础版）：**
+- 新建 `scripts/beat_analysis.py`（依赖 `librosa`）：输入音频路径，输出 BPM、节拍时间点数组、能量段落（intro/build/drop/outro）
+- 新建 `src/services/musicBeatAnalysis.ts`：调用 Python 脚本，返回 `BeatInfo`；Python 或 librosa 不可用时自动降级（返回 null，不影响正常剪辑）
+- `editorAgentService.ts` 集成：当 `EDITOR_BEAT_ANALYSIS=1` 且项目有 BGM audio 轨时，自动分析 BGM 并在 LLM prompt 中注入节拍约束（段落时间分配、切点对齐建议、drop 段快切规则）
+
+**启用音乐先行功能：** 在 `.env` 中加 `EDITOR_BEAT_ANALYSIS=1`，并在剪辑器里为时间轴添加 BGM 音频轨，再触发 AI 剪辑即可。
+
+---
+
+### v0.30 — 2026-04-15
+
+**高级制片导出页 · 放映室连续播放器（P0）**
+
+**Feature:**
+- **[studio] ScreeningRoomPlayer 组件**：导出页新增放映室视图，将所有分镜视频按顺序串联连续播放
+  - 主播放区（16:9）：有视频的镜头自动播放，结束后自动切下一镜；无视频镜头显示静帧，停留 2 秒自动跳下一镜
+  - 顶部覆盖层：显示「镜N / 共N镜」 + 上一镜/下一镜按钮
+  - 底部覆盖层：当前镜头描述文字
+  - 胶片条（filmstrip）：横向滚动缩略图，点击跳转，当前镜高亮蓝框，绿点/灰点标注视频生成状态
+  - 实时进度统计：「已生成视频（N/N）」
+- **[studio] 放映室 ↔ 网格视图切换**：右上角按钮在两种视图间切换，默认进入放映室
+
+---
+
+### v0.29 — 2026-04-15
+
+**「我的成片」页面 UX 全面精简**
 
 **UX:**
-- **[gallery] 绉婚櫎椤堕儴璇存槑娈佃惤**锛氬垹闄ょ害 4 琛?姝ゅ鍙敹褰曗€﹀嵆姊?App 涓嶅悓姝?璇存槑鏂囧瓧锛岄灞忕洿鎺ュ憟鐜板唴瀹广€?- **[gallery] Tab 鏍囩浼樺寲**锛歚鏈満鍘嗗彶 (N)` 鈫?`鎴戠殑鎴愮墖 (N)`锛沗鏈嶅姟绔?output 鎴愮墖` 鈫?`鏈嶅姟绔枃浠禶锛涙瘡涓?Tab 鏂板鎮诞 `?` tooltip 鍙栦唬鍐呰仈璇存槑娈佃惤銆?- **[gallery] 鍒犻櫎鏈嶅姟绔?tab 鍐呬袱鍧楄鏄?Block**锛氱Щ闄?鍜屻€屾湰鏈哄巻鍙层€嶇殑鍖哄埆"4 鏉?bullet 涓?VITE_API_BASE_URL 璇存槑娈佃惤銆?- **[gallery] 绌虹姸鎬佹敼涓虹畝娲?CTA**锛歚鎴戠殑鎴愮墖` 绌虹姸鎬?鈫?澶у浘鏍?+ 涓€鍙ヨ瘽 + 涓や釜琛屽姩鎸夐挳锛沗鏈嶅姟绔枃浠禶 绌虹姸鎬?鈫?鍥炬爣 + 鍒锋柊/杩斿洖鎸夐挳锛屾棤鎶€鏈枃瀛椼€?- **[gallery] 鏂囦欢鍚嶅彲璇诲寲**锛氭湇鍔＄鏂囦欢鍗＄墖涓嶅啀灞曠ず鍘熷 hash 璺緞锛屾敼涓烘牸寮忓寲鍚嶇О锛堝嵆姊︽垚鐗囨樉绀?鍗虫ⅵ鎴愮墖 路 鏈?鏃?鏃?鍒?锛夈€?- **[gallery] 鎸夐挳鏂囨**锛歚鍔犲叆鏈満鍘嗗彶` 鈫?`淇濆瓨鍒版垜鐨勬垚鐗嘸锛涘垹闄ゆ寜閽敼鐢?Trash 鍥炬爣銆?
+- **[gallery] 移除顶部说明段落**：删除约 4 行"此处只收录…即梦 App 不同步"说明文字，首屏直接呈现内容。
+- **[gallery] Tab 标签优化**：`本机历史 (N)` → `我的成片 (N)`；`服务端 output 成片` → `服务端文件`；每个 Tab 新增悬浮 `?` tooltip 取代内联说明段落。
+- **[gallery] 删除服务端 tab 内两块说明 Block**：移除"和「本机历史」的区别"4 条 bullet 与 VITE_API_BASE_URL 说明段落。
+- **[gallery] 空状态改为简洁 CTA**：`我的成片` 空状态 → 大图标 + 一句话 + 两个行动按钮；`服务端文件` 空状态 → 图标 + 刷新/返回按钮，无技术文字。
+- **[gallery] 文件名可读化**：服务端文件卡片不再展示原始 hash 路径，改为格式化名称（即梦成片显示"即梦成片 · 月/日 时:分"）。
+- **[gallery] 按钮文案**：`加入本机历史` → `保存到我的成片`；删除按钮改用 Trash 图标。
+
 ---
 
-### v0.28 鈥?2026-04-15
+### v0.28 — 2026-04-15
 
-**楂樼骇鍒剁墖瀵煎嚭椤靛垎闀滃崱鐗?UI 浼樺寲**
+**高级制片导出页分镜卡片 UI 优化**
 
 **Feature:**
-- **[studio] 瀵煎嚭鍒嗛暅鍗＄墖閲嶆瀯**锛氱粺涓€鍗＄墖涓恒€屽獟浣撳尯锛堜笂锛? 鎻忚堪锛堜笅锛夈€嶄袱灞傜粨鏋勶紝娑堥櫎鏈?鏃犺棰戞椂鍗＄墖楂樺害涓嶄竴鑷寸殑闂
-  - 宸茬敓鎴愯棰戯細鐩存帴鍦ㄥ獟浣撳尯鏄剧ず `<video>` 鎾斁鍣紝闈欏抚浣滀负 `poster` 灏侀潰锛堢偣鍑绘挱鏀惧墠灞曠ず锛夛紝涓嶅啀鍙犲姞棰濆鐨勫浘鐗囧眰
-  - 鏈敓鎴愯棰戯細濯掍綋鍖烘樉绀洪潤甯у浘锛屽彸涓嬭闄勩€屽皻鏈敓鎴愯棰戙€嶅皬瑙掓爣锛屾瘮鍘熸潵鏁磋鎻愮ず鏂囧瓧鏇磋交閲?  - 鎵€鏈夊崱鐗囩瓑楂橈紝4 鍒楃綉鏍煎竷灞€鏁撮綈瀵归綈
+- **[studio] 导出分镜卡片重构**：统一卡片为「媒体区（上）+ 描述（下）」两层结构，消除有/无视频时卡片高度不一致的问题
+  - 已生成视频：直接在媒体区显示 `<video>` 播放器，静帧作为 `poster` 封面（点击播放前展示），不再叠加额外的图片层
+  - 未生成视频：媒体区显示静帧图，右下角附「尚未生成视频」小角标，比原来整行提示文字更轻量
+  - 所有卡片等高，4 列网格布局整齐对齐
 
 ---
 
-### v0.27 鈥?2026-04-15
+### v0.27 — 2026-04-15
 
-**绱犳潗搴?UI 閲嶈璁?+ 涓枃鏂囦欢鍚嶇紪鐮佷慨澶?+ 澶氳处鍙锋暟鎹殧绂?*
+**素材库 UI 重设计 + 中文文件名编码修复 + 多账号数据隔离**
 
 **Feature / Fix:**
-- **[asset-library] 鍗曢〉鐢诲粖甯冨眬**锛氬簾寮?4-Tab 缁撴瀯锛岃繘鍏ュ嵆鏄剧ず鍏ㄩ儴绱犳潗鐪熷疄缂╃暐鍥剧綉鏍硷紙6 鍒楁鏂瑰舰瑁佸垏锛夛紱鍥剧墖 `<img>` 娓叉煋锛岃棰?`<video>` 灞曠ず棣栧抚 + 鎾斁鎸夐挳銆?- **[asset-library] 鍙充晶璇︽儏鎶藉眽**锛氱偣鍗＄墖婊戝叆锛屾樉绀哄ぇ鍥鹃瑙堛€佹枃浠朵俊鎭€佸畬鏁?AI 鏍囩锛屽簳閮ㄣ€岀敤浜庣敓鎴愩€嶆寜閽€?- **[asset-library] 搴曢儴涓婁紶闈㈡澘**锛氱偣銆屼笂浼犵礌鏉愩€嶄粠搴曢儴婊戝叆锛屽畬鎴愬悗鑷姩鍏抽棴骞跺埛鏂扮敾寤娿€?- **[asset-library] 鍐呭祵鎼滅储 + 绛涢€?*锛氭悳绱㈡ + 姣斾緥/绫诲瀷/鏂瑰悜/鐢昏川 4 涓?dropdown 甯搁┗椤堕儴銆?- **[asset-library/api] 鍚庣鍝嶅簲瑙勮寖鍖?*锛歚GET /assets` 涓?`GET /search` 杩斿洖 `assets` 瀛楁锛堝惈瀹屾暣 `tags` 鏁扮粍锛夈€?- **[asset-library/encoding] 涓枃鏂囦欢鍚嶄贡鐮佷慨澶?*锛歁ulter 鍦?Node/Windows 涓嬪皢 UTF-8 鏂囦欢鍚嶉敊璇瘑鍒负 Latin-1锛屾柊澧?`decodeFilename` 宸ュ叿锛坄latin1 鈫?utf8`锛夊湪鍏ュ簱鍓嶄慨姝ｏ紱`fixGarbledFilenames()` 鍦ㄦ湇鍔″惎鍔ㄦ椂涓€娆℃€ц縼绉诲巻鍙茶剰鏁版嵁銆?- **[asset-library] 瀵煎叆鐧藉睆 Bug 淇**锛氬墠绔?`getJobStatus` 鍝嶅簲褰掍竴鍖栵紙`id鈫抝obId`銆乣failed/interrupted鈫抏rror`锛夛紝`AssetImportPanel` 鍔犻槻寰℃€?`?? ''` 闃?jobId 涓?undefined 鏃跺穿婧冦€?- **[auth/logout] 鐧诲嚭娓呯悊涓氬姟鏁版嵁**锛氶€€鍑烘椂棰濆娓呴櫎 `gobs_last_project_id`銆乣h5-production-project-v1`锛堥槻姝㈤珮绾у埗鐗囨姤銆岄」鐩姞杞藉け璐ャ€嶏級銆乣production_compass_api_key`锛堝畨鍏級銆乣quickfilm_active_job`銆乣gobs_multishot_job_id`銆?- **[history] 鏈満瑙嗛鍘嗗彶鎸夎处鍙峰垎妗?*锛歬ey 鏀逛负 `h5-video-history-{username}`锛屼笉鍚岃处鍙风殑鏈満鍘嗗彶浜掍笉鍙銆?- **[history] 浜戠鍒楄〃鏄熸爣/闅愯棌鍋忓ソ鎸夎处鍙峰垎妗?*锛歬ey 鍔?username 鍚庣紑锛岃处鍙烽棿鍋忓ソ鐙珛銆?
+- **[asset-library] 单页画廊布局**：废弃 4-Tab 结构，进入即显示全部素材真实缩略图网格（6 列正方形裁切）；图片 `<img>` 渲染，视频 `<video>` 展示首帧 + 播放按钮。
+- **[asset-library] 右侧详情抽屉**：点卡片滑入，显示大图预览、文件信息、完整 AI 标签，底部「用于生成」按钮。
+- **[asset-library] 底部上传面板**：点「上传素材」从底部滑入，完成后自动关闭并刷新画廊。
+- **[asset-library] 内嵌搜索 + 筛选**：搜索框 + 比例/类型/方向/画质 4 个 dropdown 常驻顶部。
+- **[asset-library/api] 后端响应规范化**：`GET /assets` 与 `GET /search` 返回 `assets` 字段（含完整 `tags` 数组）。
+- **[asset-library/encoding] 中文文件名乱码修复**：Multer 在 Node/Windows 下将 UTF-8 文件名错误识别为 Latin-1，新增 `decodeFilename` 工具（`latin1 → utf8`）在入库前修正；`fixGarbledFilenames()` 在服务启动时一次性迁移历史脏数据。
+- **[asset-library] 导入白屏 Bug 修复**：前端 `getJobStatus` 响应归一化（`id→jobId`、`failed/interrupted→error`），`AssetImportPanel` 加防御性 `?? ''` 防 jobId 为 undefined 时崩溃。
+- **[auth/logout] 登出清理业务数据**：退出时额外清除 `gobs_last_project_id`、`h5-production-project-v1`（防止高级制片报「项目加载失败」）、`production_compass_api_key`（安全）、`quickfilm_active_job`、`gobs_multishot_job_id`。
+- **[history] 本机视频历史按账号分桶**：key 改为 `h5-video-history-{username}`，不同账号的本机历史互不可见。
+- **[history] 云端列表星标/隐藏偏好按账号分桶**：key 加 username 后缀，账号间偏好独立。
+
 ---
 
-### v0.26 鈥?2026-04-15
+### v0.26 — 2026-04-15
 
-**淇锛氳鑹?鍦烘櫙鍥剧墖鍥捐 + 鍒嗛暅瑙嗛鏃犳硶鎾斁**
+**修复：角色/场景图片图裂 + 分镜视频无法播放**
 
-**Root Cause 鍒嗘瀽锛?*
-- **鍥捐**锛歚stripBase64` 鍑芥暟鍘熸湰鐢ㄤ簬闃叉澶т綋绉?base64 鎾戝ぇ椤圭洰 JSON锛屼絾閲囩敤浜嗐€屼竴鍒€鍒囥€嶇瓥鐣ワ紝鎶婃墍鏈?`data:` URL 瀛楃涓查兘鍒犻櫎锛屽寘鎷?`imageDataUrl`锛堣鑹?鍦烘櫙澶村儚锛夈€傝繖浜涙槸鐢ㄦ埛鐨勭湡瀹炴暟鎹紝涓嶅簲琚垹銆?- **瑙嗛榛戝睆**锛歚/api/video/file` 鍦?auth 涓棿浠朵腑宸插 `<video>` 鏍囩鏀捐锛堟棤闇€ Bearer锛夛紝浣嗚矾鐢卞唴閮ㄤ粛鐢?`req.user?.username` 鍋氱敤鎴风洰褰曢壌鏉冦€傛棤 JWT 璁块棶鏃?`req.user` 涓?undefined 鈫?`username='_default'` 鈫?涓庡疄闄呯洰褰?`admin` 涓嶅尮閰?鈫?403 Forbidden銆?- **鍥剧墖鏂囦欢缂哄け**锛氳鑹插浘鐗囨枃浠朵綅浜?`/home/ubuntu/gobs-data/output/production/images/admin/`锛堜箣鍓嶇敤 `API_DATA_DIR=/home/ubuntu/gobs-data` 涓婁紶锛夛紝浣嗗綋鍓?API 榛樿璇诲彇 `process.cwd()/output/...` 鍗?`/home/ubuntu/qas-h5/api/output/...`锛堟棤 `API_DATA_DIR` 閰嶇疆锛夈€?
+**Root Cause 分析：**
+- **图裂**：`stripBase64` 函数原本用于防止大体积 base64 撑大项目 JSON，但采用了「一刀切」策略，把所有 `data:` URL 字符串都删除，包括 `imageDataUrl`（角色/场景头像）。这些是用户的真实数据，不应被删。
+- **视频黑屏**：`/api/video/file` 在 auth 中间件中已对 `<video>` 标签放行（无需 Bearer），但路由内部仍用 `req.user?.username` 做用户目录鉴权。无 JWT 访问时 `req.user` 为 undefined → `username='_default'` → 与实际目录 `admin` 不匹配 → 403 Forbidden。
+- **图片文件缺失**：角色图片文件位于 `/home/ubuntu/gobs-data/output/production/images/admin/`（之前用 `API_DATA_DIR=/home/ubuntu/gobs-data` 上传），但当前 API 默认读取 `process.cwd()/output/...` 即 `/home/ubuntu/qas-h5/api/output/...`（无 `API_DATA_DIR` 配置）。
+
 **Fix:**
-- **[api] `productionPersist.ts`**锛歚stripBase64` 鏀逛负瀛楁鍚嶆劅鐭ョ増鏈紝浠呭垹闄?`previewStillDataUrl`锛堝垎闀滈潤甯ч瑙堬紝~2MB/闀滐紝灞炲彲鍐嶇敓鎴愮紦瀛橈級锛屼繚鐣?`imageDataUrl`锛堣鑹?鍦烘櫙鍥撅級銆乣videoUrl`锛堣棰戠増鏈?URL锛夌瓑鎵€鏈夌敤鎴疯祫浜у瓧娈点€?- **[api] `video.ts`**锛歚/api/video/file` 鏃?JWT 鏃讹紙`<video>` 鏍囩鐩存帴璁块棶锛夛紝璺宠繃鐢ㄦ埛鐩綍闄愬埗锛屽彧鏍￠獙璺緞鍦?`outputDir` 鏍圭洰褰曚笅锛堥槻鐩綍绌胯秺锛夛紝淇鍏紑瑙嗛鎾斁 403銆?- **[server] 鍥剧墖鏂囦欢鎭㈠**锛氬皢 `/home/ubuntu/gobs-data/output/production/images/admin/` 鐨勬墍鏈夊浘鐗囧鍒跺埌 `/home/ubuntu/qas-h5/api/output/production/images/admin/`锛屾仮澶嶈鑹?鍦烘櫙/閬撳叿鍥剧墖璁块棶銆?
+- **[api] `productionPersist.ts`**：`stripBase64` 改为字段名感知版本，仅删除 `previewStillDataUrl`（分镜静帧预览，~2MB/镜，属可再生成缓存），保留 `imageDataUrl`（角色/场景图）、`videoUrl`（视频版本 URL）等所有用户资产字段。
+- **[api] `video.ts`**：`/api/video/file` 无 JWT 时（`<video>` 标签直接访问），跳过用户目录限制，只校验路径在 `outputDir` 根目录下（防目录穿越），修复公开视频播放 403。
+- **[server] 图片文件恢复**：将 `/home/ubuntu/gobs-data/output/production/images/admin/` 的所有图片复制到 `/home/ubuntu/qas-h5/api/output/production/images/admin/`，恢复角色/场景/道具图片访问。
+
 ---
 
-### v0.25 鈥?2026-04-15
+### v0.25 — 2026-04-15
 
-**鍗虫ⅵ鎺掗槦鍒嗛暅鏄剧ず缁熶竴涓恒€岀敓鎴愪腑銆?*
+**即梦排队分镜显示统一为「生成中」**
 
 **Fix / UX:**
-- **[frontend] Shot Strip & 鎸夐挳**锛氱瓑寰呮彁浜ょ殑鍒嗛暅锛圚5 鍐呴儴鎺掗槦涓級缁熶竴鏄剧ず涓恒€岀敓鎴愪腑銆嶆棆杞姩鐢诲拰鏂囨锛屼笉鍐嶆樉绀洪粍鑹茶剦鍐层€屾帓闃熶腑銆嶏紝閬垮厤涓庡嵆姊﹀悗鍙扮姸鎬佷骇鐢熸涔夈€?- **[api] DREAMINA_MAX_CONCURRENT 榛樿鍊兼敼鍥?1**锛氬嵆姊﹁处鍙峰疄闄呭苟鍙戣兘鍔涘洜璐﹀彿绫诲瀷鑰屽紓锛屼繚瀹堥粯璁?1 浠ラ伩鍏?ret=1310锛涢渶瑕佹洿楂樺苟鍙戞椂鍦?`.env` 涓墜鍔ㄨ缃?`DREAMINA_MAX_CONCURRENT=N`銆?
+- **[frontend] Shot Strip & 按钮**：等待提交的分镜（H5 内部排队中）统一显示为「生成中」旋转动画和文案，不再显示黄色脉冲「排队中」，避免与即梦后台状态产生歧义。
+- **[api] DREAMINA_MAX_CONCURRENT 默认值改回 1**：即梦账号实际并发能力因账号类型而异，保守默认 1 以避免 ret=1310；需要更高并发时在 `.env` 中手动设置 `DREAMINA_MAX_CONCURRENT=N`。
+
 ---
 
-### v0.24 鈥?2026-04-15
+### v0.24 — 2026-04-15
 
-**鍗虫ⅵ瑙嗛骞跺彂鏁版彁鍗囷紙1 鈫?5锛?*
+**即梦视频并发数提升（1 → 5）**
 
 **Feature:**
-- **[api] DREAMINA_MAX_CONCURRENT 璁℃暟淇″彿閲?*锛氬皢鍘熷厛涓茶鍗曟Ы锛? 骞跺彂锛夋浛鎹负鍙厤缃殑璁℃暟淇″彿閲忥紙榛樿 5 涓苟鍙戞Ы锛夛紝鍏佽鍚屾椂鍚戝嵆姊︽彁浜ゅ涓棰戠敓鎴愪换鍔★紝涓庡嵆姊﹂珮绾т細鍛樿处鍙风殑瀹為檯鑳藉姏瀵归綈銆?- **[api] ret=1310 閿欒涓撻」璀﹀憡**锛氬綋鍗虫ⅵ杩斿洖 `ExceedConcurrencyLimit (ret=1310)` 鏃讹紝绔嬪嵆閲婃斁妲戒綅骞跺湪 pm2 鏃ュ織涓墦鍗版彁绀猴紙寤鸿闄嶄綆 `DREAMINA_MAX_CONCURRENT`锛夛紝涓嶅啀璁╂Ы浣嶆案涔呴樆濉炪€?- **[api] 瀹夊叏瓒呮椂寤堕暱**锛氭瘡妲戒綅瀹夊叏瓒呮椂浠?3 鍒嗛挓寤堕暱鑷?5 鍒嗛挓锛岄€傚簲骞跺彂鍦烘櫙涓嬮儴鍒嗕换鍔¤€楁椂杈冮暱鐨勬儏鍐点€?- **[infra] .env.example 鏂板 `DREAMINA_MAX_CONCURRENT` 璇存槑**锛屾柟渚挎寜璐﹀彿瀹為檯骞跺彂鑳藉姏璋冩暣銆?
-**鏍规湰鍘熷洜锛?* 鍘熷疄鐜板熀浜?鍏嶈垂璐﹀彿鍙厑璁?1 骞跺彂"鐨勪繚瀹堝亣璁撅紙娉ㄩ噴 `ret=1310`锛夛紝楂樼骇浼氬憳瀹為檯鏀寔鏇撮珮骞跺彂锛屽鑷?H5 鐐瑰嚮澶氫釜銆岀敓鎴愬垎闀滆棰戙€嶅悗锛屽悗缁换鍔″叏閮ㄥ崱鍦ㄦ湇鍔＄ `await`锛屽嵆姊﹀悗鍙板彧鏈?1 涓换鍔″湪璺戙€?
+- **[api] DREAMINA_MAX_CONCURRENT 计数信号量**：将原先串行单槽（1 并发）替换为可配置的计数信号量（默认 5 个并发槽），允许同时向即梦提交多个视频生成任务，与即梦高级会员账号的实际能力对齐。
+- **[api] ret=1310 错误专项警告**：当即梦返回 `ExceedConcurrencyLimit (ret=1310)` 时，立即释放槽位并在 pm2 日志中打印提示（建议降低 `DREAMINA_MAX_CONCURRENT`），不再让槽位永久阻塞。
+- **[api] 安全超时延长**：每槽位安全超时从 3 分钟延长至 5 分钟，适应并发场景下部分任务耗时较长的情况。
+- **[infra] .env.example 新增 `DREAMINA_MAX_CONCURRENT` 说明**，方便按账号实际并发能力调整。
+
+**根本原因：** 原实现基于"免费账号只允许 1 并发"的保守假设（注释 `ret=1310`），高级会员实际支持更高并发，导致 H5 点击多个「生成分镜视频」后，后续任务全部卡在服务端 `await`，即梦后台只有 1 个任务在跑。
+
 ---
 
-### v0.23 鈥?2026-04-15
+### v0.23 — 2026-04-15
 
-**閰嶄箰寮曟搸鏉ユ簮鍙鍖?*
+**配乐引擎来源可视化**
 
 **UX:**
-- **[BgmMixPanel] 寮曟搸 badge**锛氶厤涔愮敓鎴愬畬鎴愬悗锛屾爣棰樻梺鏄剧ず褰╄壊灏忔爣绛锯€斺€擿馃幍 Suno`锛堢传鑹诧級鎴?`馃幍 Lyria`锛堣摑鑹诧級锛岄紶鏍囨偓娴樉绀鸿鏄庢枃瀛楋紙"涓诲紩鎿?/"澶囩敤寮曟搸"锛?- **[BgmMixPanel] 鏃ュ織鍙鎬ф彁鍗?*锛氬畬鎴愭棩蹇椾粠"閰嶄箰宸查摵婊★紙N 娈碉級"鏀逛负"鉁?閰嶄箰瀹屾垚锛堝紩鎿庯細Suno 路 鏃堕暱锛歑s 路 N 棣栵級"锛屾槑纭寘鍚紩鎿庡悕
-- **[BgmMixPanel] 鍘婚櫎纭紪鐮?Lyria"**锛氭椂闀挎彁绀轰粠"闇€ N 娈?Lyria 閰嶄箰"鏀逛负"绾﹂渶 N 棣栭厤涔?锛屽寮曟搸涓珛
-- **[BgmMixPanel] 瓒呮椂涓婇檺璋冩暣**锛氬墠绔瓑寰呰秴鏃朵粠 160s 鎻愬崌鑷?210s锛屼笌 Suno 鏈€闀跨敓鎴愭椂闂村尮閰?
+- **[BgmMixPanel] 引擎 badge**：配乐生成完成后，标题旁显示彩色小标签——`🎵 Suno`（紫色）或 `🎵 Lyria`（蓝色），鼠标悬浮显示说明文字（"主引擎"/"备用引擎"）
+- **[BgmMixPanel] 日志可读性提升**：完成日志从"配乐已铺满（N 段）"改为"✅ 配乐完成（引擎：Suno · 时长：Xs · N 首）"，明确包含引擎名
+- **[BgmMixPanel] 去除硬编码"Lyria"**：时长提示从"需 N 段 Lyria 配乐"改为"约需 N 首配乐"，对引擎中立
+- **[BgmMixPanel] 超时上限调整**：前端等待超时从 160s 提升至 210s，与 Suno 最长生成时间匹配
+
 ---
 
-### v0.22 鈥?2026-04-15
+### v0.22 — 2026-04-15
 
-**闊充箰鐢熸垚鍙屽紩鎿庯細Suno API锛堜富锛? Lyria锛坆ackup锛?*
+**音乐生成双引擎：Suno API（主）+ Lyria（backup）**
 
 **Feature:**
-- **[backend] 鏂板 `sunoMusic.ts` 鏈嶅姟**锛氬鎺?sunoapi.org Suno API锛屽叏寮傛娴佺▼锛堟彁浜や换鍔?鈫?6s 闂撮殧杞 鈫?涓嬭浇 MP3锛夛紝鏈€澶х瓑寰?3.5 鍒嗛挓锛屾瘡娆″浐瀹氳繑鍥?2 棣栧櫒涔愭洸鐩?- **[backend] `editorMusic.ts` 鍙屽紩鎿庤矾鐢?*锛氶厤缃?`SUNO_API_KEY` 鏃堕粯璁よ皟鐢?Suno锛涙晱鎰熻瘝閿欒锛?00锛夌洿鎺ヨ繑鍥烇紝鍏朵綑 Suno 閿欒锛堥厤棰濊€楀敖 429銆並ey 鏃犳晥 401銆佺綉缁滆秴鏃剁瓑锛夎嚜鍔?fallback 鍒?Lyria锛汳P3/WAV 鍙屾牸寮忔枃浠舵湇鍔?- **[backend] 鍝嶅簲鏂板瀛楁**锛歚provider: 'suno' | 'lyria'`锛屽憡鐭ュ墠绔疄闄呬娇鐢ㄥ紩鎿庯紱Suno 妯″紡涓嬫瘡棣?`durationSec` 浣跨敤鐪熷疄鏃堕暱锛堥潪鍥哄畾 32.8s锛?- **[frontend] API 绫诲瀷鎵╁睍**锛歚GenerateEditorMusicBody` 鏂板 `style`/`title` 瀛楁锛圫uno customMode锛夛紝`GenerateEditorMusicResponse` 鏂板 `provider` 瀛楁
-- **[config] `.env.example` 琛ュ厖**锛氭柊澧?`SUNO_API_KEY`銆乣SUNO_MODEL`锛堥粯璁?`V4_5ALL`锛夈€乣SUNO_API_BASE_URL` 涓変釜閰嶇疆椤硅鏄?
-**浣跨敤璇存槑锛?*
-鍦?`h5-video-tool-api/.env` 涓坊鍔?`SUNO_API_KEY=sk-xxx` 鍚庨噸鍚嵆鐢熸晥锛涗笉閰嶇疆鎴?Suno 澶辫触鏃剁郴缁熼€忔槑闄嶇骇鍒?Lyria锛屽姛鑳戒笉涓柇銆?
+- **[backend] 新增 `sunoMusic.ts` 服务**：对接 sunoapi.org Suno API，全异步流程（提交任务 → 6s 间隔轮询 → 下载 MP3），最大等待 3.5 分钟，每次固定返回 2 首器乐曲目
+- **[backend] `editorMusic.ts` 双引擎路由**：配置 `SUNO_API_KEY` 时默认调用 Suno；敏感词错误（400）直接返回，其余 Suno 错误（配额耗尽 429、Key 无效 401、网络超时等）自动 fallback 到 Lyria；MP3/WAV 双格式文件服务
+- **[backend] 响应新增字段**：`provider: 'suno' | 'lyria'`，告知前端实际使用引擎；Suno 模式下每首 `durationSec` 使用真实时长（非固定 32.8s）
+- **[frontend] API 类型扩展**：`GenerateEditorMusicBody` 新增 `style`/`title` 字段（Suno customMode），`GenerateEditorMusicResponse` 新增 `provider` 字段
+- **[config] `.env.example` 补充**：新增 `SUNO_API_KEY`、`SUNO_MODEL`（默认 `V4_5ALL`）、`SUNO_API_BASE_URL` 三个配置项说明
+
+**使用说明：**
+在 `h5-video-tool-api/.env` 中添加 `SUNO_API_KEY=sk-xxx` 后重启即生效；不配置或 Suno 失败时系统透明降级到 Lyria，功能不中断。
+
 ---
 
-### v0.21 鈥?2026-04-15
+### v0.21 — 2026-04-15
 
-**绱犳潗瀵煎叆鐧藉睆 Bug 淇**
+**素材导入白屏 Bug 修复**
 
 **Fix:**
-- **[asset-library/import] 鎵归噺瀵煎叆鐧藉睆淇**锛氫慨澶嶆壒閲忓鍏ュ浘鐗囧悗椤甸潰鐩存帴鐧藉睆鐨勯棶棰樸€傛牴鍥狅細鍚庣 `GET /import/:jobId` 杩斿洖 DB 琛屽瓧娈典负 `id`锛屽墠绔疆璇㈠悗璋冪敤 `job.jobId.slice(0,8)` 鏃?`jobId` 涓?`undefined` 瀵艰嚧 `TypeError`锛孯eact 缁勪欢鏍戝穿婧冦€?- **[asset-library/import] 杞姘镐笉鍋滄淇**锛氬悗绔?job status 瀛樺湪 `'failed'` / `'interrupted'` 涓や釜缁堟€侊紝浣嗗墠绔粎妫€鏌?`'done'` / `'error'`锛屽鑷磋疆璇㈠唴瀛樻硠婕忋€傜幇鍦?`getJobStatus` API 鍑芥暟缁熶竴褰掍竴鍖栵細`failed`/`interrupted` 鈫?`error`銆?- **[asset-library/import] 闃插尽鎬ф鏌?*锛歚job.jobId` 娓叉煋澶勫鍔犵┖鍊间繚鎶?`(job.jobId ?? '')` 闃叉鍚庣画娼滃湪宕╂簝銆?
+- **[asset-library/import] 批量导入白屏修复**：修复批量导入图片后页面直接白屏的问题。根因：后端 `GET /import/:jobId` 返回 DB 行字段为 `id`，前端轮询后调用 `job.jobId.slice(0,8)` 时 `jobId` 为 `undefined` 导致 `TypeError`，React 组件树崩溃。
+- **[asset-library/import] 轮询永不停止修复**：后端 job status 存在 `'failed'` / `'interrupted'` 两个终态，但前端仅检查 `'done'` / `'error'`，导致轮询内存泄漏。现在 `getJobStatus` API 函数统一归一化：`failed`/`interrupted` → `error`。
+- **[asset-library/import] 防御性检查**：`job.jobId` 渲染处增加空值保护 `(job.jobId ?? '')` 防止后续潜在崩溃。
+
 ---
 
-### v0.20 鈥?2026-04-15
+### v0.20 — 2026-04-15
 
-**瀵煎嚭鍘嗗彶绠＄悊闈㈡澘**
+**导出历史管理面板**
 
 **Feature:**
-- **[editor/export] 鍘嗗彶瀵煎嚭闈㈡澘**锛氬鍑烘寜閽彸渚ф柊澧?鈴?鍘嗗彶"鍥炬爣鎸夐挳锛岀偣鍑诲脊鍑洪潰鏉匡紝鍒楀嚭璇ヨ处鍙峰湪鏈嶅姟鍣ㄤ笂淇濆瓨鐨勬墍鏈夊鍑鸿棰戯紙鏈€鏂板湪鍓嶏級锛屾樉绀哄鍑烘椂闂村拰鏂囦欢澶у皬銆?- **[editor/export] 鍒锋柊涓嶅啀涓㈠け**锛氶潰鏉夸粠鏈嶅姟鍣ㄦ枃浠剁郴缁熷疄鏃舵壂鎻忥紝涓嶄緷璧栧唴瀛樼姸鎬併€傚埛鏂伴〉闈€侀噸鏂版墦寮€缂栬緫鍣ㄥ悗锛屽巻鍙插鍑烘枃浠朵緷鐒跺彲瑙侊紝鏃犻渶閲嶆柊瀵煎嚭銆?- **[editor/export] 鍘嗗彶涓嬭浇**锛氶潰鏉垮唴姣忔潯璁板綍鍧囨惡甯?JWT 閴存潈澶翠笅杞斤紙澶嶇敤 `apiDownload`锛夛紝鏃?401 闂銆?- **[editor/export] 鍘嗗彶鍒犻櫎**锛氭瘡鏉¤褰曞彲鍗曠嫭鍒犻櫎锛堜簩娆＄‘璁わ級锛屾竻鐞嗕笉鍐嶉渶瑕佺殑瀵煎嚭鏂囦欢锛岄伩鍏嶆湇鍔″櫒绌洪棿鏃犻檺绱Н銆?- **[editor/export] 鑷姩鍒锋柊鍒楄〃**锛氬綋鍓嶄細璇濆鍑哄畬鎴愬悗锛岄潰鏉垮垪琛ㄨ嚜鍔ㄨ拷鍔犳柊鏂囦欢锛屾棤闇€鎵嬪姩鍒锋柊銆?
-**API锛堝悗绔級:**
-- `GET /api/editor/export/files` 鈥?鍒楀嚭褰撳墠鐢ㄦ埛鎵€鏈?`.mp4/.mov` 瀵煎嚭鏂囦欢锛堝惈鏂囦欢澶у皬銆佸垱寤烘椂闂淬€佷笅杞?URL锛夛紝鎸夋椂闂村€掑簭
-- `DELETE /api/editor/export/files/:filename` 鈥?鍒犻櫎鎸囧畾瀵煎嚭鏂囦欢
+- **[editor/export] 历史导出面板**：导出按钮右侧新增"⏱ 历史"图标按钮，点击弹出面板，列出该账号在服务器上保存的所有导出视频（最新在前），显示导出时间和文件大小。
+- **[editor/export] 刷新不再丢失**：面板从服务器文件系统实时扫描，不依赖内存状态。刷新页面、重新打开编辑器后，历史导出文件依然可见，无需重新导出。
+- **[editor/export] 历史下载**：面板内每条记录均携带 JWT 鉴权头下载（复用 `apiDownload`），无 401 问题。
+- **[editor/export] 历史删除**：每条记录可单独删除（二次确认），清理不再需要的导出文件，避免服务器空间无限累积。
+- **[editor/export] 自动刷新列表**：当前会话导出完成后，面板列表自动追加新文件，无需手动刷新。
+
+**API（后端）:**
+- `GET /api/editor/export/files` — 列出当前用户所有 `.mp4/.mov` 导出文件（含文件大小、创建时间、下载 URL），按时间倒序
+- `DELETE /api/editor/export/files/:filename` — 删除指定导出文件
 
 ---
 
-### v0.19 鈥?2026-04-15
+### v0.19 — 2026-04-15
 
-**瀵煎嚭涓嬭浇閴存潈淇**
+**导出下载鉴权修复**
 
 **Bug Fix:**
-- **[editor/export] 涓嬭浇鎴愬搧 401 "闇€瑕佽幏寰楁巿鏉?**锛氬鍑哄畬鎴愬悗鐨勩€屸瑖 涓嬭浇鎴愬搧銆嶆寜閽師涓?`<a href>` 鐩存帴瀵艰埅锛屾祻瑙堝櫒涓嶆惡甯?`Authorization` 澶达紝鍚庣閴存潈涓棿浠惰繑鍥?401銆傛敼涓洪€氳繃 `fetch` + JWT 澶磋姹傦紝灏嗗搷搴旇浆涓?Blob URL 鍐嶈Е鍙戞祻瑙堝櫒淇濆瓨瀵硅瘽妗嗐€?- **[frontend/client] 鏂板 `apiDownload` 宸ュ叿鍑芥暟**锛氬湪 `client.ts` 涓粺涓€灏佽甯﹂壌鏉冪殑鏂囦欢涓嬭浇鑳藉姏锛屼究浜庡悗缁叾浠栭渶瑕佽璇佷笅杞界殑鍦烘櫙澶嶇敤銆?
+- **[editor/export] 下载成品 401 "需要获得授权"**：导出完成后的「⬇ 下载成品」按钮原为 `<a href>` 直接导航，浏览器不携带 `Authorization` 头，后端鉴权中间件返回 401。改为通过 `fetch` + JWT 头请求，将响应转为 Blob URL 再触发浏览器保存对话框。
+- **[frontend/client] 新增 `apiDownload` 工具函数**：在 `client.ts` 中统一封装带鉴权的文件下载能力，便于后续其他需要认证下载的场景复用。
+
 ---
 
-### v0.18 鈥?2026-04-15
+### v0.18 — 2026-04-15
 
-**楂樼骇鍒剁墖鍒嗛暅瑙嗛鎭㈠杞淇**
+**高级制片分镜视频恢复轮询修复**
 
 **Bug Fix:**
-- **[frontend] 鍒嗛暅瑙嗛鍒锋柊鍚庝笉鍐嶅洖濉?*锛氭仮澶嶈疆璇㈢殑 `useEffect(deps=[])` 鍦ㄧ粍浠舵寕杞芥椂绔嬪嵆鎵ц锛屼絾鏈嶅姟绔」鐩紓姝ュ姞杞藉皻鏈畬鎴愶紝`project.shots` 涓虹┖锛屽鑷?`pendingVideoSubmitId` 姘歌繙鏃犳硶琚娴嬪埌銆傛槰澶╂彁浜ょ殑鍗虫ⅵ浠诲姟鍒锋柊椤甸潰鍚庝笉浼氳嚜鍔ㄧ画鎺ヨ疆璇紝瑙嗛鐢熸垚缁撴灉涓㈠け銆?- **[frontend] 淇鏂规**锛氬皢 `useEffect` 渚濊禆鏀逛负 `[isServerBootstrapping]`锛岀瓑寰呮湇鍔＄椤圭洰鍔犺浇瀹屾垚锛坄isServerBootstrapping=false`锛夊悗鍐嶆墽琛屾仮澶嶈疆璇紱鏂板 `hasResumedPollingRef` 闃叉鍥犲悗缁?`project` 鍙樺寲閲嶅瑙﹀彂銆?
-**鏍规湰鍘熷洜锛?* React 涓や釜 `useEffect(deps=[])` 鍚屾椂鍦?mount 鎵ц锛屼絾鏈嶅姟绔」鐩姞杞芥槸寮傛鐨勶紝鎭㈠杞鎬诲厛浜庨」鐩暟鎹彲鐢ㄨ€岃繍琛屻€?
+- **[frontend] 分镜视频刷新后不再回填**：恢复轮询的 `useEffect(deps=[])` 在组件挂载时立即执行，但服务端项目异步加载尚未完成，`project.shots` 为空，导致 `pendingVideoSubmitId` 永远无法被检测到。昨天提交的即梦任务刷新页面后不会自动续接轮询，视频生成结果丢失。
+- **[frontend] 修复方案**：将 `useEffect` 依赖改为 `[isServerBootstrapping]`，等待服务端项目加载完成（`isServerBootstrapping=false`）后再执行恢复轮询；新增 `hasResumedPollingRef` 防止因后续 `project` 变化重复触发。
+
+**根本原因：** React 两个 `useEffect(deps=[])` 同时在 mount 执行，但服务端项目加载是异步的，恢复轮询总先于项目数据可用而运行。
+
 ---
 
-### v0.17 鈥?2026-04-15
+### v0.17 — 2026-04-15
 
-**鍓緫浣撻獙涓夐」浼樺寲 & 閿欒淇℃伅鏀瑰杽**
+**剪辑体验三项优化 & 错误信息改善**
 
 **Feature / UX:**
-- **[editor] 杩涘叆鑷姩鎵撳紑鏈€杩戦」鐩?*锛氶娆″姞杞?`/editor` 鏃讹紝鑻ユ湁宸蹭繚瀛橀」鐩紝鑷姩閫氳繃 URL param `?project=xxx` 鎵撳紑鏈€杩戠紪杈戠殑椤圭洰锛屼笉鍐嶆瘡娆￠兘灞曠ず绌虹櫧"鏈懡鍚嶅壀杈戦」鐩?锛沀RL 鍚屾鏇存柊锛屽埛鏂颁繚鎸侀」鐩笉涓?- **[editor] 鏂板缓椤圭洰鍛藉悕寮圭獥**锛氱偣鍑汇€? 鏂板缓銆嶆垨椤圭洰绠＄悊鍣ㄤ腑鐨勩€屾柊寤哄壀杈戙€嶆椂锛屽脊鍑哄懡鍚嶅璇濇锛堥粯璁ゅ悕鍚棩鏈熸椂闂达紝濡?`鍓緫-0415-1030`锛夛紝鏀寔鍥炶溅纭 / Esc 鍙栨秷锛岄」鐩粠鍒涘缓璧峰氨鏈夎涔夊寲鍚嶇О
-- **[editor] 椤舵爮 UI 浼樺寲**锛氥€岀鐞嗛」鐩€嶆敼涓恒€屾垜鐨勯」鐩?(N)銆嶆樉绀哄疄闄呮暟閲忥紱銆? 鏂板缓銆嶄娇鐢ㄤ富鑹茶皟绐佸嚭鏄剧ず
+- **[editor] 进入自动打开最近项目**：首次加载 `/editor` 时，若有已保存项目，自动通过 URL param `?project=xxx` 打开最近编辑的项目，不再每次都展示空白"未命名剪辑项目"；URL 同步更新，刷新保持项目不丢
+- **[editor] 新建项目命名弹窗**：点击「+ 新建」或项目管理器中的「新建剪辑」时，弹出命名对话框（默认名含日期时间，如 `剪辑-0415-1030`），支持回车确认 / Esc 取消，项目从创建起就有语义化名称
+- **[editor] 顶栏 UI 优化**：「管理项目」改为「我的项目 (N)」显示实际数量；「+ 新建」使用主色调突出显示
 
 **Bug Fix:**
-- **[editor/export] drawtext 棰勬**锛氬鍑哄墠鍏堥€氳繃 `ffmpeg -filters` 妫€娴?drawtext 鏄惁鍙敤锛堢粨鏋滅紦瀛橈級锛屾湇鍔″櫒 FFmpeg 缂哄皯 libfreetype 鏃剁洿鎺ヨ烦杩囨枃瀛楀眰锛屼笉鍐嶅湪杩愯鏃舵姤閿欏悗鎵嶉檷绾э紝娑堥櫎鍋跺彂鐨?瀵煎嚭澶辫触锛欶Fmpeg 閫€鍑虹爜 8"
-- **[api] Compass 缃戠粶閿欒鎻愮ず**锛欳ompass API 杩炴帴澶辫触缁?3 娆￠噸璇曚粛涓嶅彲杈炬椂锛岄敊璇秷鎭粠瑁搁湶鐨?`"Network Error"` 鏀逛负銆孉I 鏈嶅姟鏆傛椂涓嶅彲杈撅紙宸查噸璇?3 娆★級锛岃绋嶅悗閲嶈瘯銆傚鎸佺画鍑虹幇锛岃妫€鏌ユ湇鍔″櫒鍑虹綉閰嶇疆鎴?COMPASS_API_URL銆?- **[frontend] fetch 缃戠粶閿欒缁熶竴澶勭悊**锛歚apiGet` / `apiPost` 鏂板 `wrapFetchError()` 鎹曡幏 `fetch()` 鏈韩鎶涘嚭鐨勬祻瑙堝櫒缃戠粶寮傚父锛坄Failed to fetch / NetworkError / Load failed`锛夛紝缁熶竴杞负銆屾棤娉曡繛鎺ュ埌鏈嶅姟鍣紝璇锋鏌ョ綉缁滃悗閲嶈瘯銆?
+- **[editor/export] drawtext 预检**：导出前先通过 `ffmpeg -filters` 检测 drawtext 是否可用（结果缓存），服务器 FFmpeg 缺少 libfreetype 时直接跳过文字层，不再在运行时报错后才降级，消除偶发的"导出失败：FFmpeg 退出码 8"
+- **[api] Compass 网络错误提示**：Compass API 连接失败经 3 次重试仍不可达时，错误消息从裸露的 `"Network Error"` 改为「AI 服务暂时不可达（已重试 3 次），请稍后重试。如持续出现，请检查服务器出网配置或 COMPASS_API_URL」
+- **[frontend] fetch 网络错误统一处理**：`apiGet` / `apiPost` 新增 `wrapFetchError()` 捕获 `fetch()` 本身抛出的浏览器网络异常（`Failed to fetch / NetworkError / Load failed`），统一转为「无法连接到服务器，请检查网络后重试」
+
 ---
 
-### v0.17a 鈥?2026-04-15
+### v0.17a — 2026-04-15
 
-**鏈嶅姟鍣ㄧ幆澧冨彉閲忎慨澶嶏紙Windows 璺緞 鈫?Linux 璺緞锛?*
+**服务器环境变量修复（Windows 路径 → Linux 路径）**
 
 **Bug Fix:**
-- **[infra] `PYTHON_EXE` 璺緞淇**锛氭湇鍔″櫒 `.env` 涓?`PYTHON_EXE` 琚敊璇缃负 Windows 璺緞锛坄C:/Users/wei.liu/...`锛夛紝瀵艰嚧銆岀敓鎴愬垎闀滆棰戙€嶆椂鎶?`spawn ENOENT`銆傚凡鏀逛负 `/usr/bin/python3`锛圲buntu 瀹為檯璺緞锛?- **[infra] `DREAMINA_BIN` 璺緞淇**锛歐indows 璺緞 鈫?`/home/ubuntu/.local/bin/dreamina`
-- **[infra] `YT_DLP_PATH` 璺緞淇**锛歐indows 璺緞 鈫?`/home/ubuntu/.local/bin/yt-dlp`
+- **[infra] `PYTHON_EXE` 路径修正**：服务器 `.env` 中 `PYTHON_EXE` 被错误设置为 Windows 路径（`C:/Users/wei.liu/...`），导致「生成分镜视频」时报 `spawn ENOENT`。已改为 `/usr/bin/python3`（Ubuntu 实际路径）
+- **[infra] `DREAMINA_BIN` 路径修正**：Windows 路径 → `/home/ubuntu/.local/bin/dreamina`
+- **[infra] `YT_DLP_PATH` 路径修正**：Windows 路径 → `/home/ubuntu/.local/bin/yt-dlp`
 
-**鏍规湰鍘熷洜锛?* 鏈湴 `.env`锛堝惈 Windows 璺緞锛夊湪鏌愭閮ㄧ讲鏃惰鏁翠綋瑕嗙洊鍒版湇鍔″櫒锛屾湇鍔″櫒闇€瑕佺殑鏄?Linux 缁濆璺緞銆傛湇鍔″櫒 `.env` 宸茬洿鎺ヤ慨澶嶏紝鏈敼鍔ㄤ唬鐮併€?
+**根本原因：** 本地 `.env`（含 Windows 路径）在某次部署时被整体覆盖到服务器，服务器需要的是 Linux 绝对路径。服务器 `.env` 已直接修复，未改动代码。
+
 ---
 
-### v0.16 鈥?2026-04-15
+### v0.16 — 2026-04-15
 
-**楂樼骇鍒剁墖椤圭洰鍔犺浇鎬ц兘浼樺寲**
+**高级制片项目加载性能优化**
 
 **Bug Fix / Perf:**
-- **[api] 淇濆瓨鍓?strip base64**锛歚/api/production/project/save` 鍦ㄥ啓纾佺洏鍓嶉€掑綊灏嗘墍鏈?`data:` URL 鏇挎崲涓?`null`锛岄槻姝㈡湭瀹屾垚涓婁紶鐨勪复鏃?base64 鍥剧墖锛堟瘡寮?~2MB锛夋拺澶ч」鐩?JSON锛堝師 18MB 鈫?棰勮 <1MB锛?- **[api] sidecar `.meta.json`**锛氭瘡娆′繚瀛樻椂鍚屾鍐欎竴浠戒粎鍚?`{id, title, updatedAt, step}` 鐨勮交閲?sidecar 鏂囦欢锛垀100 瀛楄妭锛夛紝`/project/list` 浼樺厛璇?sidecar锛屼笉鍐嶈В鏋愬叏閲?JSON锛岄」鐩垪琛ㄥ姞杞戒粠绉掔骇闄嶈嚦姣绾э紱鏃?sidecar 鐨勬棫椤圭洰鑷姩鍥為€€瑙ｆ瀽鍏ㄩ噺 JSON锛堝悜鍚庡吋瀹癸級
-- **[api] 鍒犻櫎鏃跺悓姝ユ竻鐞?sidecar**锛歚DELETE /api/production/project` 杩炲悓 `.meta.json` 涓€骞跺垹闄?
-**鏍规湰鍘熷洜璇存槑锛?*
-鑷姩淇濆瓨锛?s 闃叉姈锛夊湪鍥剧墖涓婁紶瀹屾垚鍓嶈Е鍙戯紝瀵艰嚧 base64 琚啓鍏ョ鐩橈紱`/project/list` 閫愪釜瑙ｆ瀽鍏ㄩ噺 JSON 鑾峰彇鍏冧俊鎭€傛湰娆′慨澶嶅湪鏈嶅姟绔厹搴曪紝涓嶄緷璧栧墠绔笂浼犳椂搴忋€?
+- **[api] 保存前 strip base64**：`/api/production/project/save` 在写磁盘前递归将所有 `data:` URL 替换为 `null`，防止未完成上传的临时 base64 图片（每张 ~2MB）撑大项目 JSON（原 18MB → 预计 <1MB）
+- **[api] sidecar `.meta.json`**：每次保存时同步写一份仅含 `{id, title, updatedAt, step}` 的轻量 sidecar 文件（~100 字节），`/project/list` 优先读 sidecar，不再解析全量 JSON，项目列表加载从秒级降至毫秒级；无 sidecar 的旧项目自动回退解析全量 JSON（向后兼容）
+- **[api] 删除时同步清理 sidecar**：`DELETE /api/production/project` 连同 `.meta.json` 一并删除
+
+**根本原因说明：**
+自动保存（3s 防抖）在图片上传完成前触发，导致 base64 被写入磁盘；`/project/list` 逐个解析全量 JSON 获取元信息。本次修复在服务端兜底，不依赖前端上传时序。
+
 ---
 
-### v0.16a 鈥?2026-04-15
+### v0.16a — 2026-04-15
 
-**浠撳簱鐦﹁韩 & .gitignore 瀹夊叏淇**
+**仓库瘦身 & .gitignore 安全修复**
 
 **Chore:**
-- **[repo] 鍒犻櫎鍘嗗彶閮ㄧ讲鍖?*锛氭竻鐞?`deploy-full-20260413-1620/`銆乣deploy/cloud-baseline/`銆?0 涓?`gobs-*.tar.gz`銆? 涓?`.zip` 绛夊叡 ~30MB 褰掓。锛屼粨搴撲綋绉樉钁楃缉鍑?- **[repo] 鍒犻櫎涓存椂璋冭瘯鏂囦欢**锛歚debug_path.mjs`銆乣final_test.sh`銆乣test_api.sh`銆乣tmp_flash_image_test.png`銆乣gobs_ppt*.py`銆佺┖鍗犱綅鏂囦欢 `claude`銆佹棫鐗?`.cmd` 鍚姩鑴氭湰
-- **[repo] 鍒犻櫎鍙啀鐢熸垚浜х墿**锛歚h5-video-tool/dist/`銆乣h5-video-tool-api/dist/`銆乣out/` 绛夌紪璇戣緭鍑虹洰褰?- **[frontend] 鍒犻櫎姝讳唬鐮侀〉闈?*锛歚TabMaterials.tsx`锛堝叏椤圭洰鏃犺矾鐢?鏃犲紩鐢級
-- **[security] 琛ュ叏 `.gitignore`**锛氭柊澧?`*.db`/`*.db-shm`/`*.db-wal`銆乣dreamina-login.json`銆乣editor-projects/`銆乣uploads/`銆乣.claude/settings.local.json` 绛夎鍒欙紝闃叉鏁版嵁搴撴枃浠跺拰鐧诲綍鍑瘉鎰忓杩涘叆 Git 鍘嗗彶
+- **[repo] 删除历史部署包**：清理 `deploy-full-20260413-1620/`、`deploy/cloud-baseline/`、10 个 `gobs-*.tar.gz`、2 个 `.zip` 等共 ~30MB 归档，仓库体积显著缩减
+- **[repo] 删除临时调试文件**：`debug_path.mjs`、`final_test.sh`、`test_api.sh`、`tmp_flash_image_test.png`、`gobs_ppt*.py`、空占位文件 `claude`、旧版 `.cmd` 启动脚本
+- **[repo] 删除可再生成产物**：`h5-video-tool/dist/`、`h5-video-tool-api/dist/`、`out/` 等编译输出目录
+- **[frontend] 删除死代码页面**：`TabMaterials.tsx`（全项目无路由/无引用）
+- **[security] 补全 `.gitignore`**：新增 `*.db`/`*.db-shm`/`*.db-wal`、`dreamina-login.json`、`editor-projects/`、`uploads/`、`.claude/settings.local.json` 等规则，防止数据库文件和登录凭证意外进入 Git 历史
 
 ---
 
-### v0.15 鈥?2026-04-15
+### v0.15 — 2026-04-15
 
-**鍓嶇鐘舵€佺鐞嗗崌绾э紙React Query锛?*
+**前端状态管理升级（React Query）**
 
 **Feature:**
-- **[frontend] React Query 鍩虹璁炬柦**锛氬畨瑁?`@tanstack/react-query`锛屽湪 `main.tsx` 鎸傝浇 `QueryClientProvider`锛坄staleTime=10s`銆乣retry=1`銆乣refetchOnWindowFocus=false`锛?- **[frontend] `useVideoTaskQuery` hook**锛氭柊澧?`useDreaminaTaskQuery(submitId)` 鍜?`useKlingTaskQuery(taskId)`锛屼娇鐢?React Query 鐨?`refetchInterval` 瀹炵幇闈為樆濉炶棰戜换鍔¤疆璇紱浠诲姟瀹屾垚/澶辫触鍚庤嚜鍔ㄥ仠姝㈣疆璇?- **[frontend] 绫诲瀷鎵╁睍**锛歚DreaminaTaskPollResponse` 鍜?`KlingTaskStatusResponse` 鍧囨柊澧炲彲閫?`errorCode` 瀛楁锛屼笌鍚庣鎵规 5 鐨勯敊璇爜瀵归綈
+- **[frontend] React Query 基础设施**：安装 `@tanstack/react-query`，在 `main.tsx` 挂载 `QueryClientProvider`（`staleTime=10s`、`retry=1`、`refetchOnWindowFocus=false`）
+- **[frontend] `useVideoTaskQuery` hook**：新增 `useDreaminaTaskQuery(submitId)` 和 `useKlingTaskQuery(taskId)`，使用 React Query 的 `refetchInterval` 实现非阻塞视频任务轮询；任务完成/失败后自动停止轮询
+- **[frontend] 类型扩展**：`DreaminaTaskPollResponse` 和 `KlingTaskStatusResponse` 均新增可选 `errorCode` 字段，与后端批次 5 的错误码对齐
 
-**鑳屾櫙璇存槑锛堟壒娆?7 鐜扮姸锛夛細**
-鍓緫鍣ㄦ挙閿€/閲嶅仛锛坄useUndoRedo`锛宒epth=50锛夊拰鑷姩淇濆瓨锛?s 闃叉姈锛岄€氳繃 `/api/editor/projects`锛夊凡鍦ㄦ鍓嶇増鏈疄鐜帮紝鏈壒娆＄‘璁ゅ苟瀹屽杽浜嗙浉鍏冲熀纭€璁炬柦銆?
+**背景说明（批次 7 现状）：**
+剪辑器撤销/重做（`useUndoRedo`，depth=50）和自动保存（3s 防抖，通过 `/api/editor/projects`）已在此前版本实现，本批次确认并完善了相关基础设施。
+
 ---
 
-### v0.14 鈥?2026-04-15
+### v0.14 — 2026-04-15
 
-**宸ㄧ煶鏂囦欢鎷嗗垎锛堟壒娆?6锛?*
+**巨石文件拆分（批次 6）**
 
 **Refactor:**
-- **[api] `videoMultishot.ts` 鐙珛璺敱**锛氬皢 `video.ts` 涓殑澶氶暅澶翠换鍔＄郴缁燂紙绫诲瀷瀹氫箟銆?50+ 琛屼换鍔″紩鎿庛€乫fmpeg 鎷兼帴銆乣/generate-multishot`銆乣/multishot-job/:jobId` 璺敱锛夋彁鍙栧埌鐙珛鏂囦欢锛宍video.ts` 琛屾暟浠?647 琛岄檷鑷?~400 琛?- **[api] multishot 璺緞瑙勮寖鍖?*锛歚MULTISHOT_JOBS_ROOT` 鏀圭敤 `resolvePath('multishot-jobs')` 鑰岄潪 `path.join(getApiDataDir(), 'multishot-jobs')`锛屼笌 storageResolver 瀵归綈
-- **[api] `/generate` 閿欒鍝嶅簲鍔犲叆 `errorCode`**锛欴reamina 鏈櫥褰曟椂闄勫甫 `errorCode: DREAMINA_NOT_LOGGED_IN`
-- **[frontend] 鍚堝苟 `useVideoGenerate` 鈫?`useVideoGeneration`**锛氬垹闄ゅ弻杞?hook锛岀粺涓€浣跨敤 `useVideoGeneration`锛涘悜鍚庡吋瀹瑰湴瀵煎嚭 `generateMultishot`銆乣loading`銆乣error`銆乣clearError`銆乣setError`銆乣useMock` 绛夊睘鎬?
+- **[api] `videoMultishot.ts` 独立路由**：将 `video.ts` 中的多镜头任务系统（类型定义、250+ 行任务引擎、ffmpeg 拼接、`/generate-multishot`、`/multishot-job/:jobId` 路由）提取到独立文件，`video.ts` 行数从 647 行降至 ~400 行
+- **[api] multishot 路径规范化**：`MULTISHOT_JOBS_ROOT` 改用 `resolvePath('multishot-jobs')` 而非 `path.join(getApiDataDir(), 'multishot-jobs')`，与 storageResolver 对齐
+- **[api] `/generate` 错误响应加入 `errorCode`**：Dreamina 未登录时附带 `errorCode: DREAMINA_NOT_LOGGED_IN`
+- **[frontend] 合并 `useVideoGenerate` → `useVideoGeneration`**：删除双轨 hook，统一使用 `useVideoGeneration`；向后兼容地导出 `generateMultishot`、`loading`、`error`、`clearError`、`setError`、`useMock` 等属性
+
 ---
 
-### v0.13 鈥?2026-04-15
+### v0.13 — 2026-04-15
 
-**浠诲姟鐘舵€佹満鏍囧噯鍖栵紙job-status domain锛?*
+**任务状态机标准化（job-status domain）**
 
 **Refactor:**
-- **[domain] 缁熶竴 `JobStatus` / `JobErrorCode` 鏋氫妇**锛氭柊澧?`src/domain/job-status.ts`锛屽畾涔?6 绉嶄换鍔＄姸鎬侊紙`queued/running/succeeded/failed/timeout/canceled`锛夊拰 15 绉嶅叿鍚嶉敊璇爜
-- **[api] `classifyError()` 宸ュ叿鍑芥暟**锛氳嚜鍔ㄥ皢浠绘剰 Error 瀵硅薄鏄犲皠鍒扮粨鏋勫寲閿欒鐮侊紙瑕嗙洊 Dreamina 鏈櫥褰曘€丆ompass 429銆並ling 401銆佽秴鏃剁瓑鍦烘櫙锛?- **[api] Dreamina 閿欒鍝嶅簲鍔犲叆 `errorCode`**锛歚/api/video/dreamina/submit` 鍜?`/task/:submitId` 鐨勬墍鏈夊け璐ヨ矾寰勫潎鎼哄甫 `errorCode`锛屽墠绔彲绮剧‘鍖归厤鎻愮ず鏂囨锛堝銆屽嵆姊︽湭鐧诲綍銆峷s銆屽唴瀹瑰鏍告嫤鎴€嶏級
-- **[api] Kling 閿欒鍝嶅簲鍔犲叆 `errorCode`**锛氭墍鏈夊彲鐏佃矾鐢?catch 鍧楃粺涓€浣跨敤 `classifyError`锛屽憡鍒?`'鏈煡閿欒'` 瀛楃涓?
+- **[domain] 统一 `JobStatus` / `JobErrorCode` 枚举**：新增 `src/domain/job-status.ts`，定义 6 种任务状态（`queued/running/succeeded/failed/timeout/canceled`）和 15 种具名错误码
+- **[api] `classifyError()` 工具函数**：自动将任意 Error 对象映射到结构化错误码（覆盖 Dreamina 未登录、Compass 429、Kling 401、超时等场景）
+- **[api] Dreamina 错误响应加入 `errorCode`**：`/api/video/dreamina/submit` 和 `/task/:submitId` 的所有失败路径均携带 `errorCode`，前端可精确匹配提示文案（如「即梦未登录」vs「内容审核拦截」）
+- **[api] Kling 错误响应加入 `errorCode`**：所有可灵路由 catch 块统一使用 `classifyError`，告别 `'未知错误'` 字符串
+
 ---
 
-### v0.12 鈥?2026-04-15
+### v0.12 — 2026-04-15
 
-**璺緞鎶借薄灞傦紙storageResolver锛?*
+**路径抽象层（storageResolver）**
 
 **Refactor:**
-- **[infra] storageResolver 缁熶竴璺緞鍏ュ彛**锛氭柊澧?`src/infra/storage/resolver.ts`锛屽畾涔?20+ 绉嶄笟鍔¤矾寰勭被鍨嬶紙`db`銆乣video-output`銆乣uploads/editor`銆乣projects`銆乣character-library`銆乣.data` 绛夛級锛屾墍鏈変笟鍔′唬鐮侀€氳繃 `resolvePath(type, ...segments)` 鑾峰彇缁濆璺緞
-- **[fix] 淇 6 澶?`process.cwd()` 鏃佽矾**锛歚assetDb.ts`銆乣localUpload.ts`銆乣characterLibrary.ts`銆乣projects.ts`銆乣assetIngestService.ts`銆乣gobsAuthStore.ts`銆乣riskSentimentService.ts` 鍏ㄩ儴鏀圭敤 resolver锛屾秷闄?鏇存崲 API_DATA_DIR 鍚庨儴鍒嗚矾寰勪笉璺熼殢"鐨勯殣鎮?- **[infra] 鐩綍鑷鎵╁睍**锛氬惎鍔ㄦ椂鑷鐩綍鏂板 `db/` 鍜?`.data/`
+- **[infra] storageResolver 统一路径入口**：新增 `src/infra/storage/resolver.ts`，定义 20+ 种业务路径类型（`db`、`video-output`、`uploads/editor`、`projects`、`character-library`、`.data` 等），所有业务代码通过 `resolvePath(type, ...segments)` 获取绝对路径
+- **[fix] 修复 6 处 `process.cwd()` 旁路**：`assetDb.ts`、`localUpload.ts`、`characterLibrary.ts`、`projects.ts`、`assetIngestService.ts`、`gobsAuthStore.ts`、`riskSentimentService.ts` 全部改用 resolver，消除"更换 API_DATA_DIR 后部分路径不跟随"的隐患
+- **[infra] 目录自检扩展**：启动时自检目录新增 `db/` 和 `.data/`
 
 ---
 
-### v0.11 鈥?2026-04-15
+### v0.11 — 2026-04-15
 
-**鍩虹鏋舵瀯瀹夊叏鍔犲浐 & 杩愮淮鏍囧噯鍖栵紙鎵规 0-3锛?*
+**基础架构安全加固 & 运维标准化（批次 0-3）**
 
-**瀹夊叏淇锛堢揣鎬ワ級锛?*
-- **[infra] Nginx 璺緞淇**锛氭湇鍔″櫒 Nginx root 缁熶竴鎸囧悜 `/home/ubuntu/qas-h5/frontend`锛堟渶鏂版瀯寤轰骇鐗╋級锛屾秷闄?鐢ㄦ埛璁块棶鏃х増鏈?闂锛堝師鏈?3 浠藉壇鏈紝Nginx 鎸囧悜鐨勪笉鏄渶鏂扮増锛?- **[infra] API 绔彛鏀舵暃**锛歚Express.listen` 缁戝畾鍦板潃浠?`0.0.0.0` 鏀逛负 `127.0.0.1`锛屽缃戞棤娉曠粫杩?Nginx 鐩磋繛 3001 绔彛
-- **[infra] 鏈嶅姟鍣ㄥ瘑閽ユ竻鐞?*锛氫粠鏈嶅姟鍣?`.env` 绉婚櫎 `SERVER_PASSWORD`锛圫SH 鐧诲綍瀵嗙爜锛夛紝璇ュ瓧娈典粎渚涙湰鍦伴儴缃茶剼鏈娇鐢?
-**鏁版嵁瀹夊叏锛?*
-- **[infra] assets.db 杩佺Щ**锛歋QLite 绱犳潗鏁版嵁搴撲粠娣峰湪瑙嗛杈撳嚭鐩綍锛坄output/assets.db`锛夎縼绉诲埌涓撳睘鐩綍锛坄api/db/assets.db`锛夛紝娑堥櫎璇竻鐞嗗鑷存暟鎹涪澶辩殑椋庨櫓
+**安全修复（紧急）：**
+- **[infra] Nginx 路径修复**：服务器 Nginx root 统一指向 `/home/ubuntu/qas-h5/frontend`（最新构建产物），消除"用户访问旧版本"问题（原有 3 份副本，Nginx 指向的不是最新版）
+- **[infra] API 端口收敛**：`Express.listen` 绑定地址从 `0.0.0.0` 改为 `127.0.0.1`，外网无法绕过 Nginx 直连 3001 端口
+- **[infra] 服务器密钥清理**：从服务器 `.env` 移除 `SERVER_PASSWORD`（SSH 登录密码），该字段仅供本地部署脚本使用
 
-**鐗堟湰鍙拷婧€э細**
-- **[api] `/api/system/version` 鎺ュ彛**锛氭柊澧炴棤閴存潈鐗堟湰鏌ヨ鎺ュ彛锛岃繑鍥?`commitSha`銆乣branch`銆乣buildTime`锛屽彲闅忔椂楠岃瘉绾夸笂杩愯鐨勬槸鍝釜 commit
-- **[build] build-info.json 娉ㄥ叆**锛歚npm run build` 鑷姩鐢熸垚 `dist/build-info.json`锛岃褰?git commit / branch / 鏋勫缓鏃堕棿
+**数据安全：**
+- **[infra] assets.db 迁移**：SQLite 素材数据库从混在视频输出目录（`output/assets.db`）迁移到专属目录（`api/db/assets.db`），消除误清理导致数据丢失的风险
 
-**閮ㄧ讲鏍囧噯鍖栵細**
-- **[scripts] 缁熶竴閮ㄧ讲鑴氭湰**锛氭柊澧?`scripts/deploy_all.py` / `deploy_api.py` / `deploy_frontend.py`锛屼竴閿畬鎴愭瀯寤轰骇鐗╀笂浼?+ pm2 閲嶅惎 + 鐗堟湰涓€鑷存€ч獙璇侊紱鍓嶇涓婁紶鐩爣鐩綍缁熶竴锛屼笉鍐嶅嚭鐜板鍓湰闂
+**版本可追溯性：**
+- **[api] `/api/system/version` 接口**：新增无鉴权版本查询接口，返回 `commitSha`、`branch`、`buildTime`，可随时验证线上运行的是哪个 commit
+- **[build] build-info.json 注入**：`npm run build` 自动生成 `dist/build-info.json`，记录 git commit / branch / 构建时间
 
-**鍚姩鑷锛?*
-- **[api] env 鏍￠獙**锛氭湇鍔″惎鍔ㄦ椂鑷姩鏍￠獙蹇呭～鐜鍙橀噺锛坄COMPASS_API_URL`銆乣COMPASS_API_KEY`锛夛紝缂哄け鏃?10 绉掑唴鎶ラ敊骞舵槑纭墦鍗扮己澶卞瓧娈靛悕锛屼笉鍐嶉潤榛樺紓甯?- **[api] 鐩綍鑷**锛氬惎鍔ㄦ椂鑷姩鍒涘缓 `output/`銆乣uploads/`銆乣uploads/editor/`銆乣db/` 绛夊繀瑕佺洰褰曪紝鏂扮幆澧冩棤闇€鎵嬪姩鍒濆鍖?- **[docs] `.env.example` 瀹屽杽**锛氳ˉ鍏呭繀濉?鍙€?鏈湴涓撶敤涓夌被鍒嗗尯娉ㄩ噴锛屾柊澧?`SERVER_*` 瀛楁鐨勫畨鍏ㄨ鏄?
+**部署标准化：**
+- **[scripts] 统一部署脚本**：新增 `scripts/deploy_all.py` / `deploy_api.py` / `deploy_frontend.py`，一键完成构建产物上传 + pm2 重启 + 版本一致性验证；前端上传目标目录统一，不再出现多副本问题
+
+**启动自检：**
+- **[api] env 校验**：服务启动时自动校验必填环境变量（`COMPASS_API_URL`、`COMPASS_API_KEY`），缺失时 10 秒内报错并明确打印缺失字段名，不再静默异常
+- **[api] 目录自检**：启动时自动创建 `output/`、`uploads/`、`uploads/editor/`、`db/` 等必要目录，新环境无需手动初始化
+- **[docs] `.env.example` 完善**：补充必填/可选/本地专用三类分区注释，新增 `SERVER_*` 字段的安全说明
+
 ---
 
-### v0.10 鈥?2026-04-14
+### v0.10 — 2026-04-14
 
-**瑙嗛鍓緫涓夌被鏍稿績闂淇**
+**视频剪辑三类核心问题修复**
 
 **Bug Fix:**
-- **[editor] 涓嶅啀鑷姩鍒涘缓绌洪」鐩?*锛氳繘鍏?`/editor` 椤甸潰鏃讹紝鍙湁娣诲姞浜嗙礌鏉愶紙瑙嗛鐗囨銆侀煶棰戙€佸瓧骞曪級鍚庢墠瑙﹀彂鑷姩淇濆瓨锛屾秷闄ゆ瘡娆¤繘鍏ラ兘浜х敓"鏈懡鍚嶅壀杈戦」鐩?鐨勯棶棰?- **[editor] 椤圭洰绠＄悊寮圭獥**锛氶《閮ㄦ爮銆岀鐞嗛」鐩€嶆寜閽墦寮€鍏ㄥ姛鑳介」鐩鐞嗗脊绐楋紝鏀寔锛?  - 鏈€杩戜紭鍏堟帓搴?+ 鐩稿鏃堕棿鏄剧ず锛?3鍒嗛挓鍓?锛?  - 琛屽唴閲嶅懡鍚嶏紙鍚庣鏂板 PATCH 鎺ュ彛锛?  - 鍒犻櫎鍓嶇‘璁ゆ楠?  - 椤圭洰鍚嶆悳绱㈣繃婊?  - 绉婚櫎浜嗗師鏉ユ棤纭鐨勩€屽垹闄ゃ€嶆寜閽?- **[editor] 瀵煎嚭涓嶅啀鍥犳枃瀛楄建鎶ラ敊閫€鍑虹爜 8**锛欶Fmpeg `drawtext` 杩囨护鍣ㄥ湪鏈嶅姟鍣?Linux apt 鐗堟湰涓己灏?`libfreetype` 鏃讹紝瀵煎嚭娴佺▼鐜板湪浼氾細
-  1. 鍦?Linux 涓嬭嚜鍔ㄦ帰娴嬪苟娉ㄥ叆 `fontfile=` 鍙傛暟锛堜娇鐢ㄧ郴缁熷瓧浣擄級
-  2. 鑻ヤ粛涓嶆敮鎸?`drawtext`锛屾崟鑾烽敊璇紝璺宠繃鏂囧瓧杞紝鍦ㄨ繘搴︿腑鏄剧ず 鈿狅笍 鎻愮ず锛屽鍑烘甯稿畬鎴愶紙涓嶅惈鏂囧瓧灞傦級
+- **[editor] 不再自动创建空项目**：进入 `/editor` 页面时，只有添加了素材（视频片段、音频、字幕）后才触发自动保存，消除每次进入都产生"未命名剪辑项目"的问题
+- **[editor] 项目管理弹窗**：顶部栏「管理项目」按钮打开全功能项目管理弹窗，支持：
+  - 最近优先排序 + 相对时间显示（"3分钟前"）
+  - 行内重命名（后端新增 PATCH 接口）
+  - 删除前确认步骤
+  - 项目名搜索过滤
+  - 移除了原来无确认的「删除」按钮
+- **[editor] 导出不再因文字轨报错退出码 8**：FFmpeg `drawtext` 过滤器在服务器 Linux apt 版本中缺少 `libfreetype` 时，导出流程现在会：
+  1. 在 Linux 下自动探测并注入 `fontfile=` 参数（使用系统字体）
+  2. 若仍不支持 `drawtext`，捕获错误，跳过文字轨，在进度中显示 ⚠️ 提示，导出正常完成（不含文字层）
 
 ---
 
-### v0.9 鈥?2026-04-14
+### v0.9 — 2026-04-14
 
-**鍗虫ⅵ鍒嗛暅瑙嗛涓ょ被 Bug 淇**
+**即梦分镜视频两类 Bug 修复**
 
 **Bug Fix:**
-- **[studio] 鍙傝€冨浘鍘嬬缉**锛氬寮犲弬鑰冨浘鎻愪氦鍗虫ⅵ鏃讹紝灏?PNG锛垀2-4MB锛夊帇缂╀负 JPEG锛坢ax 768px, quality 0.85锛寏150-250KB锛夛紝瑙ｅ喅 TOS 涓婁紶澶辫触锛?upload phase, no file upload"锛?- **[studio] 鍒嗛暅瑙嗛鏄剧ず淇**锛氬嵆姊︾敓鎴愬畬鎴愬悗锛孉PI 涓嶅啀鍦?JSON 鍝嶅簲涓繑鍥炲畬鏁磋棰?data URL锛垀100MB锛夈€傛敼涓鸿繑鍥炴湇鍔?URL锛坄/api/video/file?path=...`锛夛紝褰诲簳瑙ｅ喅杞瓒呮椂鍜?localStorage 閰嶉婧㈠嚭闂
+- **[studio] 参考图压缩**：多张参考图提交即梦时，将 PNG（~2-4MB）压缩为 JPEG（max 768px, quality 0.85，~150-250KB），解决 TOS 上传失败（"upload phase, no file upload"）
+- **[studio] 分镜视频显示修复**：即梦生成完成后，API 不再在 JSON 响应中返回完整视频 data URL（~100MB）。改为返回服务 URL（`/api/video/file?path=...`），彻底解决轮询超时和 localStorage 配额溢出问题
 
 ---
 
-### v0.8 鈥?2026-04-13
+### v0.8 — 2026-04-13
 
-**鍗虫ⅵ骞跺彂鎻愪氦 + 鎺掗槦鐘舵€?UX**
+**即梦并发提交 + 排队状态 UX**
 
 **Feature:**
-- **[studio] 骞跺彂鍒嗛暅瑙嗛鎻愪氦**锛氬嵆姊︿换鍔″湪鏀跺埌 `submit_id` 鍚庣珛鍗抽噴鏀鹃槦鍒楁Ы锛堝師涓虹瓑寰呭畬鏁磋疆璇級锛屽涓垎闀滃彲骞跺彂鎻愪氦鍜岃疆璇?- **[studio] 鎺掗槦涓?/ 鐢熸垚涓?鐘舵€?*锛氬垎闀滄潯鍜屻€岀敓鎴愬垎闀滆棰戙€嶆寜閽柊澧炪€屾帓闃熺瓑寰呬腑鈥︺€嶏紙榛勮壊锛夊拰銆屽嵆姊︽彁浜?鐢熸垚涓€︺€嶏紙鐞ョ弨鑹诧級涓ょ鐙珛鐘舵€?
+- **[studio] 并发分镜视频提交**：即梦任务在收到 `submit_id` 后立即释放队列槽（原为等待完整轮询），多个分镜可并发提交和轮询
+- **[studio] 排队中 / 生成中 状态**：分镜条和「生成分镜视频」按钮新增「排队等待中…」（黄色）和「即梦提交/生成中…」（琥珀色）两种独立状态
+
 ---
 
-### v0.7 鈥?2026-04-12 鑷?2026-04-13
+### v0.7 — 2026-04-12 至 2026-04-13
 
-**鍓緫鍙敤鎬ф彁鍗囷紙P0-P1 鍔熻兘锛?*
+**剪辑可用性提升（P0-P1 功能）**
 
 **Feature:**
-- **[editor] 闊抽娉㈠舰鍙鍖?*锛氭椂闂磋酱闊抽鐗囨鑳屾櫙鏄剧ず FFmpeg showwavespic 鐢熸垚鐨勬尝褰㈠浘
-- **[editor] crossfade 杞満瀵煎嚭**锛氫娇鐢?FFmpeg xfade filter 瀹炵幇鍙犲寲杞満锛屼笉鍐嶆槸纭垏
-- **[editor] 鎷栨嫿杈圭紭 Trim**锛氭椂闂磋酱鐗囨宸﹀彸杈圭紭鍚勬湁 6px Resize Handle锛屾嫋鎷藉彲绮捐皟鍏ュ嚭鐐?- **[editor] 绱犳潗鎮仠棰勮**锛氱礌鏉愬簱鍗＄墖鎮仠 300ms 寮瑰嚭瑙嗛棰勮
-- **[editor] BGM 娣″叆娣″嚭**锛氬鍑烘椂 BGM 杞ㄨ嚜鍔ㄥ姞娣″叆锛?s锛夊拰娣″嚭锛堝彲璋?0-3s锛?- **[editor] 鎾斁閫熷害瀹炴椂棰勮**锛氳缃皟閫熷悗棰勮瑙嗛鍚屾 playbackRate
+- **[editor] 音频波形可视化**：时间轴音频片段背景显示 FFmpeg showwavespic 生成的波形图
+- **[editor] crossfade 转场导出**：使用 FFmpeg xfade filter 实现叠化转场，不再是硬切
+- **[editor] 拖拽边缘 Trim**：时间轴片段左右边缘各有 6px Resize Handle，拖拽可精调入出点
+- **[editor] 素材悬停预览**：素材库卡片悬停 300ms 弹出视频预览
+- **[editor] BGM 淡入淡出**：导出时 BGM 轨自动加淡入（1s）和淡出（可调 0-3s）
+- **[editor] 播放速度实时预览**：设置调速后预览视频同步 playbackRate
 
 ---
 
-### v0.6 鈥?2026-04-11 鑷?2026-04-12
+### v0.6 — 2026-04-11 至 2026-04-12
 
-**绋冲畾鎬т慨澶?*
+**稳定性修复**
 
 **Bug Fix:**
-- 鍗虫ⅵ鏈嶅姟绔苟鍙戞Ы锛堝悓璐﹀彿闄?1 涓苟鍙戯級锛屽鐢ㄦ埛瀹夊叏
-- 鍗虫ⅵ澶氭ā鎬?TOS 涓婁紶鐬椂澶辫触鑷姩閲嶈瘯锛堟渶澶?2 娆★級
-- editor 瑙嗛鏂囦欢閴存潈鏃佽矾瀵艰嚧榛戝睆闂淇
-- `crypto.randomUUID()` 鏇挎崲涓?HTTP 瀹夊叏鐨?fallback锛屽吋瀹归潪 HTTPS 鐜
+- 即梦服务端并发槽（同账号限 1 个并发），多用户安全
+- 即梦多模态 TOS 上传瞬时失败自动重试（最多 2 次）
+- editor 视频文件鉴权旁路导致黑屏问题修复
+- `crypto.randomUUID()` 替换为 HTTP 安全的 fallback，兼容非 HTTPS 环境
 
 ---
 
-### v0.5 鈥?鏇存棭鐗堟湰
+### v0.5 — 更早版本
 
-- 鍒濈増 AI 鍒嗛暅宸ヤ綔鍙帮紙5-Step 鍚戝锛?- 鍒濈増鍓緫宸ヤ綔鍙帮紙鏃堕棿杞淬€佹枃瀛楃増寮忋€丅GM銆丄gent锛?- 鍗虫ⅵ CLI 闆嗘垚銆並ling API 闆嗘垚
-- 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
+- 初版 AI 分镜工作台（5-Step 向导）
+- 初版剪辑工作台（时间轴、文字版式、BGM、Agent）
+- 即梦 CLI 集成、Kling API 集成
+- 用量监控、历史记录、画廊
+
 ---
 
-*最后更新：2026-04-23（v0.118）*
+*Last updated: 2026-04-23 (v0.120)*

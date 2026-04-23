@@ -72,6 +72,9 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'generate.configureDriveHint'), 'Before using "Match Assets", set a Drive folder in Materials first.');
   assert.equal(getMessage('en', 'productionWizard.projectTitlePlaceholder'), 'Project title');
   assert.equal(getMessage('en', 'productionWizard.subtitle'), 'Advanced Production · Story Outline -> Character & Scene Design -> Storyboard -> Export');
+  assert.equal(getMessage('en', 'productionWizard.projectListTitle'), 'Saved Projects');
+  assert.equal(getMessage('en', 'productionWizard.namingModalTitle'), 'Name The Project Before Saving');
+  assert.equal(getMessage('en', 'productionWizard.saveProjectBeforeShotVideo'), 'Save the project before generating storyboard video');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');
   assert.equal(getMessage('en', 'quickfilm.processingTitle'), 'QuickFilm Is Writing');
   assert.equal(getMessage('en', 'quickfilm.confirmTitle'), 'Storyboard Ready');

@@ -1,11 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ProjectListItem } from '../../api/production';
 import { isUnnamedProductionProjectTitle } from '../../utils/projectLifecycle.ts';
-
-function formatProjectTime(iso: string): string {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString('zh-CN');
-}
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { formatDateTime } from '../../i18n/locale.ts';
 
 export function ProductionProjectListModal({
   visible,
@@ -26,6 +23,7 @@ export function ProductionProjectListModal({
   onDeleteProject: (id: string) => void | Promise<void>;
   onGovernUnnamed: () => void | Promise<void>;
 }) {
+  const { uiLocale, t } = useLocale();
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -40,6 +38,18 @@ export function ProductionProjectListModal({
   const filtered = projects.filter((projectItem) =>
     !search.trim() || (projectItem.title || '').toLowerCase().includes(search.trim().toLowerCase()),
   );
+  const formatText = (path: string, values?: Record<string, string | number>) => {
+    let message = t(path);
+    if (!values) return message;
+    for (const [key, value] of Object.entries(values)) {
+      message = message.replaceAll(`{${key}}`, String(value));
+    }
+    return message;
+  };
+  const formatProjectTime = (iso: string): string => {
+    if (!iso) return '';
+    return formatDateTime(iso, uiLocale);
+  };
 
   if (!visible) return null;
 
@@ -73,9 +83,11 @@ export function ProductionProjectListModal({
       <div className="flex h-[620px] w-full max-w-3xl flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-[var(--color-text)]">已保存的项目</h2>
+            <h2 className="text-base font-semibold text-[var(--color-text)]">{t('productionWizard.projectListTitle')}</h2>
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              {unnamedCount > 0 ? `还有 ${unnamedCount} 个未命名项目待治理` : '项目列表已整理干净'}
+              {unnamedCount > 0
+                ? formatText('productionWizard.unnamedProjectCount', { count: unnamedCount })
+                : t('productionWizard.projectListClean')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -85,7 +97,7 @@ export function ProductionProjectListModal({
               onClick={() => void onGovernUnnamed()}
               className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {governanceBusy ? '治理中...' : '治理未命名项目'}
+              {governanceBusy ? t('productionWizard.governingProjects') : t('productionWizard.governUnnamedProjects')}
             </button>
             <button
               type="button"
@@ -102,14 +114,14 @@ export function ProductionProjectListModal({
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索项目名称..."
+            placeholder={t('productionWizard.searchProjectsPlaceholder')}
             className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
           />
         </div>
 
         {filtered.length === 0 ? (
           <p className="flex flex-1 items-center justify-center py-8 text-center text-sm text-[var(--color-text-muted)]">
-            {search ? '没有匹配的项目' : '暂无已保存项目'}
+            {search ? t('productionWizard.noMatchedProjects') : t('productionWizard.noSavedProjects')}
           </p>
         ) : (
           <div className="flex-1 space-y-2 overflow-y-auto pr-1">
@@ -140,37 +152,40 @@ export function ProductionProjectListModal({
                       ) : (
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-medium text-[var(--color-text)]">
-                            {projectItem.title || '未命名项目'}
+                            {projectItem.title || t('productionWizard.untitledProject')}
                           </p>
                           {isUnnamed && (
                             <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-300">
-                              待治理
+                              {t('productionWizard.needsGovernance')}
                             </span>
                           )}
                         </div>
                       )}
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                        步骤 {projectItem.step + 1} · {formatProjectTime(projectItem.updatedAt)}
+                        {formatText('productionWizard.projectStepMeta', {
+                          step: projectItem.step + 1,
+                          time: formatProjectTime(projectItem.updatedAt),
+                        })}
                       </p>
                     </div>
 
                     {isDeleting ? (
                       <div className="flex shrink-0 items-center gap-2 text-xs">
-                        <span className="text-[var(--color-text-muted)]">确认删除？</span>
+                        <span className="text-[var(--color-text-muted)]">{t('productionWizard.confirmDeleteProject')}</span>
                         <button
                           type="button"
                           disabled={isBusy}
                           onClick={() => void handleDelete(projectItem.id)}
                           className="rounded bg-red-500/10 px-2 py-1 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                         >
-                          {isBusy ? '删除中...' : '删除'}
+                          {isBusy ? t('productionWizard.deleting') : t('common.delete')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteId(null)}
                           className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                         >
-                          取消
+                          {t('common.cancel')}
                         </button>
                       </div>
                     ) : (
@@ -180,7 +195,7 @@ export function ProductionProjectListModal({
                           onClick={() => void onLoadProject(projectItem.id, projectItem.title)}
                           className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-primary)] hover:border-[var(--color-primary)]/40"
                         >
-                          打开
+                          {t('productionWizard.openProject')}
                         </button>
                         {isRenaming ? (
                           <>
@@ -190,14 +205,14 @@ export function ProductionProjectListModal({
                               onClick={() => void handleRename(projectItem.id)}
                               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                             >
-                              {isBusy ? '保存中...' : '保存'}
+                              {isBusy ? t('productionWizard.saving') : t('common.save')}
                             </button>
                             <button
                               type="button"
                               onClick={() => setRenamingId(null)}
                               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)]"
                             >
-                              取消
+                              {t('common.cancel')}
                             </button>
                           </>
                         ) : (
@@ -210,14 +225,14 @@ export function ProductionProjectListModal({
                               }}
                               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                             >
-                              重命名
+                              {t('productionWizard.renameProject')}
                             </button>
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(projectItem.id)}
                               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-red-400"
                             >
-                              删除
+                              {t('common.delete')}
                             </button>
                           </>
                         )}
