@@ -122,7 +122,7 @@ export function CharacterPortraitEditorModal({
   const subtitle =
     editIntent.mode === 'replace'
       ? `重绘节点：${lookTree.find((n) => n.id === editIntent.nodeId)?.label ?? '—'}`
-      : `从「${lookTree.find((n) => n.id === editIntent.parentNodeId)?.label ?? '—'}」分支新形象`;
+      : `从「${lookTree.find((n) => n.id === editIntent.parentNodeId)?.label ?? '—'}」生成新变体`;
 
   const runGenerate = useCallback(() => {
     if (!promptVariant) {
@@ -136,7 +136,7 @@ export function CharacterPortraitEditorModal({
       enforceGlobalStyleLock: styleLock,
     });
     if (editIntent.mode === 'branch') {
-      base += '\n\n这是同一角色的新版本分支，在保持人物识别度的前提下体现造型或状态变化。';
+      base += '\n\n这是同一角色的新形象变体，在保持人物识别度的前提下体现造型或状态变化。';
     }
     const prompt = extraPrompt.trim() ? `${base}\n\n用户补充：${extraPrompt.trim()}` : base;
     const g = globalStyleReferenceFrame?.trim();
@@ -282,7 +282,7 @@ export function CharacterPortraitEditorModal({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-3">
                 <p className="text-[10px] text-[var(--color-text-muted)]">
-                  关闭本窗口后生成仍会继续，进度与待确认预览显示在形象树小图上；确认后才会写入形象树。刷新页面将丢弃未确认的预览。
+                  关闭本窗口后生成仍会继续，进度与待确认预览显示在角色形象变体小图上；确认后才会写入当前形象。刷新页面将丢弃未确认的预览。
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -312,7 +312,7 @@ export function CharacterPortraitEditorModal({
                 {genMode === 'reference' && (
                   <div>
                     <p className="text-[10px] text-[var(--color-text-muted)]">
-                      上传参考图（脸型/服装/气质）。分支模式下已自动带入父节点图，可更换。
+                      上传参考图（脸型/服装/气质）。生成新变体时已自动带入父节点图，可更换。
                     </p>
                     <label className="mt-1 block cursor-pointer rounded-lg border border-dashed border-[var(--color-border)] px-3 py-4 text-center text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)]">
                       {refDataUrl ? '已选择参考图，点击更换' : '点击上传参考图'}
@@ -373,7 +373,7 @@ export function CharacterPortraitEditorModal({
               </div>
 
               <div className="space-y-2">
-                <div className="text-xs font-medium text-[var(--color-text-muted)]">预览（确认前不会写入形象树）</div>
+                <div className="text-xs font-medium text-[var(--color-text-muted)]">预览（确认前不会写入角色形象变体）</div>
                 <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-black ring-1 ring-[var(--color-border)]">
                   {preview ? (
                     <img src={preview} alt="预览" className="h-full w-full object-cover" />
@@ -399,8 +399,8 @@ export function CharacterPortraitEditorModal({
                 {preview && (
                   <p className="text-[10px] text-[var(--color-text-muted)]">
                     {editIntent.mode === 'branch'
-                      ? '确认后将新增子节点并设为定稿；可继续在形象树中迭代。'
-                      : '确认后覆盖当前节点图并设为定稿参考。'}
+                      ? '确认后将新增变体并设为当前形象；可继续在高级变体关系中迭代。'
+                      : '确认后覆盖当前形象并设为当前参考。'}
                   </p>
                 )}
               </div>
@@ -432,7 +432,7 @@ export function CharacterPortraitEditorModal({
                 onClick={handleConfirm}
                 className="rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                {editIntent.mode === 'branch' ? '确认并加入形象树' : '确认应用此形象'}
+                {editIntent.mode === 'branch' ? '确认并加入形象变体' : '确认应用此形象'}
               </button>
             </>
           )}

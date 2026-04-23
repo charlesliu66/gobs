@@ -1,6 +1,7 @@
 import type { BatchJobDto } from '../../api/batchJobs';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
+import { getShotUserStatus, type ShotProviderStatus } from '../shotUserStatus';
 
 function formatEta(etaSec: number | undefined, uiLocale: 'zh-CN' | 'en'): string {
   if (!etaSec || etaSec <= 0) return uiLocale === 'en' ? 'starting soon' : '即将开始';
@@ -24,6 +25,9 @@ export function StepStoryboardGenerateActions({
   dreaminaAsync,
   hasProductionDesign,
   hasVideo,
+  hasStill,
+  showAdvancedTools,
+  shotVideoDreaminaModel,
   activeJob,
   cancelBusy,
   pendingVideoSubmitId,
@@ -37,6 +41,9 @@ export function StepStoryboardGenerateActions({
   dreaminaAsync: boolean;
   hasProductionDesign: boolean;
   hasVideo?: boolean;
+  hasStill?: boolean;
+  showAdvancedTools?: boolean;
+  shotVideoDreaminaModel?: string;
   activeJob?: BatchJobDto | null;
   cancelBusy?: boolean;
   pendingVideoSubmitId?: string;
@@ -50,11 +57,17 @@ export function StepStoryboardGenerateActions({
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const isSubmitting = shotMediaBusy === 'video';
   const hasActiveJob = !!activeJob;
-  const hasPendingBackend = (!hasVideo && !!pendingVideoSubmitId) || hasActiveJob;
+  const userStatus = getShotUserStatus({
+    hasVideo: !!hasVideo,
+    jobStatus: activeJob?.status as ShotProviderStatus | undefined,
+    hasPendingSubmitId: !!pendingVideoSubmitId,
+  });
+  const hasPendingBackend = userStatus.status !== 'not_started' && userStatus.status !== 'completed';
   const videoButtonDisabled = isSubmitting || hasActiveJob;
   const platformQueuePosition = typeof activeJob?.globalQueuePos === 'number' ? activeJob.globalQueuePos + 1 : null;
   const dreaminaQueuePosition = typeof activeJob?.queueInfo?.queue_idx === 'number' ? activeJob.queueInfo.queue_idx + 1 : null;
   const dreaminaQueueSize = typeof activeJob?.queueInfo?.queue_length === 'number' ? activeJob.queueInfo.queue_length : null;
+  const needsImageToVideoStill = shotVideoDreaminaModel === 'dreamina-image2video' && !hasStill;
 
   function videoButtonLabel() {
     if (isSubmitting) return uiText('入队中...', 'Queueing...');
@@ -151,16 +164,18 @@ export function StepStoryboardGenerateActions({
   return (
     <>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={shotMediaBusy === 'frame' || !hasProductionDesign}
-          onClick={onGenerateShotFrame}
-          className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-        >
-          {shotMediaBusy === 'frame'
-            ? uiText('分镜图生成中...', 'Generating storyboard frame...')
-            : uiText('生成分镜图', 'Generate storyboard frame')}
-        </button>
+        {showAdvancedTools && (
+          <button
+            type="button"
+            disabled={shotMediaBusy === 'frame' || !hasProductionDesign}
+            onClick={onGenerateShotFrame}
+            className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 disabled:opacity-50"
+          >
+            {shotMediaBusy === 'frame'
+              ? uiText('首帧生成中...', 'Generating first frame...')
+              : uiText('生成首帧', 'Generate first frame')}
+          </button>
+        )}
         <button
           type="button"
           disabled={videoButtonDisabled}
@@ -194,6 +209,14 @@ export function StepStoryboardGenerateActions({
           </button>
         )}
       </div>
+      {needsImageToVideoStill && (
+        <p className="mt-2 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[11px] leading-relaxed text-cyan-100">
+          {uiText(
+            '图生视频需要当前分镜先有首帧。请展开高级工具生成首帧，或切换为文本生成视频。',
+            'Image-to-video needs a first frame for this shot. Open Advanced tools to generate one, or switch back to text-to-video.',
+          )}
+        </p>
+      )}
       {statusBanner && (
         <div className={`mt-3 rounded-xl border px-3 py-2.5 ${statusBanner.className}`}>
           <div className="text-xs font-semibold">{statusBanner.title}</div>

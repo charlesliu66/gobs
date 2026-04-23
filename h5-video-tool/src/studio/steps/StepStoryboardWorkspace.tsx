@@ -4,6 +4,7 @@
   ProductionShotVideoVersion,
   SceneSheet,
 } from '../productionTypes';
+import { useEffect, useState } from 'react';
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
@@ -143,6 +144,36 @@ export function StepStoryboardWorkspace({
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const currentShotNumber = shots.length > 0 ? selectedShotIdx + 1 : 0;
+  const canGoPreviousShot = selectedShotIdx > 0;
+  const canGoNextShot = selectedShotIdx < shots.length - 1;
+
+  const goToShot = (idx: number) => {
+    if (idx < 0 || idx >= shots.length) return;
+    setSelectedShotIdx(idx);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+      }
+      if (event.key === '[' && canGoPreviousShot) {
+        event.preventDefault();
+        setSelectedShotIdx((idx) => Math.max(0, idx - 1));
+      }
+      if (event.key === ']' && canGoNextShot) {
+        event.preventDefault();
+        setSelectedShotIdx((idx) => Math.min(shots.length - 1, idx + 1));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canGoNextShot, canGoPreviousShot, setSelectedShotIdx, shots.length]);
 
   if (busyL3 && (!shots || shots.length === 0)) {
     return (
@@ -246,6 +277,34 @@ export function StepStoryboardWorkspace({
         />
 
         <main className="min-w-0 flex-1 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+            <div>
+              <div className="text-sm font-semibold text-[var(--color-text)]">
+                {uiText(`第 ${currentShotNumber} / ${shots.length} 镜`, `Shot ${currentShotNumber} / ${shots.length}`)}
+              </div>
+              <div className="text-[10px] text-[var(--color-text-muted)]">
+                {uiText('当前分镜详情与预览会随切换同步更新', 'Shot details and preview update with navigation')}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => goToShot(selectedShotIdx - 1)}
+                disabled={!canGoPreviousShot}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {uiText('上一镜', 'Previous')}
+              </button>
+              <button
+                type="button"
+                onClick={() => goToShot(selectedShotIdx + 1)}
+                disabled={!canGoNextShot}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {uiText('下一镜', 'Next')}
+              </button>
+            </div>
+          </div>
           <StepStoryboardMainHeader
             styleRefSummary={styleRefSummary}
             storySceneCoverage={storySceneCoverage}
@@ -279,6 +338,9 @@ export function StepStoryboardWorkspace({
               cancelBusy={cancelBusy}
               pendingVideoSubmitId={shot.pendingVideoSubmitId}
               checkingProgress={checkingProgress}
+              hasStill={!!shot.previewStillDataUrl}
+              showAdvancedTools={showAdvancedTools}
+              shotVideoDreaminaModel={shotVideoDreaminaModel}
               onGenerateShotFrame={onGenerateShotFrame}
               onGenerateShotVideo={onGenerateShotVideo}
               onCheckVideoProgress={onCheckVideoProgress}
@@ -291,38 +353,78 @@ export function StepStoryboardWorkspace({
               onOpenLightbox={setLightboxSrc}
             />
 
-            <StepStoryboardQuickAdjust
-              shot={shot}
-              onPatchStructured={(patch) => {
-                const stillKeys = ['sp_subject', 'sp_environment', 'sp_style', 'sp_lighting', 'sp_camera', 'sp_composition', 'sp_continuity', 'sp_negative'] as const;
-                const motionKeys = ['mp_motion', 'mp_camera', 'mp_tempo', 'mp_transition', 'mp_audio'] as const;
-                const stillPatch: Record<string, string> = {};
-                const motionPatch: Record<string, string> = {};
-                for (const [k, v] of Object.entries(patch)) {
-                  if ((stillKeys as readonly string[]).includes(k)) stillPatch[k] = v;
-                  if ((motionKeys as readonly string[]).includes(k)) motionPatch[k] = v;
-                }
-                const shotPatch: Partial<typeof shot> = {};
-                if (Object.keys(stillPatch).length) {
-                  shotPatch.structuredStill = { ...shot.structuredStill, ...stillPatch };
-                }
-                if (Object.keys(motionPatch).length) {
-                  shotPatch.structuredMotion = { ...shot.structuredMotion, ...motionPatch };
-                }
-                patchShot(selectedShotIdx, shotPatch);
-              }}
-            />
+            <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedTools((visible) => !visible)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+                aria-expanded={showAdvancedTools}
+              >
+                <span>{uiText('高级工具', 'Advanced tools')}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">
+                  {showAdvancedTools
+                    ? uiText('收起', 'Collapse')
+                    : uiText('首帧、AI 审片、快速调整', 'First frame, AI review, quick adjust')}
+                </span>
+              </button>
+              {showAdvancedTools && (
+                <div className="space-y-3 border-t border-[var(--color-border)] p-3">
+                  <StepStoryboardQuickAdjust
+                    shot={shot}
+                    onPatchStructured={(patch) => {
+                      const stillKeys = ['sp_subject', 'sp_environment', 'sp_style', 'sp_lighting', 'sp_camera', 'sp_composition', 'sp_continuity', 'sp_negative'] as const;
+                      const motionKeys = ['mp_motion', 'mp_camera', 'mp_tempo', 'mp_transition', 'mp_audio'] as const;
+                      const stillPatch: Record<string, string> = {};
+                      const motionPatch: Record<string, string> = {};
+                      for (const [k, v] of Object.entries(patch)) {
+                        if ((stillKeys as readonly string[]).includes(k)) stillPatch[k] = v;
+                        if ((motionKeys as readonly string[]).includes(k)) motionPatch[k] = v;
+                      }
+                      const shotPatch: Partial<typeof shot> = {};
+                      if (Object.keys(stillPatch).length) {
+                        shotPatch.structuredStill = { ...shot.structuredStill, ...stillPatch };
+                      }
+                      if (Object.keys(motionPatch).length) {
+                        shotPatch.structuredMotion = { ...shot.structuredMotion, ...motionPatch };
+                      }
+                      patchShot(selectedShotIdx, shotPatch);
+                    }}
+                  />
 
-            {onAiReview && onApplySuggestion && onApplyAllAndRegenerate && (
-              <StepStoryboardAiReview
-                shot={shot}
-                reviewResult={aiReviewResult ?? null}
-                reviewing={aiReviewing ?? false}
-                onReview={onAiReview}
-                onApplySuggestion={onApplySuggestion}
-                onApplyAllAndRegenerate={onApplyAllAndRegenerate}
-              />
-            )}
+                  {onAiReview && onApplySuggestion && onApplyAllAndRegenerate && (
+                    <StepStoryboardAiReview
+                      shot={shot}
+                      reviewResult={aiReviewResult ?? null}
+                      reviewing={aiReviewing ?? false}
+                      onReview={onAiReview}
+                      onApplySuggestion={onApplySuggestion}
+                      onApplyAllAndRegenerate={onApplyAllAndRegenerate}
+                    />
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {onShowContinuousPlay && (
+                      <button
+                        type="button"
+                        onClick={onShowContinuousPlay}
+                        className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+                      >
+                        {uiText('连续播放', 'Continuous play')}
+                      </button>
+                    )}
+                    {onShowAbCompare && shotVideoVersions.length >= 2 && (
+                      <button
+                        type="button"
+                        onClick={onShowAbCompare}
+                        className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+                      >
+                        {uiText('版本 A/B 对比', 'Compare versions A/B')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </main>
 
@@ -362,24 +464,6 @@ export function StepStoryboardWorkspace({
               : uiText(`取消本项目排队（${projectQueuedCount}）`, `Cancel queued jobs for this project (${projectQueuedCount})`)}
           </button>
         )}
-        {onShowContinuousPlay && (
-          <button
-            type="button"
-            onClick={onShowContinuousPlay}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-          >
-            {uiText('连续播放', 'Continuous play')}
-          </button>
-        )}
-        {onShowAbCompare && shotVideoVersions.length >= 2 && (
-          <button
-            type="button"
-            onClick={onShowAbCompare}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-          >
-            {uiText('版本 A/B 对比', 'Compare versions A/B')}
-          </button>
-        )}
         {onSyncBatchJobs && (
           <button
             type="button"
@@ -410,7 +494,7 @@ export function StepStoryboardWorkspace({
         onCancelShotJob={onCancelShotJob}
       />
 
-      {onContinuityCheck && (
+      {showAdvancedTools && onContinuityCheck && (
         <StepStoryboardContinuityCheck
           issues={continuityIssues ?? null}
           checking={continuityChecking ?? false}

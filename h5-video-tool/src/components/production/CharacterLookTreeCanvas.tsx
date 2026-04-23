@@ -114,9 +114,9 @@ export function CharacterLookTreeCanvas({
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
         <div>
-          <h3 className="text-sm font-semibold text-[var(--color-text)]">形象演化树</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">角色形象变体</h3>
           <p className="text-[10px] text-[var(--color-text-muted)]">
-            根节点在上，向下分支。点击卡片设为定稿；「分支」基于父节点继续迭代生图。
+            当前形象在上，向下展示变体关系。点击「设为当前形象」切换当前参考；「生成新变体」会基于父节点继续生图。
           </p>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
@@ -221,7 +221,7 @@ export function CharacterLookTreeCanvas({
                   />
                   {isActive && (
                     <span className="absolute left-1 top-1 z-[11] rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[8px] text-white">
-                      定稿
+                      当前形象
                     </span>
                   )}
                 </div>
@@ -235,7 +235,7 @@ export function CharacterLookTreeCanvas({
                       className="rounded bg-[var(--color-primary)]/15 px-1 py-0.5 text-[8px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/25"
                       onClick={() => setActive(n.id)}
                     >
-                      定稿
+                      设为当前形象
                     </button>
                     <button
                       type="button"
@@ -249,7 +249,7 @@ export function CharacterLookTreeCanvas({
                       className="rounded bg-violet-500/15 px-1 py-0.5 text-[8px] text-violet-300 ring-1 ring-violet-500/30"
                       onClick={() => onRequestPortrait({ mode: 'branch', parentNodeId: n.id })}
                     >
-                      分支
+                      生成新变体
                     </button>
                   </div>
                 </div>

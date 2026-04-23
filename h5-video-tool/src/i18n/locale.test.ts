@@ -75,6 +75,8 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'productionWizard.projectListTitle'), 'Saved Projects');
   assert.equal(getMessage('en', 'productionWizard.namingModalTitle'), 'Name The Project Before Saving');
   assert.equal(getMessage('en', 'productionWizard.saveProjectBeforeShotVideo'), 'Save the project before generating storyboard video');
+  assert.equal(getMessage('en', 'productionWizard.status.completed'), 'Completed');
+  assert.equal(getMessage('zh-CN', 'productionWizard.status.platformQueueing'), '平台排队中');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');
   assert.equal(getMessage('en', 'quickfilm.processingTitle'), 'QuickFilm Is Writing');
   assert.equal(getMessage('en', 'quickfilm.confirmTitle'), 'Storyboard Ready');

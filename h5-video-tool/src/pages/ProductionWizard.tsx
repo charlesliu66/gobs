@@ -1360,7 +1360,7 @@ export function ProductionWizard() {
       setTreeFocusCharacterId(null);
       return;
     }
-    setTreeFocusCharacterId((id) => (id && list.some((c) => c.id === id) ? id : list[0]!.id));
+    setTreeFocusCharacterId((id) => (id && list.some((c) => c.id === id) ? id : null));
   }, [step, l2Tab, project.characterAssets]);
 
   const handleStoryArc = useCallback(async () => {

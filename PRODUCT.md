@@ -3,6 +3,12 @@
 > 本文件记录平台所有功能模块及其用法，并追踪每次发布的变更历史。
 > 维护规则：每次功能上线或 bug 修复后，同步更新 Changelog 章节。
 
+相关治理文档：
+- [CHANGELOG.md](./CHANGELOG.md) — 近期版本流水，后续逐步从 PRODUCT.md 拆出。
+- [docs/product/user-journeys.md](./docs/product/user-journeys.md) — 一键成片 / 高级制片 / 分发运营三条用户路径。
+- [docs/product/status-model.md](./docs/product/status-model.md) — 用户态任务状态口径。
+- [docs/product/data-ownership-invariants.md](./docs/product/data-ownership-invariants.md) — 数据归属不变量。
+
 ---
 
 ## 一、功能模块总览
@@ -41,6 +47,7 @@
 | 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
 
 **分镜工作台增强功能（v0.42+）：**
+- **默认路径瘦身与状态导航（v0.121）**：分镜页默认保留生成视频、批量生成缺失视频、状态和预览；首帧生成、AI 审片、快速调整、连续性检查、A/B 对比等收进“高级工具”；分镜列表支持按未开始、等待提交、平台排队中、生成中、已完成、失败、已取消筛选，并提供上一镜 / 下一镜导航。
 - **英文界面深层状态收口（v0.120）**：项目列表、命名弹窗、未命名项目治理、同步批量任务、补全缺图、分镜视频生成/取消/检查等状态提示已接入 `productionWizard.*` key，并改用 locale-aware 时间格式。
 - 一键生成所有缺失视频（批量提交至自适应队列）
 - AI 自动审片：分镜生成时后端自动优化 Prompt 质量（v0.43 起内置于生成流程）；手动审片仍可用于二次检查
@@ -216,6 +223,16 @@
 ---
 
 ## 二、Changelog
+
+### v0.121 — 2026-04-23
+
+**高级制片默认路径瘦身与分镜状态导航**
+
+**Frontend / UX:**
+- **[frontend] 高级制片默认工具收纳**（`h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx`, `StepStoryboardGenerateActions.tsx`）：默认主路径只保留生成分镜视频、批量生成缺失视频、任务状态和预览；首帧生成、AI 审片、快速调整、连续播放、A/B 对比和连续性检查进入“高级工具”。
+- **[frontend] 分镜状态列表与导航**（`StepStoryboardShotStrip.tsx`, `shotUserStatus.ts`）：分镜条升级为可筛选状态列表，覆盖未开始、等待提交、平台排队中、正在生成、已完成、失败、已取消，并新增上一镜 / 下一镜与 `[` / `]` 快捷键。
+- **[frontend] 角色形象变体简化**（`StepDesignCharactersPanel.tsx`, `CharacterLookTreeCanvas.tsx`, `CharacterPortraitEditorModal.tsx`）：形象演化树默认不再展开，主入口改为“编辑形象变体”，树关系作为高级查看能力保留。
+- **[docs] 状态模型、数据归属与用户路径治理文档落地**（`docs/product/*.md`, `CHANGELOG.md`）：为后续跨页面状态统一和 PRODUCT / CHANGELOG 拆分建立基线。
 
 ### v0.120 — 2026-04-23
 
@@ -1830,4 +1847,4 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-04-23 (v0.120)*
+*Last updated: 2026-04-23 (v0.121)*

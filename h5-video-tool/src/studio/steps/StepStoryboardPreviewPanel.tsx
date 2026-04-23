@@ -3,6 +3,7 @@ import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
 import { hasProductionShotPreviewMedia, type ProductionShot, type ProductionShotVideoVersion } from '../productionTypes';
 import { VersionTimeline } from '../components/VersionTimeline';
+import { getShotUserStatus, type ShotProviderStatus } from '../shotUserStatus';
 
 function formatEta(etaSec: number | undefined, uiLocale: 'zh-CN' | 'en'): string {
   if (!etaSec || etaSec <= 0) return uiLocale === 'en' ? 'starting soon' : '即将开始';
@@ -47,12 +48,17 @@ export function StepStoryboardPreviewPanel({
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const hasVideo = hasProductionShotPreviewMedia(shot);
+  const userStatus = getShotUserStatus({
+    hasVideo,
+    jobStatus: activeJob?.status as ShotProviderStatus | undefined,
+    hasPendingSubmitId: !!shot.pendingVideoSubmitId || shotMediaBusy === 'video',
+  });
   const platformQueuePosition = typeof activeJob?.globalQueuePos === 'number' ? activeJob.globalQueuePos + 1 : null;
   const dreaminaQueuePosition = typeof activeJob?.queueInfo?.queue_idx === 'number' ? activeJob.queueInfo.queue_idx + 1 : null;
   const dreaminaQueueSize = typeof activeJob?.queueInfo?.queue_length === 'number' ? activeJob.queueInfo.queue_length : null;
   const hasPendingVideoCard = shotMediaBusy === 'video'
     || (!!activeJob && !shotPreviewPlaySrc && !hasVideo)
-    || (!shotPreviewPlaySrc && !hasVideo && !!shot.pendingVideoSubmitId);
+    || (!shotPreviewPlaySrc && (userStatus.status === 'waiting_submit' || userStatus.status === 'platform_queueing' || userStatus.status === 'generating'));
 
   const statusCard = (() => {
     if (shotMediaBusy === 'video') {
@@ -147,7 +153,10 @@ export function StepStoryboardPreviewPanel({
         </div>
       ) : (
         <p className="mt-3 text-[11px] text-[var(--color-text-muted)]">
-          {uiText('暂无分镜图，点击“生成分镜图”。', 'No storyboard still yet. Click “Generate storyboard frame”.')}
+          {uiText(
+            '暂无首帧；需要图生视频时可在高级工具中生成首帧。',
+            'No first frame yet. Generate one from Advanced tools when using image-to-video.',
+          )}
         </p>
       )}
       <div className="mt-3">

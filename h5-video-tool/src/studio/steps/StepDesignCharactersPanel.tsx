@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { CharacterLibraryPanel } from '../../components/CharacterLibraryPanel';
 import { CharacterLookTreeCanvas } from '../../components/production/CharacterLookTreeCanvas';
 import { getPortraitJobKey, type PortraitJobState } from '../../components/production/portraitJobKey';
@@ -48,6 +49,23 @@ export function StepDesignCharactersPanel({
   onRemoveCharacterVariant: (sheetId: string, variantId: string) => void;
   onAddCharacterVariant: (sheetId: string) => void;
 }) {
+  const treePanelRef = useRef<HTMLDivElement | null>(null);
+
+  const openVariantEditor = (ch: CharacterSheet) => {
+    const sheet = ensureCharacterLookTree(ch);
+    const node = getCharacterActiveNode(sheet) ?? sheet.lookTree?.[0];
+    if (!node) return;
+    onTreeFocusChange(ch.id);
+    onTreeRequestPortrait(sheet, { mode: 'replace', nodeId: node.id });
+  };
+
+  const showVariantTree = (id: string) => {
+    onTreeFocusChange(id);
+    window.setTimeout(() => {
+      treePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
   return (
     <>
       {showLibraryImport && (
@@ -56,8 +74,13 @@ export function StepDesignCharactersPanel({
         </div>
       )}
       {chSheets.length > 0 && treeFocusCharacterId ? (
-        <div className="mb-6 space-y-3">
-          <div className="text-xs font-medium text-[var(--color-text-muted)]">形象演化树</div>
+        <div ref={treePanelRef} className="mb-6 space-y-3">
+          <div>
+            <div className="text-xs font-medium text-[var(--color-text-muted)]">角色形象变体（高级）</div>
+            <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+              用于查看形象变体关系；主流程只需要确认当前形象即可。
+            </p>
+          </div>
           {(() => {
             const focused = chSheets.find((c) => c.id === treeFocusCharacterId);
             if (!focused) return null;
@@ -94,10 +117,7 @@ export function StepDesignCharactersPanel({
               <button
                 type="button"
                 onClick={() => {
-                  const s = ensureCharacterLookTree(ch);
-                  const node = getCharacterActiveNode(s) ?? s.lookTree![0];
-                  onTreeFocusChange(ch.id);
-                  onTreeRequestPortrait(s, { mode: 'replace', nodeId: node.id });
+                  openVariantEditor(ch);
                 }}
                 className="group relative aspect-[3/4] w-full cursor-pointer overflow-hidden bg-[var(--color-surface-hover)] text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
               >
@@ -162,10 +182,17 @@ export function StepDesignCharactersPanel({
                 <div className="mt-1 text-xs text-[var(--color-text-muted)]">共{lookCount}个形象</div>
                 <button
                   type="button"
-                  onClick={() => onTreeFocusChange(ch.id)}
+                  onClick={() => openVariantEditor(ch)}
                   className="mt-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
                 >
-                  形象演化
+                  编辑形象变体
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showVariantTree(ch.id)}
+                  className="ml-2 mt-1 text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  查看变体关系
                 </button>
               </div>
               <details className="border-t border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)]/50 px-2 py-1.5">
@@ -242,4 +269,3 @@ export function StepDesignCharactersPanel({
     </>
   );
 }
-
