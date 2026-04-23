@@ -7,6 +7,7 @@ gmail.env
 **/node_modules/
 **/dist/
 **/.vite/
+.worktrees/
 
 # 本地生成的大文件与输出目录
 h5-video-tool-api/output/
