@@ -14,6 +14,10 @@ import {
 } from '../services/studioPipeline.js';
 import { compassChatCompletion } from '../services/compassLlm.js';
 import {
+  isLikelyProductionDesignParseError,
+  requestProductionDesignFallback,
+} from '../services/productionDesignFallback.js';
+import {
   collectStringSamples,
   localizeStructuredPayload,
   resolveReplyLocale,
@@ -178,7 +182,14 @@ studioRouter.post('/production-design', async (req: Request, res: Response) => {
   }
   try {
     const replyLocale = getStudioReplyLocale(req, [story]);
-    const productionDesign = await generateProductionDesign(story);
+    let productionDesign: ProductionDesignLayer;
+    try {
+      productionDesign = await generateProductionDesign(story);
+    } catch (err) {
+      if (!isLikelyProductionDesignParseError(err)) throw err;
+      console.warn('[studio/production-design] primary parse failed, retrying fallback:', err);
+      productionDesign = await requestProductionDesignFallback(story);
+    }
     res.json({ productionDesign: await localizeProductionDesign(productionDesign, replyLocale) });
   } catch (err) {
     console.error('[studio/production-design]', err);
