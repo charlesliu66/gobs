@@ -2380,6 +2380,9 @@ export function ProductionWizard() {
                 .join(', ') || undefined
             }
             productionProjectId={serverProjectId ?? undefined}
+            shotActiveJobMap={shotActiveJobMap}
+            shotJobStatusMap={shotJobStatusMap}
+            queueSnapshot={queueSnapshot}
           />
         )}
 

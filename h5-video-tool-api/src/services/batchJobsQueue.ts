@@ -374,11 +374,24 @@ function shouldPollJob(job: BatchJob): boolean {
   return true;
 }
 
+export function isSameOwnedQuickfilmQueueJob(candidate: BatchJob, completedJob: BatchJob): boolean {
+  const owner = completedJob.username?.trim();
+  return (
+    completedJob.source === 'quickfilm'
+    && !!owner
+    && candidate.source === 'quickfilm'
+    && candidate.username?.trim() === owner
+    && candidate.projectId === completedJob.projectId
+    && candidate.status === 'awaiting_submit'
+    && !!candidate.submitParams
+  );
+}
+
 async function submitNextQuickfilmShot(completedJob: BatchJob): Promise<void> {
   if (completedJob.source !== 'quickfilm') return;
   await loadJobs();
   const next = getCurrentJobs()
-    .filter((job) => job.projectId === completedJob.projectId && job.status === 'awaiting_submit' && job.submitParams)
+    .filter((job) => isSameOwnedQuickfilmQueueJob(job, completedJob))
     .sort((a, b) => a.shotIndex - b.shotIndex)[0];
   if (!next?.submitParams) return;
 

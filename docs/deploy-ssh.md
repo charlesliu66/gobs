@@ -1,5 +1,12 @@
 # QAS H5 SSH 服务器部署指南
 
+> 状态：历史参考。当前正式发布请优先使用
+> `docs/guides/2026-04-23-single-owner-staging-prod-release-runbook.md`。
+> 线上服务器已拆分为 `/home/ubuntu/qas-h5/staging/*` 与
+> `/home/ubuntu/qas-h5/prod/*`，PM2 进程分别为 `qas-api-staging`
+> 和 `qas-api-prod`；不要再按本文早期示例直接部署到
+> `/home/ubuntu/qas-h5/api` 或重启旧 `qas-api`。
+
 将 QAS H5 部署到已通过 SSH 连接的远程服务器。
 
 ## 一、架构说明

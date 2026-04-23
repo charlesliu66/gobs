@@ -336,6 +336,14 @@ export async function runRecoveryScan(): Promise<{ matched: string[]; expired: s
 
     const matched: string[] = [];
     for (const intent of pending) {
+      const owner = intent.username?.trim();
+      const projectId = intent.projectId?.trim();
+      const shotIndex = typeof intent.shotIndex === 'number' && Number.isFinite(intent.shotIndex)
+        ? intent.shotIndex
+        : null;
+      if (!owner || !projectId || shotIndex == null) {
+        continue;
+      }
       const cands = tasksToCandidates(tasks, occupied);
       if (cands.length === 0) break;
       const hit = findBestMatch(intent, cands);
@@ -348,12 +356,12 @@ export async function runRecoveryScan(): Promise<{ matched: string[]; expired: s
         id: jobId,
         submitId: hit.submitId,
         taskId: `dreamina-${hit.submitId}`,
-        projectId: intent.projectId || 'default',
-        shotIndex: intent.shotIndex ?? 0,
+        projectId,
+        shotIndex,
         shotDescription: intent.shotDescription ?? '',
         model: intent.model,
         source: 'production',
-        username: intent.username,
+        username: owner,
         status: 'pending',
         createdAt: ts,
         updatedAt: ts,

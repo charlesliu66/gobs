@@ -21,6 +21,7 @@ import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 const router = Router();
 
 router.post('/', async (req, res) => {
+  const username = req.user?.username?.trim();
   const { projectId, shots } = req.body as {
     projectId?: string;
     shots?: Array<{
@@ -31,6 +32,10 @@ router.post('/', async (req, res) => {
       model?: string;
     }>;
   };
+  if (!username) {
+    res.status(401).json({ error: 'login required' });
+    return;
+  }
   if (!projectId || !Array.isArray(shots) || shots.length === 0) {
     res.status(400).json({ error: 'need projectId + shots[]' });
     return;
@@ -38,7 +43,7 @@ router.post('/', async (req, res) => {
   const now = new Date().toISOString();
   const added: BatchJob[] = [];
   for (const shot of shots) {
-    if (!shot.submitId) continue;
+    if (!shot.submitId || !Number.isFinite(shot.shotIndex)) continue;
     const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
     const job: BatchJob = {
       id,
@@ -46,7 +51,7 @@ router.post('/', async (req, res) => {
       taskId: shot.taskId ?? `dreamina-${shot.submitId}`,
       projectId,
       source: (shot as Record<string, unknown>).source === 'quickfilm' ? 'quickfilm' : 'production',
-      username: req.user?.username,
+      username,
       shotIndex: shot.shotIndex,
       shotDescription: shot.shotDescription ?? '',
       model: shot.model ?? 'dreamina-multimodal',
@@ -56,6 +61,10 @@ router.post('/', async (req, res) => {
     };
     await addJob(job);
     added.push(job);
+  }
+  if (added.length === 0) {
+    res.status(400).json({ error: 'no valid shots' });
+    return;
   }
   res.json({ added: added.length, jobs: added });
 });
@@ -72,7 +81,7 @@ router.post('/enqueue', async (req, res) => {
     res.status(401).json({ error: '需要登录' });
     return;
   }
-  if (!projectId || typeof shotIndex !== 'number' || !submitParams?.model || !submitParams.aspectRatio) {
+  if (!projectId || typeof shotIndex !== 'number' || !Number.isFinite(shotIndex) || !submitParams?.model || !submitParams.aspectRatio) {
     res.status(400).json({ error: 'need projectId + shotIndex + submitParams' });
     return;
   }
@@ -169,7 +178,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: false, wasteCredit: false, note: '任务不存在', reason: 'not_found' });
     return;
   }
-  if (!username || (job.username && job.username !== username)) {
+  if (!username || job.username !== username) {
     res.json({ ok: false, wasteCredit: false, note: '无权取消该任务', reason: 'forbidden' });
     return;
   }
@@ -178,9 +187,23 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.post('/:id/poll-now', async (req, res) => {
+  const username = req.user?.username?.trim();
   const id = req.params.id?.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!username) {
+    res.status(401).json({ error: 'login required' });
+    return;
+  }
   if (!id) {
     res.status(400).json({ error: 'invalid id' });
+    return;
+  }
+  const existing = await getJobById(id);
+  if (!existing) {
+    res.status(404).json({ error: 'job not found' });
+    return;
+  }
+  if (existing.username !== username) {
+    res.status(403).json({ error: 'forbidden' });
     return;
   }
   const job = await pollJobNow(id);
@@ -192,7 +215,7 @@ router.post('/:id/poll-now', async (req, res) => {
 });
 
 router.post('/sync-now', async (req, res) => {
-  const username = req.user?.username;
+  const username = req.user?.username?.trim();
   if (!username) {
     res.status(401).json({ error: 'unauthorized' });
     return;
@@ -311,7 +334,7 @@ router.get('/video/:id', async (req, res) => {
     res.status(404).json({ error: 'job not found' });
     return;
   }
-  if (job.username && job.username !== callerUsername) {
+  if (job.username !== callerUsername) {
     res.status(403).json({ error: '无权访问该任务视频' });
     return;
   }

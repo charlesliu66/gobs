@@ -1,11 +1,47 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
+import { useLocale } from '../../i18n/LocaleContext.tsx';
+import { pickUiText } from '../../i18n/uiText.ts';
 import { ScreeningRoomPlayer } from './ScreeningRoomPlayer';
 import { listEditorProjects, saveEditorProject } from '../../api/editor';
 import type { AspectRatioPreset, MediaAsset, VideoClip, Track, TimelineProject } from '../../editor/types/timeline';
 import { syncSourceAudioClipsFromVideo } from '../../editor/types/timeline';
 import { toast } from '../../components/Toast';
+import {
+  buildExportStoryboardShotStatuses,
+  summarizeExportStoryboardStatus,
+  type ShotStatusMap,
+} from '../exportStoryboardStatus';
+import type { ShotUserStatus } from '../shotUserStatus';
+
+const STATUS_BADGE_CLASS: Record<ShotUserStatus, string> = {
+  not_started: 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]',
+  waiting_submit: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
+  platform_queueing: 'border-sky-500/30 bg-sky-500/10 text-sky-200',
+  generating: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+  completed: 'border-green-500/30 bg-green-500/10 text-green-200',
+  failed: 'border-red-500/30 bg-red-500/10 text-red-200',
+  cancelled: 'border-slate-500/30 bg-slate-500/10 text-slate-200',
+};
+
+function formatEta(etaSec: number | undefined, uiLocale: 'zh-CN' | 'en'): string {
+  if (!etaSec || etaSec <= 0) return uiLocale === 'en' ? 'starting soon' : '即将开始';
+  if (etaSec < 60) {
+    return uiLocale === 'en'
+      ? `about ${Math.max(1, Math.round(etaSec))} sec`
+      : `约 ${Math.max(1, Math.round(etaSec))} 秒`;
+  }
+  if (etaSec < 3600) {
+    return uiLocale === 'en'
+      ? `about ${Math.max(1, Math.round(etaSec / 60))} min`
+      : `约 ${Math.max(1, Math.round(etaSec / 60))} 分钟`;
+  }
+  return uiLocale === 'en'
+    ? `about ${Math.max(1, Math.round(etaSec / 3600))} hr`
+    : `约 ${Math.max(1, Math.round(etaSec / 3600))} 小时`;
+}
 
 export function StepExportStoryboardOverview({
   shots,
@@ -17,6 +53,9 @@ export function StepExportStoryboardOverview({
   aspectRatio,
   bgmPromptHint,
   productionProjectId,
+  shotActiveJobMap,
+  shotJobStatusMap,
+  queueSnapshot,
 }: {
   shots: ProductionShot[];
   scSheets: SceneSheet[];
@@ -27,10 +66,23 @@ export function StepExportStoryboardOverview({
   aspectRatio?: string;
   bgmPromptHint?: string;
   productionProjectId?: string;
+  shotActiveJobMap?: Record<string, BatchJobDto>;
+  shotJobStatusMap?: Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'>;
+  queueSnapshot?: QueueSnapshotDto | null;
 }) {
   const [showScreeningRoom, setShowScreeningRoom] = useState(true);
   const [openingEditor, setOpeningEditor] = useState(false);
   const navigate = useNavigate();
+  const { uiLocale, t } = useLocale();
+  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const statusItems = buildExportStoryboardShotStatuses(
+    shots,
+    shotActiveJobMap,
+    shotJobStatusMap as ShotStatusMap | undefined,
+  );
+  const statusSummary = summarizeExportStoryboardStatus(statusItems);
+  const totalPlatformQueue = (queueSnapshot?.totalActive ?? 0) + (queueSnapshot?.totalWaiting ?? 0);
+  const leadingQueuedShot = statusItems.find((item) => item.platformQueuePosition != null);
 
   const handleOpenInEditor = async () => {
     const shotsWithVideo = shots.filter((sh) => resolveVideoSrc(sh));
@@ -138,6 +190,46 @@ export function StepExportStoryboardOverview({
       <p className="text-xs text-[var(--color-text-muted)]">
         汇总全部分镜的静帧与已生成视频（在分镜步骤逐镜生成后会同步出现在此）。成片会自动保存到「生成视频 → 历史内容」。
       </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-emerald-100">
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">
+            {uiText('可审片', 'Ready')}
+          </div>
+          <div className="mt-1 text-lg font-bold">
+            {statusSummary.completed}/{statusSummary.all}
+          </div>
+          <div className="text-[10px] opacity-80">
+            {uiText('已生成并会进入当前项目历史', 'Generated and attached to this project history')}
+          </div>
+        </div>
+        <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-sky-100">
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">
+            {uiText('排队/生成', 'Queued')}
+          </div>
+          <div className="mt-1 text-lg font-bold">{statusSummary.queued}</div>
+          <div className="text-[10px] opacity-80">
+            {leadingQueuedShot?.platformQueuePosition
+              ? uiText(
+                  `最快一条排在平台第 ${leadingQueuedShot.platformQueuePosition}${totalPlatformQueue ? `/${totalPlatformQueue}` : ''} 位`,
+                  `Leading shot is #${leadingQueuedShot.platformQueuePosition}${totalPlatformQueue ? `/${totalPlatformQueue}` : ''} in platform queue`,
+                )
+              : uiText('后端会持续推进并回写结果', 'Backend keeps advancing and writes results back')}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onBackToStoryboard}
+          className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-left text-amber-100 transition hover:bg-amber-500/15"
+        >
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">
+            {uiText('待处理', 'Needs action')}
+          </div>
+          <div className="mt-1 text-lg font-bold">{statusSummary.needsAction}</div>
+          <div className="text-[10px] opacity-80">
+            {uiText('返回分镜页可继续生成/重试', 'Return to Storyboard to generate or retry')}
+          </div>
+        </button>
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -187,6 +279,21 @@ export function StepExportStoryboardOverview({
             const thumb = sh.previewStillDataUrl || scImg;
             const storyLine = buildStoryLine(sh);
             const vSrc = resolveVideoSrc(sh);
+            const status = statusItems[idx];
+            const statusLabel = status ? t(status.labelKey) : '';
+            const queueLine = status?.platformQueuePosition
+              ? uiText(
+                  `平台队列 #${status.platformQueuePosition}${totalPlatformQueue ? `/${totalPlatformQueue}` : ''}，预计 ${formatEta(status.activeJob?.etaSec, uiLocale)}`,
+                  `Platform queue #${status.platformQueuePosition}${totalPlatformQueue ? `/${totalPlatformQueue}` : ''}, ${formatEta(status.activeJob?.etaSec, uiLocale)}`,
+                )
+              : status?.dreaminaQueuePosition
+                ? uiText(
+                    `即梦队列 #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
+                    `Dreamina queue #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
+                  )
+                : status?.userStatus === 'generating'
+                  ? uiText('后端正在持续跟进，完成后会回到这条分镜历史', 'Backend is tracking it; the result returns to this shot history')
+                  : null;
             return (
               <div
                 key={`${sh.shotIndex}-${idx}`}
@@ -219,7 +326,26 @@ export function StepExportStoryboardOverview({
                   </span>
                 </div>
                 {/* 描述文字 */}
-                <p className="line-clamp-2 border-t border-[var(--color-border)] px-2 py-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                {status && (
+                  <div className="border-t border-[var(--color-border)] px-2 pt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${STATUS_BADGE_CLASS[status.userStatus]}`}>
+                        {statusLabel}
+                      </span>
+                      {status.platformQueuePosition && (
+                        <span className="text-[10px] font-semibold text-sky-200">
+                          #{status.platformQueuePosition}
+                        </span>
+                      )}
+                    </div>
+                    {queueLine && (
+                      <p className="mt-1 rounded-md bg-sky-500/10 px-1.5 py-1 text-[10px] leading-snug text-sky-200">
+                        {queueLine}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <p className={`${status ? 'border-t-0 pt-1' : 'border-t'} border-[var(--color-border)] px-2 py-2 text-[10px] leading-relaxed text-[var(--color-text-muted)] line-clamp-2`}>
                   {storyLine.slice(0, 120)}
                   {storyLine.length > 120 ? '…' : ''}
                 </p>
