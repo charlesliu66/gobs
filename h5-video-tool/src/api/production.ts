@@ -85,6 +85,10 @@ export async function deleteProductionProject(id: string): Promise<{ ok: boolean
   return apiDelete<{ ok: boolean }>(`/api/production/project?id=${encodeURIComponent(id)}`);
 }
 
+export async function renameProductionProject(id: string, title: string): Promise<{ ok: boolean }> {
+  return apiPatch<{ ok: boolean }>('/api/production/project/title', { id, title });
+}
+
 /**
  * 即时持久化镜头版本选择（不等 auto-save）
  */

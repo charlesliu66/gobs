@@ -17,17 +17,31 @@ import {
   saveEditorProject,
   type EditorProjectRecord,
 } from '../../api/editor';
+import {
+  hasMeaningfulEditorDraft,
+  shouldRequireEditorProjectNaming,
+  suggestEditorProjectName,
+} from '../../utils/projectLifecycle';
 
 const ASPECT_STORAGE_KEY = 'h5-editor-aspect-ratio';
 
 function loadStoredAspect(): AspectRatioPreset {
   try {
-    const v = localStorage.getItem(ASPECT_STORAGE_KEY) as AspectRatioPreset | null;
-    if (v === '9:16' || v === '16:9' || v === '1:1' || v === '4:3') return v;
+    const value = localStorage.getItem(ASPECT_STORAGE_KEY) as AspectRatioPreset | null;
+    if (value === '9:16' || value === '16:9' || value === '1:1' || value === '4:3') {
+      return value;
+    }
   } catch {
     /* ignore */
   }
   return '9:16';
+}
+
+function extractAssetName(asset: MediaAsset): string | undefined {
+  const originalName = asset.meta && typeof asset.meta === 'object' && 'originalName' in asset.meta
+    ? (asset.meta.originalName as string | undefined)
+    : undefined;
+  return originalName?.trim() || undefined;
 }
 
 export function useTimelineState() {
@@ -42,13 +56,45 @@ export function useTimelineState() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [projectId, setProjectId] = useState<string>(project.id);
-  const [projectName, setProjectName] = useState<string>('未命名剪辑项目');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [projectList, setProjectList] = useState<Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>>>([]);
+  const [hasPersistedProject, setHasPersistedProject] = useState(false);
+  const [projectName, setProjectName] = useState<string>('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error' | 'needs_name'>('idle');
+  const [projectList, setProjectList] = useState<
+    Array<Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>>
+  >([]);
   const suppressAutoSaveRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
-  /** 曾经有内容的标记；为 false 时空项目不自动保存，避免进入页面就创建空记录 */
   const hasContentRef = useRef(false);
+
+  const draftIsMeaningful = useMemo(
+    () =>
+      hasMeaningfulEditorDraft({
+        project,
+        assets,
+        projectMemory,
+      }),
+    [project, assets, projectMemory],
+  );
+
+  const projectNamingSuggestion = useMemo(
+    () =>
+      suggestEditorProjectName({
+        sourceProductionTitle:
+          typeof project.sourceProductionTitle === 'string' ? project.sourceProductionTitle : undefined,
+        assets: Object.values(assets).map((asset) => ({ originalName: extractAssetName(asset) })),
+      }),
+    [project.sourceProductionTitle, assets],
+  );
+
+  const requiresProjectNaming = useMemo(
+    () =>
+      shouldRequireEditorProjectNaming({
+        projectName,
+        hasPersistedProject,
+        draftIsMeaningful,
+      }),
+    [projectName, hasPersistedProject, draftIsMeaningful],
+  );
 
   const setAspectRatio = useCallback((next: AspectRatioPreset) => {
     setAspectRatioState(next);
@@ -57,8 +103,8 @@ export function useTimelineState() {
     } catch {
       /* ignore */
     }
-    setProject((p) => ({ ...p, aspectRatio: next }));
-  }, []);
+    setProject((current) => ({ ...current, aspectRatio: next }));
+  }, [setProject]);
 
   const refreshProjectList = useCallback(async () => {
     try {
@@ -80,11 +126,12 @@ export function useTimelineState() {
         setProjectMemory(rec.memory ?? createEmptyEditorProjectMemory());
         setAspectRatioState((rec.aspectRatio as AspectRatioPreset) || normalized.aspectRatio || '9:16');
         setProjectId(rec.id);
-        setProjectName(rec.name || '未命名剪辑项目');
+        setHasPersistedProject(true);
+        setProjectName((rec.name ?? '').trim());
         setCurrentTime(0);
         setIsPlaying(false);
         setSaveState('saved');
-        hasContentRef.current = true; // 已存在的项目后续修改应继续自动保存
+        hasContentRef.current = true;
       } finally {
         setTimeout(() => {
           suppressAutoSaveRef.current = false;
@@ -102,11 +149,12 @@ export function useTimelineState() {
       setAssets({});
       setProjectMemory(createEmptyEditorProjectMemory());
       setProjectId(next.id);
-      setProjectName(name?.trim() || '未命名剪辑项目');
+      setHasPersistedProject(false);
+      setProjectName(name?.trim() || '');
       setCurrentTime(0);
       setIsPlaying(false);
       setSaveState('idle');
-      hasContentRef.current = false; // 新空项目不自动保存
+      hasContentRef.current = false;
       setTimeout(() => {
         suppressAutoSaveRef.current = false;
       }, 0);
@@ -140,21 +188,21 @@ export function useTimelineState() {
 
   useEffect(() => {
     if (suppressAutoSaveRef.current) return;
-    // 只有项目有内容时才自动保存；避免进入页面就创建空记录
-    const hasContent =
-      project.tracks.some((t) => t.clips.length > 0) ||
-      (project.subtitles?.length ?? 0) > 0 ||
-      Object.keys(assets).length > 0 ||
-      projectMemory.rawEvents.length > 0 ||
-      projectMemory.stableFacts.length > 0 ||
-      projectMemory.preferenceSignals.length > 0 ||
-      projectMemory.negativePreferenceSignals.length > 0 ||
-      projectMemory.decisionLog.length > 0 ||
-      projectMemory.openIssues.length > 0;
-    if (hasContent) hasContentRef.current = true;
-    if (!hasContentRef.current) return;
+    if (draftIsMeaningful) {
+      hasContentRef.current = true;
+    }
+    if (!hasContentRef.current) {
+      return;
+    }
+    if (saveTimerRef.current != null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (requiresProjectNaming) {
+      setSaveState('needs_name');
+      return;
+    }
 
-    if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
     setSaveState('saving');
     saveTimerRef.current = window.setTimeout(() => {
       void (async () => {
@@ -168,7 +216,8 @@ export function useTimelineState() {
             memory: projectMemory,
           });
           setProjectId(rec.id);
-          setProjectName(rec.name || projectName);
+          setHasPersistedProject(true);
+          setProjectName((rec.name ?? '').trim() || projectName);
           setSaveState('saved');
           await refreshProjectList();
         } catch {
@@ -176,30 +225,42 @@ export function useTimelineState() {
         }
       })();
     }, 3000);
+
     return () => {
-      if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+      if (saveTimerRef.current != null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
     };
-  }, [project, assets, projectMemory, aspectRatio, projectId, projectName, refreshProjectList]);
+  }, [
+    aspectRatio,
+    assets,
+    draftIsMeaningful,
+    project,
+    projectId,
+    projectMemory,
+    projectName,
+    refreshProjectList,
+    requiresProjectNaming,
+  ]);
 
   const durationSec = useMemo(() => {
-    const d = computeDurationSec(project);
-    return d > 0 ? d : project.durationSec;
+    const duration = computeDurationSec(project);
+    return duration > 0 ? duration : project.durationSec;
   }, [project]);
 
   const activeVideoClip = useMemo(() => {
-    const vTrack = project.tracks.find((t) => t.type === 'video');
-    if (!vTrack || vTrack.clips.length === 0) return null;
-    /** 含右端点：播放头停在片段结尾（或工程总时长）时仍显示该段画面，避免预览与轨道不一致 */
-    const clips = [...vTrack.clips]
-      .map((c) => c as VideoClip)
+    const videoTrack = project.tracks.find((track) => track.type === 'video');
+    if (!videoTrack || videoTrack.clips.length === 0) return null;
+
+    const clips = [...videoTrack.clips]
+      .map((clip) => clip as VideoClip)
       .sort((a, b) => a.timelineStart - b.timelineStart);
     const eps = 1e-3;
-    /** 多段同时满足时取时间轴更靠后的片段（衔接点优先显示后一段） */
     let best: VideoClip | null = null;
-    for (const vc of clips) {
-      const end = vc.timelineStart + timelineDurationOf(vc);
-      if (currentTime + eps >= vc.timelineStart && currentTime <= end + eps) {
-        best = vc;
+    for (const clip of clips) {
+      const end = clip.timelineStart + timelineDurationOf(clip);
+      if (currentTime + eps >= clip.timelineStart && currentTime <= end + eps) {
+        best = clip;
       }
     }
     return best;
@@ -207,13 +268,12 @@ export function useTimelineState() {
 
   const activeVideoUrl = useMemo(() => {
     if (!activeVideoClip) return null;
-    const a = assets[activeVideoClip.assetId];
-    return a?.url ?? null;
+    const asset = assets[activeVideoClip.assetId];
+    return asset?.url ?? null;
   }, [activeVideoClip, assets]);
 
   const sourceTimeForPreview = useMemo(() => {
     if (!activeVideoClip) return 0;
-    // 时间轴偏移 → 源秒（由 clipSpeed 决定比例），供 <video>.currentTime 赋值
     const raw = toSourceSec(activeVideoClip, currentTime - activeVideoClip.timelineStart);
     const { sourceStart, sourceEnd, assetId } = activeVideoClip;
     let upper = sourceEnd;
@@ -224,15 +284,11 @@ export function useTimelineState() {
     return Math.min(Math.max(raw, sourceStart), upper);
   }, [activeVideoClip, currentTime, assets]);
 
-  const seek = useCallback((t: number) => {
+  const seek = useCallback((time: number) => {
     const max = Math.max(durationSec, 0.001);
-    setCurrentTime(Math.max(0, Math.min(t, max)));
+    setCurrentTime(Math.max(0, Math.min(time, max)));
   }, [durationSec]);
 
-  /**
-   * Undo/Redo/删除片段后 durationSec 可能缩短，而 currentTime 仍指向旧位置（越界）。
-   * 用 effect 统一 clamp，这样所有变更源都自动处理。
-   */
   useEffect(() => {
     const max = Math.max(durationSec, 0);
     if (currentTime > max + 1e-3) {
@@ -267,10 +323,14 @@ export function useTimelineState() {
     seek,
     projectId,
     setProjectId,
+    hasPersistedProject,
     projectName,
     setProjectName,
     saveState,
     projectList,
+    draftIsMeaningful,
+    requiresProjectNaming,
+    projectNamingSuggestion,
     refreshProjectList,
     openProject,
     createNewProject,

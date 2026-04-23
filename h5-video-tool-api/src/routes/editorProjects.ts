@@ -5,6 +5,7 @@ import path from 'path';
 import { nanoid } from 'nanoid';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
+import { resolveEditorProjectSaveName } from '../services/projectPersistenceGuards.js';
 import { normalizeEditorProjectMemory, type EditorProjectMemory } from '../types/editorAgentMemory.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
@@ -44,17 +45,31 @@ router.post('/projects', async (req: Request, res: Response) => {
 
   let createdAt = now;
   let previousMemory: unknown;
+  let previousName: string | undefined;
+  let isNewProject = true;
   try {
     const old = JSON.parse(await fs.readFile(file, 'utf-8')) as Partial<EditorProjectDoc>;
     if (old.createdAt) createdAt = old.createdAt;
     previousMemory = old.memory;
+    previousName = typeof old.name === 'string' ? old.name : undefined;
+    isNewProject = false;
   } catch {
     // new project
   }
 
+  const resolvedName = resolveEditorProjectSaveName({
+    incomingName: typeof body.name === 'string' ? body.name : undefined,
+    existingName: previousName,
+    isNewProject,
+  });
+  if (!resolvedName.ok) {
+    res.status(400).json({ success: false, error: '请先命名剪辑项目，再保存到项目列表' });
+    return;
+  }
+
   const doc: EditorProjectDoc = {
     id,
-    name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : makeDefaultName(),
+    name: resolvedName.name,
     createdAt,
     updatedAt: now,
     aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : '9:16',

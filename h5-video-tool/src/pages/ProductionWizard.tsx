@@ -60,7 +60,15 @@ import {
 } from '../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../components/production/portraitJobKey';
 import { generateCharacterPortrait, generateFrames, type GenerateCharacterPortraitRequest } from '../api/storyboard';
-import { saveProductionProject, loadProductionProject, listProductionProjects, uploadProductionImage, type ProjectListItem } from '../api/production';
+import {
+  deleteProductionProject,
+  loadProductionProject,
+  listProductionProjects,
+  renameProductionProject,
+  saveProductionProject,
+  uploadProductionImage,
+  type ProjectListItem,
+} from '../api/production';
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
@@ -93,6 +101,13 @@ import { apiPost } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
 import { pickUiText } from '../i18n/uiText.ts';
+import {
+  hasMeaningfulProductionDraft,
+  isUnnamedProductionProjectTitle,
+  resolveUnnamedProjectGovernanceAction,
+  shouldRequireProductionProjectNaming,
+  suggestProductionProjectTitle,
+} from '../utils/projectLifecycle.ts';
 
 const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
   { value: 'three_act', label: '三幕式' },
@@ -197,6 +212,8 @@ export function ProductionWizard() {
   });
   const [showProjectList, setShowProjectList] = useState(false);
   const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
+  const [projectNamingModal, setProjectNamingModal] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
+  const [projectGovernanceBusy, setProjectGovernanceBusy] = useState(false);
   const [loadingProjectTitle, setLoadingProjectTitle] = useState<string | null>(null);
   const [showLibraryImport, setShowLibraryImport] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -215,6 +232,36 @@ export function ProductionWizard() {
       fallbackContentLocale: contentLocale,
     });
   }, [contentLocale]);
+
+  const draftRequiresProjectNaming = useMemo(
+    () =>
+      shouldRequireProductionProjectNaming({
+        projectTitle: project.meta.title,
+        hasPersistedProject: Boolean(serverProjectId),
+        draftIsMeaningful: hasMeaningfulProductionDraft({
+          project,
+          characterBible,
+          synopsis,
+        }),
+      }),
+    [characterBible, project, serverProjectId, synopsis],
+  );
+
+  const buildSuggestedProductionTitle = useCallback((input?: {
+    storySummary?: string | null;
+    synopsis?: string | null;
+    fallbackDate?: Date;
+  }) => {
+    return suggestProductionProjectTitle({
+      storySummary: input?.storySummary ?? project.story?.synopsis,
+      synopsis: input?.synopsis ?? synopsis,
+      fallbackDate: input?.fallbackDate,
+    });
+  }, [project.story?.synopsis, synopsis]);
+
+  const closeProjectNamingModal = useCallback(() => {
+    setProjectNamingModal({ open: false, name: '' });
+  }, []);
 
   const localizedSteps = useMemo(
     () => STEPS.map((stepItem) => {
@@ -347,6 +394,96 @@ export function ProductionWizard() {
       setLoadingProjectTitle(null);
     }
   }, [hydrateStoredProject, loadKnownBatchJobsById]);
+
+  const handleRenameServerProject = useCallback(async (id: string, title: string) => {
+    await renameProductionProject(id, title);
+    setProjectList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, title, updatedAt: new Date().toISOString() } : item)),
+    );
+    if (id === serverProjectId) {
+      setProject((current) => ({ ...current, meta: { ...current.meta, title } }));
+    }
+  }, [serverProjectId]);
+
+  const handleDeleteServerProject = useCallback(async (id: string) => {
+    await deleteProductionProject(id);
+    setProjectList((prev) => prev.filter((item) => item.id !== id));
+    if (id === serverProjectId) {
+      stylePreviewRevokeRef.current?.();
+      stylePreviewRevokeRef.current = null;
+      setStyleRefPreview(null);
+      setProject(emptyProductionProject());
+      setCharacterBible('');
+      setSynopsis('');
+      setStoryGenre('');
+      setStructureTemplate('three_act');
+      setMaxTotalDurationSec(60);
+      setStep(0);
+      setPortraitEdit(null);
+      setPortraitJobs({});
+      setServerProjectId(null);
+      try { localStorage.removeItem('gobs_last_project_id'); } catch { /* ignore */ }
+      const url = new URL(window.location.href);
+      url.searchParams.delete('projectId');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [serverProjectId]);
+
+  const handleGovernUnnamedProjects = useCallback(async () => {
+    const targets = projectList.filter((item) => isUnnamedProductionProjectTitle(item.title));
+    if (targets.length === 0) {
+      toast.info('当前没有待治理的未命名项目');
+      return;
+    }
+    setProjectGovernanceBusy(true);
+    let renamed = 0;
+    let deleted = 0;
+    let failed = 0;
+    try {
+      for (const target of targets) {
+        try {
+          const raw = await loadProductionProject(target.id);
+          const stored = raw as unknown as StoredWizard;
+          const loadedProject = migrateProject((stored.project as ProductionProject | undefined) ?? emptyProductionProject());
+          const action = resolveUnnamedProjectGovernanceAction({
+            isUnnamed: true,
+            draftIsMeaningful: hasMeaningfulProductionDraft({
+              project: loadedProject,
+              characterBible: stored.characterBible ?? '',
+              synopsis: stored.synopsis ?? '',
+            }),
+          });
+          if (action === 'delete') {
+            await handleDeleteServerProject(target.id);
+            deleted += 1;
+            continue;
+          }
+          if (action === 'rename') {
+            const nextTitle = buildSuggestedProductionTitle({
+              storySummary: loadedProject.story?.synopsis,
+              synopsis: stored.synopsis ?? '',
+              fallbackDate: target.updatedAt ? new Date(target.updatedAt) : undefined,
+            });
+            await handleRenameServerProject(target.id, nextTitle);
+            renamed += 1;
+          }
+        } catch {
+          failed += 1;
+        }
+      }
+      const refreshed = await listProductionProjects();
+      setProjectList(refreshed.projects);
+      toast.success(
+        failed > 0
+          ? `未命名项目治理完成：重命名 ${renamed} 个，删除 ${deleted} 个，失败 ${failed} 个`
+          : `未命名项目治理完成：重命名 ${renamed} 个，删除 ${deleted} 个`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '未命名项目治理失败');
+    } finally {
+      setProjectGovernanceBusy(false);
+    }
+  }, [buildSuggestedProductionTitle, handleDeleteServerProject, handleRenameServerProject, projectList]);
 
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
@@ -1102,6 +1239,22 @@ export function ProductionWizard() {
   }, [project.meta.styleRefImageDataUrl]);
 
   useEffect(() => {
+    if (!draftRequiresProjectNaming || serverProjectId) return;
+    setProjectNamingModal((current) => {
+      if (current.open) return current;
+      return {
+        open: true,
+        name: project.meta.title?.trim() || buildSuggestedProductionTitle(),
+      };
+    });
+  }, [buildSuggestedProductionTitle, draftRequiresProjectNaming, project.meta.title, serverProjectId]);
+
+  useEffect(() => {
+    if (draftRequiresProjectNaming) return;
+    setProjectNamingModal((current) => (current.open ? { open: false, name: '' } : current));
+  }, [draftRequiresProjectNaming]);
+
+  useEffect(() => {
     if (isServerBootstrapping || !canAutoPersist) return;
     const persistedProject = {
       ...project,
@@ -1120,11 +1273,13 @@ export function ProductionWizard() {
       projectPersistId: serverProjectId,
     };
     saveStored(data);
-    if (needsFlushRef.current) {
-      needsFlushRef.current = false;
-      flushServerSync(data);
-    } else {
-      scheduleServerSync(data);
+    if (!draftRequiresProjectNaming) {
+      if (needsFlushRef.current) {
+        needsFlushRef.current = false;
+        flushServerSync(data);
+      } else {
+        scheduleServerSync(data);
+      }
     }
   }, [
     project,
@@ -1139,6 +1294,7 @@ export function ProductionWizard() {
     flushServerSync,
     isServerBootstrapping,
     canAutoPersist,
+    draftRequiresProjectNaming,
   ]);
 
   useEffect(() => {
@@ -1474,6 +1630,7 @@ export function ProductionWizard() {
   const resetDraft = useCallback(() => {
     if (!confirm('清空本地草稿并恢复初始状态？')) return;
     clearStylePreview();
+    closeProjectNamingModal();
     setProject(emptyProductionProject());
     setCharacterBible('');
     setSynopsis('');
@@ -1490,7 +1647,7 @@ export function ProductionWizard() {
     const url = new URL(window.location.href);
     url.searchParams.delete('projectId');
     window.history.replaceState(null, '', url.toString());
-  }, [clearStylePreview]);
+  }, [clearStylePreview, closeProjectNamingModal]);
 
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
   const goNext = () => setStep((s) => Math.min(localizedSteps.length - 1, s + 1));
@@ -1501,6 +1658,15 @@ export function ProductionWizard() {
       setTimeout(() => setTitleSaved(false), 3000);
     }
   };
+  const handleConfirmProjectNaming = useCallback(() => {
+    const nextTitle = projectNamingModal.name.trim();
+    if (!nextTitle) {
+      toast.error('请先填写项目名称');
+      return;
+    }
+    handleProjectTitleChange(nextTitle);
+    closeProjectNamingModal();
+  }, [closeProjectNamingModal, handleProjectTitleChange, projectNamingModal.name]);
 
   const patchStory = useCallback((fn: (s: StoryArcLayer) => StoryArcLayer) => {
     setProject((p) => {
@@ -2182,9 +2348,56 @@ export function ProductionWizard() {
       <ProductionProjectListModal
         visible={showProjectList}
         projects={projectList}
+        governanceBusy={projectGovernanceBusy}
         onClose={() => setShowProjectList(false)}
         onLoadProject={handleLoadServerProject}
+        onRenameProject={handleRenameServerProject}
+        onDeleteProject={handleDeleteServerProject}
+        onGovernUnnamed={handleGovernUnnamedProjects}
       />
+      {projectNamingModal.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeProjectNamingModal();
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
+            <h3 className="text-base font-semibold text-[var(--color-text)]">先命名再保存项目</h3>
+            <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+              当前草稿已经开始生成有效内容了。命名后，它才会进入正式项目列表并同步到云端。
+            </p>
+            <input
+              autoFocus
+              type="text"
+              value={projectNamingModal.name}
+              onChange={(event) => setProjectNamingModal((current) => ({ ...current, name: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') handleConfirmProjectNaming();
+                if (event.key === 'Escape') closeProjectNamingModal();
+              }}
+              placeholder="例如：冰原女王活动分镜"
+              className="mt-4 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeProjectNamingModal}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmProjectNaming}
+                className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
+              >
+                命名并保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       {showContinuousPlay && (
         <StepStoryboardContinuousPlay

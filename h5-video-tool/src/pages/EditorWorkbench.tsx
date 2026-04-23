@@ -53,6 +53,7 @@ import {
   applyEditorAgentStream,
   chatEditorAgent,
   generateEditorMusic,
+  loadEditorProject,
   polishEditorMusicPrompt,
   routeEditorAgentMessage,
   type EditorAgentJobProgress,
@@ -76,6 +77,12 @@ import {
 } from '../editor/utils/formatAgentDeliverable';
 import { detectBgmIntent } from '../editor/utils/bgmIntent';
 import { formatTimelineTime } from '../editor/utils/formatTimelineTime';
+import {
+  hasMeaningfulEditorDraft,
+  isUnnamedEditorProjectName,
+  resolveUnnamedProjectGovernanceAction,
+  suggestEditorProjectName,
+} from '../utils/projectLifecycle.ts';
 import { useSearchParams } from 'react-router-dom';
 import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import { useLocale } from '../i18n/LocaleContext.tsx';
@@ -123,6 +130,12 @@ function uniqueVideoAssetIds(p: TimelineProject): string[] {
     }
   }
   return [...s];
+}
+
+function readOriginalAssetName(asset: MediaAsset | null | undefined): string | undefined {
+  if (!asset?.meta || typeof asset.meta !== 'object') return undefined;
+  const value = 'originalName' in asset.meta ? asset.meta.originalName : undefined;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 /** Agent 返回的时间轴可能引用素材 id，若 assets 中尚无 url，从左侧库补全以便预览 */
@@ -178,10 +191,14 @@ export function EditorWorkbench() {
     beginProjectBatch,
     endProjectBatch,
     projectId,
+    hasPersistedProject,
     projectName,
     setProjectName,
     saveState,
     projectList,
+    requiresProjectNaming,
+    projectNamingSuggestion,
+    refreshProjectList,
     openProject,
     createNewProject,
     removeProject,
@@ -231,7 +248,12 @@ export function EditorWorkbench() {
   const [showTextPanel, setShowTextPanel] = useState(false);
   const [showProjectManager, setShowProjectManager] = useState(false);
   /** 新建项目命名弹窗 */
-  const [newProjectModal, setNewProjectModal] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
+  const [projectNamingModal, setProjectNamingModal] = useState<{
+    open: boolean;
+    mode: 'new' | 'promotion';
+    name: string;
+  }>({ open: false, mode: 'new', name: '' });
+  const [governanceBusy, setGovernanceBusy] = useState(false);
   /** 首次自动打开最近项目的标记，防止重复触发 */
   const hasAutoOpenedRef = useRef(false);
   /** 从制片导入后的引导弹窗 */
@@ -254,6 +276,125 @@ export function EditorWorkbench() {
     });
   }, [contentLocale]);
 
+  const buildSuggestedProjectName = useCallback((input?: {
+    sourceProductionTitle?: string | null;
+    assetMap?: Record<string, MediaAsset> | null;
+    fallbackDate?: Date;
+  }) => {
+    return suggestEditorProjectName({
+      sourceProductionTitle: input?.sourceProductionTitle ?? project.sourceProductionTitle,
+      assets: Object.values(input?.assetMap ?? assets).map((asset) => ({
+        originalName: readOriginalAssetName(asset),
+      })),
+      fallbackDate: input?.fallbackDate,
+    });
+  }, [assets, project.sourceProductionTitle]);
+
+  const openNewProjectNamingModal = useCallback(() => {
+    setProjectNamingModal({
+      open: true,
+      mode: 'new',
+      name: buildSuggestedProjectName(),
+    });
+  }, [buildSuggestedProjectName]);
+
+  const closeProjectNamingModal = useCallback(() => {
+    if (projectNamingModal.mode === 'promotion') {
+      return;
+    }
+    setProjectNamingModal({ open: false, mode: 'new', name: '' });
+  }, [projectNamingModal.mode]);
+
+  const handleConfirmProjectNaming = useCallback(() => {
+    const name = projectNamingModal.name.trim();
+    if (!name) {
+      toast.error(uiText('请先填写项目名称', 'Enter a project name first.'));
+      return;
+    }
+    if (projectNamingModal.mode === 'new') {
+      createNewProject(name);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('project');
+        return next;
+      });
+    } else {
+      setProjectName(name);
+    }
+    setProjectNamingModal({ open: false, mode: 'new', name: '' });
+  }, [createNewProject, projectNamingModal.mode, projectNamingModal.name, setProjectName, setSearchParams, uiText]);
+
+  const handleRemoveProject = useCallback(async (id: string) => {
+    await removeProject(id);
+    if (id === projectId) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('project');
+        return next;
+      });
+    }
+  }, [projectId, removeProject, setSearchParams]);
+
+  const handleGovernUnnamedProjects = useCallback(async () => {
+    const targets = projectList.filter((item) => isUnnamedEditorProjectName(item.name));
+    if (targets.length === 0) {
+      toast.info(uiText('当前没有待治理的未命名项目', 'There are no unnamed projects to clean up.'));
+      return;
+    }
+    setGovernanceBusy(true);
+    let renamed = 0;
+    let deleted = 0;
+    let failed = 0;
+    try {
+      for (const target of targets) {
+        try {
+          const record = await loadEditorProject(target.id);
+          const meaningful = hasMeaningfulEditorDraft({
+            project: record.project,
+            assets: record.assets,
+            projectMemory: record.memory,
+          });
+          const action = resolveUnnamedProjectGovernanceAction({
+            isUnnamed: true,
+            draftIsMeaningful: meaningful,
+          });
+          if (action === 'delete') {
+            await handleRemoveProject(target.id);
+            deleted += 1;
+            continue;
+          }
+          if (action === 'rename') {
+            const suggestedName = buildSuggestedProjectName({
+              sourceProductionTitle:
+                typeof record.project.sourceProductionTitle === 'string'
+                  ? record.project.sourceProductionTitle
+                  : undefined,
+              assetMap: record.assets,
+              fallbackDate: target.updatedAt ? new Date(target.updatedAt) : undefined,
+            });
+            await renameProject(target.id, suggestedName);
+            renamed += 1;
+          }
+        } catch {
+          failed += 1;
+        }
+      }
+      await refreshProjectList();
+      if (renamed > 0 || deleted > 0) {
+        toast.success(
+          uiText(
+            `已治理未命名项目：重命名 ${renamed} 个，删除 ${deleted} 个${failed ? `，失败 ${failed} 个` : ''}`,
+            `Unnamed project cleanup finished: renamed ${renamed}, deleted ${deleted}${failed ? `, failed ${failed}` : ''}.`,
+          ),
+        );
+      } else {
+        toast.info(uiText('未命名项目没有可治理的内容', 'No unnamed projects needed cleanup.'));
+      }
+    } finally {
+      setGovernanceBusy(false);
+    }
+  }, [buildSuggestedProjectName, handleRemoveProject, projectList, refreshProjectList, renameProject, uiText]);
+
   useEffect(() => {
     setAgentChatHistory(projectMemoryToChatTurns(projectMemory));
   }, [projectMemory]);
@@ -265,6 +406,29 @@ export function EditorWorkbench() {
     setAgentJobProgress(null);
     setAgentUserCommunicationProfile(null);
   }, [projectId]);
+
+  useEffect(() => {
+    if (!requiresProjectNaming || hasPersistedProject) return;
+    setProjectNamingModal((current) => {
+      if (current.open && current.mode === 'promotion') {
+        return current;
+      }
+      return {
+        open: true,
+        mode: 'promotion',
+        name: projectName.trim() || projectNamingSuggestion,
+      };
+    });
+  }, [hasPersistedProject, projectName, projectNamingSuggestion, requiresProjectNaming]);
+
+  useEffect(() => {
+    if (requiresProjectNaming) return;
+    setProjectNamingModal((current) =>
+      current.open && current.mode === 'promotion'
+        ? { open: false, mode: 'new', name: '' }
+        : current,
+    );
+  }, [requiresProjectNaming]);
 
   useEffect(() => {
     let disposed = false;
@@ -1587,14 +1751,14 @@ export function EditorWorkbench() {
                 )}
               </>
             )}
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-2 py-1">
+            <div className={`flex items-center gap-2 rounded-lg border px-2 py-1 ${saveState === 'needs_name' ? 'border-amber-400/40 bg-amber-400/5' : 'border-[var(--color-border)]'}`}>
               <input
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 className="w-[140px] bg-transparent text-xs text-[var(--color-text)] outline-none"
                 placeholder={uiText('项目名', 'Project name')}
               />
-              <span className="text-[10px] text-[var(--color-text-muted)]">
+              <span className={`text-[10px] ${saveState === 'needs_name' ? 'text-amber-300' : 'text-[var(--color-text-muted)]'}`}>
                 {saveState === 'saving'
                   ? uiText('保存中...', 'Saving...')
                   : saveState === 'saved'
@@ -1614,9 +1778,10 @@ export function EditorWorkbench() {
             <button
               type="button"
               onClick={() => {
-                const dateStamp = new Date().toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit' }).replace(/[/.]/g, '');
+                const dateStamp = '';
                 const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-                setNewProjectModal({ open: true, name: defaultName });
+                void defaultName;
+                openNewProjectNamingModal();
               }}
               className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
             >
@@ -1697,13 +1862,16 @@ export function EditorWorkbench() {
           });
         }}
         onNew={() => {
-          const dateStamp = new Date().toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit' }).replace(/[/.]/g, '');
+          const dateStamp = '';
           const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-          setNewProjectModal({ open: true, name: defaultName });
+          void defaultName;
+          openNewProjectNamingModal();
           setShowProjectManager(false);
         }}
         onRename={renameProject}
-        onDelete={removeProject}
+        onDelete={handleRemoveProject}
+        onGovernUnnamed={handleGovernUnnamedProjects}
+        governanceBusy={governanceBusy}
         onClose={() => setShowProjectManager(false)}
       />
     )}
@@ -1743,10 +1911,10 @@ export function EditorWorkbench() {
     )}
 
     {/* 新建项目命名弹窗 */}
-    {newProjectModal.open && (
+    {projectNamingModal.open && (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-        onClick={(e) => { if (e.target === e.currentTarget) setNewProjectModal({ open: false, name: '' }); }}
+        onClick={(e) => { if (e.target === e.currentTarget) closeProjectNamingModal(); }}
       >
         <div className="w-80 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
           <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{uiText('新建剪辑项目', 'Create a new editing project')}</h3>
@@ -1754,20 +1922,13 @@ export function EditorWorkbench() {
           <input
             autoFocus
             type="text"
-            value={newProjectModal.name}
-            onChange={(e) => setNewProjectModal((s) => ({ ...s, name: e.target.value }))}
+            value={projectNamingModal.name}
+            onChange={(e) => setProjectNamingModal((s) => ({ ...s, name: e.target.value }))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                const name = newProjectModal.name.trim() || undefined;
-                createNewProject(name);
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.delete('project');
-                  return next;
-                });
-                setNewProjectModal({ open: false, name: '' });
+                handleConfirmProjectNaming();
               }
-              if (e.key === 'Escape') setNewProjectModal({ open: false, name: '' });
+              if (e.key === 'Escape') closeProjectNamingModal();
             }}
             placeholder={uiText('例：产品宣传片-0415', 'Example: Product launch cut - 0415')}
             className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
@@ -1775,23 +1936,14 @@ export function EditorWorkbench() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setNewProjectModal({ open: false, name: '' })}
+              onClick={closeProjectNamingModal}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
               {uiText('取消', 'Cancel')}
             </button>
             <button
               type="button"
-              onClick={() => {
-                const name = newProjectModal.name.trim() || undefined;
-                createNewProject(name);
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.delete('project');
-                  return next;
-                });
-                setNewProjectModal({ open: false, name: '' });
-              }}
+              onClick={handleConfirmProjectNaming}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
               {uiText('创建', 'Create')}

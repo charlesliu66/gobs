@@ -13,6 +13,7 @@ import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { getJobById } from '../services/batchJobsQueue.js';
+import { resolveProductionProjectSaveTitle } from '../services/projectPersistenceGuards.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export const productionPersistRouter = Router();
@@ -693,12 +694,16 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
     const projDir = getProductionProjDir(username);
     const filePath = path.join(projDir, `${id}.json`);
     const metaPath = path.join(projDir, `${id}.meta.json`);
+    let existingTitle: string | undefined;
+    let isNewProject = true;
 
     // Merge video versions: writeBackToProject may have added versions
     // that the frontend hasn't seen yet; don't lose them on overwrite.
     try {
       const existingRaw = await fs.readFile(filePath, 'utf-8');
       const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+      isNewProject = false;
+      existingTitle = ((existing.project as Record<string, unknown> | undefined)?.meta as Record<string, unknown> | undefined)?.title as string | undefined;
       const existingProject = existing.project as Record<string, unknown> | undefined;
       const existingShots = existingProject?.shots as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(existingShots) && Array.isArray(incomingShots)) {
@@ -718,10 +723,29 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       }
     } catch { /* first save or file missing — no merge needed */ }
 
+    const resolvedTitle = resolveProductionProjectSaveTitle({
+      incomingTitle: (projectData.meta as Record<string, unknown> | undefined)?.title as string | undefined,
+      existingTitle,
+      isNewProject,
+    });
+    if (!resolvedTitle.ok) {
+      res.status(400).json({ error: '请先命名高级制片项目，再保存到项目列表' });
+      return;
+    }
+    const resolvedProject: Record<string, unknown> = {
+      ...(incomingProject ?? {}),
+      meta: {
+        ...(((incomingProject?.meta as Record<string, unknown> | undefined) ?? {})),
+        title: resolvedTitle.title,
+      },
+    };
+    payload.project = resolvedProject;
+    const resolvedIncomingShots = resolvedProject.shots as Array<Record<string, unknown>> | undefined;
+
     const currentProjectDoc: LoadedProjectDoc = {
       projectId: id,
       data: payload,
-      shots: Array.isArray(incomingShots) ? incomingShots : [],
+      shots: Array.isArray(resolvedIncomingShots) ? resolvedIncomingShots : [],
       filePath,
       metaPath,
       dirty: true,
@@ -740,7 +764,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       await persistLoadedProjectDoc(doc);
     }
 
-    res.json({ id, updatedAt, title });
+    res.json({ id, updatedAt, title: resolvedTitle.title });
   } catch (err) {
     console.error('[production/project/save]', err);
     res.status(500).json({ error: '项目保存失败' });
@@ -859,6 +883,58 @@ productionPersistRouter.get('/project/list', async (req: Request, res: Response)
   } catch (err) {
     console.error('[production/project/list]', err);
     res.status(500).json({ error: '读取项目列表失败' });
+  }
+});
+
+productionPersistRouter.patch('/project/title', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const body = req.body as { id?: string; title?: string };
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  if (!id || !/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效的项目 id' });
+    return;
+  }
+
+  const filePath = path.join(getProductionProjDir(username), `${id}.json`);
+  const metaPath = path.join(getProductionProjDir(username), `${id}.meta.json`);
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const project = data.project as Record<string, unknown> | undefined;
+    const existingTitle = ((project?.meta as Record<string, unknown> | undefined)?.title as string | undefined);
+    const resolvedTitle = resolveProductionProjectSaveTitle({
+      incomingTitle: body.title,
+      existingTitle,
+      isNewProject: false,
+    });
+    if (!resolvedTitle.ok) {
+      res.status(400).json({ error: '请输入有效的项目名称' });
+      return;
+    }
+
+    const nextProject = {
+      ...(project ?? {}),
+      meta: {
+        ...(((project?.meta as Record<string, unknown> | undefined) ?? {})),
+        title: resolvedTitle.title,
+      },
+    };
+    data.project = nextProject;
+    data.updatedAt = new Date().toISOString();
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    await fs.writeFile(
+      metaPath,
+      JSON.stringify({
+        id,
+        title: resolvedTitle.title,
+        updatedAt: data.updatedAt,
+        step: typeof data.step === 'number' ? data.step : Number(data.step ?? 0) || 0,
+      }),
+      'utf-8',
+    );
+    res.json({ ok: true, title: resolvedTitle.title });
+  } catch {
+    res.status(404).json({ error: '项目不存在' });
   }
 });
 
