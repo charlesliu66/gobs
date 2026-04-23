@@ -38,6 +38,10 @@ function result(status: ShotUserStatus): ShotUserStatusResult {
   };
 }
 
+export function getShotUserStatusLabelKey(status: ShotUserStatus): string {
+  return STATUS_LABEL_KEYS[status];
+}
+
 export function getShotUserStatus(input: {
   hasVideo: boolean;
   jobStatus?: ShotProviderStatus;

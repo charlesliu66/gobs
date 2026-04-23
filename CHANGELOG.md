@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.122 — 2026-04-23
+
+**高级制片分镜状态标签收口**
+
+**Frontend / UX:**
+- 分镜条状态筛选和卡片状态文案统一复用 `shotUserStatus` 的 `productionWizard.status.*` label key，避免组件内再维护一套本地 switch 文案。
+- 补充分镜状态 helper 回归测试，确保用户态状态与 i18n label key 保持稳定映射。
+
 ## v0.121 — 2026-04-23
 
 **高级制片默认路径瘦身与分镜状态导航**

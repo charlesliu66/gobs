@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getShotUserStatus } from '../src/studio/shotUserStatus.ts';
+import { getShotUserStatus, getShotUserStatusLabelKey } from '../src/studio/shotUserStatus.ts';
 
 test('getShotUserStatus returns completed when shot has preview media', () => {
   assert.equal(
@@ -108,4 +108,14 @@ test('getShotUserStatus returns not started when no media or job exists', () => 
     }).status,
     'not_started',
   );
+});
+
+test('getShotUserStatus exposes stable i18n label keys', () => {
+  const result = getShotUserStatus({
+    hasVideo: false,
+    jobStatus: 'queuing',
+  });
+
+  assert.equal(result.labelKey, 'productionWizard.status.platformQueueing');
+  assert.equal(getShotUserStatusLabelKey(result.status), result.labelKey);
 });

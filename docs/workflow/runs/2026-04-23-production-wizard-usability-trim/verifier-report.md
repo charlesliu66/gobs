@@ -4,7 +4,7 @@
 
 | Check | Result |
 |---|---|
-| `node --test tests\shotUserStatus.test.ts` | PASS, 7/7 |
+| `node --test tests\shotUserStatus.test.ts` | PASS, 8/8 |
 | `node --test src\i18n\locale.test.ts` | PASS, 9/9 |
 | `cd h5-video-tool && npm run build` | PASS |
 | `cd h5-video-tool-api && npx tsc --noEmit` | PASS |
@@ -16,10 +16,10 @@
 | Default tool trim | PASS | Advanced tools toggle hides first-frame generation, AI review, quick adjust, continuous play, A/B compare, and continuity check by default. |
 | Image-to-video first frame | PASS | `handleGenerateShotFrame`, `onGenerateShotFrame`, and `previewStillDataUrl` remain intact; only the default button is hidden. |
 | Character variant simplification | PASS | Tree no longer auto-expands; visible text now uses “角色形象变体 / 当前形象 / 生成新变体”. |
-| Shot user status | PASS | Helper tests cover completed priority, queue states, pending submit id, failed, cancelled, and not started. |
+| Shot user status | PASS | Helper tests cover completed priority, queue states, pending submit id, failed, cancelled, not started, and stable i18n label keys. |
 | Shot filters | PASS | UI exposes all user states with counts and empty state. |
 | Previous / next navigation | PASS | Buttons and keyboard shortcuts update `selectedShotIdx` with boundary guards. |
-| i18n | PASS | New status keys added to `messages.ts` and covered by `locale.test.ts`; legacy step-local copy remains under existing `uiText` pattern. |
+| i18n | PASS | New status keys added to `messages.ts` and covered by `locale.test.ts`; shot strip status labels now resolve through the shared `productionWizard.status.*` keys. |
 | Forbidden files | PASS | No forbidden service/config/type files touched. |
 
 ## Manual QA To Run On Staging

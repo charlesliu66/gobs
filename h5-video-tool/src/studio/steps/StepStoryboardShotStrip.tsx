@@ -5,6 +5,7 @@ import { pickUiText } from '../../i18n/uiText.ts';
 import { hasProductionShotPreviewMedia, type ProductionShot, type SceneSheet } from '../productionTypes';
 import {
   getShotUserStatus,
+  getShotUserStatusLabelKey,
   type ShotProviderStatus,
   type ShotUserStatus,
 } from '../shotUserStatus';
@@ -81,34 +82,18 @@ export function StepStoryboardShotStrip({
   onSelectShot: (idx: number) => void;
   onCancelShotJob?: (job: BatchJobDto) => void;
 }) {
-  const { uiLocale } = useLocale();
+  const { uiLocale, t } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [filter, setFilter] = useState<ShotFilter>('all');
   const totalPlatformQueue = (snapshot?.totalActive ?? 0) + (snapshot?.totalWaiting ?? 0);
 
   const getFilterLabel = (nextFilter: ShotFilter) => {
-    switch (nextFilter) {
-      case 'all': return uiText('全部', 'All');
-      case 'not_started': return uiText('未开始', 'Not started');
-      case 'waiting_submit': return uiText('等待提交', 'Waiting');
-      case 'platform_queueing': return uiText('排队中', 'Queued');
-      case 'generating': return uiText('生成中', 'Generating');
-      case 'completed': return uiText('已完成', 'Done');
-      case 'failed': return uiText('失败', 'Failed');
-      case 'cancelled': return uiText('已取消', 'Cancelled');
-    }
+    if (nextFilter === 'all') return uiText('全部', 'All');
+    return t(getShotUserStatusLabelKey(nextFilter));
   };
 
   const getStatusLabel = (status: ShotUserStatus) => {
-    switch (status) {
-      case 'not_started': return uiText('未开始', 'Not started');
-      case 'waiting_submit': return uiText('等待提交', 'Waiting submit');
-      case 'platform_queueing': return uiText('平台排队中', 'Platform queueing');
-      case 'generating': return uiText('正在生成', 'Generating');
-      case 'completed': return uiText('已完成', 'Completed');
-      case 'failed': return uiText('生成失败', 'Failed');
-      case 'cancelled': return uiText('已取消', 'Cancelled');
-    }
+    return t(getShotUserStatusLabelKey(status));
   };
 
   const formatQueueTip = (key: string, base: string): string => {
