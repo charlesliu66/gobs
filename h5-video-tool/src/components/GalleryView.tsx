@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getOutputRecentVideos,
+  hideOutputRecentVideo,
+  restoreOutputRecentVideo,
   syncOutputRecentDreaminaVideos,
   type OutputRecentVideoItem,
 } from '../api/video';
@@ -14,6 +16,14 @@ import {
   getVideoFileUrl,
   type VideoHistoryItem,
 } from '../utils/videoHistory';
+import {
+  filterOutputItemsBySavedState,
+  inferOutputSourceLabel,
+  type OutputGalleryDaysFilter,
+  type OutputGallerySavedFilter,
+  type OutputGallerySource,
+  type OutputGalleryView,
+} from './outputGalleryUtils';
 import { toast } from './Toast';
 
 type GalleryTab = 'local' | 'output';
@@ -79,7 +89,14 @@ export function GalleryView() {
   const [outputLoading, setOutputLoading] = useState(false);
   const [outputSyncing, setOutputSyncing] = useState(false);
   const [outputError, setOutputError] = useState<string | null>(null);
+  const [outputHiddenCount, setOutputHiddenCount] = useState(0);
+  const [outputQuery, setOutputQuery] = useState('');
+  const [outputSourceFilter, setOutputSourceFilter] = useState<'all' | OutputGallerySource>('all');
+  const [outputDaysFilter, setOutputDaysFilter] = useState<OutputGalleryDaysFilter>('all');
+  const [outputSavedFilter, setOutputSavedFilter] = useState<OutputGallerySavedFilter>('all');
+  const [outputView, setOutputView] = useState<OutputGalleryView>('visible');
   const outputAutoSyncStartedRef = useRef(false);
+  const deferredOutputQuery = useDeferredValue(outputQuery.trim());
 
   const refreshLocal = useCallback(() => {
     setLocalItems(loadVideoHistory());
@@ -89,15 +106,24 @@ export function GalleryView() {
     setOutputLoading(true);
     setOutputError(null);
     try {
-      const { items } = await getOutputRecentVideos({ limit: 80, dreaminaOnly: false });
+      const { items, hiddenCount } = await getOutputRecentVideos({
+        limit: 80,
+        dreaminaOnly: false,
+        q: deferredOutputQuery,
+        source: outputSourceFilter,
+        days: outputDaysFilter,
+        view: outputView,
+      });
       setOutputItems(items ?? []);
+      setOutputHiddenCount(hiddenCount ?? 0);
     } catch (error) {
       setOutputError(error instanceof Error ? error.message : '加载失败');
       setOutputItems([]);
+      setOutputHiddenCount(0);
     } finally {
       setOutputLoading(false);
     }
-  }, []);
+  }, [deferredOutputQuery, outputDaysFilter, outputSourceFilter, outputView]);
 
   const syncOutput = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -159,9 +185,29 @@ export function GalleryView() {
       videoPath: row.path,
       prompt: `[服务端成片] ${row.path}`,
     });
-    toast.success('已保存到「我的成片」');
+    toast.success('已保存到“我的成片”');
     refreshLocal();
     setTab('local');
+  };
+
+  const handleHideOutput = async (row: OutputRecentVideoItem) => {
+    try {
+      await hideOutputRecentVideo(row.path);
+      toast.success('已从当前账号的服务端文件列表中隐藏');
+      await loadOutput();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '隐藏失败');
+    }
+  };
+
+  const handleRestoreOutput = async (row: OutputRecentVideoItem) => {
+    try {
+      await restoreOutputRecentVideo(row.path);
+      toast.success('已恢复到当前账号的服务端文件列表');
+      await loadOutput();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '恢复失败');
+    }
   };
 
   const sortedLocal = [...localItems].sort((a, b) => {
@@ -173,6 +219,13 @@ export function GalleryView() {
     void loadOutput();
     void syncOutput();
   };
+
+  const savedOutputPaths = new Set(
+    localItems
+      .map((item) => item.videoPath?.trim())
+      .filter((item): item is string => !!item),
+  );
+  const visibleOutputItems = filterOutputItemsBySavedState(outputItems, savedOutputPaths, outputSavedFilter);
 
   return (
     <div className="space-y-6">
@@ -187,7 +240,7 @@ export function GalleryView() {
             {
               id: 'output' as const,
               label: '服务端文件',
-              tip: '展示服务端 output 目录中的视频文件，并可在后台补同步即梦最近成片。',
+              tip: '展示当前账号目录中的服务端视频文件，并可在后台补同步最近即梦成片。',
             },
           ] as const
         ).map(({ id, label, tip }) => (
@@ -324,16 +377,123 @@ export function GalleryView() {
 
       {tab === 'output' && (
         <section className="space-y-4">
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-4">
+            <p className="text-sm font-medium text-[var(--color-text)]">服务端文件范围说明</p>
+            <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">
+              默认展示当前 GOBS 账号目录中的服务端成片。首次进入时，系统会在后台补同步最近成功的即梦成片到当前账号目录；隐藏只影响当前账号的展示，不删除服务器文件，也不影响即梦后台。
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-subtle)]">
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">当前视图：{outputView === 'hidden' ? '已隐藏' : '正常列表'}</span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">已隐藏 {outputHiddenCount} 条</span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">当前结果 {visibleOutputItems.length} 条</span>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row">
+              <input
+                value={outputQuery}
+                onChange={(event) => setOutputQuery(event.target.value)}
+                placeholder="搜索文件名或路径关键字"
+                className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              />
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['all', '全部来源'],
+                  ['dreamina', '仅即梦'],
+                  ['other', '其他成片'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setOutputSourceFilter(value)}
+                    className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                      outputSourceFilter === value
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['all', '全部时间'],
+                ['1', '今天'],
+                ['7', '近7天'],
+                ['30', '近30天'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setOutputDaysFilter(value)}
+                  className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                    outputDaysFilter === value
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+
+              {([
+                ['all', '全部保存状态'],
+                ['saved', '已保存到我的成片'],
+                ['unsaved', '未保存'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setOutputSavedFilter(value)}
+                  className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                    outputSavedFilter === value
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+
+              {([
+                ['visible', '正常列表'],
+                ['hidden', `已隐藏 (${outputHiddenCount})`],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setOutputView(value)}
+                  className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                    outputView === value
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {outputError && <p className="text-sm text-red-400">{outputError}</p>}
-          {outputSyncing && (
-            <p className="text-sm text-[var(--color-text-muted)]">正在同步即梦后台最近成片，完成后会自动刷新列表。</p>
-          )}
-          {outputLoading && !outputItems.length ? (
+          {outputSyncing && <p className="text-sm text-[var(--color-text-muted)]">正在后台同步即梦最近成片，完成后会自动刷新列表。</p>}
+
+          {outputLoading && !visibleOutputItems.length ? (
             <p className="text-sm text-[var(--color-text-muted)]">加载中...</p>
-          ) : outputItems.length === 0 ? (
+          ) : visibleOutputItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-12 text-center">
-              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">服务端暂时没有视频文件</p>
-              <p className="mb-5 text-sm text-[var(--color-text-subtle)]">可以先刷新列表，系统会顺手同步即梦后台最近成片。</p>
+              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">
+                {outputItems.length === 0 ? (outputView === 'hidden' ? '还没有已隐藏的服务端文件' : '服务端暂时没有匹配的视频文件') : '当前筛选条件下没有结果'}
+              </p>
+              <p className="mb-5 text-sm text-[var(--color-text-subtle)]">
+                {outputView === 'hidden'
+                  ? '可以切回正常列表继续浏览，或在这里恢复之前隐藏的文件。'
+                  : '可以先刷新列表，系统会顺手同步即梦后台最近成片。'}
+              </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   type="button"
@@ -354,9 +514,9 @@ export function GalleryView() {
             </div>
           ) : (
             <div className="space-y-3">
-              {outputItems.map((row) => {
+              {visibleOutputItems.map((row) => {
                 const playUrl = getVideoFileUrl(row.path);
-                const isDreamina = row.path.toLowerCase().includes('dreamina');
+                const isSaved = savedOutputPaths.has(row.path);
                 const displayName = formatOutputFilename(row.path);
                 return (
                   <div
@@ -368,9 +528,18 @@ export function GalleryView() {
                     </div>
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        {isDreamina && (
-                          <span className="rounded-full border border-amber-500/35 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200">
-                            即梦
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] ${
+                            row.source === 'dreamina'
+                              ? 'border border-amber-500/35 bg-amber-500/20 text-amber-200'
+                              : 'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-subtle)]'
+                          }`}
+                        >
+                          {inferOutputSourceLabel(row.source)}
+                        </span>
+                        {isSaved && (
+                          <span className="rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
+                            已保存到我的成片
                           </span>
                         )}
                         <span className="text-sm font-medium text-[var(--color-text)]">{displayName}</span>
@@ -388,13 +557,32 @@ export function GalleryView() {
                         >
                           下载
                         </a>
-                        <button
-                          type="button"
-                          onClick={() => addOutputToLocal(row)}
-                          className="inline-flex rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
-                        >
-                          保存到我的成片
-                        </button>
+                        {!isSaved && outputView !== 'hidden' && (
+                          <button
+                            type="button"
+                            onClick={() => addOutputToLocal(row)}
+                            className="inline-flex rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
+                          >
+                            保存到我的成片
+                          </button>
+                        )}
+                        {outputView === 'hidden' ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRestoreOutput(row)}
+                            className="inline-flex rounded-lg border border-emerald-500/35 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                          >
+                            恢复显示
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleHideOutput(row)}
+                            className="inline-flex rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+                          >
+                            仅当前账号隐藏
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

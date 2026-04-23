@@ -142,6 +142,8 @@
 - 灞曠ず宸插畬鎴愯棰戠殑鍗＄墖缃戞牸
 - 鍙挱鏀俱€佷笅杞?
 - 「服务端文件」页刷新时会自动分页补同步最近几天即梦后台已完成但尚未落盘的成片；即便第一页都是旧片，后续分页里的新成片也会继续补拉回来。
+- 「服务端文件」新增范围说明、搜索框、来源/时间/保存状态筛选，以及“正常列表 / 已隐藏”视图切换；隐藏只影响当前 GOBS 账号下的展示，不删除服务器文件，也不影响即梦后台。
+- 服务端文件卡片会标记来源（即梦回补 / 服务端成片）和“已保存到我的成片”状态，便于运营同学快速找片、筛片和二次整理。
 ---
 
 ### 7. 涓€閿垚鐗囷紙Quick Film锛?
@@ -176,7 +178,17 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.105 -->
+<!-- NEXT_VERSION: v0.106 -->
+
+### v0.105 — 2026-04-23
+
+**我的成片服务端文件支持隐藏、搜索与筛选**
+
+**Feature / UX Polish:**
+- **[api] 服务端文件列表新增搜索 / 来源 / 时间 / 视图过滤协议**（`h5-video-tool-api/src/routes/video.ts`, `h5-video-tool-api/src/services/outputGalleryService.ts`, `h5-video-tool/src/api/video.ts`）：`/api/video/output-recent` 现在支持按关键字、来源、近几天和“正常列表 / 已隐藏”视图筛选，并返回当前账号的隐藏计数，前端不再只能被动展示整包目录结果。
+- **[api] 新增服务端文件“仅当前账号隐藏 / 恢复显示”能力**（`h5-video-tool-api/src/routes/video.ts`, `h5-video-tool-api/src/services/outputGalleryService.ts`）：隐藏状态按当前 GOBS 用户单独持久化，不删除物理 mp4，也不影响即梦后台；即梦文件按 submit key 生成稳定隐藏键，避免同一成片换路径后又重新冒出来。
+- **[frontend] 画廊服务端文件页补齐搜索框、来源/时间/保存状态筛选和已隐藏视图**（`h5-video-tool/src/components/GalleryView.tsx`, `h5-video-tool/src/components/outputGalleryUtils.ts`）：运营同学现在可以更快找到即梦回补片、过滤已保存/未保存片，并在当前账号下隐藏不想再看的服务端文件。
+- **[tests] 新增 output gallery 过滤与隐藏回归测试**（`h5-video-tool-api/tests/outputGalleryService.test.ts`, `h5-video-tool/tests/outputGalleryUtils.test.ts`）：覆盖来源判定、隐藏视图、关键词/时间过滤和前端筛选 query 规则，防止后续把这块可用性能力再改回去。
 
 ### v0.104 — 2026-04-23
 
@@ -1462,4 +1474,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.104）*
+*最后更新：2026-04-23（v0.105）*

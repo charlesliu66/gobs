@@ -40,6 +40,14 @@ import {
   runRecentDreaminaSyncLocked,
   type OutputRecentVideoEntry,
 } from '../services/dreaminaRecentSync.js';
+import {
+  applyOutputGalleryFilters,
+  getHiddenOutputPathKeys,
+  hideOutputPathForUser,
+  isOutputPathOwnedByUser,
+  restoreOutputPathForUser,
+  toOutputGalleryItem,
+} from '../services/outputGalleryService.js';
 import dreaminaRouter from './videoDreamina.js';
 import klingRouter from './videoKling.js';
 import { multishotRouter, MULTISHOT_JOBS_ROOT } from './videoMultishot.js';
@@ -210,9 +218,28 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
   const onlyDreamina =
     String(req.query.dreaminaOnly ?? '') === '1' || String(req.query.filter ?? '').toLowerCase() === 'dreamina';
+  const source = String(req.query.source ?? '').toLowerCase();
+  const days = parseInt(String(req.query.days ?? ''), 10);
+  const view = String(req.query.view ?? '').toLowerCase() === 'hidden' ? 'hidden' : 'visible';
+  const minMtimeMs = Number.isFinite(days) && days > 0 ? Date.now() - days * 24 * 60 * 60 * 1000 : undefined;
   const rawItems = await collectOutputRecentItems({ username, onlyDreamina });
   const deduped = dedupeOutputRecentVideoItems(rawItems);
-  res.json({ items: deduped.items.slice(0, limit), duplicateCollapsedCount: deduped.collapsedCount });
+  const hiddenPaths = await getHiddenOutputPathKeys(username);
+  const filtered = applyOutputGalleryFilters(
+    deduped.items.map((item) => toOutputGalleryItem(item)),
+    {
+      hiddenPaths,
+      view,
+      q: typeof req.query.q === 'string' ? req.query.q : undefined,
+      source: source === 'dreamina' || source === 'other' ? source : 'all',
+      minMtimeMs,
+    },
+  );
+  res.json({
+    items: filtered.slice(0, limit),
+    duplicateCollapsedCount: deduped.collapsedCount,
+    hiddenCount: hiddenPaths.size,
+  });
 });
 
 videoRouter.post('/output-recent/sync-dreamina', async (req: Request, res: Response) => {
@@ -225,6 +252,36 @@ videoRouter.post('/output-recent/sync-dreamina', async (req: Request, res: Respo
     maxSync: 24,
   });
   res.json(syncResult);
+});
+
+videoRouter.post('/output-recent/hide', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const videoPath = String(req.body?.path ?? '').trim();
+  if (!videoPath) {
+    res.status(400).json({ error: '缺少 path' });
+    return;
+  }
+  if (!isOutputPathOwnedByUser(username, videoPath)) {
+    res.status(403).json({ error: '只能隐藏当前账号目录中的服务端文件' });
+    return;
+  }
+  const hiddenCount = await hideOutputPathForUser(username, videoPath);
+  res.json({ ok: true, hiddenCount });
+});
+
+videoRouter.post('/output-recent/restore', async (req: Request, res: Response) => {
+  const username = sanitizeUsername(req.user?.username);
+  const videoPath = String(req.body?.path ?? '').trim();
+  if (!videoPath) {
+    res.status(400).json({ error: '缺少 path' });
+    return;
+  }
+  if (!isOutputPathOwnedByUser(username, videoPath)) {
+    res.status(403).json({ error: '只能恢复当前账号目录中的服务端文件' });
+    return;
+  }
+  const hiddenCount = await restoreOutputPathForUser(username, videoPath);
+  res.json({ ok: true, hiddenCount });
 });
 
 videoRouter.post('/generate', async (req: Request, res: Response) => {

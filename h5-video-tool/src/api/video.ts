@@ -258,20 +258,30 @@ export interface OutputRecentVideoItem {
   path: string;
   mtimeMs: number;
   size: number;
+  source: 'dreamina' | 'other';
 }
 
 export interface OutputRecentVideosResponse {
   items: OutputRecentVideoItem[];
   duplicateCollapsedCount?: number;
+  hiddenCount?: number;
 }
 
 export async function getOutputRecentVideos(opts?: {
   limit?: number;
   dreaminaOnly?: boolean;
+  q?: string;
+  source?: 'all' | 'dreamina' | 'other';
+  days?: 'all' | '1' | '7' | '30';
+  view?: 'visible' | 'hidden';
 }): Promise<OutputRecentVideosResponse> {
   const q = new URLSearchParams();
   if (opts?.limit) q.set('limit', String(opts.limit));
   if (opts?.dreaminaOnly) q.set('dreaminaOnly', '1');
+  if (opts?.q?.trim()) q.set('q', opts.q.trim());
+  if (opts?.source && opts.source !== 'all') q.set('source', opts.source);
+  if (opts?.days && opts.days !== 'all') q.set('days', opts.days);
+  if (opts?.view && opts.view !== 'visible') q.set('view', opts.view);
   const qs = q.toString();
   return apiGet<OutputRecentVideosResponse>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
 }
@@ -284,6 +294,14 @@ export interface OutputDreaminaSyncResponse {
 
 export async function syncOutputRecentDreaminaVideos(): Promise<OutputDreaminaSyncResponse> {
   return apiPost<OutputDreaminaSyncResponse>('/api/video/output-recent/sync-dreamina', {});
+}
+
+export async function hideOutputRecentVideo(path: string): Promise<{ ok: boolean; hiddenCount: number }> {
+  return apiPost('/api/video/output-recent/hide', { path });
+}
+
+export async function restoreOutputRecentVideo(path: string): Promise<{ ok: boolean; hiddenCount: number }> {
+  return apiPost('/api/video/output-recent/restore', { path });
 }
 
 export async function generateMultishot(req: MultishotGenerateRequest): Promise<MultishotGenerateResponse> {
