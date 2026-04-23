@@ -4,7 +4,7 @@
   ProductionShotVideoVersion,
   SceneSheet,
 } from '../productionTypes';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
@@ -145,6 +145,7 @@ export function StepStoryboardWorkspace({
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const shotActionRef = useRef<HTMLDivElement | null>(null);
   const currentShotNumber = shots.length > 0 ? selectedShotIdx + 1 : 0;
   const canGoPreviousShot = selectedShotIdx > 0;
   const canGoNextShot = selectedShotIdx < shots.length - 1;
@@ -152,6 +153,15 @@ export function StepStoryboardWorkspace({
   const goToShot = (idx: number) => {
     if (idx < 0 || idx >= shots.length) return;
     setSelectedShotIdx(idx);
+  };
+  const revealShotAction = () => {
+    window.requestAnimationFrame(() => {
+      shotActionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+  const selectShotAndRevealAction = (idx: number) => {
+    goToShot(idx);
+    revealShotAction();
   };
 
   useEffect(() => {
@@ -314,7 +324,7 @@ export function StepStoryboardWorkspace({
           shotJobQueueInfoMap={shotJobQueueInfoMap}
           snapshot={queueSnapshot}
           cancellingJobId={cancelBusy && selectedShotJob ? selectedShotJob.id : null}
-          onSelectShot={setSelectedShotIdx}
+          onSelectShot={selectShotAndRevealAction}
           onCancelShotJob={onCancelShotJob}
         />
       </div>
@@ -391,23 +401,25 @@ export function StepStoryboardWorkspace({
               />
             ) : null}
 
-            <StepStoryboardGenerateActions
-              shotMediaBusy={shotMediaBusy}
-              dreaminaAsync={dreaminaAsync}
-              hasProductionDesign={hasProductionDesign}
-              hasVideo={hasProductionShotPreviewMedia(shot)}
-              activeJob={selectedShotJob}
-              cancelBusy={cancelBusy}
-              pendingVideoSubmitId={shot.pendingVideoSubmitId}
-              checkingProgress={checkingProgress}
-              hasStill={!!shot.previewStillDataUrl}
-              showAdvancedTools={showAdvancedTools}
-              shotVideoDreaminaModel={shotVideoDreaminaModel}
-              onGenerateShotFrame={onGenerateShotFrame}
-              onGenerateShotVideo={onGenerateShotVideo}
-              onCheckVideoProgress={onCheckVideoProgress}
-              onCancelActiveJob={onCancelActiveJob}
-            />
+            <div ref={shotActionRef} className="scroll-mt-24">
+              <StepStoryboardGenerateActions
+                shotMediaBusy={shotMediaBusy}
+                dreaminaAsync={dreaminaAsync}
+                hasProductionDesign={hasProductionDesign}
+                hasVideo={hasProductionShotPreviewMedia(shot)}
+                activeJob={selectedShotJob}
+                cancelBusy={cancelBusy}
+                pendingVideoSubmitId={shot.pendingVideoSubmitId}
+                checkingProgress={checkingProgress}
+                hasStill={!!shot.previewStillDataUrl}
+                showAdvancedTools={showAdvancedTools}
+                shotVideoDreaminaModel={shotVideoDreaminaModel}
+                onGenerateShotFrame={onGenerateShotFrame}
+                onGenerateShotVideo={onGenerateShotVideo}
+                onCheckVideoProgress={onCheckVideoProgress}
+                onCancelActiveJob={onCancelActiveJob}
+              />
+            </div>
             <StepStoryboardFieldsEditor
               shot={shot}
               scSheets={scSheets}
