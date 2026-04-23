@@ -86,6 +86,8 @@ export function StepStoryboardShotStrip({
           const isThisShotBusy = shotBusyMap[shotKey];
           const activeJob = shotActiveJobMap?.[shotKey];
           const jobStatus = shotJobStatusMap?.[shotKey];
+          const queueInfo = shotJobQueueInfoMap?.[shotKey];
+          const platformQueuePosition = typeof queueInfo?.globalQueuePos === 'number' ? queueInfo.globalQueuePos + 1 : null;
           const hasVideo = hasProductionShotPreviewMedia(s);
           const showFailed = !hasVideo && jobStatus === 'failed';
           const showCancelled = !hasVideo && jobStatus === 'cancelled';
@@ -108,6 +110,11 @@ export function StepStoryboardShotStrip({
                 }`}
               >
                 <div className="relative aspect-video w-full overflow-hidden rounded bg-[var(--color-surface-hover)]">
+                  {jobStatus === 'awaiting_submit' && platformQueuePosition != null && (
+                    <span className="absolute left-1.5 top-1.5 z-10 rounded-full border border-violet-400/35 bg-violet-950/80 px-1.5 py-0.5 text-[8px] font-semibold text-violet-100 shadow-sm">
+                      {uiText(`平台#${platformQueuePosition}`, `Queue #${platformQueuePosition}`)}
+                    </span>
+                  )}
                   {s.previewStillDataUrl ? (
                     <img src={s.previewStillDataUrl} alt="" className="h-full w-full object-cover" />
                   ) : scSheets.find((sc) => sc.sceneRef === s.sceneRef)?.variants[0]?.imageDataUrl ? (

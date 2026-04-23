@@ -50,6 +50,7 @@
 - **鍚庣鏅鸿兘杞 + SSE 鎺ㄩ€侊紙v0.35a+锛?*锛氬嵆姊︿换鍔＄敱鏈嶅姟绔悗鍙拌疆璇紝瑙嗛灏辩华鍚?SSE 瀹炴椂閫氱煡鍓嶇锛涘叧闂祻瑙堝櫒涔熶笉涓㈠け鐢熸垚缁撴灉
 - **分镜状态口径收口（v0.98）**：分镜页优先按“是否已有真实视频 + 当前 batch-job 实时状态”判断，不再被历史残留 `pendingVideoSubmitId` 误导；刷新后若后台已完成/失败/取消，会自动清理旧 submitId，确保分镜页、导出页、即梦后台看到的是同一批真实状态。
 - **分镜视频项目归位（v0.101）**：高级制片分镜视频版本现在会优先按 `batch-job / sourceProjectId / sourceShotIndex / version.id` 判断真实归属；若历史版本误串到别的项目，后端会在保存/加载时把它归位到正确项目的对应镜头历史里，而不是简单清掉。
+- **平台排位可见（v0.104）**：分镜工作台顶部摘要、生成操作区、右侧预览面板与缩略图条现在会在 `awaiting_submit` 阶段直接显示“平台排队第 N 位”；一旦平台排到你，就明确切换成“已提交到即梦 / 正在生成”的口径，用户能一眼知道任务还在排队、还是已经开始生成。
 - 骞跺彂瓒呴檺锛坮et=1310锛夎嚜鍔ㄧ瓑寰?45s 閲嶈瘯锛屾渶缁堝け璐ョ粰鍑哄弸濂戒腑鏂囨彁绀?- 鐢熸垚瀹屾垚瑙嗛閫氳繃鏈嶅姟 URL锛坄/api/video/file?path=...`锛夎闂紝涓嶄細鍦?localStorage 涓瓨鍌ㄥぇ浣撶Н data URL
 
 ---
@@ -175,7 +176,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.104 -->
+<!-- NEXT_VERSION: v0.105 -->
+
+### v0.104 — 2026-04-23
+
+**高级制片分镜平台排位可见化**
+
+**Feature / UX Polish:**
+- **[frontend] 分镜操作区、预览面板和顶部摘要统一展示“平台排队第 N 位”**（`h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`, `StepStoryboardPreviewPanel.tsx`, `StepStoryboardWorkspace.tsx`）：当前镜头处于 `awaiting_submit` 时，用户会直接看到自己在平台共享队列中的具体排位和预计开始时间，不再只看到“前方还有几个”或模糊的“等待调度中”。
+- **[frontend] 分镜缩略图条为等待平台调度的镜头新增位次角标**（`h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx`）：镜头卡片在平台队列阶段会直接带 `平台#N` 角标，用户扫一眼就能知道哪些镜头还在平台排队。
+- **[frontend] 分镜视频状态文案改成“排队会自动继续，完成会自动回写”**（`h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`, `StepStoryboardPreviewPanel.tsx`）：统一澄清“平台排队 → 已提交即梦 → 正在生成”的阶段，并去掉“请勿关闭本页”这种误导性提示，避免用户误以为离开页面后任务就不会继续。
 
 ### v0.103 — 2026-04-23
 
@@ -1452,4 +1462,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.103）*
+*最后更新：2026-04-23（v0.104）*

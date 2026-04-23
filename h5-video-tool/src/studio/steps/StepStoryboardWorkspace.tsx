@@ -194,11 +194,36 @@ export function StepStoryboardWorkspace({
     };
   })();
 
+  const selectedShotSummary = (() => {
+    if (selectedShotJob?.status === 'awaiting_submit' && typeof selectedShotJob.globalQueuePos === 'number') {
+      return uiText(
+        `当前选中分镜排在平台第 ${selectedShotJob.globalQueuePos + 1} 位，系统会自动继续排队，轮到后自动开始生成。`,
+        `The selected shot is currently #${selectedShotJob.globalQueuePos + 1} in the platform queue. The system will keep advancing it automatically until rendering starts.`,
+      );
+    }
+    if (selectedShotJob?.status === 'pending' || selectedShotJob?.status === 'queuing') {
+      return uiText(
+        '当前选中分镜已经排到平台提交阶段，正在等待即梦受理或排队。',
+        'The selected shot has already cleared the platform queue and is waiting for Dreamina to accept or queue it.',
+      );
+    }
+    if (selectedShotJob?.status === 'processing') {
+      return uiText(
+        '当前选中分镜已经轮到你，正在生成中。',
+        'The selected shot has reached the front and is rendering now.',
+      );
+    }
+    return null;
+  })();
+
   return (
     <div className="flex flex-col gap-4">
       <div className={`rounded-xl border px-4 py-3 ${platformSummary.className}`}>
         <div className="text-sm font-semibold">{platformSummary.title}</div>
         <div className="mt-1 text-xs opacity-90">{platformSummary.detail}</div>
+        {selectedShotSummary && (
+          <div className="mt-2 text-xs font-semibold opacity-95">{selectedShotSummary}</div>
+        )}
       </div>
 
       <div className="flex min-h-[480px] flex-col gap-4 lg:flex-row">
@@ -305,6 +330,7 @@ export function StepStoryboardWorkspace({
           shot={shot}
           shotMediaBusy={shotMediaBusy}
           dreaminaAsync={dreaminaAsync}
+          activeJob={selectedShotJob}
           shotPreviewPlaySrc={shotPreviewPlaySrc}
           shotVideoVersions={shotVideoVersions}
           selectedShotVideoVersion={selectedShotVideoVersion}
