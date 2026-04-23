@@ -186,6 +186,15 @@
 
 <!-- NEXT_VERSION: v0.114 -->
 
+### v0.114 — 2026-04-23
+
+**高级制片英文翻译链路 JSON 容错兜底**
+
+**Bug Fix:**
+- **[api] `replyLocale` 英文翻译结果改为容错解析**（`h5-video-tool-api/src/services/replyLocale.ts`）：高级制片在英文输出模式下，结构化内容的翻译结果现在会先尝试提取平衡 JSON，再用 `jsonrepair` 修复尾逗号、代码块包裹和夹带说明文本，避免翻译层自己的 `JSON.parse` 再把接口打成 500。
+- **[api] 英文本地化降级为 best-effort**（`h5-video-tool-api/src/services/replyLocale.ts`）：如果模型这轮翻译输出仍然不可修复，接口会保留原始结构化内容继续返回，而不是因为翻译失败阻断 `storyboard-table / production-design` 主链路。
+- **[tests] 新增 replyLocale 脏 JSON 回归测试**（`h5-video-tool-api/tests/replyLocale.test.ts`）：覆盖 fenced JSON、尾逗号和 JSON 前后夹带说明文本场景，确保这次线上报错不会再次回归。
+
 ### v0.113 — 2026-04-23
 
 **发布门禁自动化与 staging verified 提升机制**
@@ -1555,4 +1564,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.113）*
+*最后更新：2026-04-23（v0.114）*

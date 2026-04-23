@@ -1,3 +1,5 @@
+import { jsonrepair } from 'jsonrepair';
+
 import { compassChatCompletion } from './compassLlm.js';
 
 export type ReplyLocale = 'zh-CN' | 'en';
@@ -231,6 +233,65 @@ function extractJsonEnvelope(raw: string): string {
   return text;
 }
 
+function extractBalancedJsonObject(raw: string): string | null {
+  const start = raw.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < raw.length; i += 1) {
+    const char = raw[i]!;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+export function parseTranslatedEntriesResponse(raw: string): Array<{ path?: string; value?: string }> {
+  const text = extractJsonEnvelope(raw);
+  const candidates = [text];
+  const balanced = extractBalancedJsonObject(text);
+  if (balanced && !candidates.includes(balanced)) candidates.unshift(balanced);
+
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as { items?: Array<{ path?: string; value?: string }> };
+      return parsed.items ?? [];
+    } catch (error) {
+      lastError = error;
+    }
+    try {
+      const parsed = JSON.parse(jsonrepair(candidate)) as { items?: Array<{ path?: string; value?: string }> };
+      return parsed.items ?? [];
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`replyLocale translation JSON parse failed: ${message}`);
+}
+
 async function translateEntriesToEnglish(entries: StringEntry[]): Promise<StringEntry[]> {
   const raw = await compassChatCompletion({
     systemPrompt: [
@@ -248,9 +309,16 @@ async function translateEntriesToEnglish(entries: StringEntry[]): Promise<String
     maxTokens: 8192,
   });
 
-  const parsed = JSON.parse(extractJsonEnvelope(raw)) as { items?: Array<{ path?: string; value?: string }> };
+  let parsedItems: Array<{ path?: string; value?: string }>;
+  try {
+    parsedItems = parseTranslatedEntriesResponse(raw);
+  } catch (error) {
+    console.warn('[replyLocale] translateEntriesToEnglish fallback to source text:', error);
+    return entries;
+  }
+
   const byPath = new Map(
-    (parsed.items ?? [])
+    parsedItems
       .filter((item): item is { path: string; value: string } => typeof item.path === 'string' && typeof item.value === 'string')
       .map((item) => [item.path, item.value]),
   );
