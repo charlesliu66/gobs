@@ -67,6 +67,9 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'distribute.title'), 'Step 3: Publish To Social');
   assert.equal(getMessage('en', 'generate.pageTitle'), 'Start Your Video Dream');
   assert.equal(getMessage('en', 'generate.inputTitle'), 'Video Idea');
+  assert.equal(getMessage('en', 'generate.matchAssets'), 'Match Assets');
+  assert.equal(getMessage('en', 'generate.tiktokReferenceVideo'), 'TikTok Reference Video');
+  assert.equal(getMessage('en', 'generate.configureDriveHint'), 'Before using "Match Assets", set a Drive folder in Materials first.');
   assert.equal(getMessage('en', 'productionWizard.projectTitlePlaceholder'), 'Project title');
   assert.equal(getMessage('en', 'productionWizard.subtitle'), 'Advanced Production · Story Outline -> Character & Scene Design -> Storyboard -> Export');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');

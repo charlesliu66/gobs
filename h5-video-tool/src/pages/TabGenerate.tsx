@@ -87,7 +87,15 @@ interface TabGenerateProps {
 }
 
 export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGenerateProps = {}) {
-  const { t } = useLocale();
+  const { contentLocale, t } = useLocale();
+  const formatText = useCallback((path: string, values?: Record<string, string | number>) => {
+    let message = t(path);
+    if (!values) return message;
+    for (const [key, value] of Object.entries(values)) {
+      message = message.replaceAll(`{${key}}`, String(value));
+    }
+    return message;
+  }, [t]);
   const dramaOutlineLabels: DramaOutlineLabels = {
     outlineTitle: t('generate.outlineTitle'),
     protagonist: t('generate.protagonist'),
@@ -242,9 +250,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   /** Viral Dance + TikTok URL 自动预填 prompt（越懒越好） */
   useEffect(() => {
     if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim() && !prompt.trim()) {
-      setPrompt('角色（@图片1）在参考场景（@图片2）中，跟随参考视频（@视频1）中舞者的动作起舞，节奏流畅，角色造型保持一致，竖屏 9:16，8 秒，活力充沛');
+      setPrompt(
+        contentLocale === 'en'
+          ? 'The character in @图片1 dances in the reference scene from @图片2, following the dancer motion from @视频1. Smooth rhythm, consistent character design, vertical 9:16, 8 seconds, energetic.'
+          : '角色（@图片1）在参考场景（@图片2）中，跟随参考视频（@视频1）中舞者的动作起舞，节奏流畅，角色造型保持一致，竖屏 9:16，8 秒，活力充沛',
+      );
     }
-  }, [templateId, viralDanceReferenceVideoUrl]);
+  }, [contentLocale, templateId, viralDanceReferenceVideoUrl]);
 
   const handleOneClickPrompt = useCallback(
     async (styleId?: string) => {
@@ -252,7 +264,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       let effectivePrompt =
         templateId === 'cat-harem' && !prompt.trim() && catHaremPreset ? catHaremPreset.defaultPrompt : prompt;
       if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim()) {
-        effectivePrompt = `【用户将提供的参考视频直链（动作来源，与 API video_list 对应）】\n${viralDanceReferenceVideoUrl.trim()}\n\n${effectivePrompt}`;
+        const referenceVideoHeader =
+          contentLocale === 'en'
+            ? '[Reference video URL provided by the user. This is the motion source and maps to API video_list.]'
+            : '【用户将提供的参考视频直链（动作来源，与 API video_list 对应）】';
+        effectivePrompt = `${referenceVideoHeader}\n${viralDanceReferenceVideoUrl.trim()}\n\n${effectivePrompt}`;
       }
       if (!effectivePrompt.trim()) return;
       setDropdownOpen(false);
@@ -304,6 +320,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       videoDuration,
       videoAspectRatio,
       viralDanceReferenceVideoUrl,
+      contentLocale,
       setPrompt,
       setKeywords,
       setFolderHints,
@@ -492,14 +509,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   return (
     <div className="max-w-6xl p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="page-title">
-          开启你的 视频生成 即刻造梦!
-        </h1>
+        <h1 className="page-title">{t('generate.pageTitle')}</h1>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setExpertMode((v) => !v)}
-            title={expertMode ? '切换为简洁模式（隐藏高级选项）' : '切换为专家模式（显示全部选项）'}
+            title={expertMode ? t('generate.switchToSimple') : t('generate.switchToExpert')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               expertMode
                 ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
@@ -507,7 +522,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             }`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M12 2v2M12 20v2M4.93 4.93l1.41 1.41M18.66 18.66l1.41 1.41M2 12h2M20 12h2"/></svg>
-            {expertMode ? '⚡ 专家模式' : '简洁模式'}
+            {expertMode ? `⚡ ${t('generate.expertMode')}` : t('generate.simpleMode')}
           </button>
           {templateId && onBackToPicker && (
             <button
@@ -520,7 +535,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               }}
               className="relative z-10 text-sm text-[var(--color-primary)] hover:underline"
             >
-              重新选择功能
+              {t('generate.reselectFeature')}
             </button>
           )}
         </div>
@@ -529,14 +544,15 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       {/* 输入区 */}
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <span className="text-sm font-medium text-[var(--color-text)]">视频创意描述</span>
+          <span className="text-sm font-medium text-[var(--color-text)]">{t('generate.inputTitle')}</span>
           {expertMode && (isMultishotTemplate || isCustomMode) && (
             <>
               <span className="text-xs text-[var(--color-text-muted)]">
-                当前分镜时长总和: <span className={totalShotsDuration > maxDuration ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}>{totalShotsDuration}秒</span> / {maxDuration}秒
+                {t('generate.totalShotDurationLabel')}{' '}
+                <span className={totalShotsDuration > maxDuration ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}>{totalShotsDuration}s</span> / {maxDuration}s
               </span>
               <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-xs text-[var(--color-text-muted)]">多镜头描述</span>
+                <span className="text-xs text-[var(--color-text-muted)]">{t('generate.multiShotDescription')}</span>
                 <input
                   type="checkbox"
                   checked={multiShotEnabled}
@@ -556,7 +572,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               onClick={() => setSaveModalOpen(true)}
               className="text-sm text-[var(--color-primary)] hover:underline"
             >
-              保存为模板
+              {t('generate.saveAsTemplate')}
             </button>
           )}
         </div>
@@ -572,10 +588,10 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           <div className="space-y-3">
             <p className="text-xs text-[var(--color-text-muted)]">
               {isCatHaremTemplate ? (
-                <>点击「一键Prompt」→ 系统识别人物 → 为每个角色选择 1 张图片（必填）→ 可选参考场景 → 开始生成。可选：修改下方剧本自定义剧情。</>
+                <>{t('generate.catHaremHint')}</>
               ) : (
                 <>
-                  可先输入<strong className="text-[var(--color-text)]">模糊创意</strong>，点「生成剧本摘要与正文」得到结构化摘要与剧本文案；再点「一键Prompt」生成分镜。或直接写长剧本后一键 Prompt。
+                  {t('generate.shortDramaHint')}
                 </>
               )}
             </p>
@@ -587,10 +603,10 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                   disabled={dramaExpandLoading || !prompt.trim()}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/35 hover:bg-[var(--color-primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {dramaExpandLoading ? '生成中…' : '生成剧本摘要与正文'}
+                  {dramaExpandLoading ? t('generate.generating') : t('generate.generateDramaOutline')}
                 </button>
                 {dramaExpanded && (
-                  <span className="text-xs text-[var(--color-success)]">已生成，下方可继续编辑后点「一键Prompt」</span>
+                  <span className="text-xs text-[var(--color-success)]">{t('generate.generatedThenPrompt')}</span>
                 )}
               </div>
             )}
@@ -600,36 +616,36 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             {dramaExpanded && isHumanShortDrama && (
               <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 text-left space-y-3 max-h-[min(70vh,480px)] overflow-y-auto">
                 <p className="text-sm font-semibold text-[var(--color-text)] border-b border-[var(--color-border)] pb-2">
-                  剧本摘要
+                  {t('generate.outlineTitle')}
                 </p>
                 <dl className="space-y-2.5 text-sm">
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">主角</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.protagonist')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed">{dramaExpanded.summary.protagonist}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">故事类型</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.storyGenre')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed">{dramaExpanded.summary.storyGenre}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">故事梗概</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.synopsis')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.synopsis}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">故事背景</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.background')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.background}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">故事设定</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.setting')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.setting}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">一句话故事</dt>
+                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.oneLineStory')}</dt>
                     <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.oneLineStory}</dd>
                   </div>
                 </dl>
                 <div className="pt-2 border-t border-[var(--color-border)]">
-                  <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1">剧本正文（已合并至下方编辑区）</p>
+                  <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1">{t('generate.scriptContentMerged')}</p>
                   <p className="text-xs text-[var(--color-text-muted)] leading-relaxed line-clamp-4 whitespace-pre-wrap">
                     {dramaExpanded.scriptContent}
                   </p>
@@ -640,7 +656,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={isHumanShortDrama ? 14 : 5}
-              placeholder={isCatHaremTemplate ? '预设《橘座的三选一》剧本已填入。可从素材库选 4 张猫咪图（橘猫/白猫/布偶/黑猫），或修改此处自定义剧情。' : '例：一句模糊创意——「订婚宴上被妹妹和未婚夫联手背叛的养女」；或先生成摘要与正文后再编辑。'}
+              placeholder={isCatHaremTemplate ? t('generate.catHaremPlaceholder') : t('generate.shortDramaPlaceholder')}
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none font-mono text-sm"
             />
           </div>
@@ -652,8 +668,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               rows={7}
               placeholder={
                 isViralDanceTemplate
-                  ? '参考使用【TikTok视频】中舞者的动作，让【图片1】中的角色在【图片2】中的场景中动起来。可补充光线、镜头与画风。'
-                  : '在此输入 prompt，支持 @图片1 引用。点击「一键Prompt」优化（含分镜格式）→ 匹配素材 → 开始生成'
+                  ? t('generate.viralPromptPlaceholder')
+                  : t('generate.promptPlaceholder')
               }
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
             />
@@ -661,7 +677,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               <div className="rounded-xl border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 p-4 space-y-3 mt-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🎵</span>
-                  <span className="text-sm font-semibold text-[var(--color-text)]">TikTok 参考视频</span>
+                  <span className="text-sm font-semibold text-[var(--color-text)]">{t('generate.tiktokReferenceVideo')}</span>
                   <span className="ml-auto text-[10px] text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">@视频1</span>
                 </div>
                 <div className="flex gap-2">
@@ -669,7 +685,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     type="url"
                     value={viralDanceReferenceVideoUrl}
                     onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
-                    placeholder="粘贴 TikTok 分享链接（如 https://www.tiktok.com/t/...）"
+                    placeholder={t('generate.tiktokUrlPlaceholder')}
                     className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
                   />
                   {viralDanceReferenceVideoUrl.trim() && (
@@ -683,7 +699,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                   )}
                 </div>
                 <p className="text-[11px] text-[var(--color-text-muted)]">
-                  粘贴后系统自动解析视频动作，作为 Seedance 的动作参考（@视频1）。支持 TikTok 分享链接或 MP4 直链。
+                  {t('generate.tiktokReferenceHint')}
                 </p>
               </div>
             )}
@@ -699,43 +715,43 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             <ChevronIcon className={`w-3.5 h-3.5 transition-transform ${tipsExpanded ? 'rotate-180' : ''}`} />
             {isShortDramaTemplate || isCatHaremTemplate
               ? isCatHaremTemplate
-                ? '猫猫后宫写稿要点'
-                : '短剧写稿要点（drama-creator）'
+                ? t('generate.catHaremTipsTitle')
+                : t('generate.shortDramaTipsTitle')
               : isViralDanceTemplate
-                ? 'Viral 舞蹈（Seedance 2.0）要点'
-                : 'Veo 写稿要点'}
+                ? t('generate.viralDanceTipsTitle')
+                : t('generate.veoTipsTitle')}
           </button>
           {tipsExpanded && (
             <div className="mt-2 p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-muted)] space-y-2">
               {isShortDramaTemplate ? (
                 <>
-                  <p><strong className="text-[var(--color-text)]">情绪弹簧：</strong>每镜要么「压弹簧」（误会、压制、反派嚣张）要么「放弹簧」（打脸、反转、身份揭晓）；无中间状态。</p>
-                  <p><strong className="text-[var(--color-text)]">钩子-反转-再钩子：</strong>首镜5秒内建立冲突；中段30-45秒小反转；末镜留悬念或未完成的打脸。</p>
-                  <p><strong className="text-[var(--color-text)]">信息前置：</strong>台词直白，第一时间抛出身份、冲突、目标；消灭绕弯子对话。</p>
-                  <p><strong className="text-[var(--color-text)]">动作可视化：</strong>用动词和短句，避免形容词堆砌；预设竖屏特写与快剪镜头。</p>
-                  <p><strong className="text-[var(--color-text)]">格式：</strong>每镜 5-8 秒；景别（特写/中景/全景）+ 运镜（推/拉/跟）；风格自然、生活化。</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipEmotionLabel')}:</strong> {t('generate.shortDramaTipEmotionBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipHookLabel')}:</strong> {t('generate.shortDramaTipHookBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipInfoLabel')}:</strong> {t('generate.shortDramaTipInfoBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipActionLabel')}:</strong> {t('generate.shortDramaTipActionBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipFormatLabel')}:</strong> {t('generate.shortDramaTipFormatBody')}</p>
                 </>
               ) : isCatHaremTemplate ? (
                 <>
-                  <p><strong className="text-[var(--color-text)]">主角映射：</strong>系统识别 4 个角色（橘猫男主/白猫/布偶/黑猫），为每个角色选择 1 张对应图片（必填）。</p>
-                  <p><strong className="text-[var(--color-text)]">预设剧本：</strong>《橘座的三选一》6镜30秒，争宠吃醋→橘座选中布偶打脸。可修改创意自定义剧情。</p>
-                  <p><strong className="text-[var(--color-text)]">风格：</strong>宠物拟人、温馨搞笑、竖屏特写；适合全年龄段。</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipMappingLabel')}:</strong> {t('generate.catHaremTipMappingBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipScriptLabel')}:</strong> {t('generate.catHaremTipScriptBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipStyleLabel')}:</strong> {t('generate.catHaremTipStyleBody')}</p>
                 </>
               ) : isViralDanceTemplate ? (
                 <>
-                  <p><strong className="text-[var(--color-text)]">动作迁移：</strong>在 prompt 里写「参考 @视频1 中舞者的动作节奏与肢体细节」，Seedance 会提取参考视频的动作并迁移到角色图（@图片1）上。</p>
-                  <p><strong className="text-[var(--color-text)]">素材顺序：</strong>@图片1 = 角色参考（必填），@图片2 = 场景参考（可选），@视频1 = TikTok 动作参考视频（系统自动处理）。</p>
-                  <p><strong className="text-[var(--color-text)]">Prompt 结构：</strong>「[角色描述]，在[场景]中，跟随参考视频中舞者的动作起舞，节奏流畅，@图片1 角色造型一致，竖屏 9:16，8秒」。</p>
-                  <p><strong className="text-[var(--color-text)]">TikTok 链接：</strong>直接粘贴分享链接，后端 yt-dlp 解析为可下载地址，作为 @视频1 传给 Seedance。</p>
-                  <p><strong className="text-[var(--color-text)]">合规提示：</strong>不写具体艺人名或歌曲名；前 3 秒要有强吸引点；竖屏 9:16，8秒。</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipMotionLabel')}:</strong> {t('generate.viralTipMotionBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipOrderLabel')}:</strong> {t('generate.viralTipOrderBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipPromptLabel')}:</strong> {t('generate.viralTipPromptBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipLinkLabel')}:</strong> {t('generate.viralTipLinkBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipComplianceLabel')}:</strong> {t('generate.viralTipComplianceBody')}</p>
                 </>
               ) : (
                 <>
-                  <p><strong className="text-[var(--color-text)]">结构：</strong>主体 + 动作 + 场景 + 镜头 + 光线 + 风格。主体要具体（如「经验丰富的侦探」而非「男人」）。</p>
-                  <p><strong className="text-[var(--color-text)]">技巧：</strong>一次只讲一个场景；人物描述要细（年龄、发型、特征）；对话用冒号不用引号。</p>
-                  <p><strong className="text-[var(--color-text)]">镜头：</strong>特写、中景、俯拍、跟拍、航拍、慢速变焦等。</p>
-                  <p><strong className="text-[var(--color-text)]">风格：</strong>Cinematic 8K、35mm 胶片、日式动漫、逆光、黄金时刻等。</p>
-                  <p><strong className="text-[var(--color-text)]">参考图：</strong>最多 3 张，多角度清晰，有助于保持人物一致。</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipStructureLabel')}:</strong> {t('generate.veoTipStructureBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipTechniqueLabel')}:</strong> {t('generate.veoTipTechniqueBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipCameraLabel')}:</strong> {t('generate.veoTipCameraBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipStyleLabel')}:</strong> {t('generate.veoTipStyleBody')}</p>
+                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipReferenceLabel')}:</strong> {t('generate.veoTipReferenceBody')}</p>
                 </>
               )}
             </div>
@@ -748,16 +764,16 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           {isCustomMode ? (
             <div>
-              <p className="text-sm font-medium text-[var(--color-text)] mb-1">自定义模式</p>
+              <p className="text-sm font-medium text-[var(--color-text)] mb-1">{t('generate.customModeTitle')}</p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                无预设，自由发挥。点击「一键Prompt」时，优化逻辑仅使用导演知识（VEO 通用规则、景别运镜等），不依赖任何模板。
+                {t('generate.customModeDesc')}
               </p>
             </div>
           ) : isShortDramaFlow ? (
             <>
-              <p className="text-sm font-medium text-[var(--color-text)] mb-2">短剧 · 剧情预设</p>
+              <p className="text-sm font-medium text-[var(--color-text)] mb-2">{t('generate.shortDramaPresetTitle')}</p>
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                选择预设剧情或自定义，一键 Prompt 将按 drama-creator 方法论生成分镜
+                {t('generate.shortDramaPresetDesc')}
               </p>
               <div className="flex flex-wrap gap-2">
                 {shortDramaPresets.map((p) => (
@@ -777,14 +793,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 ))}
               </div>
               <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                {videoDuration}秒 · {videoAspectRatio} · 人物图必填，参考场景可选
+                {formatText('generate.shortDramaPresetMeta', { duration: videoDuration, aspectRatio: videoAspectRatio })}
               </p>
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-[var(--color-text)] mb-2">Pipeline 模板</p>
+              <p className="text-sm font-medium text-[var(--color-text)] mb-2">{t('generate.pipelineTitle')}</p>
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                选择生成模式后，一键 Prompt 将按模板产出不同风格的视频（单镜 Viral 或 多镜 CG）
+                {t('generate.pipelineDesc')}
               </p>
               <div className="flex flex-wrap gap-3">
                 <label className="flex items-center gap-2">
@@ -801,7 +817,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     }}
                     className="px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none min-w-[180px]"
                   >
-                    <option value="">默认（按风格优化）</option>
+                    <option value="">{t('generate.pipelineDefaultOption')}</option>
                     {templates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name} — {t.description}
@@ -811,7 +827,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 </label>
                 {templateId && (
                   <span className="text-xs text-[var(--color-text-muted)] self-center">
-                    {videoDuration}秒 · {videoAspectRatio}
+                    {videoDuration}s · {videoAspectRatio}
                   </span>
                 )}
               </div>
@@ -823,7 +839,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       {/* 配置行 */}
       <section className="flex flex-wrap gap-4 items-center text-sm text-[var(--color-text-muted)]">
         <label className="flex items-center gap-2">
-          <span>模型:</span>
+          <span>{t('generate.model')}</span>
           <select
             value={videoModel}
             onChange={(e) => setVideoModel(e.target.value)}
@@ -842,18 +858,18 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           </select>
         </label>
         <label className="flex items-center gap-2">
-          <span>比例:</span>
+          <span>{t('generate.aspectRatio')}</span>
           <select
             value={videoAspectRatio}
             onChange={(e) => setVideoAspectRatio(e.target.value)}
             className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
           >
-            <option value="16:9">16:9 横屏</option>
-            <option value="9:16">9:16 竖屏</option>
+            <option value="16:9">{t('generate.landscape')}</option>
+            <option value="9:16">{t('generate.portrait')}</option>
           </select>
         </label>
         <label className="flex items-center gap-2">
-          <span>时长:</span>
+          <span>{t('generate.duration')}</span>
           <select
             value={videoDuration}
             onChange={(e) => setVideoDuration(Number(e.target.value))}
@@ -861,14 +877,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           >
             {[4, 5, 6, 7, 8, 10, 15, 30, 60].map((s) => (
               <option key={s} value={s}>
-                {s}秒
+                {s}s
               </option>
             ))}
           </select>
         </label>
         {expertMode && (
           <label className="flex items-center gap-2">
-            <span>分辨率:</span>
+            <span>{t('generate.resolution')}</span>
             <select
               value={videoResolution}
               onChange={(e) => setVideoResolution(e.target.value)}
@@ -891,7 +907,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             disabled={polishLoading || !prompt.trim()}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {polishLoading ? '优化中…' : `一键Prompt（${templates.find((t) => t.id === templateId)?.name ?? '模板'}）`}
+            {polishLoading ? t('generate.optimizing') : formatText('generate.optimizePromptWithTemplate', { template: templates.find((t) => t.id === templateId)?.name ?? t('generate.templateFallback') })}
           </button>
         ) : (
           <div className="relative" ref={dropdownRef}>
@@ -901,7 +917,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               disabled={polishLoading || !prompt.trim()}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {polishLoading ? '优化中…' : '一键Prompt'}
+              {polishLoading ? t('generate.optimizing') : t('generate.optimizePrompt')}
               <ChevronIcon className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {dropdownOpen && (
@@ -913,7 +929,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     disabled={polishLoading || !prompt.trim()}
                     className="w-full px-4 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
                   >
-                    默认（仅导演知识）
+                    {t('generate.promptDefaultMode')}
                   </button>
                 )}
                 {localizedPromptStyles.map((s) => (
@@ -939,7 +955,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               disabled={matchLoading || loading}
               className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {matchLoading || loading ? '匹配中…' : '一键匹配素材'}
+              {matchLoading || loading ? t('generate.matchingAssets') : t('generate.matchAssets')}
             </button>
             {verifiedFolderId && (
               <button
@@ -947,7 +963,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 onClick={() => setShowDriveManualBrowse((v) => !v)}
                 className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
               >
-                {showDriveManualBrowse ? '收起手动选择' : '手动从 Drive 选择'}
+                {showDriveManualBrowse ? t('generate.hideManualDriveSelect') : t('generate.showManualDriveSelect')}
               </button>
             )}
             {/* TASK-D: 从资产库选参考图 */}
@@ -956,7 +972,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               onClick={() => { setAssetPickerMode('image'); setAssetPickerOpen(true); }}
               className="px-5 py-2.5 border border-[var(--color-primary)]/50 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
             >
-              从资产库选参考图
+              {t('generate.chooseReferenceFromLibrary')}
             </button>
           </>
         )}
@@ -966,7 +982,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           disabled={!canStartGenerate}
           className="px-6 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
         >
-          开始生成
+          {t('generate.startGeneration')}
         </button>
         {onBrowseTemplates && (
           <button
@@ -974,7 +990,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onClick={onBrowseTemplates}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-[var(--color-primary)] border border-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
           >
-            <span>去模板里面找找 idea</span>
+            <span>{t('generate.browseTemplateIdeas')}</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
@@ -992,7 +1008,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onClick={() => setPolishError(null)}
             className="text-sm text-[var(--color-primary)] hover:underline"
           >
-            关闭
+            {t('common.close')}
           </button>
         </div>
       )}
@@ -1003,7 +1019,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       {verifiedFolderId && (
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           <p className="text-sm font-medium text-[var(--color-text)] mb-2">
-            {isShortDramaFlow ? '人物与场景素材' : isViralDanceTemplate ? 'Viral 舞蹈 · 素材绑定（@图片1 / @图片2）' : '从素材库选择'}
+            {isShortDramaFlow ? t('generate.shortDramaAssetsTitle') : isViralDanceTemplate ? t('generate.viralAssetsTitle') : t('generate.libraryAssetsTitle')}
           </p>
           {isShortDramaFlow ? (
             characters.length > 0 ? (
@@ -1021,15 +1037,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               />
             ) : (
               <p className="text-sm text-[var(--color-text-muted)]">
-                请先点击「一键Prompt」生成分镜，系统将自动识别人物数量
+                {t('generate.identifyCharactersFirst')}
               </p>
             )
           ) : isViralDanceTemplate ? (
             <>
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                在下方进入「{verifiedFolderName}」下的<strong className="text-[var(--color-text)]">任意子文件夹</strong>
-                ，先点「从下方选择」绑定 <strong className="text-[var(--color-text)]">@图片1</strong>（角色），再绑定{' '}
-                <strong className="text-[var(--color-text)]">@图片2</strong>（场景，可选）。无需使用「一键匹配素材」。
+                {formatText('generate.viralBindingHint', { folderName: verifiedFolderName ?? '' })}
               </p>
               <ViralDanceMaterialPicker
                 accessToken={accessToken}
@@ -1080,19 +1094,18 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               />
               {selectedOrder.length > 0 ? (
                 <p className="mt-3 text-sm text-[var(--color-success)]">
-                  已绑定：{selectedOrder.length === 1 ? '@图片1 已选' : '@图片1 + @图片2 已选'}，与上方 prompt 中【图片1】【图片2】一致。
+                  {selectedOrder.length === 1 ? t('generate.viralBindingReadySingle') : t('generate.viralBindingReadyBoth')}
                 </p>
               ) : (
                 <p className="mt-3 text-sm text-[var(--color-error)]">
-                  ⚠️ @图片1（角色参考图）必填，请从形象库或 Drive 中选择一张角色图。
+                  ⚠️ {t('generate.viralBindingMissingCharacter')}
                 </p>
               )}
             </>
           ) : (
             <>
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                从「{verifiedFolderName}」中检索并勾选；或点击上方「手动从 Drive
-                选择」在子文件夹中浏览。无需依赖「一键匹配」即可勾选素材。
+                {formatText('generate.librarySelectionHint', { folderName: verifiedFolderName ?? '' })}
               </p>
               <DriveMaterialPicker
                 keywords={keywords}
@@ -1111,7 +1124,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               {showDriveManualBrowse && verifiedFolderId && verifiedFolderName && (
                 <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
                   <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                    浏览文件夹树，点击图片/视频即可加入已选（再点一次取消）。顺序对应 @图片1、@图片2…
+                    {t('generate.driveExplorerHint')}
                   </p>
                   <DriveExplorer
                     rootFolderId={verifiedFolderId}
@@ -1126,7 +1139,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               )}
               {selectedOrder.length > 0 && (
                 <p className="mt-3 text-sm text-[var(--color-success)]">
-                  已选 {selectedOrder.length} 个素材，顺序映射 @图片1、@图片2…
+                  {formatText('generate.selectedAssetCount', { count: selectedOrder.length })}
                 </p>
               )}
             </>
@@ -1138,13 +1151,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       {!verifiedFolderId && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           <p className="text-sm text-[var(--color-text-muted)] mb-2">
-            点击「一键匹配素材」前，请先在「素材管理」中设置 Drive 文件夹
+            {t('generate.configureDriveHint')}
           </p>
           <Link
             to="/materials"
             className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
           >
-            去素材管理设置
+            {t('generate.goConfigureMaterials')}
           </Link>
         </div>
       )}

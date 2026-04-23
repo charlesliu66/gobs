@@ -176,7 +176,7 @@
 - **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务；账号配置若补充 `profileUrl`，分发页和结果卡会直接展示该账号的 TikTok 主页入口
 - **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发、Asset Library、Gallery / History / Batch Jobs，以及高级制片主壳层已逐步收入口径一致的英文 key 库。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
+- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发、Asset Library、Gallery / History / Batch Jobs、Generate Video 入口表单，以及高级制片主壳层已逐步收入口径一致的英文 key 库。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
 - **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。仓库内同时补齐了单人多电脑发布 Runbook、本地状态切换脚本、`mark_release_ready.py`、以及 `deploy_all.py` 的 release guard automation，后续发 `staging/prod` 不再依赖手工记忆步骤。
 
 ---
@@ -184,7 +184,17 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.117 -->
+<!-- NEXT_VERSION: v0.118 -->
+
+### v0.118 — 2026-04-23
+
+**Generate Video 英文表单与写稿提示收口**
+
+**Frontend / i18n:**
+- **[frontend] Generate Video 主表单改为 key 驱动**（`h5-video-tool/src/pages/TabGenerate.tsx`, `h5-video-tool/src/i18n/messages.ts`）：页面标题、专家/简洁模式、视频创意描述、多镜头时长、短剧摘要、Pipeline 模板、模型/比例/时长/分辨率、Prompt 操作按钮、素材选择区与 Drive 设置引导改为跟随 `uiLocale`。
+- **[frontend] Viral Dance 与短剧写稿提示补齐英文**（`h5-video-tool/src/pages/TabGenerate.tsx`）：TikTok 参考视频输入、动作迁移提示、短剧 drama-creator 写稿要点、猫猫后宫提示、Veo 写稿提示均收进 `generate.*` key，英文模式下展开说明不再整块中文。
+- **[frontend] Viral Dance 默认 prompt 跟随内容语言**（`h5-video-tool/src/pages/TabGenerate.tsx`）：当用户选择 English 时，自动预填的 Seedance 动作迁移 prompt 与参考视频说明改为英文，避免英文内容链路里直接插入中文模板。
+- **[test] Generate Video 高频 key 加入回归断言**（`h5-video-tool/src/i18n/locale.test.ts`）：覆盖素材匹配、TikTok 参考、Drive 设置引导等新增 key。
 
 ### v0.117 — 2026-04-23
 
@@ -1591,4 +1601,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.117）*
+*最后更新：2026-04-23（v0.118）*
