@@ -20,6 +20,7 @@
 | Shot filters | PASS | UI exposes all user states with counts and empty state. |
 | Shot operation reachability | PASS | Status navigator and batch actions are placed before the editor/preview columns instead of below the whole workspace. |
 | Primary video action | PASS | Selected-shot video generation is a high-emphasis CTA with queue-position guidance and regenerate copy when a video already exists. |
+| Needs-action navigation | PASS | Not-started, failed, and cancelled shots are aggregated into a "Needs action" filter with a jump-to-next-action shortcut. |
 | Previous / next navigation | PASS | Buttons and keyboard shortcuts update `selectedShotIdx` with boundary guards. |
 | i18n | PASS | New status keys added to `messages.ts` and covered by `locale.test.ts`; shot strip status labels now resolve through the shared `productionWizard.status.*` keys. |
 | Forbidden files | PASS | No forbidden service/config/type files touched. |

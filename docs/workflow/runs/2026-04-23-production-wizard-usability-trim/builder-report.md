@@ -10,6 +10,7 @@ Implemented the full local optimization slice from `docs/plans/2026-04-23-produc
 - Phase 3 first Production Wizard use of a shared shot user status helper.
 - Phase 3 follow-up: shot strip status labels now also read from the shared status helper label keys.
 - Phase 3 UX follow-up: shot status navigation moved above the editor, and the selected-shot video generation action became the primary CTA.
+- Phase 3 UX follow-up: shot status navigation now has a "needs action" aggregate filter and jump action for unfinished / failed / cancelled shots.
 - Phase 4 product governance docs and changelog split baseline.
 
 ## AC Mapping
@@ -25,6 +26,7 @@ Implemented the full local optimization slice from `docs/plans/2026-04-23-produc
 | Shot list supports filtering | `StepStoryboardShotStrip` now filters by all user-facing states and shows counts. |
 | Shot navigation is operationally reachable | `StepStoryboardWorkspace` now places the status navigator and batch controls directly below platform status, before the editor/preview columns. |
 | Generate video is the main action | `StepStoryboardGenerateActions` now renders the selected-shot video generation as a large primary CTA with queue-position guidance and regenerate copy for completed shots. |
+| Next actionable shot is discoverable | `StepStoryboardShotStrip` now aggregates not-started / failed / cancelled shots into "待处理 / Needs action" and can jump to the next actionable shot. |
 | Previous / next shot navigation | Added buttons and `[` / `]` shortcuts in `StepStoryboardWorkspace`, disabled at boundaries and ignored during text input. |
 | Docs and governance | Added `CHANGELOG.md`, `docs/product/status-model.md`, `docs/product/data-ownership-invariants.md`, and `docs/product/user-journeys.md`; updated `PRODUCT.md`. |
 

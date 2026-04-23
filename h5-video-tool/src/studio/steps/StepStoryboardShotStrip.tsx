@@ -11,10 +11,12 @@ import {
 } from '../shotUserStatus';
 
 export type ShotJobStatus = Exclude<ShotProviderStatus, 'done'>;
-type ShotFilter = ShotUserStatus | 'all';
+type ShotFilter = ShotUserStatus | 'all' | 'needs_action';
+const NEEDS_ACTION_STATUSES = new Set<ShotUserStatus>(['not_started', 'failed', 'cancelled']);
 
 const FILTERS: ShotFilter[] = [
   'all',
+  'needs_action',
   'not_started',
   'waiting_submit',
   'platform_queueing',
@@ -89,6 +91,7 @@ export function StepStoryboardShotStrip({
 
   const getFilterLabel = (nextFilter: ShotFilter) => {
     if (nextFilter === 'all') return uiText('全部', 'All');
+    if (nextFilter === 'needs_action') return uiText('待处理', 'Needs action');
     return t(getShotUserStatusLabelKey(nextFilter));
   };
 
@@ -144,10 +147,12 @@ export function StepStoryboardShotStrip({
     (acc, item) => {
       acc.all += 1;
       acc[item.userStatus.status] += 1;
+      if (NEEDS_ACTION_STATUSES.has(item.userStatus.status)) acc.needs_action += 1;
       return acc;
     },
     {
       all: 0,
+      needs_action: 0,
       not_started: 0,
       waiting_submit: 0,
       platform_queueing: 0,
@@ -157,12 +162,17 @@ export function StepStoryboardShotStrip({
       cancelled: 0,
     } as Record<ShotFilter, number>,
   );
+  const needsActionItems = shotItems.filter((item) => NEEDS_ACTION_STATUSES.has(item.userStatus.status));
   const visibleItems = filter === 'all'
     ? shotItems
-    : shotItems.filter((item) => item.userStatus.status === filter);
+    : filter === 'needs_action'
+      ? needsActionItems
+      : shotItems.filter((item) => item.userStatus.status === filter);
   const selectedShot = shots[selectedShotIdx];
   const selectedItem = shotItems.find((item) => item.idx === selectedShotIdx);
   const selectedStatusLabel = selectedItem ? getStatusLabel(selectedItem.userStatus.status) : '';
+  const nextActionItem = needsActionItems.find((item) => item.idx > selectedShotIdx) ?? needsActionItems[0];
+  const queuedCount = statusCounts.waiting_submit + statusCounts.platform_queueing + statusCounts.generating;
 
   return (
     <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
@@ -202,9 +212,64 @@ export function StepStoryboardShotStrip({
         </div>
       </div>
 
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setFilter('needs_action')}
+          className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+            filter === 'needs_action'
+              ? 'border-amber-400/70 bg-amber-400/15 text-amber-100'
+              : 'border-amber-500/25 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15'
+          }`}
+        >
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">{uiText('待处理', 'Needs action')}</div>
+          <div className="mt-1 text-lg font-bold">{statusCounts.needs_action}</div>
+          <div className="text-[10px] opacity-80">{uiText('未生成 / 失败 / 已取消', 'Not started / failed / cancelled')}</div>
+        </button>
+        <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sky-100">
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">{uiText('队列中', 'In queue')}</div>
+          <div className="mt-1 text-lg font-bold">{queuedCount}</div>
+          <div className="text-[10px] opacity-80">{uiText('等待提交 / 排队 / 生成中', 'Waiting / queued / rendering')}</div>
+        </div>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-emerald-100">
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">{uiText('已完成', 'Completed')}</div>
+          <div className="mt-1 text-lg font-bold">{statusCounts.completed}</div>
+          <div className="text-[10px] opacity-80">
+            {uiText(`共 ${statusCounts.all} 镜`, `${statusCounts.all} shots total`)}
+          </div>
+        </div>
+      </div>
+
+      {nextActionItem && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+          <div>
+            <div className="text-xs font-semibold text-amber-100">
+              {uiText(`下一条待处理：#${nextActionItem.shot.shotIndex}`, `Next action: #${nextActionItem.shot.shotIndex}`)}
+            </div>
+            <div className="text-[10px] text-amber-100/75">
+              {uiText('选中后可直接使用下方主按钮生成或重新生成。', 'Select it, then use the primary action below to generate or regenerate.')}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilter('needs_action');
+              onSelectShot(nextActionItem.idx);
+            }}
+            className="rounded-lg border border-amber-300/45 bg-amber-300/15 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/25"
+          >
+            {uiText('跳到待处理', 'Jump to action')}
+          </button>
+        </div>
+      )}
+
       {visibleItems.length === 0 ? (
         <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-6 text-center">
-          <div className="text-sm text-[var(--color-text)]">{uiText('没有符合条件的分镜', 'No matching shots')}</div>
+          <div className="text-sm text-[var(--color-text)]">
+            {filter === 'needs_action'
+              ? uiText('没有待处理分镜', 'No shots need action')
+              : uiText('没有符合条件的分镜', 'No matching shots')}
+          </div>
           <button
             type="button"
             onClick={() => setFilter('all')}
@@ -284,9 +349,11 @@ export function StepStoryboardShotStrip({
                     <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-[var(--color-text)]/80">
                       {shot.subject || shot.action || uiText('暂无主体描述', 'No subject yet')}
                     </div>
-                    {userStatus.status === 'failed' ? (
-                      <div className="mt-1 text-[10px] text-red-300">
-                        {uiText('选择后可重新生成', 'Select to retry generation')}
+                    {NEEDS_ACTION_STATUSES.has(userStatus.status) ? (
+                      <div className={`mt-1 text-[10px] ${userStatus.status === 'failed' ? 'text-red-300' : 'text-amber-300'}`}>
+                        {userStatus.status === 'not_started'
+                          ? uiText('选择后点击主按钮生成', 'Select, then use the primary button')
+                          : uiText('选择后可重新生成', 'Select to regenerate')}
                       </div>
                     ) : null}
                   </div>
