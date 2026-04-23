@@ -69,6 +69,7 @@ import {
   uploadProductionImage,
   type ProjectListItem,
 } from '../api/production';
+import { ApiError } from '../api/client';
 import { toast } from '../components/Toast';
 import { requestNotificationPermission, sendBrowserNotification } from '../utils/notification';
 import { resolveProductionShotPreviewVideoSrc, saveVideoToHistory } from '../utils/videoHistory';
@@ -387,7 +388,16 @@ export function ProductionWizard() {
       }
     } catch (e) {
       console.warn('[production] 加载项目失败', e);
-      setErr('加载项目失败，请重试');
+      if (e instanceof ApiError && e.status === 404) {
+        try { localStorage.removeItem('gobs_last_project_id'); } catch { /* ignore */ }
+        const url = new URL(window.location.href);
+        url.searchParams.delete('projectId');
+        window.history.replaceState(null, '', url.toString());
+        setServerProjectId(null);
+        setErr('原项目在当前环境中未找到，已清除失效项目引用。请重新选择项目。');
+      } else {
+        setErr('加载项目失败，请重试');
+      }
       setShowProjectList(true);
     } finally {
       setIsServerBootstrapping(false);

@@ -28,6 +28,75 @@ function getProductionProjDir(username: string): string {
   return path.join(OUTPUT_BASE, 'production', 'projects', sanitizeUsername(username));
 }
 
+function getLegacyProductionProjDirs(username: string): string[] {
+  const safeUser = sanitizeUsername(username);
+  const candidates = [
+    path.resolve(process.cwd(), 'output', 'production', 'projects', safeUser),
+    path.resolve(process.cwd(), '..', '..', 'api', 'output', 'production', 'projects', safeUser),
+  ];
+  return [...new Set(candidates.map((item) => path.normalize(item)))].filter(
+    (item) => item !== path.normalize(getProductionProjDir(username)),
+  );
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyIfExists(sourcePath: string, targetPath: string): Promise<boolean> {
+  if (!(await pathExists(sourcePath))) return false;
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.copyFile(sourcePath, targetPath);
+  return true;
+}
+
+async function rehomeLegacyProductionProject(username: string, projectId: string): Promise<boolean> {
+  const targetDir = getProductionProjDir(username);
+  const targetFile = path.join(targetDir, `${projectId}.json`);
+  const targetMeta = path.join(targetDir, `${projectId}.meta.json`);
+  if (await pathExists(targetFile)) return true;
+
+  for (const legacyDir of getLegacyProductionProjDirs(username)) {
+    const legacyFile = path.join(legacyDir, `${projectId}.json`);
+    if (!(await pathExists(legacyFile))) continue;
+    await fs.mkdir(targetDir, { recursive: true });
+    await fs.copyFile(legacyFile, targetFile);
+    await copyIfExists(path.join(legacyDir, `${projectId}.meta.json`), targetMeta);
+    console.warn('[production/project] rehomed legacy project', { username, projectId, legacyDir, targetDir });
+    return true;
+  }
+
+  return false;
+}
+
+async function rehomeAllLegacyProductionProjects(username: string): Promise<void> {
+  const targetDir = getProductionProjDir(username);
+  await fs.mkdir(targetDir, { recursive: true });
+
+  for (const legacyDir of getLegacyProductionProjDirs(username)) {
+    let files: string[] = [];
+    try {
+      files = await fs.readdir(legacyDir);
+    } catch {
+      continue;
+    }
+
+    for (const fileName of files) {
+      if (!fileName.endsWith('.json')) continue;
+      const sourcePath = path.join(legacyDir, fileName);
+      const targetPath = path.join(targetDir, fileName);
+      if (!(await pathExists(targetPath))) {
+        await fs.copyFile(sourcePath, targetPath);
+      }
+    }
+  }
+}
+
 function resolveReadableImagePath(rawPath: string, username: string): string | null {
   const safeUser = sanitizeUsername(username);
   const cleaned = rawPath.trim().replace(/\\/g, '/');
@@ -785,6 +854,7 @@ productionPersistRouter.get('/project/load', async (req: Request, res: Response)
   const projectDir = getProductionProjDir(username);
   const filePath = path.join(projectDir, `${id}.json`);
   try {
+    await rehomeLegacyProductionProject(username, id);
     const raw = await fs.readFile(filePath, 'utf-8');
     const data = JSON.parse(raw) as Record<string, unknown>;
     const project = data.project as Record<string, unknown> | undefined;
@@ -826,6 +896,7 @@ productionPersistRouter.get('/project/list', async (req: Request, res: Response)
   const username = sanitizeUsername(req.user?.username);
   try {
     await ensureDirs(username);
+    await rehomeAllLegacyProductionProjects(username);
     const userProjDir = getProductionProjDir(username);
     const files = await fs.readdir(userProjDir);
 

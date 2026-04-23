@@ -184,7 +184,15 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.115 -->
+<!-- NEXT_VERSION: v0.116 -->
+
+### v0.116 — 2026-04-23
+
+**高级制片正式环境历史项目自动归位**
+
+**Bug Fix:**
+- **[api] 高级制片项目读取补齐旧目录回退与自动迁移**（`h5-video-tool-api/src/routes/productionPersist.ts`）：正式环境现在会优先从新的 `shared-data/output/production/projects` 读取项目；若历史项目仍在旧的 `api/output/production/projects` 目录，会在 `project/load` 与 `project/list` 时自动归位到新目录，避免发布后出现“项目列表为空 / 项目加载 404 / 页面空白”的问题。
+- **[frontend] 失效 `projectId` 不再把高级制片锁死**（`h5-video-tool/src/pages/ProductionWizard.tsx`）：如果本地记住的项目 ID 在当前环境里已经不存在，页面会自动清除失效引用并回到可重新选项目的状态，而不是一直卡在“暂停自动保存以避免覆盖云端数据”的错误页。
 
 ### v0.115 — 2026-04-23
 
@@ -1574,4 +1582,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.115）*
+*最后更新：2026-04-23（v0.116）*
