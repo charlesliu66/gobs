@@ -31,6 +31,7 @@ import googleDriveRouter from './routes/googleDrive.js';
 import gobsAuthRouter from './routes/gobsAuth.js';
 import riskSentimentRouter from './routes/riskSentiment.js';
 import adminUsageRouter from './routes/adminUsage.js';
+import adminSystemRouter from './routes/adminSystem.js';
 import { geelarkRouter } from './routes/geelark.js';
 import { shotReviewRouter } from './routes/shotReview.js';
 import { startBatchJobsPoller } from './services/batchJobsQueue.js';
@@ -99,6 +100,7 @@ app.use('/api/drive', googleDriveRouter);
 app.use('/api/risk-sentiment', riskSentimentRouter);
 app.use('/api/geelark', geelarkRouter);
 app.use('/api/admin', adminUsageRouter);
+app.use('/api/admin', adminSystemRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API 未捕获异常]', err);

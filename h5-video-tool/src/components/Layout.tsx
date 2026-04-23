@@ -7,6 +7,11 @@ import { clearAuthStorage, clearPostLoginRedirect } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { buildLocaleHeaders } from '../i18n/locale.ts';
 import { LocalePresetSwitcher } from './LocalePresetSwitcher.tsx';
+import {
+  formatRuntimeVersionLabel,
+  resolveDeploymentBanner,
+  type DeploymentStatePayload,
+} from '../utils/deploymentBanner.ts';
 
 type NavIcon = () => JSX.Element;
 type NavItemDef = { to: string; labelKey: string; icon: NavIcon; end?: boolean; highlight?: boolean };
@@ -15,6 +20,13 @@ type RuntimeVersionResponse = {
   branch?: string;
   commitShort?: string;
   commitSha?: string;
+  environment?: string;
+};
+
+type DeploymentStateResponse = {
+  success: boolean;
+  environment?: string;
+  state?: DeploymentStatePayload;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -216,7 +228,12 @@ export function Layout() {
   const isTiktokMatrix = pathname === '/tiktok-matrix';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState('GOBS');
+  const [deploymentState, setDeploymentState] = useState<DeploymentStatePayload | null>(null);
   const globalJobs = useGlobalJobsProvider();
+  const deploymentBanner = useMemo(
+    () => resolveDeploymentBanner(deploymentState, uiLocale),
+    [deploymentState, uiLocale],
+  );
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -239,7 +256,12 @@ export function Layout() {
         if (cancelled || !data?.success) return;
         const branch = (data.branch || 'unknown').trim();
         const commit = (data.commitShort || data.commitSha?.slice(0, 7) || 'unknown').trim();
-        setRuntimeVersion(`GOBS ${branch}@${commit}`);
+        setRuntimeVersion(formatRuntimeVersionLabel({
+          productName: 'GOBS',
+          environment: data.environment,
+          branch,
+          commit,
+        }));
       })
       .catch(() => {
         if (!cancelled) setRuntimeVersion(t('layout.runtimeFallback'));
@@ -251,12 +273,51 @@ export function Layout() {
     };
   }, [contentLocale, t, uiLocale]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDeploymentState = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/system/deployment-state`, {
+          headers: buildLocaleHeaders(uiLocale, contentLocale),
+        });
+        if (!res.ok) throw new Error(`deployment-state ${res.status}`);
+        const data = await res.json() as DeploymentStateResponse;
+        if (!cancelled) {
+          setDeploymentState(data?.success ? (data.state ?? null) : null);
+        }
+      } catch {
+        if (!cancelled) setDeploymentState(null);
+      }
+    };
+
+    void loadDeploymentState();
+    const timer = window.setInterval(() => {
+      void loadDeploymentState();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [contentLocale, uiLocale]);
+
   const visibleGroups = useMemo(() => {
     return NAV_GROUPS.map((g) => ({
       ...g,
       items: filterNavItems(g.items),
     })).filter((g) => g.items.length > 0);
   }, []);
+
+  const bannerClassName = (() => {
+    if (deploymentBanner.tone === 'critical') {
+      return 'border-[var(--color-error)]/35 bg-[var(--color-error)]/12 text-[var(--color-text)]';
+    }
+    if (deploymentBanner.tone === 'warning') {
+      return 'border-amber-500/35 bg-amber-500/12 text-[var(--color-text)]';
+    }
+    return 'border-sky-500/30 bg-sky-500/10 text-[var(--color-text)]';
+  })();
 
   const sidebar = (
     <div className={`sticky top-0 flex flex-col ${isEditor || isTiktokMatrix ? 'h-[100dvh]' : 'h-screen'}`}>
@@ -406,34 +467,58 @@ export function Layout() {
         >
           {sidebar}
         </aside>
-        <main
-          className={`flex-1 min-w-0 flex flex-col ${
-            isEditor || isProductionWizard || isTiktokMatrix
-              ? `min-h-0 overflow-hidden bg-[var(--color-surface)] p-0 ${
-                  isTiktokMatrix ? 'h-full max-h-[100dvh] [&>*]:min-h-0 [&>*]:min-w-0 [&>*]:flex-1' : ''
-                }`
-              : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
-          }`}
-        >
-          {!isEditor && !isProductionWizard && !isTiktokMatrix && (
-            <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(true)}
-                aria-label={t('layout.openMenu')}
-                className="p-2 rounded-lg border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="15" y2="12" />
-                  <line x1="3" y1="18" x2="18" y2="18" />
-                </svg>
-              </button>
-              <span className="text-sm font-semibold text-[var(--color-text)] tracking-tight">GOBS</span>
+        <div className="flex-1 min-w-0 flex flex-col">
+          {deploymentBanner.visible && (
+            <div className="px-4 pt-4 sm:px-6 sm:pt-5 flex-shrink-0">
+              <div className={`rounded-2xl border px-4 py-3 shadow-sm ${bannerClassName}`}>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-[15px]">
+                    {deploymentBanner.tone === 'critical' ? '!' : deploymentBanner.tone === 'warning' ? '~' : 'i'}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold tracking-tight">{deploymentBanner.title}</div>
+                    <p className="mt-1 text-xs leading-relaxed opacity-90">{deploymentBanner.message}</p>
+                    {!deploymentBanner.allowWrites && (
+                      <p className="mt-2 text-[11px] font-medium opacity-80">
+                        {uiLocale === 'en'
+                          ? 'New submissions are not recommended during this window.'
+                          : '当前发布窗口内不建议继续发起新的提交类操作。'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-          <Outlet />
-        </main>
+          <main
+            className={`flex-1 min-w-0 flex flex-col ${
+              isEditor || isProductionWizard || isTiktokMatrix
+                ? `min-h-0 overflow-hidden bg-[var(--color-surface)] p-0 ${
+                    isTiktokMatrix ? 'h-full max-h-[100dvh] [&>*]:min-h-0 [&>*]:min-w-0 [&>*]:flex-1' : ''
+                  }`
+                : 'overflow-auto p-4 sm:p-6 bg-[var(--color-surface)]'
+            }`}
+          >
+            {!isEditor && !isProductionWizard && !isTiktokMatrix && (
+              <div className="sm:hidden flex items-center gap-3 mb-4 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label={t('layout.openMenu')}
+                  className="p-2 rounded-lg border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <line x1="3" y1="12" x2="15" y2="12" />
+                    <line x1="3" y1="18" x2="18" y2="18" />
+                  </svg>
+                </button>
+                <span className="text-sm font-semibold text-[var(--color-text)] tracking-tight">GOBS</span>
+              </div>
+            )}
+            <Outlet />
+          </main>
+        </div>
         <GlobalJobsTrigger />
         <GlobalJobsPanel />
       </div>

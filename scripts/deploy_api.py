@@ -1,63 +1,89 @@
 """
-上传后端编译产物到服务器
-上传 h5-video-tool-api/dist/ → /home/ubuntu/qas-h5/api/
-重启 PM2 qas-api
+上传后端编译产物到目标环境，并重启对应 PM2 进程。
+用法：
+  python scripts/deploy_api.py --target staging
+  python scripts/deploy_api.py --target prod
 """
-import paramiko
-import os
-import stat
+from __future__ import annotations
+
+import argparse
+import json
+import time
 from pathlib import Path
 
-HOST = '43.134.186.196'
-USER = 'ubuntu'
-PASSWORD = 'rCp0uwvlm5BTy0UxqZ+D/O1Q'
+import paramiko
+
+try:
+    from scripts.deploy_config import DeployConfigError, build_target_config
+except ModuleNotFoundError:
+    from deploy_config import DeployConfigError, build_target_config
+
 LOCAL_DIST = Path(__file__).parent.parent / 'h5-video-tool-api' / 'dist'
-REMOTE_BASE = '/home/ubuntu/qas-h5/api'
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(HOST, username=USER, password=PASSWORD, timeout=30)
-sftp = client.open_sftp()
 
-def remote_mkdir(path):
+def main() -> bool:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--target', choices=['staging', 'prod'], default='prod')
+    args = parser.parse_args()
+
     try:
-        sftp.stat(path)
-    except FileNotFoundError:
-        sftp.mkdir(path)
+        config = build_target_config(args.target)
+    except DeployConfigError as exc:
+        print(f'[ERROR] {exc}')
+        return False
 
-def upload_dir(local_dir: Path, remote_dir: str):
-    remote_mkdir(remote_dir)
-    for item in local_dir.iterdir():
-        remote_path = f'{remote_dir}/{item.name}'
-        if item.is_dir():
-            upload_dir(item, remote_path)
-        else:
-            sftp.put(str(item), remote_path)
+    if not LOCAL_DIST.exists():
+        print(f'[ERROR] 后端构建产物不存在: {LOCAL_DIST}')
+        print('请先运行: cd h5-video-tool-api && npm run build')
+        return False
 
-print(f'正在上传 {LOCAL_DIST} → {REMOTE_BASE}')
-upload_dir(LOCAL_DIST, REMOTE_BASE)
-print('上传完成')
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(config.host, username=config.user, password=config.password, timeout=30)
+    sftp = client.open_sftp()
 
-sftp.close()
+    def remote_mkdir(remote_path: str) -> None:
+        try:
+            sftp.stat(remote_path)
+        except FileNotFoundError:
+            sftp.mkdir(remote_path)
 
-# 重启 PM2
-def ssh(cmd):
-    stdin, stdout, stderr = client.exec_command(cmd)
-    stdout.channel.recv_exit_status()
-    return stdout.read().decode('utf-8', errors='replace').strip()
+    def upload_dir(local_dir: Path, remote_dir: str) -> None:
+        remote_mkdir(remote_dir)
+        for item in local_dir.iterdir():
+            remote_path = f'{remote_dir}/{item.name}'
+            if item.is_dir():
+                upload_dir(item, remote_path)
+            else:
+                sftp.put(str(item), remote_path)
 
-print('重启 qas-api...')
-ssh('pm2 restart qas-api')
+    def ssh(cmd: str) -> str:
+        _stdin, stdout, _stderr = client.exec_command(cmd)
+        stdout.channel.recv_exit_status()
+        return stdout.read().decode('utf-8', errors='replace').strip()
 
-import time
-time.sleep(3)
+    print(f'正在上传后端产物到 {config.target}: {LOCAL_DIST} -> {config.api_dir}')
+    upload_dir(LOCAL_DIST, config.api_dir)
+    print('上传完成')
 
-import json
-raw = ssh('pm2 jlist')
-data = json.loads(raw)
-for p in data:
-    env = p.get('pm2_env', {})
-    print(f"PM2 {env.get('name')} = {env.get('status')} (restarts={env.get('restart_time')})")
+    sftp.close()
 
-client.close()
-print('部署完成')
+    print(f'重启 PM2 进程 {config.pm2_name}...')
+    ssh(f'pm2 restart {config.pm2_name}')
+    time.sleep(3)
+
+    raw = ssh('pm2 jlist')
+    data = json.loads(raw)
+    for process in data:
+        env = process.get('pm2_env', {})
+        if env.get('name') != config.pm2_name:
+            continue
+        print(f"PM2 {env.get('name')} = {env.get('status')} (restarts={env.get('restart_time')})")
+
+    client.close()
+    print('后端部署完成')
+    return True
+
+
+if __name__ == '__main__':
+    main()

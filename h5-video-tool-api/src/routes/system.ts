@@ -7,6 +7,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  getAppEnvironmentName,
+  readDeploymentState,
+} from '../services/deploymentState.js';
+
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,18 +42,38 @@ router.get('/version', async (_req, res) => {
     }
 
     if (info) {
-      res.json({ success: true, ...info });
+      res.json({
+        success: true,
+        ...info,
+        commitShort: info.commitSha?.slice(0, 7) || 'unknown',
+        environment: getAppEnvironmentName(),
+      });
     } else {
       res.json({
         success: true,
         commitSha: 'unknown',
+        commitShort: 'unknown',
         branch: 'unknown',
         buildTime: 'unknown',
+        environment: getAppEnvironmentName(),
         note: 'build-info.json not found; run npm run build to generate',
       });
     }
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+router.get('/deployment-state', async (_req, res) => {
+  try {
+    const state = await readDeploymentState();
+    return res.json({
+      success: true,
+      environment: getAppEnvironmentName(),
+      state,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: String(err) });
   }
 });
 

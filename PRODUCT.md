@@ -177,6 +177,7 @@
 - **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
 - **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
+- **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。
 
 ---
 
@@ -185,16 +186,27 @@
 
 <!-- NEXT_VERSION: v0.110 -->
 
-### v0.110 ? 2026-04-23
+### v0.110 — 2026-04-23
 
-**???????? JSON ????**
+**高级制片制作清单 JSON 解析兜底**
 
 **Bug Fix:**
-- **[api] `production-design` ????????????**?`h5-video-tool-api/src/routes/studio.ts`, `h5-video-tool-api/src/services/productionDesignFallback.ts`??????? Step 3???????????????????????? JSON ???????????? JSON ??????????????? fallback ????????? `JSON.parse` ???????????
-- **[api] ?? production-design ????????????**?`h5-video-tool-api/src/services/productionDesignFallback.ts`???????????????????????? L2 ????????? `wardrobe / props / sets / lighting / soundMusic` ??????????????????????????????
-- **[tests] ?? malformed JSON ????**?`h5-video-tool-api/tests/productionDesignFallback.test.ts`???? fenced JSON??????????????????????????????????
+- **[api] `production-design` 增加解析失败自动重试兜底**（`h5-video-tool-api/src/routes/studio.ts`, `h5-video-tool-api/src/services/productionDesignFallback.ts`）：当高级制片 Step 3「角色·场景·道具」里的制作清单生成因模型返回脏 JSON 失败时，路由层现在会识别 JSON 解析类错误并自动走一轮更严格的 fallback 生成，而不是把底层 `JSON.parse` 异常直接抛回前端红条。
+- **[api] 新增 production-design 修复解析器与默认值归一化**（`h5-video-tool-api/src/services/productionDesignFallback.ts`）：支持修复带代码块包裹、尾逗号、前后说明文本的 L2 输出，同时为缺失的 `wardrobe / props / sets / lighting / soundMusic` 字段补齐安全默认值，降低模型偶发格式波动对页面可用性的影响。
+- **[tests] 新增 malformed JSON 回归测试**（`h5-video-tool-api/tests/productionDesignFallback.test.ts`）：覆盖 fenced JSON、尾逗号和缺字段场景，确保这类截图里的报错不会因为后续调整再次回归。
 
-### v0.108 ? 2026-04-23
+### v0.109 — 2026-04-23
+
+**测试 / 正式双环境部署基础能力首批落地**
+
+**Feature / Infra:**
+- **[api] 系统版本接口补齐环境信息，并新增部署状态读取能力**（`h5-video-tool-api/src/routes/system.ts`, `h5-video-tool-api/src/services/deploymentState.ts`）：`/api/system/version` 现在会返回当前运行环境，前端可明确区分 `staging/prod`；同时新增 `/api/system/deployment-state`，用于公开读取当前环境的发布提示状态。
+- **[api] 管理员可读写部署状态**（`h5-video-tool-api/src/routes/adminSystem.ts`, `h5-video-tool-api/src/index.ts`）：新增 `/api/admin/deployment-state` 的管理员读写接口，用于在正式发布前切换“即将发布 / 发布中 / 验证中 / 空闲”这些状态，不再依赖手工改代码或临时口头通知。
+- **[frontend] Layout 新增全局发布公告条与环境版本展示**（`h5-video-tool/src/components/Layout.tsx`, `h5-video-tool/src/utils/deploymentBanner.ts`）：主站会轮询部署状态，在发布窗口顶部显示全局提醒；底部版本文案也会带上环境标签，避免自测时误把测试环境当正式环境。
+- **[scripts] 部署脚本改为目标环境化，移除仓库内硬编码正式目录/密码**（`scripts/deploy_config.py`, `scripts/deploy_all.py`, `scripts/deploy_api.py`, `scripts/deploy_frontend.py`, `scripts/tests/test_deploy_config.py`, `h5-video-tool-api/.env.example`）：部署脚本现支持 `--target staging|prod`，远端目录、PM2 名称、版本检查地址和连接凭据统一从本地未提交环境变量读取，为同机双环境部署打基础，也收掉了脚本里硬编码连接信息的安全风险。
+- **[tests] 新增部署状态与部署脚本回归测试**（`h5-video-tool-api/tests/deploymentState.test.ts`, `h5-video-tool/tests/deploymentBanner.test.ts`, `scripts/tests/test_deploy_config.py`）：覆盖部署状态默认值、环境识别、banner 文案回退、runtime 版本格式化，以及 `staging/prod` 部署配置解析，避免后续发布能力回退。
+
+### v0.108 — 2026-04-23
 
 **剪辑器 / 高级制片未命名项目治理与草稿转正收口**
 
@@ -1516,4 +1528,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.108）*
+*最后更新：2026-04-23（v0.110）*
