@@ -1,6 +1,6 @@
 # GOBS / QAS Docs Index
 
-> 最后更新：2026-04-21
+> 最后更新：2026-04-23
 > 用途：解释当前文档体系各自负责什么，减少重复维护。
 
 ---
@@ -49,6 +49,7 @@
 | 文档 | 角色 | 说明 |
 |---|---|---|
 | [2026-04-22-gobs-ops-market-guideline.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/guides/2026-04-22-gobs-ops-market-guideline.md>) | 对运营/市场同学的对外使用指南 | 前半段可直接宣讲，后半段可作为会后上手手册 |
+| [2026-04-23-single-owner-staging-prod-release-runbook.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/guides/2026-04-23-single-owner-staging-prod-release-runbook.md>) | 单人维护、多电脑切换时的发布 Runbook | 约束“开发 -> 测试环境 -> 正式环境 -> 回滚”的标准步骤，并约定每台发布电脑的本地配置方式 |
 
 ---
 
