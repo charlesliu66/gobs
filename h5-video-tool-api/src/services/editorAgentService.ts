@@ -38,6 +38,10 @@ import {
   localizeStructuredPayload,
   type ReplyLocale,
 } from './replyLocale.js';
+import {
+  applyFallbackTracksToProject,
+  buildFallbackTracksFromCandidateWindows,
+} from './editorAgentTimelineFallback.js';
 
 export interface EditorAgentAssetContext {
   id: string;
@@ -1050,6 +1054,16 @@ export async function runEditorAgentApply(
 
 ${planText}`;
 
+  const buildUserReferenceText = [
+    '涓嬮潰杩欎唤鍙傝€?JSON 涓殑 assetId / candidateWindow.id 蹇呴』閫愬瓧澶嶅埗锛屼笉瑕佺炕璇戙€佷笉瑕佹敼鍐欐垚鏂囦欢鍚嶃€佷笉瑕佺敓鎴愭柊 ID锛?',
+    JSON.stringify({
+      selectedAssetIds: input.selectedAssetIds,
+      assets: input.assets,
+      candidateWindows: topWindows,
+    }, null, 2),
+  ].join('\n');
+  const buildUserTextWithReference = [buildUserText, '', buildUserReferenceText].join('\n');
+
   let parsed: { summary?: string; project?: TimelineProject } | null = null;
 
   // Plan 失败时跳过 Build 两次尝试，直接进入 Legacy 兜底，节省 1-2 次无谓调用。
@@ -1064,7 +1078,7 @@ ${planText}`;
     try {
       const { text: rawText, usage: buildUsage } = await compassChatCompletionWithUsage({
         systemPrompt: buildSystemPrompt,
-        userText: buildUserText,
+        userText: buildUserTextWithReference,
         temperature: 0.1,
         maxTokens: 4096,
         responseFormat: { type: 'json_object' },
@@ -1290,43 +1304,9 @@ ${planText}`;
     });
 
     // 按 asset 分桶，轮流抽窗；每段目标 2.5–4s，最后一段裁到不超过 targetTimelineSec
-    const byAsset = new Map<string, CandidateWindow[]>();
-    for (const w of candidateWindows) {
-      if (!byAsset.has(w.assetId)) byAsset.set(w.assetId, []);
-      byAsset.get(w.assetId)!.push(w);
-    }
-    const assetIds = Array.from(byAsset.keys());
-    const iters: number[] = assetIds.map(() => 0);
-    const fallbackVideoClips: VideoClip[] = [];
-    let timelineStart = 0;
-    let guard = 0;
-    while (timelineStart < targetTimelineSec && guard++ < 60) {
-      let picked: CandidateWindow | null = null;
-      for (let k = 0; k < assetIds.length; k++) {
-        const ai = (guard - 1 + k) % assetIds.length;
-        const aid = assetIds[ai]!;
-        const wlist = byAsset.get(aid)!;
-        if (iters[ai]! < wlist.length) {
-          picked = wlist[iters[ai]!]!;
-          iters[ai]! += 1;
-          break;
-        }
-      }
-      if (!picked) break;
-      const rawDur = picked.sourceEnd - picked.sourceStart;
-      const wantDur = Math.min(rawDur, 3.2, targetTimelineSec - timelineStart);
-      if (wantDur < 0.4) break;
-      fallbackVideoClips.push({
-        id: `fb_v_${Date.now()}_${fallbackVideoClips.length}`,
-        assetId: picked.assetId,
-        sourceStart: Math.round(picked.sourceStart * 100) / 100,
-        sourceEnd: Math.round((picked.sourceStart + wantDur) * 100) / 100,
-        timelineStart: Math.round(timelineStart * 100) / 100,
-      } as VideoClip);
-      timelineStart += wantDur;
-    }
+    const fallbackTracks = buildFallbackTracksFromCandidateWindows(candidateWindows, targetTimelineSec);
 
-    if (fallbackVideoClips.length === 0) {
+    if (!fallbackTracks) {
       throw new Error(
         localizedText(
           replyLocale,
@@ -1337,31 +1317,36 @@ ${planText}`;
     }
 
     // 镜像生成 a1 原声轨（与 v1 等长等位）
-    const fallbackAudioClips: AudioClip[] = fallbackVideoClips.map((vc, i) => ({
-      id: `fb_a_${Date.now()}_${i}`,
-      assetId: vc.assetId,
-      sourceStart: vc.sourceStart,
-      sourceEnd: vc.sourceEnd,
-      timelineStart: vc.timelineStart,
-      gain: 1,
-    } as AudioClip));
-
-    merged.tracks = merged.tracks.map((t) => {
-      if (t.type === 'video' && t.id === 'v1') {
-        return { ...t, clips: fallbackVideoClips } as Track;
-      }
-      if (t.type === 'audio' && t.id === 'a1') {
-        return { ...t, clips: fallbackAudioClips } as Track;
-      }
-      return t;
-    });
-    merged.durationSec = timelineStart;
+    Object.assign(merged, applyFallbackTracksToProject(merged, fallbackTracks));
   }
 
-  const sanitized = sanitizeAgentProject(merged, allowed, durationMap, candidateWindows);
+  let sanitized = sanitizeAgentProject(merged, allowed, durationMap, candidateWindows);
 
   // 最终再校验一次：sanitize 后可能因 allowed/durationMap 过滤掉所有 clip
-  const v1Final = sanitized.tracks.find((t) => t.type === 'video' && t.id === 'v1');
+  let v1Final = sanitized.tracks.find((t) => t.type === 'video' && t.id === 'v1');
+  if ((!v1Final || v1Final.clips.length === 0) && candidateWindows.length > 0) {
+    console.warn(`[editor agent] sanitize removed every clip, rebuilding from fallback candidate windows; candidateWindows=${candidateWindows.length}`);
+    report({
+      stage: 'fallback_recover',
+      percent: 96,
+      message: localizedText(
+        replyLocale,
+        '模型选出的片段未通过校验，正在改用候选窗自动重建时间轴…',
+        'The model selected invalid clips, so fallback windows are rebuilding the timeline...',
+      ),
+      etaSec: 5,
+    });
+    const fallbackTracks = buildFallbackTracksFromCandidateWindows(candidateWindows, targetTimelineSec);
+    if (fallbackTracks) {
+      sanitized = sanitizeAgentProject(
+        applyFallbackTracksToProject(merged, fallbackTracks),
+        allowed,
+        durationMap,
+        candidateWindows,
+      );
+      v1Final = sanitized.tracks.find((t) => t.type === 'video' && t.id === 'v1');
+    }
+  }
   if (!v1Final || v1Final.clips.length === 0) {
     throw new Error(
       localizedText(

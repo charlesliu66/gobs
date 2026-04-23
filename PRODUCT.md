@@ -90,6 +90,7 @@
 - TikTok 创意 Brief 首版（v0.87）：右侧 Agent 面板新增 TikTok 内容 / TikTok 买量双模式 brief，可直接填写目标、受众、卖点、CTA、参考风格；支持“只填 brief 不写命令”直接触发剪辑。
 - 创意策略卡（v0.87）：Agent 执行后会返回推荐 Hook、备选 Hook、核心卖点与 CTA rationale，方便市场同学理解“为什么这样剪”，也方便剪辑师继续精修。
 - 回复语言跟随（v0.99）：剪辑 Agent 的聊天回复、默认 brief 指令、创意策略卡与剪辑总结现在会优先跟随当前用户消息或 brief 的语言；英文提问默认回英文，中文提问继续回中文。
+- 英文剪辑请求稳态兜底（v0.103）：当英文指令让模型在 Build/校验阶段产出无效 clip 或错误 assetId 时，后端现在会先把精确 `assetId / candidateWindow.id` 再喂给 JSON 生成阶段；如果最终校验仍把片段全部过滤掉，就自动回退到候选窗重建时间轴，而不是直接给用户抛错。
 - 剪辑工作台主壳层补齐英文 UI（v0.102）：右侧 Editing Agent 面板、Agent memory、项目管理弹窗、制片导入引导、同步制片更新弹窗、顶部项目操作区、文字编辑/预览区和新手引导现在都会跟随界面语言切换；共享 `RunningStatus` 在英文模式下也会回退到英文 inline 状态，不再展示中文剧场文案。
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?- Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
 - **蹇嵎鎸囦护妯℃澘锛坴0.58锛?*锛氶娆′娇鐢ㄦ椂灞曠ず棰勮鎸夐挳锛堟垬鏂楁贩鍓?/ 瑙掕壊灞曠ず / TikTok 棰勫憡 / 楂樼噧娣峰壀+閰嶄箰锛夛紝涓€閿彂閫?- **澶氭ā鍨?Plan 鈫?Build 涓ら樁娈垫灦鏋勶紙v0.58锛夛細**
@@ -174,7 +175,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.103 -->
+<!-- NEXT_VERSION: v0.104 -->
+
+### v0.103 — 2026-04-23
+
+**剪辑 Agent 英文请求校验兜底**
+
+**Bug Fix / Resilience:**
+- **[api] Build 阶段补充精确 ID 参考**（`h5-video-tool-api/src/services/editorAgentService.ts`）：给 Timeline JSON 生成阶段追加 `selectedAssetIds / assets / candidateWindows` 参考块，明确要求逐字复用 `assetId` 和 `candidateWindow.id`，减少英文请求时模型把素材 ID 改写成文件名或描述后被校验清空的情况。
+- **[api] 候选窗重建兜底收口 sanitize 全过滤场景**（`h5-video-tool-api/src/services/editorAgentTimelineFallback.ts`, `h5-video-tool-api/src/services/editorAgentService.ts`）：当模型挑出的 clip 在最终校验后全部被过滤时，服务端会自动用候选窗重建 `v1/a1` 时间轴，而不是直接返回 “every candidate clip was filtered out during validation”。
+- **[tests] 新增剪辑候选窗 fallback 回归测试**（`h5-video-tool-api/tests/editorAgentTimelineFallback.test.ts`）：覆盖“按候选窗轮转生成片段”和“sanitize 清空后可恢复有效时间轴”两条回归路径。
 
 ### v0.102 — 2026-04-22
 
@@ -1442,4 +1452,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-22（v0.102）*
+*最后更新：2026-04-23（v0.103）*
