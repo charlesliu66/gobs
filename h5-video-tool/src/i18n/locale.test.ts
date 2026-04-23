@@ -6,8 +6,7 @@ import {
   CONTENT_LOCALE_STORAGE_KEY,
   UI_LOCALE_STORAGE_KEY,
   getLocalePairForLanguage,
-  getLocalePreset,
-  matchLocalePreset,
+  formatDateTime,
   normalizeContentLocale,
   normalizeUiLocale,
   readStoredContentLocale,
@@ -44,7 +43,7 @@ test('stored locale readers return normalized values', () => {
 
   assert.equal(readStoredUiLocale(storage), 'en');
   assert.equal(readStoredContentLocale(storage), 'en');
-  assert.equal(readStoredContentLocale(storage, 'zh-CN'), 'zh');
+  assert.equal(readStoredContentLocale(storage, 'zh-CN'), 'en');
 });
 
 test('language options map to linked ui/content locales', () => {
@@ -64,7 +63,6 @@ test('locale header builder returns both UI and content headers', () => {
 test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'login.title'), 'Sign In To GOBS');
   assert.equal(getMessage('en', 'common.language'), 'Language');
-  assert.equal(getMessage('en', 'localePreset.enUiZhContent'), 'English UI + Chinese Content');
   assert.equal(getMessage('en', 'localeSwitcher.title'), 'Language Mode');
   assert.equal(getMessage('en', 'distribute.title'), 'Step 3: Publish To Social');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');
@@ -76,15 +74,14 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'missing.key'), 'missing.key');
 });
 
-test('locale presets resolve to stable ui/content combinations', () => {
-  assert.deepEqual(getLocalePreset('zhUiZhContent'), { uiLocale: 'zh-CN', contentLocale: 'zh' });
-  assert.deepEqual(getLocalePreset('enUiEnContent'), { uiLocale: 'en', contentLocale: 'en' });
-  assert.deepEqual(getLocalePreset('enUiZhContent'), { uiLocale: 'en', contentLocale: 'zh' });
-});
-
-test('locale presets can be matched from current ui/content values', () => {
-  assert.equal(matchLocalePreset('zh-CN', 'zh'), 'zhUiZhContent');
-  assert.equal(matchLocalePreset('en', 'en'), 'enUiEnContent');
-  assert.equal(matchLocalePreset('en', 'zh'), 'enUiZhContent');
-  assert.equal(matchLocalePreset('zh-CN', 'en'), null);
+test('formatDateTime supports custom formatting options', () => {
+  const value = new Date('2026-04-23T08:30:00.000Z');
+  const formatted = formatDateTime(value, 'en', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  });
+  assert.match(formatted, /4\/23.*08:30|4\/23.*8:30/);
 });

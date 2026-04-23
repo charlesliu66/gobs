@@ -1,3 +1,4 @@
+import { getMessage } from '../i18n/messages.ts';
 import {
   buildLocaleHeaders,
   getInitialContentLocale,
@@ -23,6 +24,11 @@ function getLocaleHeaders(): Record<string, string> {
     ? readStoredContentLocale(storage, uiLocale)
     : getInitialContentLocale(null, uiLocale);
   return buildLocaleHeaders(uiLocale, contentLocale);
+}
+
+function getCurrentUiLocale() {
+  const storage = typeof window === 'undefined' ? null : window.localStorage;
+  return storage ? readStoredUiLocale(storage) : getInitialUiLocale(null, null);
 }
 
 export function clearAuthStorage(): void {
@@ -166,8 +172,9 @@ function handleUnauthorized(res: Response): void {
 
 function wrapFetchError(e: unknown): never {
   const msg = e instanceof Error ? e.message : String(e);
+  const uiLocale = getCurrentUiLocale();
   if (/Failed to fetch|NetworkError|network error|Load failed/i.test(msg)) {
-    throw new Error('无法连接到服务器，请检查网络后重试');
+    throw new Error(getMessage(uiLocale, 'errors.networkUnavailable'));
   }
   throw e instanceof Error ? e : new Error(msg);
 }
@@ -187,7 +194,7 @@ export class ApiError extends Error {
 async function throwApiError(res: Response): Promise<never> {
   const body = await res.json().catch(() => ({ error: res.statusText }));
   const b = body as { error?: string; errorCode?: string };
-  throw new ApiError(b.error || res.statusText || '请求失败', {
+  throw new ApiError(b.error || res.statusText || getMessage(getCurrentUiLocale(), 'errors.requestFailed'), {
     errorCode: b.errorCode,
     status: res.status,
   });

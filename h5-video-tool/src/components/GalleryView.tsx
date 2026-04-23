@@ -1,5 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatDateTime } from '../i18n/locale.ts';
 import {
   getOutputRecentVideos,
   hideOutputRecentVideo,
@@ -8,50 +11,27 @@ import {
   type OutputRecentVideoItem,
 } from '../api/video';
 import {
-  loadVideoHistory,
-  saveVideoToHistory,
-  removeVideoFromHistory,
-  toggleVideoHistoryStarred,
   getLocalPlaybackSrc,
   getVideoFileUrl,
+  loadVideoHistory,
+  removeVideoFromHistory,
+  saveVideoToHistory,
+  toggleVideoHistoryStarred,
   type VideoHistoryItem,
 } from '../utils/videoHistory';
+import { toast } from './Toast';
 import {
   buildOutputHistoryPrompt,
   filterOutputItemsBySavedState,
+  formatOutputGalleryFilename,
   inferOutputSourceLabel,
   type OutputGalleryDaysFilter,
   type OutputGallerySavedFilter,
   type OutputGallerySource,
   type OutputGalleryView,
-} from './outputGalleryUtils';
-import { toast } from './Toast';
+} from './outputGalleryUtils.ts';
 
 type GalleryTab = 'local' | 'output';
-
-function formatTime(ts: number) {
-  try {
-    return new Date(ts).toLocaleString('zh-CN');
-  } catch {
-    return '';
-  }
-}
-
-function formatOutputFilename(videoPath: string): string {
-  const base = videoPath.split('/').pop() || videoPath;
-  const dreaminaMatch = base.match(/dreamina[_-]([0-9a-f]{8,})[_-](\d{10,13})/i);
-  if (dreaminaMatch) {
-    const ts = Number(dreaminaMatch[2]);
-    const date = new Date(ts > 1e12 ? ts : ts * 1000);
-    return `即梦成片 · ${date.toLocaleString('zh-CN', {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })}`;
-  }
-  return base.replace(/[_-][0-9a-f]{16,}\.(mp4|mov|webm|mkv)$/i, '.$1');
-}
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (
@@ -72,7 +52,7 @@ function TrashIcon() {
 
 function InfoTip({ text }: { text: string }) {
   return (
-    <span className="relative ml-1 inline-flex items-center group">
+    <span className="group relative ml-1 inline-flex items-center">
       <span className="flex h-4 w-4 select-none items-center justify-center rounded-full border border-[var(--color-text-subtle)] text-[10px] text-[var(--color-text-subtle)]">
         ?
       </span>
@@ -84,6 +64,16 @@ function InfoTip({ text }: { text: string }) {
 }
 
 export function GalleryView() {
+  const { t, uiLocale } = useLocale();
+  const text = useCallback(
+    (path: string, vars?: Record<string, string | number>) =>
+      Object.entries(vars ?? {}).reduce(
+        (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+        t(path),
+      ),
+    [t],
+  );
+
   const [tab, setTab] = useState<GalleryTab>('local');
   const [localItems, setLocalItems] = useState<VideoHistoryItem[]>(() => loadVideoHistory());
   const [outputItems, setOutputItems] = useState<OutputRecentVideoItem[]>([]);
@@ -98,6 +88,18 @@ export function GalleryView() {
   const [outputView, setOutputView] = useState<OutputGalleryView>('visible');
   const outputAutoSyncStartedRef = useRef(false);
   const deferredOutputQuery = useDeferredValue(outputQuery.trim());
+
+  const formatTime = useCallback(
+    (value: string | number | Date) =>
+      formatDateTime(value, uiLocale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [uiLocale],
+  );
 
   const refreshLocal = useCallback(() => {
     setLocalItems(loadVideoHistory());
@@ -118,13 +120,13 @@ export function GalleryView() {
       setOutputItems(items ?? []);
       setOutputHiddenCount(hiddenCount ?? 0);
     } catch (error) {
-      setOutputError(error instanceof Error ? error.message : '加载失败');
+      setOutputError(error instanceof Error ? error.message : t('errors.loadFailed'));
       setOutputItems([]);
       setOutputHiddenCount(0);
     } finally {
       setOutputLoading(false);
     }
-  }, [deferredOutputQuery, outputDaysFilter, outputSourceFilter, outputView]);
+  }, [deferredOutputQuery, outputDaysFilter, outputSourceFilter, outputView, t]);
 
   const syncOutput = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -135,17 +137,19 @@ export function GalleryView() {
         const result = await syncOutputRecentDreaminaVideos();
         await loadOutput();
         if (result.synced > 0) {
-          toast.success(`已从即梦后台同步 ${result.synced} 个新成片`);
+          toast.success(text('gallery.syncedNewOutputs', { count: result.synced }));
         } else if (!options?.silent) {
-          toast.success(result.joinedExisting ? '即梦后台同步仍在进行中' : '即梦后台同步完成');
+          toast.success(
+            result.joinedExisting ? text('gallery.syncInProgress') : text('gallery.syncCompleted'),
+          );
         }
       } catch (error) {
-        setOutputError(error instanceof Error ? error.message : '同步失败');
+        setOutputError(error instanceof Error ? error.message : t('errors.syncFailed'));
       } finally {
         setOutputSyncing(false);
       }
     },
-    [loadOutput, outputSyncing],
+    [loadOutput, outputSyncing, t, text],
   );
 
   useEffect(() => {
@@ -184,9 +188,14 @@ export function GalleryView() {
     saveVideoToHistory({
       taskId,
       videoPath: row.path,
-      prompt: buildOutputHistoryPrompt(row),
+      prompt: buildOutputHistoryPrompt(row, {
+        sourceLabel: inferOutputSourceLabel(row.source, {
+          dreamina: t('gallery.sourceDreamina'),
+          other: t('gallery.sourceOther'),
+        }),
+      }),
     });
-    toast.success('已保存到“我的成片”');
+    toast.success(t('gallery.savedToMine'));
     refreshLocal();
     setTab('local');
   };
@@ -194,20 +203,20 @@ export function GalleryView() {
   const handleHideOutput = async (row: OutputRecentVideoItem) => {
     try {
       await hideOutputRecentVideo(row.path);
-      toast.success('已从当前账号的服务端文件列表中隐藏');
+      toast.success(t('gallery.hiddenForAccount'));
       await loadOutput();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '隐藏失败');
+      toast.error(error instanceof Error ? error.message : t('errors.hideFailed'));
     }
   };
 
   const handleRestoreOutput = async (row: OutputRecentVideoItem) => {
     try {
       await restoreOutputRecentVideo(row.path);
-      toast.success('已恢复到当前账号的服务端文件列表');
+      toast.success(t('gallery.restoredForAccount'));
       await loadOutput();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '恢复失败');
+      toast.error(error instanceof Error ? error.message : t('errors.restoreFailed'));
     }
   };
 
@@ -228,23 +237,28 @@ export function GalleryView() {
   );
   const visibleOutputItems = filterOutputItemsBySavedState(outputItems, savedOutputPaths, outputSavedFilter);
 
+  const sourceLabels = {
+    dreamina: t('gallery.sourceDreamina'),
+    other: t('gallery.sourceOther'),
+  };
+
+  const tabItems = [
+    {
+      id: 'local' as const,
+      label: `${t('gallery.tabLocal')} (${localItems.length})`,
+      tip: t('gallery.tabLocalTip'),
+    },
+    {
+      id: 'output' as const,
+      label: t('gallery.tabOutput'),
+      tip: t('gallery.tabOutputTip'),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2 border-b border-[var(--color-border)] pb-2">
-        {(
-          [
-            {
-              id: 'local' as const,
-              label: `我的成片 (${localItems.length})`,
-              tip: '展示本地保存的成片记录，支持收藏、删除和再次查看。',
-            },
-            {
-              id: 'output' as const,
-              label: '服务端文件',
-              tip: '展示当前账号目录中的服务端视频文件，并可在后台补同步最近即梦成片。',
-            },
-          ] as const
-        ).map(({ id, label, tip }) => (
+        {tabItems.map(({ id, label, tip }) => (
           <button
             key={id}
             type="button"
@@ -266,7 +280,7 @@ export function GalleryView() {
             disabled={outputLoading || outputSyncing}
             className="ml-auto text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50"
           >
-            {outputSyncing ? '同步中...' : outputLoading ? '加载中...' : '刷新列表'}
+            {outputSyncing ? t('gallery.syncing') : outputLoading ? t('common.loading') : t('gallery.refreshList')}
           </button>
         )}
       </div>
@@ -275,20 +289,20 @@ export function GalleryView() {
         <section className="space-y-4">
           {sortedLocal.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-16 text-center">
-              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">还没有成片</p>
-              <p className="mb-6 text-sm text-[var(--color-text-subtle)]">生成完成后会自动出现在这里。</p>
+              <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">{t('gallery.localEmptyTitle')}</p>
+              <p className="mb-6 text-sm text-[var(--color-text-subtle)]">{t('gallery.localEmptyHint')}</p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link
                   to="/studio"
                   className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
                 >
-                  去 Studio 创作
+                  {t('gallery.goStudio')}
                 </Link>
                 <Link
                   to="/studio/production"
                   className="inline-flex rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
                 >
-                  高级制片
+                  {t('gallery.goProduction')}
                 </Link>
               </div>
             </div>
@@ -307,7 +321,7 @@ export function GalleryView() {
                         <video src={src} controls className="h-full w-full object-contain" preload="metadata" />
                       ) : (
                         <div className="flex h-full items-center justify-center px-2 text-center text-xs text-[var(--color-text-muted)]">
-                          无预览地址
+                          {t('gallery.noPreview')}
                         </div>
                       )}
                     </div>
@@ -317,16 +331,16 @@ export function GalleryView() {
                           <div className="mb-1 flex flex-wrap items-center gap-2">
                             {item.taskId.startsWith('dreamina-') && (
                               <span className="rounded-full border border-amber-500/35 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200">
-                                即梦
+                                {t('gallery.tagDreamina')}
                               </span>
                             )}
                             {item.prompt?.includes('[高级制片·') && (
                               <span className="rounded-full border border-violet-500/35 bg-violet-500/15 px-2 py-0.5 text-[10px] text-violet-200">
-                                高级制片
+                                {t('gallery.tagProduction')}
                               </span>
                             )}
                           </div>
-                          <p className="line-clamp-3 text-sm text-[var(--color-text)]">{item.prompt || '无描述'}</p>
+                          <p className="line-clamp-3 text-sm text-[var(--color-text)]">{item.prompt || t('gallery.noPrompt')}</p>
                           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatTime(item.createdAt)}</p>
                         </div>
                         <div className="flex shrink-0 gap-1">
@@ -334,7 +348,7 @@ export function GalleryView() {
                             type="button"
                             onClick={() => handleStar(item.taskId)}
                             className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-                            title={starred ? '取消星标' : '星标'}
+                            title={starred ? t('gallery.unstar') : t('gallery.star')}
                           >
                             <StarIcon filled={starred} />
                           </button>
@@ -342,7 +356,7 @@ export function GalleryView() {
                             type="button"
                             onClick={() => handleRemove(item.taskId)}
                             className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-error)]"
-                            title="删除记录"
+                            title={t('gallery.deleteRecord')}
                           >
                             <TrashIcon />
                           </button>
@@ -353,7 +367,7 @@ export function GalleryView() {
                           to={`/result?taskId=${encodeURIComponent(item.taskId)}`}
                           className="inline-flex rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
                         >
-                          查看 / 分发
+                          {t('gallery.viewDistribute')}
                         </Link>
                         {src && (
                           <a
@@ -363,7 +377,7 @@ export function GalleryView() {
                             rel="noreferrer"
                             className="inline-flex rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
                           >
-                            下载
+                            {t('common.download')}
                           </a>
                         )}
                       </div>
@@ -379,14 +393,18 @@ export function GalleryView() {
       {tab === 'output' && (
         <section className="space-y-4">
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-4">
-            <p className="text-sm font-medium text-[var(--color-text)]">服务端文件范围说明</p>
-            <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">
-              默认展示当前 GOBS 账号目录中的服务端成片。首次进入时，系统会在后台补同步最近成功的即梦成片到当前账号目录；隐藏只影响当前账号的展示，不删除服务器文件，也不影响即梦后台。
-            </p>
+            <p className="text-sm font-medium text-[var(--color-text)]">{t('gallery.outputScopeTitle')}</p>
+            <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">{t('gallery.outputScopeDesc')}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-subtle)]">
-              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">当前视图：{outputView === 'hidden' ? '已隐藏' : '正常列表'}</span>
-              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">已隐藏 {outputHiddenCount} 条</span>
-              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">当前结果 {visibleOutputItems.length} 条</span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">
+                {t('gallery.currentView')}: {outputView === 'hidden' ? t('gallery.viewHidden') : t('gallery.viewVisible')}
+              </span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">
+                {text('gallery.hiddenCount', { count: outputHiddenCount })}
+              </span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-1">
+                {text('gallery.resultCount', { count: visibleOutputItems.length })}
+              </span>
             </div>
           </div>
 
@@ -395,14 +413,14 @@ export function GalleryView() {
               <input
                 value={outputQuery}
                 onChange={(event) => setOutputQuery(event.target.value)}
-                placeholder="搜索文件名或路径关键字"
+                placeholder={t('gallery.searchPlaceholder')}
                 className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
               />
               <div className="flex flex-wrap gap-2">
                 {([
-                  ['all', '全部来源'],
-                  ['dreamina', '仅即梦'],
-                  ['other', '其他成片'],
+                  ['all', t('gallery.filterSourceAll')],
+                  ['dreamina', t('gallery.filterSourceDreamina')],
+                  ['other', t('gallery.filterSourceOther')],
                 ] as const).map(([value, label]) => (
                   <button
                     key={value}
@@ -422,10 +440,10 @@ export function GalleryView() {
 
             <div className="flex flex-wrap gap-2">
               {([
-                ['all', '全部时间'],
-                ['1', '今天'],
-                ['7', '近7天'],
-                ['30', '近30天'],
+                ['all', t('gallery.filterDaysAll')],
+                ['1', t('gallery.filterDaysToday')],
+                ['7', t('gallery.filterDays7')],
+                ['30', t('gallery.filterDays30')],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -442,9 +460,9 @@ export function GalleryView() {
               ))}
 
               {([
-                ['all', '全部保存状态'],
-                ['saved', '已保存到我的成片'],
-                ['unsaved', '未保存'],
+                ['all', t('gallery.filterSavedAll')],
+                ['saved', t('gallery.filterSavedOnly')],
+                ['unsaved', t('gallery.filterUnsavedOnly')],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -461,8 +479,8 @@ export function GalleryView() {
               ))}
 
               {([
-                ['visible', '正常列表'],
-                ['hidden', `已隐藏 (${outputHiddenCount})`],
+                ['visible', t('gallery.viewVisible')],
+                ['hidden', `${t('gallery.viewHidden')} (${outputHiddenCount})`],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -481,19 +499,21 @@ export function GalleryView() {
           </div>
 
           {outputError && <p className="text-sm text-red-400">{outputError}</p>}
-          {outputSyncing && <p className="text-sm text-[var(--color-text-muted)]">正在后台同步即梦最近成片，完成后会自动刷新列表。</p>}
+          {outputSyncing && <p className="text-sm text-[var(--color-text-muted)]">{t('gallery.syncingHint')}</p>}
 
           {outputLoading && !visibleOutputItems.length ? (
-            <p className="text-sm text-[var(--color-text-muted)]">加载中...</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('common.loading')}</p>
           ) : visibleOutputItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-elevated)]/60 p-12 text-center">
               <p className="mb-1 text-base font-medium text-[var(--color-text-muted)]">
-                {outputItems.length === 0 ? (outputView === 'hidden' ? '还没有已隐藏的服务端文件' : '服务端暂时没有匹配的视频文件') : '当前筛选条件下没有结果'}
+                {outputItems.length === 0
+                  ? outputView === 'hidden'
+                    ? t('gallery.noHiddenFiles')
+                    : t('gallery.noOutputFiles')
+                  : t('gallery.noFilteredResults')}
               </p>
               <p className="mb-5 text-sm text-[var(--color-text-subtle)]">
-                {outputView === 'hidden'
-                  ? '可以切回正常列表继续浏览，或在这里恢复之前隐藏的文件。'
-                  : '可以先刷新列表，系统会顺手同步即梦后台最近成片。'}
+                {outputView === 'hidden' ? t('gallery.hiddenHint') : t('gallery.outputEmptyHint')}
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <button
@@ -502,14 +522,14 @@ export function GalleryView() {
                   disabled={outputLoading || outputSyncing}
                   className="inline-flex rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
                 >
-                  {outputSyncing ? '同步中...' : '刷新列表'}
+                  {outputSyncing ? t('gallery.syncing') : t('gallery.refreshList')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setTab('local')}
                   className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
                 >
-                  查看我的成片
+                  {t('gallery.viewMine')}
                 </button>
               </div>
             </div>
@@ -518,7 +538,10 @@ export function GalleryView() {
               {visibleOutputItems.map((row) => {
                 const playUrl = getVideoFileUrl(row.path);
                 const isSaved = savedOutputPaths.has(row.path);
-                const displayName = formatOutputFilename(row.path);
+                const displayName = formatOutputGalleryFilename(row.path, {
+                  locale: uiLocale,
+                  fallbackPrefix: t('gallery.outputFileFallbackPrefix'),
+                });
                 const promptSummary = row.promptSummary?.trim();
                 return (
                   <div
@@ -537,11 +560,11 @@ export function GalleryView() {
                               : 'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-subtle)]'
                           }`}
                         >
-                          {inferOutputSourceLabel(row.source)}
+                          {inferOutputSourceLabel(row.source, sourceLabels)}
                         </span>
                         {isSaved && (
                           <span className="rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
-                            已保存到我的成片
+                            {t('gallery.savedToMineBadge')}
                           </span>
                         )}
                         <span className="text-sm font-medium text-[var(--color-text)]">{displayName}</span>
@@ -562,7 +585,7 @@ export function GalleryView() {
                           rel="noreferrer"
                           className="inline-flex rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
                         >
-                          下载
+                          {t('common.download')}
                         </a>
                         {!isSaved && outputView !== 'hidden' && (
                           <button
@@ -570,7 +593,7 @@ export function GalleryView() {
                             onClick={() => addOutputToLocal(row)}
                             className="inline-flex rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
                           >
-                            保存到我的成片
+                            {t('gallery.savedToMine')}
                           </button>
                         )}
                         {outputView === 'hidden' ? (
@@ -579,7 +602,7 @@ export function GalleryView() {
                             onClick={() => void handleRestoreOutput(row)}
                             className="inline-flex rounded-lg border border-emerald-500/35 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-500/10"
                           >
-                            恢复显示
+                            {t('gallery.restoreVisible')}
                           </button>
                         ) : (
                           <button
@@ -587,7 +610,7 @@ export function GalleryView() {
                             onClick={() => void handleHideOutput(row)}
                             className="inline-flex rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
                           >
-                            仅当前账号隐藏
+                            {t('gallery.hideForCurrentAccount')}
                           </button>
                         )}
                       </div>

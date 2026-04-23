@@ -1,37 +1,39 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { toast } from '../components/Toast';
-import { RunningStatus } from '../components/RunningStatus';
-import {
-  loadVideoHistory,
-  removeVideoFromHistory,
-  getLocalPlaybackSrc,
-  saveVideoToHistory,
-  toggleVideoHistoryStarred,
-  type VideoHistoryItem,
-} from '../utils/videoHistory';
-import {
-  loadCloudHiddenIds,
-  loadCloudStarredIds,
-  toggleCloudStarred,
-  hideCloudTask,
-} from '../utils/historyPrefs';
+
+import type { BatchJobDto } from '../api/batchJobs';
+import { appendFileAccessToken } from '../api/client';
+import { uploadEditorAsset } from '../api/editor';
+import { pollRemixUntilDone, submitRemixMerge } from '../api/remix';
 import {
   getKlingRecentList,
   klingVideoProxyUrl,
   resolveKlingPlaybackUrl,
   type KlingVideoListRow,
 } from '../api/video';
-import { pollRemixUntilDone, submitRemixMerge } from '../api/remix';
-import { uploadEditorAsset } from '../api/editor';
-import type { BatchJobDto } from '../api/batchJobs';
-import { appendFileAccessToken } from '../api/client';
-import { absoluteApiUrl } from '../utils/absoluteApiUrl';
 import { BatchJobsBoard } from '../components/BatchJobsBoard';
+import { RunningStatus } from '../components/RunningStatus';
+import { toast } from '../components/Toast';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatDateTime } from '../i18n/locale.ts';
+import {
+  hideCloudTask,
+  loadCloudHiddenIds,
+  loadCloudStarredIds,
+  toggleCloudStarred,
+} from '../utils/historyPrefs';
+import { absoluteApiUrl } from '../utils/absoluteApiUrl';
+import {
+  getLocalPlaybackSrc,
+  loadVideoHistory,
+  removeVideoFromHistory,
+  saveVideoToHistory,
+  toggleVideoHistoryStarred,
+  type VideoHistoryItem,
+} from '../utils/videoHistory';
 
 type HistoryTab = 'cloud' | 'local' | 'batch';
 
-/** 单行通栏字幕（整段约 1 小时），精细时间轴请用 SRT 模式 */
 function buildSimpleSrt(text: string): string {
   return `1\n00:00:00,000 --> 00:59:59,999\n${text.replace(/\r/g, '').replace(/\n/g, ' ')}\n`;
 }
@@ -83,6 +85,16 @@ function TrashIcon() {
 export function History() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, uiLocale } = useLocale();
+  const text = useCallback(
+    (path: string, vars?: Record<string, string | number>) =>
+      Object.entries(vars ?? {}).reduce(
+        (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+        t(path),
+      ),
+    [t],
+  );
+
   const [tab, setTab] = useState<HistoryTab>('cloud');
   const [items, setItems] = useState<VideoHistoryItem[]>(() => loadVideoHistory());
   const [cloudItems, setCloudItems] = useState<KlingVideoListRow[]>([]);
@@ -97,34 +109,48 @@ export function History() {
   const [mergeOutroUrl, setMergeOutroUrl] = useState('');
   const [mergeSubtitleMode, setMergeSubtitleMode] = useState<'off' | 'simple' | 'srt'>('off');
   const [batchImportBusy, setBatchImportBusy] = useState(false);
-
-  /** 把批量任务成品导入到剪辑时间轴 */
-  const handleImportBatchVideo = useCallback(async (job: BatchJobDto) => {
-    if (!job.videoUrl) return;
-    setBatchImportBusy(true);
-    try {
-      // 下载视频 → Blob → 上传到剪辑素材库 → navigate 到剪辑页
-      const protectedVideoUrl = appendFileAccessToken(absoluteApiUrl(job.videoUrl));
-      const resp = await fetch(protectedVideoUrl);
-      if (!resp.ok) throw new Error(`下载失败 ${resp.status}`);
-      const blob = await resp.blob();
-      const filename = `batch_shot${job.shotIndex + 1}_${job.id}.mp4`;
-      const file = new File([blob], filename, { type: 'video/mp4' });
-      const { asset } = await uploadEditorAsset(file);
-      toast.success(`已导入 ${filename}（${(file.size / 1024 / 1024).toFixed(1)} MB），正在跳转剪辑器…`);
-      // 把 assetId 存到 sessionStorage，EditorWorkbench 启动时读取并追加
-      sessionStorage.setItem('editor_pending_import', JSON.stringify({ assetId: asset.id, originalName: filename }));
-      navigate('/editor');
-    } catch (e) {
-      alert(`导入失败：${e instanceof Error ? e.message : '未知错误'}`);
-    } finally {
-      setBatchImportBusy(false);
-    }
-  }, [navigate]);
   const [mergeSimpleText, setMergeSimpleText] = useState('');
   const [mergeSrtText, setMergeSrtText] = useState('');
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+
+  const formatTime = useCallback(
+    (value: string | number | Date) =>
+      formatDateTime(value, uiLocale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [uiLocale],
+  );
+
+  const handleImportBatchVideo = useCallback(async (job: BatchJobDto) => {
+    if (!job.videoUrl) return;
+    setBatchImportBusy(true);
+    try {
+      const protectedVideoUrl = appendFileAccessToken(absoluteApiUrl(job.videoUrl));
+      const resp = await fetch(protectedVideoUrl);
+      if (!resp.ok) throw new Error(text('history.importDownloadFailed', { status: resp.status }));
+      const blob = await resp.blob();
+      const filename = `batch_shot${job.shotIndex + 1}_${job.id}.mp4`;
+      const file = new File([blob], filename, { type: 'video/mp4' });
+      const { asset } = await uploadEditorAsset(file);
+      toast.success(
+        text('history.importBatchSuccess', {
+          filename,
+          size: (file.size / 1024 / 1024).toFixed(1),
+        }),
+      );
+      sessionStorage.setItem('editor_pending_import', JSON.stringify({ assetId: asset.id, originalName: filename }));
+      navigate('/editor');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('errors.importFailed'));
+    } finally {
+      setBatchImportBusy(false);
+    }
+  }, [navigate, t, text]);
 
   useEffect(() => {
     const defaultTab = (location.state as { defaultTab?: HistoryTab } | null)?.defaultTab;
@@ -142,15 +168,15 @@ export function History() {
     setCloudLoading(true);
     setCloudError(null);
     getKlingRecentList(1, 20)
-      .then((r) => {
+      .then((response) => {
         if (!cancelled) {
-          setCloudItems(r.items || []);
-          setKlingAvailable(!!r.klingAvailable);
+          setCloudItems(response.items || []);
+          setKlingAvailable(!!response.klingAvailable);
         }
       })
-      .catch((e) => {
+      .catch((error) => {
         if (!cancelled) {
-          const msg = e instanceof Error ? e.message : '无法加载可灵云端列表';
+          const msg = error instanceof Error ? error.message : t('errors.loadFailed');
           toast.error(msg);
           setCloudError(msg);
         }
@@ -161,10 +187,10 @@ export function History() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const visibleCloudRows = useMemo(() => {
-    const filtered = cloudItems.filter((r) => !cloudHidden.has(r.taskId));
+    const filtered = cloudItems.filter((row) => !cloudHidden.has(row.taskId));
     return sortCloudRows(filtered, cloudStarred);
   }, [cloudItems, cloudHidden, cloudStarred]);
 
@@ -176,121 +202,102 @@ export function History() {
     if (tab === 'local') refreshLocal();
   }, [tab, refreshLocal]);
 
-  const handleRemoveLocal = useCallback(
-    (taskId: string) => {
-      removeVideoFromHistory(taskId);
-      refreshLocal();
-    },
-    [refreshLocal],
-  );
+  const handleRemoveLocal = useCallback((taskId: string) => {
+    removeVideoFromHistory(taskId);
+    refreshLocal();
+  }, [refreshLocal]);
 
-  const handleStarLocal = useCallback(
-    (taskId: string) => {
-      toggleVideoHistoryStarred(taskId);
-      refreshLocal();
-    },
-    [refreshLocal],
-  );
+  const handleStarLocal = useCallback((taskId: string) => {
+    toggleVideoHistoryStarred(taskId);
+    refreshLocal();
+  }, [refreshLocal]);
 
   const handleStarCloud = useCallback((taskId: string) => {
     toggleCloudStarred(taskId);
-    setPrefsVersion((v) => v + 1);
+    setPrefsVersion((value) => value + 1);
   }, []);
 
   const handleDeleteCloud = useCallback((taskId: string) => {
     hideCloudTask(taskId);
-    setPrefsVersion((v) => v + 1);
+    setPrefsVersion((value) => value + 1);
   }, []);
 
-  const formatTime = (ts: number) => new Date(ts).toLocaleString('zh-CN');
+  const openCloudResult = useCallback((row: KlingVideoListRow) => {
+    const remote = resolveKlingPlaybackUrl(row);
+    if (!remote) return;
+    const tid = row.taskId.startsWith('kling-') ? row.taskId : `kling-${row.taskId}`;
+    saveVideoToHistory({
+      taskId: tid,
+      videoPath: '',
+      videoUrl: klingVideoProxyUrl(remote),
+      prompt: row.prompt || `${t('history.tabCloud')} ${row.taskId}`,
+    });
+    refreshLocal();
+    navigate(`/result?taskId=${encodeURIComponent(tid)}`);
+  }, [navigate, refreshLocal, t]);
 
-  const openCloudResult = useCallback(
-    (row: KlingVideoListRow) => {
+  const buildClipUrlForKey = useCallback((key: string): string | null => {
+    if (key.startsWith('local:')) {
+      const tid = key.slice(6);
+      const item = items.find((row) => row.taskId === tid);
+      if (!item) return null;
+      const src = getLocalPlaybackSrc(item);
+      return src ? absoluteApiUrl(src) : null;
+    }
+    if (key.startsWith('cloud:')) {
+      const tid = key.slice(6);
+      const row = cloudItems.find((entry) => entry.taskId === tid);
+      if (!row) return null;
       const remote = resolveKlingPlaybackUrl(row);
-      if (!remote) return;
-      const tid = row.taskId.startsWith('kling-') ? row.taskId : `kling-${row.taskId}`;
-      saveVideoToHistory({
-        taskId: tid,
-        videoPath: '',
-        videoUrl: klingVideoProxyUrl(remote),
-        prompt: row.prompt || `可灵任务 ${row.taskId}`,
-      });
-      refreshLocal();
-      navigate(`/result?taskId=${encodeURIComponent(tid)}`);
-    },
-    [navigate, refreshLocal],
-  );
-
-  const buildClipUrlForKey = useCallback(
-    (key: string): string | null => {
-      if (key.startsWith('local:')) {
-        const tid = key.slice(6);
-        const item = items.find((x) => x.taskId === tid);
-        if (!item) return null;
-        const src = getLocalPlaybackSrc(item);
-        return src ? absoluteApiUrl(src) : null;
-      }
-      if (key.startsWith('cloud:')) {
-        const tid = key.slice(6);
-        const row = cloudItems.find((r) => r.taskId === tid);
-        if (!row) return null;
-        const remote = resolveKlingPlaybackUrl(row);
-        return remote ? absoluteApiUrl(klingVideoProxyUrl(remote)) : null;
-      }
-      return null;
-    },
-    [items, cloudItems],
-  );
+      return remote ? absoluteApiUrl(klingVideoProxyUrl(remote)) : null;
+    }
+    return null;
+  }, [cloudItems, items]);
 
   const toggleClipKey = useCallback((key: string) => {
-    setSelectedClipKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setSelectedClipKeys((prev) => (prev.includes(key) ? prev.filter((value) => value !== key) : [...prev, key]));
   }, []);
 
   const moveClipKey = useCallback((index: number, dir: -1 | 1) => {
     setSelectedClipKeys((prev) => {
       const next = [...prev];
-      const j = index + dir;
-      if (j < 0 || j >= next.length) return prev;
-      const t = next[index]!;
-      next[index] = next[j]!;
-      next[j] = t;
+      const targetIndex = index + dir;
+      if (targetIndex < 0 || targetIndex >= next.length) return prev;
+      const current = next[index]!;
+      next[index] = next[targetIndex]!;
+      next[targetIndex] = current;
       return next;
     });
   }, []);
 
   const runMerge = useCallback(async () => {
     if (selectedClipKeys.length === 0) {
-      setMergeError('请至少勾选一段成片');
+      setMergeError(t('history.mergeClipEmpty'));
       return;
     }
+
     setMergeError(null);
     const clipUrls: string[] = [];
     for (const key of selectedClipKeys) {
-      const u = buildClipUrlForKey(key);
-      if (!u) {
-        setMergeError(`无法解析成片地址，请取消勾选后重试：${key}`);
+      const url = buildClipUrlForKey(key);
+      if (!url) {
+        setMergeError(text('history.mergeResolveFailed', { key }));
         return;
       }
-      clipUrls.push(u);
+      clipUrls.push(url);
     }
+
     let subtitles: string | undefined;
     if (mergeSubtitleMode === 'simple' && mergeSimpleText.trim()) {
       subtitles = buildSimpleSrt(mergeSimpleText.trim());
     } else if (mergeSubtitleMode === 'srt' && mergeSrtText.trim()) {
       subtitles = mergeSrtText.trim();
     }
+
     const introRaw = mergeIntroUrl.trim();
     const outroRaw = mergeOutroUrl.trim();
-    const introUrl = introRaw
-      ? /^https?:\/\//i.test(introRaw)
-        ? introRaw
-        : absoluteApiUrl(introRaw)
-      : undefined;
-    const outroUrl = outroRaw
-      ? /^https?:\/\//i.test(outroRaw)
-        ? outroRaw
-        : absoluteApiUrl(outroRaw)
-      : undefined;
+    const introUrl = introRaw ? (/^https?:\/\//i.test(introRaw) ? introRaw : absoluteApiUrl(introRaw)) : undefined;
+    const outroUrl = outroRaw ? (/^https?:\/\//i.test(outroRaw) ? outroRaw : absoluteApiUrl(outroRaw)) : undefined;
 
     setMergeBusy(true);
     try {
@@ -301,116 +308,91 @@ export function History() {
       saveVideoToHistory({
         taskId: newId,
         videoPath: vp,
-        prompt: `合并成片（${clipUrls.length} 段）`,
+        prompt: text('history.mergePromptPrefix', { count: clipUrls.length }),
       });
       refreshLocal();
       setMergeMode(false);
       setSelectedClipKeys([]);
       navigate(`/result?taskId=${encodeURIComponent(newId)}`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '合并失败';
-      toast.error('合并失败：' + msg);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : t('errors.unknownError');
+      toast.error(text('history.mergeFailed', { reason }));
     } finally {
       setMergeBusy(false);
     }
   }, [
-    selectedClipKeys,
     buildClipUrlForKey,
-    mergeSubtitleMode,
-    mergeSimpleText,
-    mergeSrtText,
     mergeIntroUrl,
     mergeOutroUrl,
-    refreshLocal,
+    mergeSimpleText,
+    mergeSrtText,
+    mergeSubtitleMode,
     navigate,
+    refreshLocal,
+    selectedClipKeys,
+    t,
+    text,
   ]);
 
   return (
-    <div className="max-w-6xl w-full flex flex-col min-h-0">
-      {/* 冻结：标题 + Tab + 简短说明 */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 sm:mx-0 sm:px-0 pb-3 mb-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-md">
-        <h1 className="page-title">历史</h1>
+    <div className="flex min-h-0 w-full max-w-6xl flex-col">
+      <div className="sticky top-0 z-30 -mx-4 mb-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 pb-3 backdrop-blur-md sm:mx-0 sm:px-0">
+        <h1 className="page-title">{t('history.pageTitle')}</h1>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('cloud')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === 'cloud'
-                ? 'bg-[var(--color-primary)] text-white'
-                : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-            }`}
-          >
-            可灵云端（ingarena）
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('local')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === 'local'
-                ? 'bg-[var(--color-primary)] text-white'
-                : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-            }`}
-          >
-            本机历史
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('batch')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === 'batch'
-                ? 'bg-[var(--color-primary)] text-white'
-                : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-            }`}
-          >
-            🌙 批量任务看板
-          </button>
+          {([
+            ['cloud', t('history.tabCloud')],
+            ['local', t('history.tabLocal')],
+            ['batch', t('history.tabBatch')],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                tab === value
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+              }`}
+            >
+              {value === 'batch' ? `🌙 ${label}` : label}
+            </button>
+          ))}
         </div>
-        <p className="text-xs text-[var(--color-text-subtle)] mt-3 max-w-3xl leading-relaxed">
-          云端与官网共用 API Key；可<strong>星标</strong>置顶、<strong>删除</strong>仅从当前列表隐藏（不调用远端删任务）。
-          「本机历史」含 Studio 生成的 Veo、<strong>即梦</strong>、可灵代理 URL 等；即梦成片优先存本机文件路径以便预览。本机记录保存在浏览器，删除后不可恢复。
-        </p>
+        <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--color-text-subtle)]">{t('history.intro')}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {
-              setMergeMode((m) => {
-                if (m) setSelectedClipKeys([]);
-                return !m;
+              setMergeMode((current) => {
+                if (current) setSelectedClipKeys([]);
+                return !current;
               });
             }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
               mergeMode
-                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
                 : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
             }`}
           >
-            {mergeMode ? '退出合并模式' : '多选合并成片'}
+            {mergeMode ? t('history.exitMergeMode') : t('history.enterMergeMode')}
           </button>
-          {mergeMode && (
-            <span className="text-xs text-[var(--color-text-muted)]">
-              在下列条目中勾选多段，顺序以下方列表为准；需本机已安装 ffmpeg 的后端服务。
-            </span>
-          )}
+          {mergeMode && <span className="text-xs text-[var(--color-text-muted)]">{t('history.mergeModeHint')}</span>}
         </div>
       </div>
 
-      {/* 可灵云端 */}
       {tab === 'cloud' && (
         <section className="space-y-4">
-          {cloudLoading && <p className="text-sm text-[var(--color-text-muted)]">加载可灵列表…</p>}
+          {cloudLoading && <p className="text-sm text-[var(--color-text-muted)]">{t('history.loadingCloudList')}</p>}
           {cloudError && <p className="text-sm text-[var(--color-error)]">{cloudError}</p>}
           {!cloudLoading && !klingAvailable && !cloudError && (
-            <p className="text-sm text-[var(--color-text-muted)]">
-              未配置 ingarena 可灵（后端 <code className="text-xs">KLING_API_BASE_URL</code> +{' '}
-              <code className="text-xs">KLING_API_KEY</code>
-              ），无法同步官网列表。
-            </p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('history.klingNotConfigured')}</p>
           )}
           {!cloudLoading && klingAvailable && visibleCloudRows.length === 0 && (
             <p className="text-sm text-[var(--color-text-muted)]">
-              {cloudItems.length ? '当前列表已清空或已全部隐藏，可刷新页面重新拉取列表' : '云端暂无任务记录'}
+              {cloudItems.length ? t('history.cloudHiddenEmpty') : t('history.cloudEmpty')}
             </p>
           )}
+
           {visibleCloudRows.length > 0 && (
             <div className="space-y-4">
               {visibleCloudRows.map((row) => {
@@ -420,58 +402,70 @@ export function History() {
                 return (
                   <div
                     key={row.taskId}
-                    className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] overflow-hidden flex flex-col sm:flex-row"
+                    className="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] sm:flex-row"
                   >
                     {mergeMode && (
-                      <div className="flex sm:items-center px-3 py-2 sm:py-0 sm:w-11 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--color-border)] bg-[var(--color-surface)]/50">
+                      <div className="flex shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)]/50 px-3 py-2 sm:w-11 sm:items-center sm:border-r sm:border-b-0 sm:py-0">
                         <input
                           type="checkbox"
                           checked={selectedClipKeys.includes(`cloud:${row.taskId}`)}
                           onChange={() => toggleClipKey(`cloud:${row.taskId}`)}
                           disabled={!remote}
                           className="h-4 w-4 rounded accent-[var(--color-primary)]"
-                          title={remote ? '按勾选顺序拼接' : '无成片不可选'}
-                          aria-label="勾选加入合并"
+                          title={remote ? t('history.checkboxMergeOrder') : t('history.checkboxNoPreview')}
+                          aria-label={t('history.checkboxAddToMerge')}
                         />
                       </div>
                     )}
-                    <div className="sm:w-48 flex-shrink-0 aspect-video bg-black">
+                    <div className="aspect-video flex-shrink-0 bg-black sm:w-48">
                       {play ? (
-                        <video src={play} controls className="w-full h-full object-contain" preload="metadata" />
+                        <video src={play} controls className="h-full w-full object-contain" preload="metadata" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-[var(--color-text-muted)] p-2 text-center">
-                          无成片或排队中
+                        <div className="flex h-full w-full items-center justify-center p-2 text-center text-xs text-[var(--color-text-muted)]">
+                          {t('history.cloudNoOutput')}
                           <br />
-                          <span className="text-[10px] mt-1 opacity-80">status: {String(row.taskStatus ?? '-')}</span>
+                          <span className="mt-1 text-[10px] opacity-80">status: {String(row.taskStatus ?? '-')}</span>
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 p-4 min-w-0 flex flex-col">
+                    <div className="flex min-w-0 flex-1 flex-col p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-mono text-[var(--color-text-muted)] truncate">{row.taskId}</p>
-                          <p className="text-sm text-[var(--color-text)] line-clamp-2 mt-1">{row.prompt || '（无描述）'}</p>
-                          <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                          <p className="truncate text-xs font-mono text-[var(--color-text-muted)]">{row.taskId}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            {row.taskId.startsWith('dreamina-') && (
+                              <span className="rounded-full border border-amber-500/35 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200">
+                                {t('history.cloudTagDreamina')}
+                              </span>
+                            )}
+                            {row.taskId.startsWith('kling-') && (
+                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
+                                {t('history.cloudTagKling')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm text-[var(--color-text)]">{row.prompt || t('history.noDescription')}</p>
+                          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                             {row.createdAt || ''}
                             {row.modelName ? ` · ${row.modelName}` : ''}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex shrink-0 items-center gap-1">
                           <button
                             type="button"
                             onClick={() => handleStarCloud(row.taskId)}
-                            className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
-                            title={starred ? '取消星标' : '星标'}
-                            aria-label={starred ? '取消星标' : '星标'}
+                            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+                            title={starred ? t('gallery.unstar') : t('gallery.star')}
+                            aria-label={starred ? t('gallery.unstar') : t('gallery.star')}
                           >
                             <StarIcon filled={starred} />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteCloud(row.taskId)}
-                            className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
-                            title="从列表中移除"
-                            aria-label="删除"
+                            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-error)]"
+                            title={t('history.removeFromList')}
+                            aria-label={t('common.delete')}
                           >
                             <TrashIcon />
                           </button>
@@ -481,9 +475,9 @@ export function History() {
                         <button
                           type="button"
                           onClick={() => openCloudResult(row)}
-                          className="mt-3 self-start inline-flex px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm hover:bg-[var(--color-primary-hover)]"
+                          className="mt-3 inline-flex self-start rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]"
                         >
-                          全屏预览 / 加入本机历史
+                          {t('history.openPreviewAndSave')}
                         </button>
                       )}
                     </div>
@@ -495,27 +489,24 @@ export function History() {
         </section>
       )}
 
-      {/* 本机历史 */}
       {tab === 'local' && (
         <section className="space-y-4">
           {sortedLocalItems.length === 0 ? (
-            <div className="p-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-center">
-              <p className="text-[var(--color-text-muted)] mb-2">暂无本机生成记录</p>
-              <p className="text-sm text-[var(--color-text-subtle)] mb-4">
-                在 Studio 内生成成功后会写入此处（含即梦 Dreamina 异步/同步成片）；也可在「可灵云端」打开成片并加入本机历史。
-              </p>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-8 text-center">
+              <p className="mb-2 text-[var(--color-text-muted)]">{t('history.localEmptyTitle')}</p>
+              <p className="mb-4 text-sm text-[var(--color-text-subtle)]">{t('history.localEmptyHint')}</p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link
                   to="/studio"
-                  className="inline-flex px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
+                  className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
                 >
-                  去 Studio 创作
+                  {t('history.openInStudio')}
                 </Link>
                 <a
                   href="/studio"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm hover:bg-[var(--color-primary)]/10 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-primary)] px-4 py-2 text-sm text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/10"
                 >
-                  去生成视频 →
+                  {t('history.goGenerate')}
                 </a>
               </div>
             </div>
@@ -527,75 +518,75 @@ export function History() {
                 return (
                   <div
                     key={item.taskId}
-                    className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] overflow-hidden flex flex-col sm:flex-row"
+                    className="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] sm:flex-row"
                   >
                     {mergeMode && (
-                      <div className="flex sm:items-center px-3 py-2 sm:py-0 sm:w-11 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--color-border)] bg-[var(--color-surface)]/50">
+                      <div className="flex shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)]/50 px-3 py-2 sm:w-11 sm:items-center sm:border-r sm:border-b-0 sm:py-0">
                         <input
                           type="checkbox"
                           checked={selectedClipKeys.includes(`local:${item.taskId}`)}
                           onChange={() => toggleClipKey(`local:${item.taskId}`)}
                           disabled={!src}
                           className="h-4 w-4 rounded accent-[var(--color-primary)]"
-                          title={src ? '按勾选顺序拼接' : '无预览地址'}
-                          aria-label="勾选加入合并"
+                          title={src ? t('history.checkboxMergeOrder') : t('history.checkboxNoPlayback')}
+                          aria-label={t('history.checkboxAddToMerge')}
                         />
                       </div>
                     )}
-                    <div className="sm:w-48 flex-shrink-0 aspect-video bg-black">
+                    <div className="aspect-video flex-shrink-0 bg-black sm:w-48">
                       {src ? (
-                        <video src={src} controls className="w-full h-full object-contain" preload="metadata" />
+                        <video src={src} controls className="h-full w-full object-contain" preload="metadata" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-[var(--color-text-muted)]">
-                          无预览地址
+                        <div className="flex h-full w-full items-center justify-center text-xs text-[var(--color-text-muted)]">
+                          {t('gallery.noPreview')}
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
+                    <div className="flex min-w-0 flex-1 flex-col justify-between p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
                             {item.taskId.startsWith('dreamina-') && (
-                              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/35">
-                                即梦
+                              <span className="rounded-full border border-amber-500/35 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200">
+                                {t('history.cloudTagDreamina')}
                               </span>
                             )}
                             {item.taskId.startsWith('kling-') && !item.taskId.startsWith('dreamina-') && (
-                              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                                可灵
+                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
+                                {t('history.cloudTagKling')}
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-[var(--color-text)] line-clamp-2 mb-1">{item.prompt || '无描述'}</p>
+                          <p className="mb-1 line-clamp-2 text-sm text-[var(--color-text)]">{item.prompt || t('gallery.noPrompt')}</p>
                           <p className="text-xs text-[var(--color-text-muted)]">{formatTime(item.createdAt)}</p>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex shrink-0 items-center gap-1">
                           <button
                             type="button"
                             onClick={() => handleStarLocal(item.taskId)}
-                            className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)]"
-                            title={starred ? '取消星标' : '星标'}
-                            aria-label={starred ? '取消星标' : '星标'}
+                            className="rounded-lg p-2 hover:bg-[var(--color-surface-hover)]"
+                            title={starred ? t('gallery.unstar') : t('gallery.star')}
+                            aria-label={starred ? t('gallery.unstar') : t('gallery.star')}
                           >
                             <StarIcon filled={starred} />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleRemoveLocal(item.taskId)}
-                            className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
-                            title="删除本机记录"
-                            aria-label="删除"
+                            className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-error)]"
+                            title={t('history.deleteLocalRecord')}
+                            aria-label={t('common.delete')}
                           >
                             <TrashIcon />
                           </button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-3">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <Link
                           to={`/result?taskId=${encodeURIComponent(item.taskId)}`}
-                          className="inline-flex px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] text-sm font-medium"
+                          className="inline-flex rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
                         >
-                          查看 / 分发
+                          {t('gallery.viewDistribute')}
                         </Link>
                         {src && (
                           <a
@@ -603,9 +594,9 @@ export function History() {
                             download={item.videoPath?.split('/').pop() || 'video.mp4'}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex px-3 py-1.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] text-sm"
+                            className="inline-flex rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
                           >
-                            下载
+                            {t('common.download')}
                           </a>
                         )}
                       </div>
@@ -618,92 +609,94 @@ export function History() {
         </section>
       )}
 
-      {/* 批量任务看板 */}
       {tab === 'batch' && (
         <section className="space-y-4">
           {batchImportBusy && (
-            <div className="text-sm text-[var(--color-text-muted)] text-center py-2">
-              正在上传视频到素材库，请稍候…
-            </div>
+            <div className="py-2 text-center text-sm text-[var(--color-text-muted)]">{t('history.importPendingLabel')}</div>
           )}
           <BatchJobsBoard onImportVideo={handleImportBatchVideo} />
         </section>
       )}
 
       {mergeMode && (
-        <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 space-y-4">
-          <h2 className="text-sm font-medium text-[var(--color-text)]">合并设置</h2>
+        <section className="mt-6 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+          <h2 className="text-sm font-medium text-[var(--color-text)]">{t('history.mergeSettings')}</h2>
           <p className="text-xs text-[var(--color-text-muted)]">
-            已选 {selectedClipKeys.length} 段，顺序如下（可用箭头调整）。可混选「可灵云端」与「本机历史」中的条目。
+            {text('history.mergeSelectedCount', { count: selectedClipKeys.length })}
           </p>
+
           {selectedClipKeys.length > 0 ? (
-            <ol className="list-decimal list-inside space-y-1 text-sm text-[var(--color-text)]">
-              {selectedClipKeys.map((key, i) => (
+            <ol className="list-inside list-decimal space-y-1 text-sm text-[var(--color-text)]">
+              {selectedClipKeys.map((key, index) => (
                 <li key={key} className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-[var(--color-text-muted)] truncate max-w-[min(100%,280px)]">
+                  <span className="max-w-[min(100%,280px)] truncate font-mono text-xs text-[var(--color-text-muted)]">
                     {key}
                   </span>
                   <button
                     type="button"
-                    disabled={i === 0}
-                    onClick={() => moveClipKey(i, -1)}
-                    className="text-xs px-2 py-0.5 rounded border border-[var(--color-border)] disabled:opacity-30"
+                    disabled={index === 0}
+                    onClick={() => moveClipKey(index, -1)}
+                    className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs disabled:opacity-30"
                   >
-                    上移
+                    {t('history.moveUp')}
                   </button>
                   <button
                     type="button"
-                    disabled={i === selectedClipKeys.length - 1}
-                    onClick={() => moveClipKey(i, 1)}
-                    className="text-xs px-2 py-0.5 rounded border border-[var(--color-border)] disabled:opacity-30"
+                    disabled={index === selectedClipKeys.length - 1}
+                    onClick={() => moveClipKey(index, 1)}
+                    className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs disabled:opacity-30"
                   >
-                    下移
+                    {t('history.moveDown')}
                   </button>
                 </li>
               ))}
             </ol>
           ) : (
-            <p className="text-sm text-[var(--color-text-muted)]">请在上方列表中勾选至少一段成片。</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('history.mergeClipEmpty')}</p>
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs text-[var(--color-text-muted)]">
-              片头（可选，URL 或 /api/… 相对路径）
+              {t('history.introClipUrl')}
               <input
                 type="text"
                 value={mergeIntroUrl}
                 onChange={(e) => setMergeIntroUrl(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
-                placeholder="https://… 或 output/intro.mp4"
+                placeholder={t('history.introClipPlaceholder')}
               />
             </label>
             <label className="block text-xs text-[var(--color-text-muted)]">
-              片尾（可选）
+              {t('history.outroClipUrl')}
               <input
                 type="text"
                 value={mergeOutroUrl}
                 onChange={(e) => setMergeOutroUrl(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
-                placeholder="https://… 或 output/outro.mp4"
+                placeholder={t('history.outroClipPlaceholder')}
               />
             </label>
           </div>
 
           <div className="space-y-2">
-            <span className="text-xs text-[var(--color-text-muted)]">字幕</span>
+            <span className="text-xs text-[var(--color-text-muted)]">{t('history.subtitleLabel')}</span>
             <div className="flex flex-wrap gap-2">
-              {(['off', 'simple', 'srt'] as const).map((m) => (
+              {([
+                ['off', t('history.subtitleOff')],
+                ['simple', t('history.subtitleSimple')],
+                ['srt', t('history.subtitleSrt')],
+              ] as const).map(([value, label]) => (
                 <button
-                  key={m}
+                  key={value}
                   type="button"
-                  onClick={() => setMergeSubtitleMode(m)}
-                  className={`px-3 py-1 rounded-lg text-xs ${
-                    mergeSubtitleMode === m
+                  onClick={() => setMergeSubtitleMode(value)}
+                  className={`rounded-lg px-3 py-1 text-xs ${
+                    mergeSubtitleMode === value
                       ? 'bg-[var(--color-primary)] text-white'
                       : 'border border-[var(--color-border)] text-[var(--color-text)]'
                   }`}
                 >
-                  {m === 'off' ? '无' : m === 'simple' ? '一行通栏' : 'SRT 全文'}
+                  {label}
                 </button>
               ))}
             </div>
@@ -713,7 +706,7 @@ export function History() {
                 onChange={(e) => setMergeSimpleText(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
-                placeholder="整段视频显示同一行字幕（烧录）"
+                placeholder={t('history.simpleSubtitlePlaceholder')}
               />
             )}
             {mergeSubtitleMode === 'srt' && (
@@ -721,8 +714,8 @@ export function History() {
                 value={mergeSrtText}
                 onChange={(e) => setMergeSrtText(e.target.value)}
                 rows={6}
-                className="w-full font-mono text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text)]"
-                placeholder={'1\n00:00:00,000 --> 00:00:05,000\n文案\n'}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-text)]"
+                placeholder={t('history.srtPlaceholder')}
               />
             )}
           </div>
@@ -733,11 +726,11 @@ export function History() {
             type="button"
             disabled={mergeBusy || selectedClipKeys.length === 0}
             onClick={() => void runMerge()}
-            className="inline-flex px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:pointer-events-none"
+            className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:pointer-events-none disabled:opacity-50"
           >
-            {mergeBusy ? '合并处理中…' : '开始合并并写入本机历史'}
+            {mergeBusy ? t('history.merging') : t('history.startMergeSaveToLocal')}
           </button>
-          <RunningStatus active={mergeBusy} label="正在合并视频片段" stallAfterSec={30} scene="fine-cut" />
+          <RunningStatus active={mergeBusy} label={t('history.mergeProcessingLabel')} stallAfterSec={30} scene="fine-cut" />
         </section>
       )}
     </div>

@@ -1,3 +1,6 @@
+import type { UiLocale } from '../i18n/locale.ts';
+import { formatDateTime } from '../i18n/locale.ts';
+
 export type OutputGallerySource = 'dreamina' | 'other';
 export type OutputGalleryView = 'visible' | 'hidden';
 export type OutputGallerySavedFilter = 'all' | 'saved' | 'unsaved';
@@ -21,14 +24,44 @@ export function buildOutputGalleryQuery(options: OutputGalleryQueryOptions): str
   return qs ? `?${qs}` : '';
 }
 
-export function inferOutputSourceLabel(source: OutputGallerySource): string {
-  return source === 'dreamina' ? '即梦回补' : '服务端成片';
+export function inferOutputSourceLabel(
+  source: OutputGallerySource,
+  labels?: { dreamina: string; other: string },
+): string {
+  if (source === 'dreamina') return labels?.dreamina ?? '即梦回补';
+  return labels?.other ?? '服务端成片';
 }
 
-export function buildOutputHistoryPrompt(item: { path: string; promptSummary?: string }): string {
+export function formatOutputGalleryFilename(
+  videoPath: string,
+  options?: {
+    locale?: UiLocale;
+    fallbackPrefix?: string;
+  },
+): string {
+  const base = videoPath.split('/').pop() || videoPath;
+  const dreaminaMatch = base.match(/dreamina[_-]([0-9a-f]{8,})[_-](\d{10,13})/i);
+  if (dreaminaMatch) {
+    const ts = Number(dreaminaMatch[2]);
+    const date = new Date(ts > 1e12 ? ts : ts * 1000);
+    const prefix = options?.fallbackPrefix ?? '即梦成片';
+    return `${prefix} · ${formatDateTime(date, options?.locale ?? 'zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
+  }
+  return base.replace(/[_-][0-9a-f]{16,}\.(mp4|mov|webm|mkv)$/i, '.$1');
+}
+
+export function buildOutputHistoryPrompt(
+  item: { path: string; promptSummary?: string },
+  options?: { sourceLabel?: string },
+): string {
   const promptSummary = item.promptSummary?.trim();
   if (promptSummary) return promptSummary;
-  return `[服务端成片] ${item.path}`;
+  return `[${options?.sourceLabel ?? '服务端成片'}] ${item.path}`;
 }
 
 export function filterOutputItemsBySavedState<T extends { path: string }>(

@@ -1,15 +1,8 @@
 export type UiLocale = 'zh-CN' | 'en';
 export type ContentLocale = 'zh' | 'en';
-export type LocalePresetId = 'zhUiZhContent' | 'enUiZhContent' | 'enUiEnContent';
 
 export const UI_LOCALE_STORAGE_KEY = 'gobs_ui_locale';
 export const CONTENT_LOCALE_STORAGE_KEY = 'gobs_content_locale';
-
-const LOCALE_PRESETS: Record<LocalePresetId, { uiLocale: UiLocale; contentLocale: ContentLocale }> = {
-  zhUiZhContent: { uiLocale: 'zh-CN', contentLocale: 'zh' },
-  enUiZhContent: { uiLocale: 'en', contentLocale: 'zh' },
-  enUiEnContent: { uiLocale: 'en', contentLocale: 'en' },
-};
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'> | Map<string, string>;
 
@@ -58,19 +51,6 @@ export function getLocalePairForLanguage(uiLocale: UiLocale): {
   };
 }
 
-export function getLocalePreset(id: LocalePresetId): { uiLocale: UiLocale; contentLocale: ContentLocale } {
-  return LOCALE_PRESETS[id];
-}
-
-export function matchLocalePreset(uiLocale: UiLocale, contentLocale: ContentLocale): LocalePresetId | null {
-  for (const [id, preset] of Object.entries(LOCALE_PRESETS) as Array<
-    [LocalePresetId, { uiLocale: UiLocale; contentLocale: ContentLocale }]
-  >) {
-    if (preset.uiLocale === uiLocale && preset.contentLocale === contentLocale) return id;
-  }
-  return null;
-}
-
 export function readStoredUiLocale(storage?: StorageLike | null): UiLocale {
   return normalizeUiLocale(read(storage, UI_LOCALE_STORAGE_KEY));
 }
@@ -117,13 +97,20 @@ export function getInitialContentLocale(
   return defaultContentLocaleFor(uiLocale ?? 'zh-CN');
 }
 
-export function formatDateTime(value: string | number | Date, locale: UiLocale): string {
+export function formatDateTime(
+  value: string | number | Date,
+  locale: UiLocale,
+  options?: Intl.DateTimeFormatOptions,
+): string {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleString(locale, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return date.toLocaleString(
+    locale,
+    options ?? {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  );
 }

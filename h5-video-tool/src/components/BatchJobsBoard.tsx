@@ -1,29 +1,15 @@
-/**
- * BatchJobsBoard - 即梦批量任务审片看板
- * 展示所有 batch jobs 状态，支持：
- * - 按项目过滤
- * - 实时刷新（SSE 实时推送）
- * - 预览视频（点击展开）
- * - 一键导入到剪辑时间轴
- */
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { cancelBatchJob, cancelBatchByProject, type BatchJobDto } from '../api/batchJobs';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import type { BatchJobDto } from '../api/batchJobs';
+import { cancelBatchByProject, cancelBatchJob } from '../api/batchJobs';
 import { appendFileAccessToken } from '../api/client';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatDateTime } from '../i18n/locale.ts';
 import { absoluteApiUrl } from '../utils/absoluteApiUrl';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 const STREAM_RETRY_BASE_MS = 1500;
 const STREAM_RETRY_MAX_MS = 10000;
-
-const STATUS_LABEL: Record<BatchJobDto['status'], string> = {
-  awaiting_submit: '🕒 排队待提交',
-  pending: '⏳ 等待中',
-  queuing: '📧 排队中',
-  processing: '⚙️ 生成中',
-  done: '✅ 已完成',
-  failed: '❌ 失败',
-  cancelled: '🚫 已取消',
-};
 
 const STATUS_COLOR: Record<BatchJobDto['status'], string> = {
   awaiting_submit: 'text-slate-400',
@@ -46,6 +32,40 @@ function resolveProtectedVideoUrl(videoUrl?: string): string {
 }
 
 export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps) {
+  const { t, uiLocale } = useLocale();
+  const text = useCallback(
+    (path: string, vars?: Record<string, string | number>) =>
+      Object.entries(vars ?? {}).reduce(
+        (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+        t(path),
+      ),
+    [t],
+  );
+
+  const getStatusLabel = useCallback(
+    (status: BatchJobDto['status']) => {
+      switch (status) {
+        case 'awaiting_submit':
+          return t('batchJobs.statusAwaitingSubmit');
+        case 'pending':
+          return t('batchJobs.statusPending');
+        case 'queuing':
+          return t('batchJobs.statusQueuing');
+        case 'processing':
+          return t('batchJobs.statusProcessing');
+        case 'done':
+          return t('batchJobs.statusDone');
+        case 'failed':
+          return t('batchJobs.statusFailed');
+        case 'cancelled':
+          return t('batchJobs.statusCancelled');
+        default:
+          return status;
+      }
+    },
+    [t],
+  );
+
   const [jobs, setJobs] = useState<BatchJobDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -76,16 +96,14 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
         try {
           const job = JSON.parse(e.data as string) as BatchJobDto;
           setJobs((prev) => {
-            const map = new Map(prev.map((j) => [j.id, j]));
+            const map = new Map(prev.map((row) => [row.id, row]));
             map.set(job.id, job);
             const all = [...map.values()];
-            const filtered = projectId ? all.filter((j) => j.projectId === projectId) : all;
-            return filtered.sort((a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-            );
+            const filtered = projectId ? all.filter((row) => row.projectId === projectId) : all;
+            return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
           });
         } catch {
-          // Ignore malformed events.
+          // Ignore malformed stream events.
         }
       };
 
@@ -122,16 +140,16 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
 
   const activeProjectIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const j of jobs) {
-      if (j.status === 'pending' || j.status === 'queuing' || j.status === 'processing' || j.status === 'awaiting_submit') {
-        ids.add(j.projectId);
+    for (const job of jobs) {
+      if (job.status === 'pending' || job.status === 'queuing' || job.status === 'processing' || job.status === 'awaiting_submit') {
+        ids.add(job.projectId);
       }
     }
     return ids;
   }, [jobs]);
 
   const handleCancelAll = useCallback(async () => {
-    if (!confirm('确定取消所有排队中的任务？已完成的不受影响。')) return;
+    if (!confirm(t('batchJobs.confirmCancelAll'))) return;
     setCancellingAll(true);
     try {
       for (const pid of activeProjectIds) {
@@ -140,12 +158,12 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
     } finally {
       setCancellingAll(false);
     }
-  }, [activeProjectIds]);
+  }, [activeProjectIds, t]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-[var(--color-text-muted)] text-sm">
-        加载批量任务…
+      <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-muted)]">
+        {t('batchJobs.loading')}
       </div>
     );
   }
@@ -153,63 +171,58 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
   if (jobs.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-center">
-        <span className="text-4xl">🎬</span>
-        <p className="text-sm text-[var(--color-text-muted)]">暂无批量任务</p>
-        <p className="text-xs text-[var(--color-text-muted)]/70">
-          在“生成视频”步骤点击“夜间批量提交”，即可在这里看到所有分镜的生成进度
-        </p>
+        <span className="text-4xl">🎞</span>
+        <p className="text-sm text-[var(--color-text-muted)]">{t('batchJobs.emptyTitle')}</p>
+        <p className="text-xs text-[var(--color-text-muted)]/70">{t('batchJobs.emptyHint')}</p>
       </div>
     );
   }
 
-  const done = jobs.filter((j) => j.status === 'done').length;
+  const done = jobs.filter((job) => job.status === 'done').length;
   const total = jobs.length;
-  const awaitingCount = jobs.filter((j) => j.status === 'awaiting_submit').length;
-  const queuingCount = jobs.filter((j) => j.status === 'queuing' || j.status === 'pending').length;
-  const processingCount = jobs.filter((j) => j.status === 'processing').length;
-  const doneCount = done;
-  const failedCount = jobs.filter((j) => j.status === 'failed').length;
+  const awaitingCount = jobs.filter((job) => job.status === 'awaiting_submit').length;
+  const queuingCount = jobs.filter((job) => job.status === 'queuing' || job.status === 'pending').length;
+  const processingCount = jobs.filter((job) => job.status === 'processing').length;
+  const failedCount = jobs.filter((job) => job.status === 'failed').length;
   const hasActive = activeProjectIds.size > 0;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between rounded-xl bg-[var(--color-surface-elevated)] px-4 py-2.5">
         <span className="text-sm font-medium text-[var(--color-text)]">
-          批量任务 · {done}/{total} 已完成
+          {t('batchJobs.title')} · {done}/{total} {t('batchJobs.completed')}
         </span>
         <div className="flex items-center gap-2">
           {hasActive && (
             <button
               onClick={() => void handleCancelAll()}
               disabled={cancellingAll}
-              className="text-[11px] px-2.5 py-1 rounded-lg border border-red-400/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+              className="rounded-lg border border-red-400/30 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
             >
-              {cancellingAll ? '取消中…' : '取消全部排队'}
+              {cancellingAll ? t('batchJobs.cancelling') : t('batchJobs.cancelAllQueued')}
             </button>
           )}
           <span className="text-[10px] text-[var(--color-text-muted)]">
-            {streamState === 'open' ? '实时同步' : '重连中…'}
+            {streamState === 'open' ? t('batchJobs.liveSync') : t('batchJobs.reconnecting')}
           </span>
         </div>
       </div>
 
-      <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-hover)]">
         <div
           className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
           style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
         />
       </div>
 
-      {jobs.length > 0 && (
-        <div className="flex gap-3 px-3 py-2 text-[10px] text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-          <span>总 {total}</span>
-          {awaitingCount > 0 && <span className="text-slate-400">待提交 {awaitingCount}</span>}
-          {queuingCount > 0 && <span className="text-yellow-400">排队 {queuingCount}</span>}
-          {processingCount > 0 && <span className="text-blue-400">生成中 {processingCount}</span>}
-          {doneCount > 0 && <span className="text-green-400">完成 {doneCount}</span>}
-          {failedCount > 0 && <span className="text-red-400">失败 {failedCount}</span>}
-        </div>
-      )}
+      <div className="flex gap-3 border-b border-[var(--color-border)] px-3 py-2 text-[10px] text-[var(--color-text-muted)]">
+        <span>{t('batchJobs.total')} {total}</span>
+        {awaitingCount > 0 && <span className="text-slate-400">{t('batchJobs.awaiting')} {awaitingCount}</span>}
+        {queuingCount > 0 && <span className="text-yellow-400">{t('batchJobs.queued')} {queuingCount}</span>}
+        {processingCount > 0 && <span className="text-blue-400">{t('batchJobs.processing')} {processingCount}</span>}
+        {done > 0 && <span className="text-green-400">{t('batchJobs.done')} {done}</span>}
+        {failedCount > 0 && <span className="text-red-400">{t('batchJobs.failed')} {failedCount}</span>}
+      </div>
 
       <div className="flex flex-col gap-2">
         {jobs.map((job) => {
@@ -217,51 +230,46 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
           return (
             <div
               key={job.id}
-              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden"
+              className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
             >
               <div
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors"
+                className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--color-surface-hover)]"
                 onClick={() => setExpandedId(expandedId === job.id ? null : job.id)}
               >
-                <span className="text-xs font-mono text-[var(--color-text-muted)] w-6 text-center">
+                <span className="w-6 text-center font-mono text-xs text-[var(--color-text-muted)]">
                   #{job.shotIndex + 1}
                 </span>
-                <span className="flex-1 text-sm text-[var(--color-text)] truncate">
-                  {job.shotDescription || `分镜 ${job.shotIndex + 1}`}
+                <span className="flex-1 truncate text-sm text-[var(--color-text)]">
+                  {job.shotDescription || text('batchJobs.shotFallback', { index: job.shotIndex + 1 })}
                 </span>
                 {job.source && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-subtle)]">
-                    {job.source === 'quickfilm' ? '一键成片' : '高级制片'}
+                  <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-subtle)]">
+                    {job.source === 'quickfilm' ? t('batchJobs.sourceQuickfilm') : t('batchJobs.sourceProduction')}
                   </span>
                 )}
                 <span className={`text-[11px] font-medium ${STATUS_COLOR[job.status]}`}>
-                  {STATUS_LABEL[job.status]}
+                  {getStatusLabel(job.status)}
                 </span>
-                {(job.status === 'queuing' || job.status === 'pending') &&
-                  job.queueInfo?.queue_idx != null && (
-                    <span className="text-[10px] text-yellow-400">
-                      排队中 #{job.queueInfo.queue_idx + 1}
-                      {job.queueInfo.queue_length != null ? `/${job.queueInfo.queue_length}` : ''}
-                    </span>
-                  )}
-                <span className="text-[var(--color-text-muted)] text-xs">
-                  {expandedId === job.id ? '▼' : '▶'}
-                </span>
+                {(job.status === 'queuing' || job.status === 'pending') && job.queueInfo?.queue_idx != null && (
+                  <span className="text-[10px] text-yellow-400">
+                    {text('batchJobs.queuePosition', { position: job.queueInfo.queue_idx + 1 })}
+                    {job.queueInfo.queue_length != null ? `/${job.queueInfo.queue_length}` : ''}
+                  </span>
+                )}
+                <span className="text-xs text-[var(--color-text-muted)]">{expandedId === job.id ? '▾' : '▸'}</span>
               </div>
 
               {expandedId === job.id && (
-                <div className="border-t border-[var(--color-border)] px-3 py-3 space-y-2.5">
+                <div className="space-y-2.5 border-t border-[var(--color-border)] px-3 py-3">
                   {job.status === 'failed' && job.failReason && (
-                    <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-2.5 py-1.5">
-                      {job.failReason}
-                    </p>
+                    <p className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">{job.failReason}</p>
                   )}
 
                   {job.status === 'done' && protectedVideoUrl && (
                     <video
                       src={protectedVideoUrl}
                       controls
-                      className="w-full rounded-lg max-h-[240px] object-contain bg-black"
+                      className="max-h-[240px] w-full rounded-lg bg-black object-contain"
                       preload="metadata"
                     />
                   )}
@@ -270,9 +278,9 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                     {job.status === 'done' && onImportVideo && (
                       <button
                         onClick={() => onImportVideo(job)}
-                        className="flex-1 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium py-1.5 hover:opacity-90 transition-opacity"
+                        className="flex-1 rounded-lg bg-[var(--color-primary)] py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
                       >
-                        ↳ 导入到时间轴
+                        {t('batchJobs.importToTimeline')}
                       </button>
                     )}
                     {job.status === 'done' && protectedVideoUrl && (
@@ -280,22 +288,25 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                         href={protectedVideoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] text-[var(--color-primary)] hover:underline self-center"
+                        className="self-center text-[10px] text-[var(--color-primary)] hover:underline"
                       >
-                        下载视频
+                        {t('batchJobs.downloadVideo')}
                       </a>
                     )}
                     {(job.status === 'pending' || job.status === 'queuing' || job.status === 'awaiting_submit') && (
                       <button
                         onClick={() => void handleCancel(job.id)}
                         disabled={cancellingId === job.id}
-                        className="rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] text-xs px-3 py-1.5 hover:text-red-400 hover:border-red-400/30 transition-colors disabled:opacity-50"
+                        className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-red-400/30 hover:text-red-400 disabled:opacity-50"
                       >
-                        {cancellingId === job.id ? '取消中…' : '取消'}
+                        {cancellingId === job.id ? t('batchJobs.cancelling') : t('batchJobs.cancel')}
                       </button>
                     )}
-                    <span className="text-[9px] text-[var(--color-text-muted)] self-center ml-auto">
-                      项目 {job.projectId} · 提交于 {new Date(job.createdAt).toLocaleString('zh-CN')}
+                    <span className="ml-auto self-center text-[9px] text-[var(--color-text-muted)]">
+                      {text('batchJobs.submittedAt', {
+                        projectId: job.projectId,
+                        time: formatDateTime(job.createdAt, uiLocale),
+                      })}
                     </span>
                   </div>
                 </div>

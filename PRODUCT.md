@@ -184,7 +184,17 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.114 -->
+<!-- NEXT_VERSION: v0.115 -->
+
+### v0.115 — 2026-04-23
+
+**英文本地化第一批 key 库收口（Gallery / History / Batch Jobs）**
+
+**Frontend / i18n:**
+- **[frontend] 画廊与历史页改为统一 message key 驱动**（`h5-video-tool/src/i18n/messages.ts`, `h5-video-tool/src/pages/Gallery.tsx`, `h5-video-tool/src/components/GalleryView.tsx`, `h5-video-tool/src/pages/History.tsx`）：`My Videos / Server Files / History / Kling Cloud / Local History / Merge Settings` 等高频次级页面壳层、toast、空状态、筛选项、按钮与提示文案统一收进共享 key 库，英文模式下不再整页掉回中文。
+- **[frontend] 批量任务看板补齐英文状态与时间格式**（`h5-video-tool/src/components/BatchJobsBoard.tsx`, `h5-video-tool/src/i18n/messages.ts`）：批量任务摘要、状态标签、取消按钮、导入时间轴、下载视频与提交时间改为跟随 `uiLocale`，并统一使用 locale-aware 时间格式。
+- **[frontend] 通用错误与输出文件 helper 收口到 locale-aware 工具层**（`h5-video-tool/src/api/client.ts`, `h5-video-tool/src/components/outputGalleryUtils.ts`）：网络错误 / 请求失败兜底文案改为从字典读取，Dreamina 输出文件名、来源标签与保存到本地历史的 prompt fallback 也不再写死中文。
+- **[test] 新增输出画廊本地化 helper 回归测试，并清理旧 preset 残留测试**（`h5-video-tool/src/components/outputGalleryUtils.test.ts`, `h5-video-tool/src/i18n/locale.test.ts`, `h5-video-tool/src/i18n/locale.ts`）：覆盖来源标签、Dreamina 文件名展示、fallback prompt 与 locale 归一化，避免新 key 库和现有语言协议再次漂移。
 
 ### v0.114 — 2026-04-23
 
@@ -1564,4 +1574,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.114）*
+*最后更新：2026-04-23（v0.115）*
