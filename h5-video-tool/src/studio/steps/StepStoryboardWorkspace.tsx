@@ -257,6 +257,68 @@ export function StepStoryboardWorkspace({
         )}
       </div>
 
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
+          <div className="min-w-[220px] flex-1">
+            <div className="text-xs font-semibold text-[var(--color-text)]">
+              {uiText('先选镜头，再生成视频', 'Pick a shot, then generate')}
+            </div>
+            <div className="text-[10px] text-[var(--color-text-muted)]">
+              {uiText('先定位未生成、排队或失败的镜头，再使用下方主按钮生成或重试。', 'Find pending, queued, or failed shots first, then use the primary action below to generate or retry.')}
+            </div>
+          </div>
+          {onBatchGenerateAllVideos && (
+            <button
+              type="button"
+              onClick={onBatchGenerateAllVideos}
+              className="rounded-lg border border-amber-500/40 bg-amber-600/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-600/25"
+            >
+              {uiText('一键生成所有缺失视频', 'Generate all missing videos')}
+            </button>
+          )}
+          {onCancelProjectQueue && (
+            <button
+              type="button"
+              onClick={onCancelProjectQueue}
+              disabled={bulkCancelling || projectQueuedCount === 0}
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {bulkCancelling
+                ? uiText('取消中...', 'Cancelling...')
+                : uiText(`取消本项目排队（${projectQueuedCount}）`, `Cancel queued jobs for this project (${projectQueuedCount})`)}
+            </button>
+          )}
+          {onSyncBatchJobs && (
+            <button
+              type="button"
+              onClick={onSyncBatchJobs}
+              disabled={syncingBatchJobs}
+              title={uiText(
+                '立即拉取所有即梦任务最新状态，并兜底恢复丢失的 submitId。',
+                'Fetch the latest Dreamina job states now and try to recover any missing submitId values.',
+              )}
+              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步即梦状态', 'Sync Dreamina status')}
+            </button>
+          )}
+        </div>
+
+        <StepStoryboardShotStrip
+          shots={shots}
+          scSheets={scSheets}
+          selectedShotIdx={selectedShotIdx}
+          shotBusyMap={shotBusyMap}
+          shotActiveJobMap={shotActiveJobMap}
+          shotJobStatusMap={shotJobStatusMap}
+          shotJobQueueInfoMap={shotJobQueueInfoMap}
+          snapshot={queueSnapshot}
+          cancellingJobId={cancelBusy && selectedShotJob ? selectedShotJob.id : null}
+          onSelectShot={setSelectedShotIdx}
+          onCancelShotJob={onCancelShotJob}
+        />
+      </div>
+
       <div className="flex min-h-[480px] flex-col gap-4 lg:flex-row">
         <StepStoryboardAssetsSidebar
           chSheets={chSheets}
@@ -441,58 +503,6 @@ export function StepStoryboardWorkspace({
           onSelectVideoVersion={onSelectVideoVersion}
         />
       </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {onBatchGenerateAllVideos && (
-          <button
-            type="button"
-            onClick={onBatchGenerateAllVideos}
-            className="rounded-lg border border-amber-500/40 bg-amber-600/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-600/25"
-          >
-            {uiText('一键生成所有缺失视频', 'Generate all missing videos')}
-          </button>
-        )}
-        {onCancelProjectQueue && (
-          <button
-            type="button"
-            onClick={onCancelProjectQueue}
-            disabled={bulkCancelling || projectQueuedCount === 0}
-            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {bulkCancelling
-              ? uiText('取消中...', 'Cancelling...')
-              : uiText(`取消本项目排队（${projectQueuedCount}）`, `Cancel queued jobs for this project (${projectQueuedCount})`)}
-          </button>
-        )}
-        {onSyncBatchJobs && (
-          <button
-            type="button"
-            onClick={onSyncBatchJobs}
-            disabled={syncingBatchJobs}
-            title={uiText(
-              '立即拉取所有即梦任务最新状态，并兜底恢复丢失的 submitId。',
-              'Fetch the latest Dreamina job states now and try to recover any missing submitId values.',
-            )}
-            className="ml-auto rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步即梦状态', 'Sync Dreamina status')}
-          </button>
-        )}
-      </div>
-
-      <StepStoryboardShotStrip
-        shots={shots}
-        scSheets={scSheets}
-        selectedShotIdx={selectedShotIdx}
-        shotBusyMap={shotBusyMap}
-        shotActiveJobMap={shotActiveJobMap}
-        shotJobStatusMap={shotJobStatusMap}
-        shotJobQueueInfoMap={shotJobQueueInfoMap}
-        snapshot={queueSnapshot}
-        cancellingJobId={cancelBusy && selectedShotJob ? selectedShotJob.id : null}
-        onSelectShot={setSelectedShotIdx}
-        onCancelShotJob={onCancelShotJob}
-      />
 
       {showAdvancedTools && onContinuityCheck && (
         <StepStoryboardContinuityCheck

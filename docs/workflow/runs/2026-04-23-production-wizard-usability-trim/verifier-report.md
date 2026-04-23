@@ -18,6 +18,8 @@
 | Character variant simplification | PASS | Tree no longer auto-expands; visible text now uses “角色形象变体 / 当前形象 / 生成新变体”. |
 | Shot user status | PASS | Helper tests cover completed priority, queue states, pending submit id, failed, cancelled, not started, and stable i18n label keys. |
 | Shot filters | PASS | UI exposes all user states with counts and empty state. |
+| Shot operation reachability | PASS | Status navigator and batch actions are placed before the editor/preview columns instead of below the whole workspace. |
+| Primary video action | PASS | Selected-shot video generation is a high-emphasis CTA with queue-position guidance and regenerate copy when a video already exists. |
 | Previous / next navigation | PASS | Buttons and keyboard shortcuts update `selectedShotIdx` with boundary guards. |
 | i18n | PASS | New status keys added to `messages.ts` and covered by `locale.test.ts`; shot strip status labels now resolve through the shared `productionWizard.status.*` keys. |
 | Forbidden files | PASS | No forbidden service/config/type files touched. |

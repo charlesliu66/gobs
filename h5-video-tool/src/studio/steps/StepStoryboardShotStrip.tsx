@@ -160,25 +160,36 @@ export function StepStoryboardShotStrip({
   const visibleItems = filter === 'all'
     ? shotItems
     : shotItems.filter((item) => item.userStatus.status === filter);
+  const selectedShot = shots[selectedShotIdx];
+  const selectedItem = shotItems.find((item) => item.idx === selectedShotIdx);
+  const selectedStatusLabel = selectedItem ? getStatusLabel(selectedItem.userStatus.status) : '';
 
   return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
+    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-xs font-semibold text-[var(--color-text)]">
-            {uiText('分镜状态列表', 'Shot status list')}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold text-[var(--color-text)]">
+              {uiText('分镜导航与状态', 'Shot navigation & status')}
+            </div>
+            {selectedShot && (
+              <span className="rounded-full border border-[var(--color-primary)]/45 bg-[var(--color-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
+                {uiText(`当前 #${selectedShot.shotIndex} · ${selectedStatusLabel}`, `Current #${selectedShot.shotIndex} · ${selectedStatusLabel}`)}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)]">
-            {uiText('按状态筛选，快速定位未生成、排队或失败的分镜。', 'Filter by status to find pending, queued, or failed shots quickly.')}
+            {uiText('先在这里定位镜头，再到下方主按钮生成视频或查看排队位次。', 'Find the shot here first, then use the primary action below to generate or see its queue position.')}
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
           {FILTERS.map((nextFilter) => (
             <button
               key={nextFilter}
               type="button"
+              aria-pressed={filter === nextFilter}
               onClick={() => setFilter(nextFilter)}
-              className={`rounded-full border px-2.5 py-1 text-[10px] transition-colors ${
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] transition-colors ${
                 filter === nextFilter
                   ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
                   : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
@@ -203,7 +214,7 @@ export function StepStoryboardShotStrip({
           </button>
         </div>
       ) : (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid max-h-[340px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
           {visibleItems.map((item) => {
             const { shot, idx, shotKey, activeJob, scene, isThisShotBusy, userStatus } = item;
             const q = shotJobQueueInfoMap?.[shotKey];
