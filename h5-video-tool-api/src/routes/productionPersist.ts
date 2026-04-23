@@ -8,6 +8,7 @@
  * DELETE /api/production/project?id= — 删除项目
  */
 import { Router, Request, Response } from 'express';
+import { existsSync } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
@@ -36,6 +37,17 @@ function getLegacyProductionProjDirs(username: string): string[] {
   ];
   return [...new Set(candidates.map((item) => path.normalize(item)))].filter(
     (item) => item !== path.normalize(getProductionProjDir(username)),
+  );
+}
+
+function getLegacyProductionImgDirs(username: string): string[] {
+  const safeUser = sanitizeUsername(username);
+  const candidates = [
+    path.resolve(process.cwd(), 'output', 'production', 'images', safeUser),
+    path.resolve(process.cwd(), '..', '..', 'api', 'output', 'production', 'images', safeUser),
+  ];
+  return [...new Set(candidates.map((item) => path.normalize(item)))].filter(
+    (item) => item !== path.normalize(getProductionImgDir(username)),
   );
 }
 
@@ -97,19 +109,32 @@ async function rehomeAllLegacyProductionProjects(username: string): Promise<void
   }
 }
 
-function resolveReadableImagePath(rawPath: string, username: string): string | null {
+function isSafeImageSuffix(suffix: string): string | null {
+  const normalized = path.normalize(suffix);
+  if (!normalized || path.isAbsolute(normalized) || normalized === '..' || normalized.startsWith(`..${path.sep}`)) {
+    return null;
+  }
+  return normalized;
+}
+
+export function resolveReadableImagePath(rawPath: string, username: string): string | null {
   const safeUser = sanitizeUsername(username);
   const cleaned = rawPath.trim().replace(/\\/g, '/');
   if (!cleaned) return null;
 
   const allowedDirs = [
-    path.resolve(getApiDataDir(), 'output', 'production', 'images', safeUser),
-    path.resolve(process.cwd(), 'output', 'production', 'images', safeUser),
-    path.resolve(getDefaultVideoOutputDir(), 'production', 'images', safeUser),
+    path.resolve(getProductionImgDir(safeUser)),
+    ...getLegacyProductionImgDirs(safeUser).map((item) => path.resolve(item)),
   ];
 
   const inAllowedDir = (p: string) =>
     allowedDirs.some((base) => p === base || p.startsWith(base + path.sep));
+  const chooseReadable = (candidates: string[]) => {
+    const safeCandidates = candidates
+      .map((item) => path.resolve(item))
+      .filter(inAllowedDir);
+    return safeCandidates.find((item) => existsSync(item)) ?? safeCandidates[0] ?? null;
+  };
 
   // 1) 绝对路径（历史数据可能直接存了绝对路径）
   if (path.isAbsolute(cleaned)) {
@@ -120,20 +145,30 @@ function resolveReadableImagePath(rawPath: string, username: string): string | n
   // 2) 标准相对路径：output/production/images/xxx
   const normalized = path.normalize(cleaned);
   if (normalized.startsWith(`output/production/images/${safeUser}/`) || normalized.startsWith(`output\\production\\images\\${safeUser}\\`)) {
-    const abs = path.resolve(getApiDataDir(), normalized);
-    return inAllowedDir(abs) ? abs : null;
+    const suffix = isSafeImageSuffix(cleaned.slice(`output/production/images/${safeUser}/`.length));
+    if (!suffix) return null;
+    return chooseReadable([
+      path.join(getProductionImgDir(safeUser), suffix),
+      ...getLegacyProductionImgDirs(safeUser).map((dir) => path.join(dir, suffix)),
+    ]);
   }
 
   // 3) 旧相对路径：production/images/xxx
   if (normalized.startsWith(`production/images/${safeUser}/`) || normalized.startsWith(`production\\images\\${safeUser}\\`)) {
-    const abs = path.resolve(getApiDataDir(), 'output', normalized);
-    return inAllowedDir(abs) ? abs : null;
+    const suffix = isSafeImageSuffix(cleaned.slice(`production/images/${safeUser}/`.length));
+    if (!suffix) return null;
+    return chooseReadable([
+      path.join(getProductionImgDir(safeUser), suffix),
+      ...getLegacyProductionImgDirs(safeUser).map((dir) => path.join(dir, suffix)),
+    ]);
   }
 
   // 4) 仅文件名：默认落在 output/production/images
   if (!normalized.includes('/') && !normalized.includes('\\') && !normalized.includes('..')) {
-    const abs = path.resolve(getApiDataDir(), 'output', 'production', 'images', safeUser, normalized);
-    return inAllowedDir(abs) ? abs : null;
+    return chooseReadable([
+      path.join(getProductionImgDir(safeUser), normalized),
+      ...getLegacyProductionImgDirs(safeUser).map((dir) => path.join(dir, normalized)),
+    ]);
   }
 
   return null;

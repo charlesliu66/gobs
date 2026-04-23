@@ -184,7 +184,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.118 -->
+<!-- NEXT_VERSION: v0.119 -->
+
+### v0.119 — 2026-04-23
+
+**高级制片历史图片回显修复**
+
+**Backend / data migration:**
+- **[backend] 高级制片图片读取兼容旧产物目录**（`h5-video-tool-api/src/routes/productionPersist.ts`）：`/api/production/image` 现在会在共享数据目录缺图时回退到历史 `prod/api/output/production/images/<user>` 与旧根目录，避免项目 JSON 迁移后历史角色图、场景图、分镜缩略图 404 图裂。
+- **[test] 补充历史图片目录回归测试**（`h5-video-tool-api/tests/productionImagePath.test.ts`）：覆盖“新共享目录为空、旧 prod/api 图片存在”的解析场景。
+- **[ops] 线上 prod 已把旧目录 83 张高级制片图片复制回 shared-data**：只补缺失文件，不删除旧文件，历史项目刷新后可恢复图片显示。
 
 ### v0.118 — 2026-04-23
 
