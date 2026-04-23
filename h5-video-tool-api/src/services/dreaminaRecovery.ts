@@ -53,6 +53,12 @@ interface IntentFile {
   updatedAt?: string;
 }
 
+export interface DreaminaIntentPromptCandidate {
+  submitId: string;
+  text: string;
+  priority: number;
+}
+
 // ── 常量 ────────────────────────────────────────────────────────────────────
 
 const INTENT_FILE = path.join(getApiDataDir(), 'output', 'batch-jobs', 'dreamina-intents.json');
@@ -210,6 +216,20 @@ export async function listOwnedDreaminaSubmitIds(username?: string): Promise<str
   }
 
   return [...out];
+}
+
+export async function listOwnedDreaminaIntentPromptCandidates(username?: string): Promise<DreaminaIntentPromptCandidate[]> {
+  const trimmed = username?.trim();
+  if (!trimmed) return [];
+
+  const intents = await loadIntents();
+  return intents
+    .filter((intent) => intent.submitId && (intent.username ?? '').trim() === trimmed && intent.prompt?.trim())
+    .map((intent) => ({
+      submitId: intent.submitId!,
+      text: intent.prompt.trim(),
+      priority: 30,
+    }));
 }
 
 // ── 匹配逻辑 ───────────────────────────────────────────────────────────────

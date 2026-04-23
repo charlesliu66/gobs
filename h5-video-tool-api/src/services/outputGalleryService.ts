@@ -3,13 +3,23 @@ import path from 'path';
 import { getApiDataDir } from '../config/apiDataDir.js';
 import { extractDreaminaSubmitKeyFromPath, type OutputRecentVideoEntry } from './dreaminaRecentSync.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
+import { listOwnedBatchJobPromptCandidates } from './batchJobsQueue.js';
+import { listOwnedDreaminaIntentPromptCandidates } from './dreaminaRecovery.js';
 
 export type OutputGallerySource = 'dreamina' | 'other';
 export type OutputGalleryView = 'visible' | 'hidden';
+const OUTPUT_PROMPT_SUMMARY_MAX_LENGTH = 280;
 
 export interface OutputGalleryItem extends OutputRecentVideoEntry {
   source: OutputGallerySource;
   hiddenKey: string;
+  promptSummary?: string;
+}
+
+export interface OutputPromptCandidate {
+  submitId: string;
+  text: string;
+  priority: number;
 }
 
 export interface OutputGalleryFilterOptions {
@@ -83,6 +93,76 @@ export function toOutputGalleryItem(item: OutputRecentVideoEntry): OutputGallery
     source: inferOutputGallerySource(item.path),
     hiddenKey: toOutputGalleryHiddenKey(item.path),
   };
+}
+
+function normalizeOutputPromptSummary(text: string): string | undefined {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return undefined;
+  if (normalized.length <= OUTPUT_PROMPT_SUMMARY_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, OUTPUT_PROMPT_SUMMARY_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function toSubmitPromptKey(submitId: string): string | undefined {
+  const normalized = submitId.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return normalized ? normalized.slice(0, 12) : undefined;
+}
+
+function selectPreferredPromptCandidate(
+  current: OutputPromptCandidate | undefined,
+  next: OutputPromptCandidate,
+): OutputPromptCandidate {
+  if (!current) return next;
+  if (next.priority !== current.priority) return next.priority > current.priority ? next : current;
+  return next.text.length > current.text.length ? next : current;
+}
+
+export function buildOutputPromptSummaryMap(
+  items: OutputRecentVideoEntry[],
+  candidates: OutputPromptCandidate[],
+): Map<string, string> {
+  const preferredBySubmitKey = new Map<string, OutputPromptCandidate>();
+  for (const candidate of candidates) {
+    const promptSummary = normalizeOutputPromptSummary(candidate.text);
+    const submitKey = toSubmitPromptKey(candidate.submitId);
+    if (!promptSummary || !submitKey) continue;
+    preferredBySubmitKey.set(
+      submitKey,
+      selectPreferredPromptCandidate(preferredBySubmitKey.get(submitKey), {
+        ...candidate,
+        text: promptSummary,
+      }),
+    );
+  }
+
+  const summaryByPath = new Map<string, string>();
+  for (const item of items) {
+    const submitKey = extractDreaminaSubmitKeyFromPath(item.path);
+    if (!submitKey) continue;
+    const preferred = preferredBySubmitKey.get(submitKey);
+    if (preferred?.text) {
+      summaryByPath.set(item.path, preferred.text);
+    }
+  }
+  return summaryByPath;
+}
+
+export async function enrichOutputGalleryItemsForUser(
+  username: string,
+  items: OutputRecentVideoEntry[],
+): Promise<OutputGalleryItem[]> {
+  const [batchJobCandidates, intentCandidates] = await Promise.all([
+    listOwnedBatchJobPromptCandidates(username),
+    listOwnedDreaminaIntentPromptCandidates(username),
+  ]);
+  const promptSummaryMap = buildOutputPromptSummaryMap(items, [
+    ...batchJobCandidates,
+    ...intentCandidates,
+  ]);
+
+  return items.map((item) => ({
+    ...toOutputGalleryItem(item),
+    promptSummary: promptSummaryMap.get(item.path),
+  }));
 }
 
 export function isOutputPathOwnedByUser(username: string, videoPath: string): boolean {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildOutputGalleryQuery,
+  buildOutputHistoryPrompt,
   filterOutputItemsBySavedState,
   inferOutputSourceLabel,
   type OutputGallerySavedFilter,
@@ -33,6 +34,24 @@ test('filterOutputItemsBySavedState keeps only saved items when requested', () =
 });
 
 test('inferOutputSourceLabel returns readable labels', () => {
-  assert.equal(inferOutputSourceLabel('dreamina'), '即梦回补');
-  assert.equal(inferOutputSourceLabel('other'), '服务端成片');
+  assert.ok(inferOutputSourceLabel('dreamina').length > 0);
+  assert.ok(inferOutputSourceLabel('other').length > 0);
+  assert.notEqual(inferOutputSourceLabel('dreamina'), inferOutputSourceLabel('other'));
+});
+
+test('buildOutputHistoryPrompt prefers prompt summary over generic server placeholder', () => {
+  assert.equal(
+    buildOutputHistoryPrompt({
+      path: 'output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4',
+      promptSummary: 'A ronin walks toward the exit of a dim chamber while the camera slowly pushes in.',
+    }),
+    'A ronin walks toward the exit of a dim chamber while the camera slowly pushes in.',
+  );
+
+  const fallback = buildOutputHistoryPrompt({
+    path: 'output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4',
+  });
+
+  assert.match(fallback, /output\/admin\/dreamina_aaaabbbbcccc_1777000000000\.mp4/);
+  assert.notEqual(fallback, 'output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4');
 });

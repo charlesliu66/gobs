@@ -25,6 +25,12 @@ export function inferOutputSourceLabel(source: OutputGallerySource): string {
   return source === 'dreamina' ? '即梦回补' : '服务端成片';
 }
 
+export function buildOutputHistoryPrompt(item: { path: string; promptSummary?: string }): string {
+  const promptSummary = item.promptSummary?.trim();
+  if (promptSummary) return promptSummary;
+  return `[服务端成片] ${item.path}`;
+}
+
 export function filterOutputItemsBySavedState<T extends { path: string }>(
   items: T[],
   savedPaths: Set<string>,

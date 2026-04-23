@@ -17,6 +17,7 @@ import {
   type VideoHistoryItem,
 } from '../utils/videoHistory';
 import {
+  buildOutputHistoryPrompt,
   filterOutputItemsBySavedState,
   inferOutputSourceLabel,
   type OutputGalleryDaysFilter,
@@ -183,7 +184,7 @@ export function GalleryView() {
     saveVideoToHistory({
       taskId,
       videoPath: row.path,
-      prompt: `[服务端成片] ${row.path}`,
+      prompt: buildOutputHistoryPrompt(row),
     });
     toast.success('已保存到“我的成片”');
     refreshLocal();
@@ -518,6 +519,7 @@ export function GalleryView() {
                 const playUrl = getVideoFileUrl(row.path);
                 const isSaved = savedOutputPaths.has(row.path);
                 const displayName = formatOutputFilename(row.path);
+                const promptSummary = row.promptSummary?.trim();
                 return (
                   <div
                     key={row.path}
@@ -544,6 +546,11 @@ export function GalleryView() {
                         )}
                         <span className="text-sm font-medium text-[var(--color-text)]">{displayName}</span>
                       </div>
+                      {promptSummary ? (
+                        <p className="line-clamp-3 text-sm leading-6 text-[var(--color-text)]">{promptSummary}</p>
+                      ) : (
+                        <p className="truncate text-xs text-[var(--color-text-subtle)]">{row.path}</p>
+                      )}
                       <p className="text-xs text-[var(--color-text-muted)]">
                         {formatTime(row.mtimeMs)} · {(row.size / (1024 * 1024)).toFixed(2)} MB
                       </p>

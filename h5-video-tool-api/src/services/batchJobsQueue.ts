@@ -79,6 +79,12 @@ export interface QueueSnapshot {
   avgSecPerJob: number;
 }
 
+export interface BatchJobPromptCandidate {
+  submitId: string;
+  text: string;
+  priority: number;
+}
+
 const JOBS_FILE = path.join(getApiDataDir(), 'output', 'batch-jobs', 'jobs.json');
 const TICK_INTERVAL_MS = 20_000;
 const MAX_JOB_AGE_MS = 12 * 3600_000;
@@ -250,6 +256,36 @@ async function queueMaintenance(): Promise<void> {
 export async function getAllJobs(): Promise<BatchJob[]> {
   await loadJobs();
   return getCurrentJobs().sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
+export async function listOwnedBatchJobPromptCandidates(username?: string): Promise<BatchJobPromptCandidate[]> {
+  const trimmed = username?.trim();
+  if (!trimmed) return [];
+
+  const jobsForUser = (await getAllJobs()).filter((job) => job.submitId && (job.username ?? '').trim() === trimmed);
+  const candidates: BatchJobPromptCandidate[] = [];
+
+  for (const job of jobsForUser) {
+    const promptText = job.submitParams?.storyboardText?.trim() || job.submitParams?.prompt?.trim();
+    if (promptText) {
+      candidates.push({
+        submitId: job.submitId,
+        text: promptText,
+        priority: 40,
+      });
+    }
+
+    const shotDescription = job.shotDescription?.trim();
+    if (shotDescription) {
+      candidates.push({
+        submitId: job.submitId,
+        text: shotDescription,
+        priority: 10,
+      });
+    }
+  }
+
+  return candidates;
 }
 
 export async function getJobsByProject(projectId: string): Promise<BatchJob[]> {

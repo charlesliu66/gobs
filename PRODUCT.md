@@ -145,6 +145,7 @@
 - 「服务端文件」新增范围说明、搜索框、来源/时间/保存状态筛选，以及“正常列表 / 已隐藏”视图切换；隐藏只影响当前 GOBS 账号下的展示，不删除服务器文件，也不影响即梦后台。
 - 服务端文件卡片会标记来源（即梦回补 / 服务端成片）和“已保存到我的成片”状态，便于运营同学快速找片、筛片和二次整理。
 - 即梦最近成片回补现在只会补回“当前账号已有归属证据”的 submitId，不再把共享即梦账号里的其他人任务自动补进当前账号目录。
+- 服务端文件现在会优先按 submitId 回查当前账号的 batch-jobs 与 dreamina intents，把可回溯的提示词摘要直接展示在卡片上；保存到“我的成片”时也优先写入这份摘要，不再一律退回 `[服务端成片] 路径` 占位文案。
 ---
 
 ### 7. 涓€閿垚鐗囷紙Quick Film锛?
@@ -180,6 +181,15 @@
 
 
 <!-- NEXT_VERSION: v0.107 -->
+
+### v0.107 — 2026-04-23
+
+**我的成片服务端文件补回提示词摘要**
+
+**Bug Fix / UX Polish:**
+- **[api] 服务端文件列表新增 `promptSummary` 回填**（`h5-video-tool-api/src/routes/video.ts`, `h5-video-tool-api/src/services/outputGalleryService.ts`, `h5-video-tool-api/src/services/batchJobsQueue.ts`, `h5-video-tool-api/src/services/dreaminaRecovery.ts`）：后端现在会先按服务端文件里的 dreamina submitId，回查当前账号名下的 batch-jobs 和 dreamina intents，优先选最完整的提示词摘要随列表返回，避免“明明是自己的成片，列表里却只剩服务端路径”。
+- **[frontend] 从服务端文件保存到我的成片时优先落真实提示词**（`h5-video-tool/src/components/GalleryView.tsx`, `h5-video-tool/src/components/outputGalleryUtils.ts`, `h5-video-tool/src/api/video.ts`）：服务端文件卡片直接展示回填出的提示词摘要；点击“保存到我的成片”时会优先写入这份摘要，只有在完全查不到归属 prompt 时才退回 `[服务端成片] path` 占位文案。
+- **[tests] 新增 prompt summary 回归测试**（`h5-video-tool-api/tests/outputGalleryService.test.ts`, `h5-video-tool/tests/outputGalleryUtils.test.ts`）：覆盖“同一 submitId 取最高优先级 prompt 摘要”和“保存历史时优先使用 promptSummary”两条规则，防止后续再退回只存路径。
 
 ### v0.106 — 2026-04-23
 
@@ -1483,4 +1493,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.106）*
+*最后更新：2026-04-23（v0.107）*

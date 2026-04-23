@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   applyOutputGalleryFilters,
+  buildOutputPromptSummaryMap,
   inferOutputGallerySource,
   toOutputGalleryHiddenKey,
   type OutputGalleryFilterOptions,
   type OutputGalleryItem,
+  type OutputPromptCandidate,
 } from '../src/services/outputGalleryService.ts';
 
 const sampleItems: OutputGalleryItem[] = [
@@ -60,4 +62,46 @@ test('applyOutputGalleryFilters supports source, keyword, and date filters toget
 
   const result = applyOutputGalleryFilters(sampleItems, options);
   assert.deepEqual(result.map((item) => item.path), ['output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4']);
+});
+
+test('buildOutputPromptSummaryMap prefers richer prompt candidates for matching dreamina submit ids', () => {
+  const candidates: OutputPromptCandidate[] = [
+    {
+      submitId: 'aaaabbbbcccc',
+      text: '绠€鐣ョ殑鍒嗛暅鎻忚堪',
+      priority: 10,
+    },
+    {
+      submitId: 'aaaabbbbcccc',
+      text: '瀹屾暣鎻愮ず璇嶏細涓昏鍦ㄥ瘑瀹ら噷鎱㈡參璧板悜鍑哄彛锛岄暅澶寸ǔ瀹氭帹杩戯紝鍏夌嚎鍐锋殫銆?',
+      priority: 30,
+    },
+    {
+      submitId: 'dddd11112222',
+      text: '鍙︿竴鏉′笉鐩稿叧鐨勬彁绀鸿瘝',
+      priority: 30,
+    },
+  ];
+
+  const result = buildOutputPromptSummaryMap(
+    [
+      {
+        path: 'output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4',
+        mtimeMs: Date.UTC(2026, 3, 23, 12, 0, 0),
+        size: 10,
+      },
+      {
+        path: 'output/admin/final_campaign_cut.mp4',
+        mtimeMs: Date.UTC(2026, 3, 20, 12, 0, 0),
+        size: 20,
+      },
+    ],
+    candidates,
+  );
+
+  assert.equal(
+    result.get('output/admin/dreamina_aaaabbbbcccc_1777000000000.mp4'),
+    '瀹屾暣鎻愮ず璇嶏細涓昏鍦ㄥ瘑瀹ら噷鎱㈡參璧板悜鍑哄彛锛岄暅澶寸ǔ瀹氭帹杩戯紝鍏夌嚎鍐锋殫銆?',
+  );
+  assert.equal(result.has('output/admin/final_campaign_cut.mp4'), false);
 });

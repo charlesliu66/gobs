@@ -42,11 +42,11 @@ import {
 } from '../services/dreaminaRecentSync.js';
 import {
   applyOutputGalleryFilters,
+  enrichOutputGalleryItemsForUser,
   getHiddenOutputPathKeys,
   hideOutputPathForUser,
   isOutputPathOwnedByUser,
   restoreOutputPathForUser,
-  toOutputGalleryItem,
 } from '../services/outputGalleryService.js';
 import dreaminaRouter from './videoDreamina.js';
 import klingRouter from './videoKling.js';
@@ -225,8 +225,9 @@ videoRouter.get('/output-recent', async (req: Request, res: Response) => {
   const rawItems = await collectOutputRecentItems({ username, onlyDreamina });
   const deduped = dedupeOutputRecentVideoItems(rawItems);
   const hiddenPaths = await getHiddenOutputPathKeys(username);
+  const enrichedItems = await enrichOutputGalleryItemsForUser(req.user?.username ?? username, deduped.items);
   const filtered = applyOutputGalleryFilters(
-    deduped.items.map((item) => toOutputGalleryItem(item)),
+    enrichedItems,
     {
       hiddenPaths,
       view,

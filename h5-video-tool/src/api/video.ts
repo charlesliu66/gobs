@@ -259,6 +259,7 @@ export interface OutputRecentVideoItem {
   mtimeMs: number;
   size: number;
   source: 'dreamina' | 'other';
+  promptSummary?: string;
 }
 
 export interface OutputRecentVideosResponse {
