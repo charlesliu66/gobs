@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.126 — 2026-04-23
+
+**高级制片生图脚本部署补齐**
+
+**Ops / Backend:**
+- 后端部署现在会在上传 `dist/` 后同步上传 `h5-video-tool-api/scripts/imagen_generate.py` 到 `/home/ubuntu/qas-h5/<env>/scripts/`，覆盖角色定妆、形象状态衣橱、场景/道具图、分镜首帧等共用 Compass/Imagen 生图链路。
+- 新增部署脚本回归测试，验证运行时脚本远端目录计算和缺失脚本拦截，避免后续发布再次漏发 `imagen_generate.py`。
+
 ## v0.125 — 2026-04-23
 
 **高级制片分镜选择后直达主操作**

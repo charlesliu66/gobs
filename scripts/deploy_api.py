@@ -18,11 +18,37 @@ try:
 except ModuleNotFoundError:
     from deploy_config import DeployConfigError, build_target_config
 
-LOCAL_DIST = Path(__file__).parent.parent / 'h5-video-tool-api' / 'dist'
+LOCAL_API_ROOT = Path(__file__).parent.parent / 'h5-video-tool-api'
+LOCAL_DIST = LOCAL_API_ROOT / 'dist'
+LOCAL_RUNTIME_SCRIPT_DIR = LOCAL_API_ROOT / 'scripts'
+RUNTIME_SCRIPT_NAMES = ('imagen_generate.py',)
 
 
 class DeployRuntimeError(RuntimeError):
     pass
+
+
+def remote_parent(remote_path: str) -> str:
+    normalized = remote_path.rstrip('/')
+    if not normalized or normalized == '/':
+        return '/'
+    parent = normalized.rsplit('/', 1)[0]
+    return parent or '/'
+
+
+def get_remote_runtime_scripts_dir(api_dir: str) -> str:
+    return f'{remote_parent(api_dir)}/scripts'
+
+
+def get_runtime_script_paths(script_dir: Path = LOCAL_RUNTIME_SCRIPT_DIR) -> list[Path]:
+    return [script_dir / name for name in RUNTIME_SCRIPT_NAMES]
+
+
+def ensure_runtime_scripts_exist(script_paths: list[Path]) -> None:
+    missing = [str(path) for path in script_paths if not path.exists()]
+    if missing:
+        rendered = '\n'.join(f'- {path}' for path in missing)
+        raise DeployRuntimeError(f'Missing backend runtime scripts:\n{rendered}')
 
 
 def ensure_pm2_online(processes: list[dict], pm2_name: str) -> None:
@@ -67,6 +93,14 @@ def main() -> bool:
         except FileNotFoundError:
             sftp.mkdir(remote_path)
 
+    def remote_mkdir_p(remote_path: str) -> None:
+        current = ''
+        for part in remote_path.strip('/').split('/'):
+            if not part:
+                continue
+            current = f'{current}/{part}'
+            remote_mkdir(current)
+
     def upload_dir(local_dir: Path, remote_dir: str) -> None:
         remote_mkdir(remote_dir)
         for item in local_dir.iterdir():
@@ -76,6 +110,13 @@ def main() -> bool:
             else:
                 sftp.put(str(item), remote_path)
 
+    def upload_runtime_scripts(remote_dir: str) -> None:
+        script_paths = get_runtime_script_paths()
+        ensure_runtime_scripts_exist(script_paths)
+        remote_mkdir_p(remote_dir)
+        for script_path in script_paths:
+            sftp.put(str(script_path), f'{remote_dir}/{script_path.name}')
+
     def ssh(cmd: str) -> str:
         _stdin, stdout, _stderr = client.exec_command(cmd)
         stdout.channel.recv_exit_status()
@@ -83,6 +124,9 @@ def main() -> bool:
 
     print(f'正在上传后端产物到 {config.target}: {LOCAL_DIST} -> {config.api_dir}')
     upload_dir(LOCAL_DIST, config.api_dir)
+    runtime_scripts_dir = get_remote_runtime_scripts_dir(config.api_dir)
+    print(f'Uploading backend runtime scripts: {LOCAL_RUNTIME_SCRIPT_DIR} -> {runtime_scripts_dir}')
+    upload_runtime_scripts(runtime_scripts_dir)
     print('上传完成')
 
     sftp.close()
