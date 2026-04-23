@@ -110,28 +110,11 @@ import {
   suggestProductionProjectTitle,
 } from '../utils/projectLifecycle.ts';
 
-const TEMPLATE_OPTIONS: { value: StructureTemplate; label: string }[] = [
-  { value: 'three_act', label: '三幕式' },
-  { value: 'five_act', label: '五幕式' },
-  { value: 'save_the_cat', label: 'Save the Cat 节拍' },
-];
-
-function formatEta(etaSec?: number): string {
-  if (!etaSec || etaSec <= 0) return '即将开始';
-  if (etaSec < 60) return `${Math.max(1, Math.round(etaSec))} 秒`;
-  if (etaSec < 3600) return `${Math.max(1, Math.round(etaSec / 60))} 分钟`;
-  return `${Math.max(1, Math.round(etaSec / 3600))} 小时`;
-}
+const TEMPLATE_OPTION_VALUES: StructureTemplate[] = ['three_act', 'five_act', 'save_the_cat'];
 
 const ASPECT_OPTIONS = ['16:9', '9:16', '1:1', '4:3'] as const;
 
-const STEPS = [
-  { id: 0, label: '输入' },
-  { id: 1, label: '剧本大纲' },
-  { id: 2, label: '角色·场景·道具' },
-  { id: 3, label: '分镜' },
-  { id: 4, label: '导出' },
-];
+const STEP_IDS = [0, 1, 2, 3, 4] as const;
 
 type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
 
@@ -148,8 +131,22 @@ interface BatchAssetGenState {
 }
 
 export function ProductionWizard() {
-  const { contentLocale, uiLocale } = useLocale();
+  const { contentLocale, uiLocale, t } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const formatText = useCallback((path: string, values?: Record<string, string | number>) => {
+    let message = t(path);
+    if (!values) return message;
+    for (const [key, value] of Object.entries(values)) {
+      message = message.replaceAll(`{${key}}`, String(value));
+    }
+    return message;
+  }, [t]);
+  const formatEta = useCallback((etaSec?: number): string => {
+    if (!etaSec || etaSec <= 0) return t('productionWizard.etaSoon');
+    if (etaSec < 60) return formatText('productionWizard.etaSeconds', { count: Math.max(1, Math.round(etaSec)) });
+    if (etaSec < 3600) return formatText('productionWizard.etaMinutes', { count: Math.max(1, Math.round(etaSec / 60)) });
+    return formatText('productionWizard.etaHours', { count: Math.max(1, Math.round(etaSec / 3600)) });
+  }, [formatText, t]);
   const [searchParams] = useSearchParams();
   // URL ?projectId=xxx 优先；没有则读 localStorage 上次记录的 id
   const urlProjectId = searchParams.get('projectId');
@@ -265,19 +262,33 @@ export function ProductionWizard() {
   }, []);
 
   const localizedSteps = useMemo(
-    () => STEPS.map((stepItem) => {
-      const label = stepItem.id === 0
-        ? uiText('输入', 'Input')
-        : stepItem.id === 1
-          ? uiText('剧本大纲', 'Story outline')
-          : stepItem.id === 2
-            ? uiText('角色·场景·道具', 'Character · Scene · Prop')
-            : stepItem.id === 3
-              ? uiText('分镜', 'Storyboard')
-              : uiText('导出', 'Export');
-      return { ...stepItem, label };
-    }),
-    [uiLocale],
+    () => STEP_IDS.map((id) => ({
+      id,
+      label:
+        id === 0
+          ? t('productionWizard.stepInput')
+          : id === 1
+            ? t('productionWizard.stepStoryOutline')
+            : id === 2
+              ? t('productionWizard.stepDesign')
+              : id === 3
+                ? t('productionWizard.stepStoryboard')
+                : t('productionWizard.stepExport'),
+    })),
+    [t],
+  );
+  const localizedTemplateOptions = useMemo(
+    () =>
+      TEMPLATE_OPTION_VALUES.map((value) => ({
+        value,
+        label:
+          value === 'three_act'
+            ? t('productionWizard.templateThreeAct')
+            : value === 'five_act'
+              ? t('productionWizard.templateFiveAct')
+              : t('productionWizard.templateSaveTheCat'),
+      })),
+    [t],
   );
 
   const loadKnownBatchJobsById = useCallback(async () => {
@@ -1836,9 +1847,15 @@ export function ProductionWizard() {
         shots[shotIdx] = { ...cur, lastVideoError: undefined };
         return { ...p, shots };
       });
-      toast.success(`分镜 #${s.shotIndex} 已入队，平台第 ${globalQueuePos + 1} 位，约 ${formatEta(etaSec)} 后开始`);
+      toast.success(
+        formatText('productionWizard.shotQueued', {
+          shotIndex: s.shotIndex,
+          position: globalQueuePos + 1,
+          eta: formatEta(etaSec),
+        }),
+      );
     } catch (e) {
-      const message = e instanceof Error ? e.message : '分镜视频入队失败';
+      const message = e instanceof Error ? e.message : t('productionWizard.queueFailed');
       setErr(message);
       toast.error(message);
     } finally {
@@ -1857,6 +1874,9 @@ export function ProductionWizard() {
     setShotBusy,
     clearShotBusy,
     setProject,
+    formatText,
+    formatEta,
+    t,
   ]);
 
   const handleGenerateShotVideo = useCallback(async () => {
@@ -2061,14 +2081,14 @@ export function ProductionWizard() {
 
   const footerHint =
     step === 0
-      ? uiText('填写立项信息后可生成剧本大纲', 'Fill in the project setup, then generate the story outline')
+      ? t('productionWizard.footerStep0')
       : step === 1
-        ? uiText('确认故事摘要后可生成角色与场景设定', 'Confirm the story summary, then generate character and scene design')
+        ? t('productionWizard.footerStep1')
         : step === 2
-          ? uiText('角色与场景将用于分镜引用，建议补全后再继续', 'Characters and scenes will be referenced in storyboard shots, so it is best to complete them before moving on')
+          ? t('productionWizard.footerStep2')
           : step === 3
-            ? uiText('检查分镜与 @ 引用后可导出 Prompt', 'Review storyboard shots and @ references before exporting prompts')
-            : uiText('分镜整合与 Seedance 导出；成片可在「生成视频 → 历史内容」查看', 'Assemble storyboards and export Seedance prompts. Finished videos can be reviewed in “Generate Video → History”.');
+            ? t('productionWizard.footerStep3')
+            : t('productionWizard.footerStep4');
 
   if (isServerBootstrapping) {
     return <ProductionBootstrappingView loadingProjectTitle={loadingProjectTitle} />;
@@ -2143,7 +2163,7 @@ export function ProductionWizard() {
             synopsis={synopsis}
             onSynopsisChange={setSynopsis}
             structureTemplate={structureTemplate}
-            templateOptions={TEMPLATE_OPTIONS}
+            templateOptions={localizedTemplateOptions}
             onStructureTemplateChange={setStructureTemplate}
             busyL1={busyL1}
             onGenerateStoryArc={handleStoryArc}

@@ -24,27 +24,39 @@ import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
 import { AssetPicker } from '../components/AssetPicker';
 import { RunningStatus } from '../components/RunningStatus';
 import { recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
+import { useLocale } from '../i18n/LocaleContext.tsx';
 
-function formatDramaOutlineForPrompt(r: ShortDramaExpandResult): string {
+type DramaOutlineLabels = {
+  outlineTitle: string;
+  protagonist: string;
+  storyGenre: string;
+  synopsis: string;
+  background: string;
+  setting: string;
+  oneLineStory: string;
+  scriptTitle: string;
+};
+
+function formatLocalizedDramaOutlineForPrompt(r: ShortDramaExpandResult, labels: DramaOutlineLabels): string {
   const { summary, scriptContent } = r;
   return [
-    '【剧本摘要】',
-    `主角：${summary.protagonist}`,
-    `故事类型：${summary.storyGenre}`,
-    `故事梗概：${summary.synopsis}`,
-    `故事背景：${summary.background}`,
-    `故事设定：${summary.setting}`,
-    `一句话故事：${summary.oneLineStory}`,
+    `【${labels.outlineTitle}】`,
+    `${labels.protagonist}：${summary.protagonist}`,
+    `${labels.storyGenre}：${summary.storyGenre}`,
+    `${labels.synopsis}：${summary.synopsis}`,
+    `${labels.background}：${summary.background}`,
+    `${labels.setting}：${summary.setting}`,
+    `${labels.oneLineStory}：${summary.oneLineStory}`,
     '',
-    '【剧本正文】',
+    `【${labels.scriptTitle}】`,
     scriptContent,
   ].join('\n');
 }
 
-const SEEDANCE_MODELS = [
-  { value: 'dreamina-multimodal', label: '🌙 全能参考（Seedance 2.0）— 推荐' },
-  { value: 'dreamina-text2video', label: '文生视频（Seedance 2.0）' },
-  { value: 'dreamina-image2video', label: '图生视频（Seedance 2.0）' },
+const LOCALIZED_SEEDANCE_MODEL_KEYS = [
+  { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
+  { value: 'dreamina-text2video', labelKey: 'generate.modelTextToVideo' },
+  { value: 'dreamina-image2video', labelKey: 'generate.modelImageToVideo' },
 ] as const;
 
 /** 专家模式额外可选的 Veo 模型（仍依赖后端） */
@@ -62,10 +74,10 @@ function ChevronIcon({ className }: { className?: string }) {
 }
 
 /** Prompt 风格选项，id 需与后端 STYLE_HINTS 对应；后续可改为从 API 或配置加载 */
-const PROMPT_STYLES = [
-  { id: 'viral', label: '社群Viral风' },
-  { id: 'formal', label: '正式宣传风' },
-  { id: 'story', label: '剧情叙事风' },
+const LOCALIZED_PROMPT_STYLE_KEYS = [
+  { id: 'viral', labelKey: 'generate.styleViral' },
+  { id: 'formal', labelKey: 'generate.styleFormal' },
+  { id: 'story', labelKey: 'generate.styleStory' },
 ] as const;
 
 interface TabGenerateProps {
@@ -75,6 +87,25 @@ interface TabGenerateProps {
 }
 
 export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGenerateProps = {}) {
+  const { t } = useLocale();
+  const dramaOutlineLabels: DramaOutlineLabels = {
+    outlineTitle: t('generate.outlineTitle'),
+    protagonist: t('generate.protagonist'),
+    storyGenre: t('generate.storyGenre'),
+    synopsis: t('generate.synopsis'),
+    background: t('generate.background'),
+    setting: t('generate.setting'),
+    oneLineStory: t('generate.oneLineStory'),
+    scriptTitle: t('generate.scriptContentTitle'),
+  };
+  const localizedSeedanceModels = LOCALIZED_SEEDANCE_MODEL_KEYS.map((item) => ({
+    value: item.value,
+    label: t(item.labelKey),
+  }));
+  const localizedPromptStyles = LOCALIZED_PROMPT_STYLE_KEYS.map((item) => ({
+    id: item.id,
+    label: t(item.labelKey),
+  }));
   const {
     prompt,
     setPrompt,
@@ -260,7 +291,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           setPrompt(polishedPrompt);
         }
       } catch (e) {
-        setPolishError(e instanceof Error ? e.message : '优化失败');
+        setPolishError(e instanceof Error ? e.message : t('generate.promptPolishFailedError'));
       } finally {
         setPolishLoading(false);
       }
@@ -314,7 +345,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
 
   const handleExpandShortDrama = useCallback(async () => {
     if (!prompt.trim()) {
-      setDramaExpandError('请先输入一句或一段短剧创意');
+      setDramaExpandError(t('generate.enterDramaIdeaFirstError'));
       return;
     }
     setDramaExpandLoading(true);
@@ -322,10 +353,10 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     try {
       const result = await expandShortDramaFromIdea(prompt.trim());
       setDramaExpanded(result);
-      setPrompt(formatDramaOutlineForPrompt(result));
+      setPrompt(formatLocalizedDramaOutlineForPrompt(result, dramaOutlineLabels));
       setHasPolishedPrompt(false);
     } catch (e) {
-      setDramaExpandError(e instanceof Error ? e.message : '生成失败');
+      setDramaExpandError(e instanceof Error ? e.message : t('generate.dramaExpandFailedError'));
     } finally {
       setDramaExpandLoading(false);
     }
@@ -334,7 +365,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const handleOneClickMatch = useCallback(async () => {
     if (!verifiedFolderId || !accessToken) return;
     if (keywords.length === 0) {
-      setPolishError('请先点击「一键Prompt」优化创意并提取关键词');
+      setPolishError(t('generate.optimizePromptFirstError'));
       return;
     }
     setMatchLoading(true);
@@ -343,10 +374,10 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       const matched = await search(keywords, verifiedFolderId, folderHints.length > 0 ? folderHints : undefined);
       setHasMatchedMaterials(matched.length > 0);
       if (matched.length === 0) {
-        setPolishError('未匹配到素材。可点击「手动从 Drive 选择」在文件夹中勾选，或调整创意后重新一键 Prompt 再匹配。');
+        setPolishError(t('generate.matchNoResultsError'));
       }
     } catch {
-      setPolishError('素材搜索失败');
+      setPolishError(t('generate.matchSearchFailedError'));
       setHasMatchedMaterials(false);
     } finally {
       setMatchLoading(false);
@@ -798,7 +829,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onChange={(e) => setVideoModel(e.target.value)}
             className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
           >
-            {SEEDANCE_MODELS.map((m) => (
+            {localizedSeedanceModels.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>
@@ -885,7 +916,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     默认（仅导演知识）
                   </button>
                 )}
-                {PROMPT_STYLES.map((s) => (
+                {localizedPromptStyles.map((s) => (
                   <button
                     key={s.id}
                     type="button"
@@ -951,7 +982,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         )}
       </section>
 
-      <RunningStatus active={polishLoading} label="正在润色 Prompt" stallAfterSec={15} scene="writers-room" />
+      <RunningStatus active={polishLoading} label={t('generate.runningPromptPolish')} stallAfterSec={15} scene="writers-room" />
 
       {polishError && (
         <div className="flex items-center gap-2">

@@ -176,7 +176,7 @@
 - **视频分发**（`/distribute`）：选择 GeeLark 目标账号，一键生成结合视频画面与账号上下文的 TikTok 风格文案/标签；发布后当前页会保留最近一次批次结果卡，按账号展示实时状态、失败原因、截图与返回链接，并继续自动轮询未完成任务；账号配置若补充 `profileUrl`，分发页和结果卡会直接展示该账号的 TikTok 主页入口
 - **分发文案语言跟随**（v0.99）：当语言选择为 `DEFAULT` 时，caption / hashtags 生成会优先根据本轮输入内容自动判断中英文，不再固定回落到英文。
 - **鐢ㄩ噺鐩戞帶**锛坄/settings/usage-monitor`锛夛細鏌ョ湅 API 鐢ㄩ噺
-- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发和 Asset Library 主链路已补齐英文壳层。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
+- **语言切换**：登录页和主站侧边栏统一使用单一下拉框切换语言，仅保留 `简体中文` 与 `English` 两个选项；选择后会同时切换界面语言与内容语言，不再暴露混合 preset，一键成片、视频分发、Asset Library、Gallery / History / Batch Jobs，以及高级制片主壳层已逐步收入口径一致的英文 key 库。高级制片、视频剪辑和视频分发三条主生成链路新增按本轮输入语言回复/生成的能力，避免“英文界面里核心结果仍然回中文”。
 - **系统运行与发布提示（v0.109）**：主站侧边栏底部现在可显示当前运行环境与真实版本信息（如 `GOBS [PROD] main@abc1234`）；正式环境进入发布窗口时，页面顶部会出现全局公告条，向正在使用的同学明确提示“即将发布 / 正在发布 / 发布验证中”的状态，降低发布窗口内误操作和重复提交的风险。仓库内同时补齐了单人多电脑发布 Runbook、本地状态切换脚本、`mark_release_ready.py`、以及 `deploy_all.py` 的 release guard automation，后续发 `staging/prod` 不再依赖手工记忆步骤。
 
 ---
@@ -184,7 +184,16 @@
 ## 浜屻€丆hangelog
 
 
-<!-- NEXT_VERSION: v0.116 -->
+<!-- NEXT_VERSION: v0.117 -->
+
+### v0.117 — 2026-04-23
+
+**英文本地化第二批 key 库收口（Generate / Production Wizard Shell）**
+
+**Frontend / i18n:**
+- **[frontend] 高级制片主壳层改为统一 key 驱动**（`h5-video-tool/src/studio/ProductionWizardShell.tsx`, `h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/i18n/messages.ts`）：项目标题占位、保存状态、项目列表、Studio 返回入口、清空草稿、步骤条、底部上一步/下一步、footer 引导语、模板名称、排队 ETA 与入队 toast 改为跟随 `uiLocale`，减少进入高级制片后又露中文的体感。
+- **[frontend] Generate Video 入口补齐第二批可复用 key**（`h5-video-tool/src/pages/TabGenerate.tsx`, `h5-video-tool/src/i18n/messages.ts`）：Seedance 模型选项、Prompt 风格、短剧摘要写入、素材匹配错误、Prompt 润色状态等先收进 `generate.*` namespace，为后续整页替换打基础。
+- **[test] 本地化 key 回归测试覆盖 Generate 与 Production Wizard**（`h5-video-tool/src/i18n/locale.test.ts`）：新增关键英文 key lookup 断言，避免新 namespace 在后续拆页面时漂移或漏配。
 
 ### v0.116 — 2026-04-23
 
@@ -1582,4 +1591,4 @@ ole="presentation"
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
 ---
 
-*最后更新：2026-04-23（v0.116）*
+*最后更新：2026-04-23（v0.117）*
