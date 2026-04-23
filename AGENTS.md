@@ -72,10 +72,16 @@ bash scripts/eval.sh <run-id>
 ## 三端一统（强制）
 
 **每次修改完成后，必须保证本地、GitHub、云端服务器三端同步，缺一不可。**
+**从现在开始，任何面向线上环境的发布都必须遵守 `staging -> 验证 -> prod`，禁止跳过测试环境直接发正式。**
 
 ```
-本地代码 → git commit → git push → 本地编译 → SFTP 上传 → pm2 restart
+本地代码 → git commit → git push → 本地编译 → 部署 staging → staging 验证通过 → 正式环境发布提示 → 部署 prod → prod 验证 → 恢复 idle
 ```
+
+- **唯一允许发布的代码来源**：已经 `git push origin main` 的 commit
+- **默认发布顺序**：先 `staging`，验收通过后再 `prod`
+- **例外条件**：只有用户明确批准“紧急热修直接上正式”时，才允许跳过 `staging` 或缩短正式提示窗口
+- **详细 SOP**：见 `docs/guides/2026-04-23-single-owner-staging-prod-release-runbook.md`
 
 ### 服务器连接方式
 
@@ -88,15 +94,27 @@ bash scripts/eval.sh <run-id>
 
 ```
 /home/ubuntu/qas-h5/
-├── api/          # 后端（已编译的 ESM JS，对应本地 dist/）
-├── frontend/     # 前端静态文件（对应本地 h5-video-tool/dist/）
+├── prod/
+│   ├── api/
+│   ├── frontend/
+│   ├── shared-data/
+│   └── .env
+├── staging/
+│   ├── api/
+│   ├── frontend/
+│   ├── shared-data/
+│   └── .env
+├── backups/
 └── scripts/
 ```
 
-- PM2 进程名：`qas-api`，运行 `/home/ubuntu/qas-h5/api/index.js`
+- 正式环境入口：`http://43.134.186.196`
+- 测试环境入口：`http://43.134.186.196:8080`
+- PM2 进程名：`qas-api-prod`，运行 `/home/ubuntu/qas-h5/prod/api/index.js`
+- PM2 进程名：`qas-api-staging`，运行 `/home/ubuntu/qas-h5/staging/api/index.js`
 - 服务器**无 git**，通过 SFTP 上传编译产物部署
 
-### 标准五步部署流程
+### 标准七步部署流程
 
 ```bash
 # 1. 本地 TypeScript 编译检查
@@ -119,10 +137,19 @@ git push origin main
 cd h5-video-tool-api && npm run build   # → dist/
 cd h5-video-tool && npm run build       # → dist/
 
-# 5. SFTP 上传 + pm2 重启（用 paramiko Python 脚本）
-#    API：上传 dist/ 中有变动的 .js 文件到 /home/ubuntu/qas-h5/api/
-#    前端：上传整个 h5-video-tool/dist/ 到 /home/ubuntu/qas-h5/frontend/
-#    重启：pm2 restart qas-api
+# 5. 先部署测试环境并完成验收
+python scripts/deploy_all.py --target staging
+#    打开 http://43.134.186.196:8080 自测
+#    确认环境标识、版本号、关键链路、数据隔离都正常
+
+# 6. 正式发布前先打开发布提示，再部署正式环境
+python scripts/set_deployment_state.py --target prod --phase preparing --updated-by <your-name>
+#    等待 3~5 分钟，让线上同学先看到提示
+python scripts/deploy_all.py --target prod
+python scripts/set_deployment_state.py --target prod --phase verifying --updated-by <your-name>
+
+# 7. 正式环境验证通过后恢复 idle
+python scripts/set_deployment_state.py --target prod --phase idle --updated-by <your-name>
 ```
 
 ### 违禁情形
@@ -130,8 +157,11 @@ cd h5-video-tool && npm run build       # → dist/
 - 不得只改本地、不提交
 - 不得只 push GitHub、不部署服务器
 - 不得跳过 TypeScript 编译检查直接部署
+- 不得跳过 `staging` 验证直接发 `prod`
+- 不得在正式发布前省略发布提示（除非用户明确批准紧急热修）
 - **不得跳过 PRODUCT.md 更新**（功能文档必须与代码同步）
-- AI 完成每个任务后必须主动执行上述五步，不等用户催
+- 不得在不同电脑上发布不同 commit 且不核对 SHA
+- AI 完成每个任务后必须主动执行上述七步，不等用户催
 
 ---
 
@@ -165,6 +195,7 @@ cd h5-video-tool && npm run build       # → dist/
 
 - `.env`（真实密钥）
 - `*.env`（除 `*.env.example`）
+- `scripts/.env`（发布机本地配置）
 - `h5-video-tool-api/dreamina-login.json`
 
 ---
