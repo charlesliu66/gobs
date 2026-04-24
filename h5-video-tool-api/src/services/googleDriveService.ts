@@ -2,12 +2,18 @@
  * Google Drive 集成服务
  * 懒加载模式：浏览时只拉元数据/缩略图，使用时才下载到服务器
  */
-import { google, type drive_v3 } from 'googleapis';
+import { google, type drive_v3, type Auth } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
 import { resolvePath } from '../infra/storage/resolver.js';
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+
+type StoredGoogleTokens = {
+  access_token: string;
+  refresh_token: string;
+  expiry_date: number;
+};
 
 function getOAuth2Client() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -21,8 +27,8 @@ function getOAuth2Client() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-// 内存缓存 per-user tokens（生产环境应持久化到 DB）
-const tokenStore = new Map<string, { access_token: string; refresh_token: string; expiry_date: number }>();
+// 内存缓存 per-user tokens，生产环境应持久化到 DB。
+const tokenStore = new Map<string, StoredGoogleTokens>();
 
 export function getAuthUrl(state?: string): string {
   const client = getOAuth2Client();
@@ -66,7 +72,7 @@ async function getDriveClient(username: string): Promise<drive_v3.Drive> {
     expiry_date: stored.expiry_date,
   });
 
-  client.on('tokens', (tokens) => {
+  client.on('tokens', (tokens: Auth.Credentials) => {
     if (tokens.access_token) {
       stored.access_token = tokens.access_token;
       if (tokens.expiry_date) stored.expiry_date = tokens.expiry_date;
@@ -105,7 +111,7 @@ export async function listFiles(
     orderBy: 'folder, name',
   });
 
-  const files: DriveFile[] = (res.data.files ?? []).map((f) => ({
+  const files: DriveFile[] = (res.data.files ?? []).map((f: drive_v3.Schema$File) => ({
     id: f.id ?? '',
     name: f.name ?? '',
     mimeType: f.mimeType ?? '',

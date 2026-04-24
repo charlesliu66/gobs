@@ -75,7 +75,9 @@ klingRouter.get('/kling/video-proxy', async (req: Request, res: Response) => {
       return;
     }
     const ct = r.headers['content-type'];
-    if (ct) res.setHeader('Content-Type', ct);
+    if (typeof ct === 'string' || typeof ct === 'number' || Array.isArray(ct)) {
+      res.setHeader('Content-Type', ct);
+    }
     res.setHeader('Content-Disposition', 'inline');
     r.data.pipe(res);
   } catch (err) {
@@ -224,4 +226,3 @@ klingRouter.post('/generate-kling-async', async (req: Request, res: Response) =>
 });
 
 export default klingRouter;
-

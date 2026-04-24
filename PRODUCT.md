@@ -47,6 +47,7 @@
 | 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
 
 **分镜工作台增强功能（v0.42+）：**
+- **高级制片分镜导演规则层（v0.129）**：后端新增统一 `productionStoryboardRules` 规则层，收编 `storyboard-studio`、`video-director` 与项目自定义时长约束；`/api/studio/storyboard-table` 生成阶段会自动注入导演规则，auto-refine 阶段也会校正镜头内容与 `durationSec` 的匹配度，减少明显过碎或过长的 narrative shots。
 - **高级制片分镜视频归属与导出状态收口（v0.127）**：批量分镜任务的创建、取消、手动轮询和视频文件访问统一校验当前登录账号；即梦孤儿任务恢复不再注册缺失账号/项目/分镜的任务；导出审片页复用分镜页状态模型，展示已完成、排队/生成、待处理统计和平台排队位次，确保视频只回到对应项目对应分镜的历史里。
 - **高级制片生图运行时脚本部署补齐（v0.126）**：后端发布会同步上传 Compass/Imagen Python 生图脚本到 prod/staging 运行时 `scripts/` 目录，覆盖角色定妆、形象状态衣橱、场景/道具图、分镜首帧等共用生图链路，避免线上缺少 `imagen_generate.py`。
 - **默认路径瘦身、状态导航与主操作增强（v0.125）**：分镜页默认保留生成视频、批量生成缺失视频、状态和预览；首帧生成、AI 审片、快速调整、连续性检查、A/B 对比等收进“高级工具”；分镜列表支持按待处理、未开始、等待提交、平台排队中、生成中、已完成、失败、已取消筛选，并提供上一镜 / 下一镜导航；状态导航上移到编辑区前，生成分镜视频升级为醒目主 CTA，并提示排队位次；从状态导航选中分镜后会直达主操作区。
@@ -225,6 +226,15 @@
 ---
 
 ## 二、Changelog
+
+### v0.129 — 2026-04-24
+
+**高级制片分镜导演规则层**
+
+**Backend / Storyboard:**
+- **[backend] 新增统一 `productionStoryboardRules` 规则模块**（`h5-video-tool-api/src/services/productionStoryboardRules.ts`）：收编 `storyboard-studio` 的镜头类型/构图/时长基线、`video-director` 的平台节奏约束，以及项目自定义的 `4-15s` 叙事建议，形成可复用的生成/校正规则上下文。
+- **[backend] `/api/studio/storyboard-table` 自动注入导演规则上下文**（`h5-video-tool-api/src/routes/studio.ts`）：在不修改底层 `studioPipeline.ts` 的前提下，通过 `extraNotes` 将规则层接入分镜生成源头，让 shot 数量和 `durationSec` 更贴近导演逻辑而不是平均分配。
+- **[backend] auto-refine 新增时长合理性校正**（`h5-video-tool-api/src/routes/studio.ts`）：批量 refine 现在会同时检查 `durationSec`、镜头类型、动作复杂度和信息密度的匹配关系，对明显过短/过长的镜头做保守修正，但不改变镜头数量。
 
 ### v0.127 — 2026-04-23
 
@@ -1900,4 +1910,4 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-04-23 (v0.127)*
+*Last updated: 2026-04-24 (v0.129)*

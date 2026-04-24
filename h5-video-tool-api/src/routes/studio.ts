@@ -23,17 +23,28 @@ import {
   resolveReplyLocale,
   type ReplyLocale,
 } from '../services/replyLocale.js';
+import {
+  buildStoryboardGenerationRulesContext,
+  buildStoryboardRefineRulesContext,
+} from '../services/productionStoryboardRules.js';
 
 export const studioRouter = Router();
 
-// ── Auto-refine: batch review all shots in one LLM call ──────────────────
-const BATCH_REFINE_SYSTEM = `你是资深分镜导演。给你一组结构化镜头 JSON 数组，逐镜检查并优化以下字段使其可直接用于 Seedance 2.0 AI 视频生成：
-- structuredStill：sp_subject 需具体人物外貌/动作，sp_environment 需场景细节，sp_lighting 需明确光源/色温，sp_style 需风格一致
-- structuredMotion：mp_motion 需清晰的动作描述，mp_camera 需精确运镜指令，mp_tempo 需节奏描述
-
-你必须仅输出一段合法 JSON 数组（与输入长度相同，每个元素只包含需要修改的字段路径和新值）。
-格式：[{"shotIndex":number,"patches":[{"path":"structuredStill.sp_lighting","value":"..."},...]}]
-如果某镜不需要修改，patches 为空数组。不要输出 markdown 代码块。只改确实不够好的字段，不要为了改而改。`;
+function buildBatchRefineSystem(): string {
+  return [
+    '你是资深分镜导演与 AI 视频 prompt 质检员。',
+    '给你一组结构化镜头 JSON 数组，请逐镜检查并优化以下内容，使其更适合后续 AI 视频生成：',
+    '- structuredStill：sp_subject 需要具体人物外貌/动作，sp_environment 需要场景细节，sp_lighting 需要明确光源/色温，sp_style 需要风格一致。',
+    '- structuredMotion：mp_motion 需要清晰动作描述，mp_camera 需要精确运镜指令，mp_tempo 需要节奏描述。',
+    '- durationSec：需要与镜头内容、镜头类型、动作复杂度和信息密度匹配。',
+    buildStoryboardRefineRulesContext(),
+    '你必须仅输出一段合法 JSON 数组，长度与输入 shots 相同。',
+    '每个元素格式为：{"shotIndex":number,"patches":[{"path":"durationSec","value":6},{"path":"structuredStill.sp_lighting","value":"..."},...]}',
+    '如果某镜不需要修改，patches 为空数组。',
+    '不要输出 markdown 代码块，不要解释。',
+    '只改确实不够好的字段，不要为了修改而修改。',
+  ].join('\n');
+}
 
 async function autoRefineShots(
   shots: ProductionShot[],
@@ -42,9 +53,14 @@ async function autoRefineShots(
   if (!shots.length) return shots;
   const pickFields = (s: ProductionShot) => ({
     shotIndex: s.shotIndex,
+    durationSec: s.durationSec,
+    shotScale: s.shotScale,
+    cameraMove: s.cameraMove,
     subject: s.subject,
     action: s.action,
+    composition: s.composition,
     lighting: s.lighting,
+    emotion: s.emotion,
     structuredStill: s.structuredStill,
     structuredMotion: s.structuredMotion,
   });
@@ -54,7 +70,7 @@ async function autoRefineShots(
   });
   try {
     const raw = await compassChatCompletion({
-      systemPrompt: BATCH_REFINE_SYSTEM,
+      systemPrompt: buildBatchRefineSystem(),
       userText,
       temperature: 0.3,
       maxTokens: 16384,
@@ -69,13 +85,17 @@ async function autoRefineShots(
     }
     const patches = JSON.parse(text) as Array<{
       shotIndex: number;
-      patches: Array<{ path: string; value: string }>;
+      patches: Array<{ path: string; value: string | number }>;
     }>;
     const refined = shots.map((s) => {
       const entry = patches.find((p) => p.shotIndex === s.shotIndex);
       if (!entry?.patches?.length) return s;
       let next = { ...s };
       for (const p of entry.patches) {
+        if (p.path === 'durationSec' && typeof p.value === 'number' && Number.isFinite(p.value)) {
+          next = { ...next, durationSec: Math.max(1, Math.round(p.value)) };
+          continue;
+        }
         const parts = p.path.split('.');
         if (parts.length === 2) {
           const [group, key] = parts;
@@ -147,12 +167,12 @@ studioRouter.post('/story-arc', async (req: Request, res: Response) => {
   const bible = typeof characterBible === 'string' ? characterBible.trim() : '';
   const syn = typeof synopsis === 'string' ? synopsis.trim() : '';
   if (!bible || !syn) {
-    res.status(400).json({ error: '请提供 characterBible 与 synopsis' });
+    res.status(400).json({ error: '请提供 characterBible 和 synopsis' });
     return;
   }
   const st = (structureTemplate || 'three_act') as StructureTemplate;
   if (!TEMPLATES.includes(st)) {
-    res.status(400).json({ error: 'structureTemplate 须为 three_act | five_act | save_the_cat' });
+    res.status(400).json({ error: 'structureTemplate 必须为 three_act | five_act | save_the_cat' });
     return;
   }
   try {
@@ -209,10 +229,11 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
     extraNotes?: string;
   };
   if (!story || !productionDesign) {
-    res.status(400).json({ error: '请提供 story 与 productionDesign' });
+    res.status(400).json({ error: '请提供 story 和 productionDesign' });
     return;
   }
   const maxDur = typeof maxTotalDurationSec === 'number' && maxTotalDurationSec > 0 ? maxTotalDurationSec : 60;
+  const generationRulesContext = buildStoryboardGenerationRulesContext();
   const styleRef = typeof (req.body as Record<string, unknown>).styleRef === 'string'
     ? ((req.body as Record<string, unknown>).styleRef as string).trim()
     : productionDesign.colorGrading?.trim();
@@ -222,7 +243,12 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
       story,
       productionDesign,
       maxTotalDurationSec: maxDur,
-      extraNotes: typeof extraNotes === 'string' ? extraNotes.trim() : undefined,
+      extraNotes: [
+        generationRulesContext,
+        typeof extraNotes === 'string' ? extraNotes.trim() : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
     });
     const shots = await autoRefineShots(rawShots, styleRef);
     res.json({ shots: await localizeShots(shots, replyLocale) });
@@ -234,7 +260,7 @@ studioRouter.post('/storyboard-table', async (req: Request, res: Response) => {
 
 /**
  * POST /api/studio/extract-style-reference
- * Body: { imageBase64, mimeType? } — 风格参考图反解析 → 文字风格摘要
+ * Body: { imageBase64, mimeType? } - 风格参考图反解为文字摘要
  */
 studioRouter.post('/extract-style-reference', async (req: Request, res: Response) => {
   const { imageBase64, mimeType } = req.body as { imageBase64?: string; mimeType?: string };
@@ -254,7 +280,7 @@ studioRouter.post('/extract-style-reference', async (req: Request, res: Response
     });
   } catch (err) {
     console.error('[studio/extract-style-reference]', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : '反解析失败' });
+    res.status(500).json({ error: err instanceof Error ? err.message : '反解失败' });
   }
 });
 
