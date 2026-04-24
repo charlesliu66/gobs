@@ -1574,6 +1574,12 @@ export function ProductionWizard() {
     setPortraitEdit,
   });
 
+  const characterStoryBio = useCallback((name: string) => {
+    const c = project.story?.characters?.find((x) => x.name === name);
+    if (!c) return undefined;
+    return [c.goal, c.conflict, c.arc].filter(Boolean).join(' ');
+  }, [project.story?.characters]);
+
   const handleQuickGenerateCharacterMainLook = useCallback((sheet: CharacterSheet) => {
     const productionDesign = project.productionDesign;
     if (!productionDesign) return;
@@ -2155,12 +2161,6 @@ export function ProductionWizard() {
 
   const story = project.story;
   const chSheets = project.characterAssets ?? [];
-
-  const characterStoryBio = useCallback((name: string) => {
-    const c = project.story?.characters?.find((x) => x.name === name);
-    if (!c) return undefined;
-    return [c.goal, c.conflict, c.arc].filter(Boolean).join(' ');
-  }, [project.story?.characters]);
   const scSheets = project.sceneAssets ?? [];
   const propSheets = project.propAssets ?? [];
   const shot = project.shots[selectedShotIdx];
