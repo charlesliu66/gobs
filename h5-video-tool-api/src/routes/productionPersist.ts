@@ -14,6 +14,7 @@ import path from 'path';
 import { randomBytes } from 'crypto';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { getJobById } from '../services/batchJobsQueue.js';
+import { mergeExecutionSegmentsForSave } from '../services/productionExecutionSegments.js';
 import { resolveProductionProjectSaveTitle } from '../services/projectPersistenceGuards.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
@@ -792,7 +793,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       id,
       updatedAt,
     }) as Record<string, unknown>;
-    const incomingProject = payload.project as Record<string, unknown> | undefined;
+    let incomingProject = payload.project as Record<string, unknown> | undefined;
     const incomingShots = incomingProject?.shots as Array<Record<string, unknown>> | undefined;
 
     const projDir = getProductionProjDir(username);
@@ -800,6 +801,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
     const metaPath = path.join(projDir, `${id}.meta.json`);
     let existingTitle: string | undefined;
     let isNewProject = true;
+    let existingProject: Record<string, unknown> | undefined;
 
     // Merge video versions: writeBackToProject may have added versions
     // that the frontend hasn't seen yet; don't lose them on overwrite.
@@ -808,7 +810,7 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
       const existing = JSON.parse(existingRaw) as Record<string, unknown>;
       isNewProject = false;
       existingTitle = ((existing.project as Record<string, unknown> | undefined)?.meta as Record<string, unknown> | undefined)?.title as string | undefined;
-      const existingProject = existing.project as Record<string, unknown> | undefined;
+      existingProject = existing.project as Record<string, unknown> | undefined;
       const existingShots = existingProject?.shots as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(existingShots) && Array.isArray(incomingShots)) {
         for (const iShot of incomingShots) {
@@ -826,6 +828,15 @@ productionPersistRouter.post('/project/save', async (req: Request, res: Response
         }
       }
     } catch { /* first save or file missing — no merge needed */ }
+
+    const mergedExecutionSegments = mergeExecutionSegmentsForSave(incomingProject, existingProject);
+    if (mergedExecutionSegments) {
+      incomingProject = {
+        ...(incomingProject ?? {}),
+        executionSegments: mergedExecutionSegments,
+      };
+      payload.project = incomingProject;
+    }
 
     const resolvedTitle = resolveProductionProjectSaveTitle({
       incomingTitle: (projectData.meta as Record<string, unknown> | undefined)?.title as string | undefined,

@@ -1,5 +1,6 @@
 ﻿import type {
   CharacterSheet,
+  ProductionExecutionSegment,
   ProductionShot,
   ProductionShotVideoVersion,
   SceneSheet,
@@ -22,6 +23,11 @@ import { StepStoryboardShotStrip } from './StepStoryboardShotStrip';
 import { StepStoryboardAiReview } from './StepStoryboardAiReview';
 import { StepStoryboardQuickAdjust } from './StepStoryboardQuickAdjust';
 import { StepStoryboardContinuityCheck } from './StepStoryboardContinuityCheck';
+import { ShotExecutionSegmentsPanel } from '../components/ShotExecutionSegmentsPanel';
+import { getSegmentsForShot } from '../executionSegments';
+import { resolveShotAggregateStatus } from '../executionSegmentStatus';
+import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
+import { getStoredExecutionSegmentsForShots } from '../productionWizardStorage';
 
 type StorySceneCoverage = { hit: number; total: number; missingLabels: string[] } | null;
 type MultimodalRefPack = {
@@ -40,6 +46,8 @@ export function StepStoryboardWorkspace({
   shotActiveJobMap,
   shotJobStatusMap,
   shotJobQueueInfoMap,
+  segmentJobsMap,
+  executionSegments,
   selectedShotJob,
   queueSnapshot,
   storySceneCoverage,
@@ -90,8 +98,10 @@ export function StepStoryboardWorkspace({
   scSheets: SceneSheet[];
   shotMediaBusy: 'frame' | 'video' | null;
   shotBusyMap: Record<string, 'frame' | 'video'>;
-  shotActiveJobMap?: Record<string, BatchJobDto>;
-  shotJobStatusMap?: Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'>;
+  shotActiveJobMap?: ShotActiveJobMap;
+  shotJobStatusMap?: ShotStatusMap;
+  segmentJobsMap?: Record<string, BatchJobDto[]>;
+  executionSegments?: ProductionExecutionSegment[];
   shotJobQueueInfoMap?: Record<string, {
     queue_idx?: number;
     queue_length?: number;
@@ -198,7 +208,7 @@ export function StepStoryboardWorkspace({
 
   if (!shot) return null;
 
-  const projectQueuedCount = Object.values(shotActiveJobMap ?? {}).filter((job) =>
+  const projectQueuedCount = Object.values(shotActiveJobMap ?? {}).filter((job): job is BatchJobDto => !!job).filter((job) =>
     job.status === 'awaiting_submit' || job.status === 'pending' || job.status === 'queuing',
   ).length;
 
@@ -272,6 +282,17 @@ export function StepStoryboardWorkspace({
       };
     })
     .filter((item): item is { id: string; name: string; label: string; manual: boolean } => !!item);
+  const effectiveExecutionSegments = executionSegments ?? getStoredExecutionSegmentsForShots(shots) ?? [];
+  const relatedExecutionSegments = getSegmentsForShot(
+    { executionSegments: effectiveExecutionSegments },
+    shot,
+  );
+  const selectedShotAggregate = resolveShotAggregateStatus(shot, relatedExecutionSegments, {
+    segmentJobsMap,
+    shotBusyMap,
+    shotActiveJobMap,
+    shotJobStatusMap,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -412,6 +433,34 @@ export function StepStoryboardWorkspace({
               ))}
             </div>
           )}
+          {selectedShotAggregate.summary.totalSegments > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">
+                {uiText('执行分段摘要', 'Execution summary')}
+              </span>
+              <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[10px] text-[var(--color-text)]">
+                {uiText(
+                  `${selectedShotAggregate.summary.totalSegments} 段 / 已完成 ${selectedShotAggregate.summary.completedSegments}`,
+                  `${selectedShotAggregate.summary.totalSegments} segments / ${selectedShotAggregate.summary.completedSegments} done`,
+                )}
+              </span>
+              {selectedShotAggregate.summary.mergedSegments > 0 && (
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] text-amber-200">
+                  {uiText(`合并 ${selectedShotAggregate.summary.mergedSegments}`, `Merged ${selectedShotAggregate.summary.mergedSegments}`)}
+                </span>
+              )}
+              {selectedShotAggregate.summary.splitSegments > 0 && (
+                <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[10px] text-sky-200">
+                  {uiText(`拆分 ${selectedShotAggregate.summary.splitSegments}`, `Split ${selectedShotAggregate.summary.splitSegments}`)}
+                </span>
+              )}
+              {selectedShotAggregate.summary.sharedSegments > 0 && (
+                <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[10px] text-violet-200">
+                  {uiText(`共享 ${selectedShotAggregate.summary.sharedSegments}`, `Shared ${selectedShotAggregate.summary.sharedSegments}`)}
+                </span>
+              )}
+            </div>
+          )}
           <StepStoryboardMainHeader
             styleRefSummary={styleRefSummary}
             storySceneCoverage={storySceneCoverage}
@@ -455,6 +504,14 @@ export function StepStoryboardWorkspace({
                 onCancelActiveJob={onCancelActiveJob}
               />
             </div>
+            <ShotExecutionSegmentsPanel
+              shot={shot}
+              segments={relatedExecutionSegments}
+              segmentJobsMap={segmentJobsMap}
+              shotBusyMap={shotBusyMap}
+              shotActiveJobMap={shotActiveJobMap}
+              shotJobStatusMap={shotJobStatusMap}
+            />
             <StepStoryboardFieldsEditor
               shot={shot}
               scSheets={scSheets}

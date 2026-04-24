@@ -124,6 +124,56 @@ export interface ProductionShotVideoVersion {
   batchJobId?: string;
 }
 
+export type ProductionExecutionSegmentMode = 'direct' | 'merged_short' | 'split_long';
+
+export type ProductionExecutionSegmentStatus =
+  | 'idle'
+  | 'awaiting_submit'
+  | 'pending'
+  | 'queuing'
+  | 'processing'
+  | 'done'
+  | 'failed'
+  | 'cancelled';
+
+export interface ProductionExecutionSegment {
+  id: string;
+  segmentOrder: number;
+  sourceShotIndexes: number[];
+  primaryShotIndex: number;
+  mode: ProductionExecutionSegmentMode;
+  durationSec: number;
+  storyboardText: string;
+  segmentLabel: string;
+  status?: ProductionExecutionSegmentStatus;
+  submitId?: string;
+  taskId?: string;
+  pendingVideoSubmitId?: string;
+  batchJobIds?: string[];
+  jobId?: string;
+  jobIds?: string[];
+  videoUrl?: string;
+  videoPath?: string;
+  previewVideoVersions?: ProductionShotVideoVersion[];
+  selectedPreviewVideoVersionId?: string;
+  failReason?: string;
+  lastVideoError?: {
+    submitId?: string;
+    jobId?: string;
+    cancelled?: boolean;
+    reason: string;
+    at: string;
+  };
+  queueInfo?: {
+    queue_idx?: number;
+    queue_length?: number;
+    queue_status?: string;
+  };
+  globalQueuePos?: number;
+  etaSec?: number;
+  updatedAt?: string;
+}
+
 export interface ProductionShot {
   shotIndex: number;
   durationSec: number;
@@ -179,6 +229,7 @@ export interface ProductionShot {
     sceneId?: string | null;
     propIds?: string[];
   };
+  executionSegmentIds?: string[];
 }
 
 export function hasProductionShotPreviewMedia(shot: Pick<
@@ -189,6 +240,16 @@ export function hasProductionShotPreviewMedia(shot: Pick<
   if (shot.previewVideoUrl?.trim()) return true;
   if (!Array.isArray(shot.previewVideoVersions)) return false;
   return shot.previewVideoVersions.some((version) => !!(version?.videoPath?.trim() || version?.videoUrl?.trim()));
+}
+
+export function hasProductionExecutionSegmentPreviewMedia(segment: Pick<
+  ProductionExecutionSegment,
+  'videoUrl' | 'videoPath' | 'previewVideoVersions'
+>): boolean {
+  if (segment.videoPath?.trim()) return true;
+  if (segment.videoUrl?.trim()) return true;
+  if (!Array.isArray(segment.previewVideoVersions)) return false;
+  return segment.previewVideoVersions.some((version) => !!(version?.videoPath?.trim() || version?.videoUrl?.trim()));
 }
 
 export interface CharacterVisualProfile {
@@ -352,6 +413,7 @@ export interface ProductionProject {
   story: StoryArcLayer | null;
   productionDesign: ProductionDesignLayer | null;
   shots: ProductionShot[];
+  executionSegments?: ProductionExecutionSegment[];
   characterVisualProfile: CharacterVisualProfile | null;
   assembled: AssemblePromptsResult | null;
   /** L2锛氳鑹插崱涓庡鐘舵€佸浘 */
@@ -378,6 +440,7 @@ export function emptyProductionProject(): ProductionProject {
     story: null,
     productionDesign: null,
     shots: [],
+    executionSegments: [],
     characterVisualProfile: null,
     assembled: null,
     characterAssets: [],

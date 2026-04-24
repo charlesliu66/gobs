@@ -20,6 +20,23 @@ import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
 
 const router = Router();
 
+function normalizeShotIndexes(values: unknown): number[] {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set<number>();
+  const normalized: number[] = [];
+  for (const value of values) {
+    const shotIndex = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(shotIndex) || seen.has(shotIndex)) continue;
+    seen.add(shotIndex);
+    normalized.push(shotIndex);
+  }
+  return normalized;
+}
+
+function readTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 router.post('/', async (req, res) => {
   const username = req.user?.username?.trim();
   const { projectId, shots } = req.body as {
@@ -28,6 +45,9 @@ router.post('/', async (req, res) => {
       submitId: string;
       taskId?: string;
       shotIndex: number;
+      primaryShotIndex?: number;
+      segmentId?: string;
+      sourceShotIndexes?: number[];
       shotDescription?: string;
       model?: string;
     }>;
@@ -43,7 +63,12 @@ router.post('/', async (req, res) => {
   const now = new Date().toISOString();
   const added: BatchJob[] = [];
   for (const shot of shots) {
-    if (!shot.submitId || !Number.isFinite(shot.shotIndex)) continue;
+    const normalizedSourceShotIndexes = normalizeShotIndexes(shot.sourceShotIndexes);
+    const resolvedPrimaryShotIndex = Number.isFinite(shot.primaryShotIndex)
+      ? shot.primaryShotIndex
+      : (Number.isFinite(shot.shotIndex) ? shot.shotIndex : normalizedSourceShotIndexes[0]);
+    if (!shot.submitId || !Number.isFinite(resolvedPrimaryShotIndex)) continue;
+    const primaryShotIndex = resolvedPrimaryShotIndex as number;
     const id = `bj_${Date.now()}_${randomBytes(3).toString('hex')}`;
     const job: BatchJob = {
       id,
@@ -52,7 +77,10 @@ router.post('/', async (req, res) => {
       projectId,
       source: (shot as Record<string, unknown>).source === 'quickfilm' ? 'quickfilm' : 'production',
       username,
-      shotIndex: shot.shotIndex,
+      shotIndex: primaryShotIndex,
+      primaryShotIndex,
+      segmentId: readTrimmedString(shot.segmentId) || undefined,
+      sourceShotIndexes: normalizedSourceShotIndexes.length > 0 ? normalizedSourceShotIndexes : [primaryShotIndex],
       shotDescription: shot.shotDescription ?? '',
       model: shot.model ?? 'dreamina-multimodal',
       status: 'pending',
@@ -71,20 +99,33 @@ router.post('/', async (req, res) => {
 
 router.post('/enqueue', async (req, res) => {
   const username = req.user?.username?.trim();
-  const { projectId, shotIndex, submitParams } = req.body as {
+  const { projectId, shotIndex, primaryShotIndex, segmentId, sourceShotIndexes, submitParams } = req.body as {
     projectId?: string;
     shotIndex?: number;
+    primaryShotIndex?: number;
+    segmentId?: string;
+    sourceShotIndexes?: number[];
     submitParams?: BatchJobSubmitParams;
   };
+  const normalizedSourceShotIndexes = normalizeShotIndexes(sourceShotIndexes);
+  const resolvedPrimaryShotIndex = Number.isFinite(primaryShotIndex)
+    ? primaryShotIndex
+    : (Number.isFinite(shotIndex) ? shotIndex : normalizedSourceShotIndexes[0]);
 
   if (!username) {
     res.status(401).json({ error: '需要登录' });
     return;
   }
-  if (!projectId || typeof shotIndex !== 'number' || !Number.isFinite(shotIndex) || !submitParams?.model || !submitParams.aspectRatio) {
-    res.status(400).json({ error: 'need projectId + shotIndex + submitParams' });
+  if (
+    !projectId
+    || !Number.isFinite(resolvedPrimaryShotIndex)
+    || !submitParams?.model
+    || !submitParams.aspectRatio
+  ) {
+    res.status(400).json({ error: 'need projectId + (primaryShotIndex|shotIndex) + submitParams' });
     return;
   }
+  const effectivePrimaryShotIndex = resolvedPrimaryShotIndex as number;
 
   const mine = (await getAllJobs()).filter(
     (job) => job.username === username && job.projectId === projectId && job.status === 'awaiting_submit',
@@ -102,7 +143,12 @@ router.post('/enqueue', async (req, res) => {
     projectId,
     source: 'production',
     username,
-    shotIndex,
+    shotIndex: effectivePrimaryShotIndex,
+    primaryShotIndex: effectivePrimaryShotIndex,
+    segmentId: readTrimmedString(segmentId) || undefined,
+    sourceShotIndexes: normalizedSourceShotIndexes.length > 0
+      ? normalizedSourceShotIndexes
+      : [effectivePrimaryShotIndex],
     shotDescription: (submitParams.storyboardText ?? submitParams.prompt ?? '').slice(0, 120),
     model: submitParams.model,
     status: 'awaiting_submit',
@@ -160,7 +206,10 @@ router.delete('/project/:projectId', async (req, res) => {
     job.username === username
     && job.status !== 'processing'
     && (job.status === 'awaiting_submit' || job.status === 'pending' || job.status === 'queuing')
-    && (!shotIndexes || shotIndexes.has(job.shotIndex)),
+    && (
+      !shotIndexes
+      || (job.sourceShotIndexes ?? [job.primaryShotIndex ?? job.shotIndex]).some((index) => shotIndexes.has(index))
+    ),
   );
 
   let cancelled = 0;

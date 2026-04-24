@@ -11,6 +11,10 @@ import {
   deriveQueuePositionPatches,
   isActiveStatus,
 } from './queueSnapshot.js';
+import {
+  appendJobId,
+  resolveExecutionTarget,
+} from './productionExecutionSegments.js';
 
 export const batchJobEvents = new EventEmitter();
 batchJobEvents.setMaxListeners(50);
@@ -42,6 +46,9 @@ export interface BatchJob {
   taskId: string;
   projectId: string;
   shotIndex: number;
+  primaryShotIndex?: number;
+  segmentId?: string;
+  sourceShotIndexes?: number[];
   shotDescription: string;
   model: string;
   source?: 'production' | 'quickfilm';
@@ -585,9 +592,11 @@ export async function pollJobNow(jobId: string): Promise<BatchJob | null> {
   }
 }
 
-async function loadProjectShot(job: BatchJob): Promise<{
+async function loadProjectExecutionTarget(job: BatchJob): Promise<{
   data: Record<string, unknown>;
-  shot: Record<string, unknown>;
+  shot?: Record<string, unknown>;
+  segment?: Record<string, unknown>;
+  relatedShots: Array<Record<string, unknown>>;
   filePath: string;
   metaPath: string;
 } | null> {
@@ -600,12 +609,21 @@ async function loadProjectShot(job: BatchJob): Promise<{
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(raw) as Record<string, unknown>;
-    const project = data.project as Record<string, unknown> | undefined;
-    const shots = project?.shots as Array<Record<string, unknown>> | undefined;
-    if (!project || !Array.isArray(shots)) return null;
-    const shot = shots.find((item) => item.shotIndex === job.shotIndex);
-    if (!shot) return null;
-    return { data, shot, filePath, metaPath };
+    const target = resolveExecutionTarget(data, {
+      segmentId: job.segmentId,
+      primaryShotIndex: job.primaryShotIndex,
+      shotIndex: job.shotIndex,
+      sourceShotIndexes: job.sourceShotIndexes,
+    });
+    if (!target) return null;
+    return {
+      data,
+      shot: target.targetShot,
+      segment: target.targetSegment,
+      relatedShots: target.relatedShots,
+      filePath,
+      metaPath,
+    };
   } catch {
     return null;
   }
@@ -629,18 +647,26 @@ async function persistProjectWriteback(
 }
 
 async function writeBackSubmittedToProject(job: BatchJob): Promise<void> {
-  const loadedProject = await loadProjectShot(job);
+  const loadedProject = await loadProjectExecutionTarget(job);
   if (!loadedProject) return;
-  const { data, shot, filePath, metaPath } = loadedProject;
-  shot.pendingVideoSubmitId = job.submitId;
-  shot.lastVideoError = undefined;
+  const { data, shot, segment, filePath, metaPath } = loadedProject;
+  if (segment) {
+    segment.pendingVideoSubmitId = job.submitId;
+    segment.lastVideoError = undefined;
+    segment.status = 'pending';
+    segment.failReason = undefined;
+    segment.jobIds = appendJobId(segment.jobIds, job.id);
+  } else if (shot) {
+    shot.pendingVideoSubmitId = job.submitId;
+    shot.lastVideoError = undefined;
+  }
   await persistProjectWriteback(data, filePath, metaPath);
 }
 
 async function writeBackToProject(job: BatchJob, videoApiUrl: string): Promise<void> {
-  const loadedProject = await loadProjectShot(job);
+  const loadedProject = await loadProjectExecutionTarget(job);
   if (!loadedProject) return;
-  const { data, shot, filePath, metaPath } = loadedProject;
+  const { data, shot, segment, filePath, metaPath } = loadedProject;
   const versionId = `batch-${job.id}-${Date.now()}`;
   const version = {
     id: versionId,
@@ -648,35 +674,70 @@ async function writeBackToProject(job: BatchJob, videoApiUrl: string): Promise<v
     createdAt: Date.now(),
     videoUrl: videoApiUrl,
     sourceProjectId: job.projectId,
-    sourceShotIndex: job.shotIndex,
+    sourceShotIndex: job.primaryShotIndex ?? job.shotIndex,
+    sourceShotIndexes: job.sourceShotIndexes,
+    primaryShotIndex: job.primaryShotIndex ?? job.shotIndex,
+    segmentId: job.segmentId,
     batchJobId: job.id,
   };
-  const versions = Array.isArray(shot.previewVideoVersions)
-    ? shot.previewVideoVersions as Array<Record<string, unknown>>
-    : [];
-  shot.previewVideoVersions = [version, ...versions];
-  shot.selectedPreviewVideoVersionId = versionId;
-  shot.previewVideoUrl = videoApiUrl;
-  shot.previewVideoPath = undefined;
-  shot.pendingVideoSubmitId = undefined;
-  shot.lastVideoError = undefined;
+  if (segment) {
+    const versions = Array.isArray(segment.previewVideoVersions)
+      ? segment.previewVideoVersions as Array<Record<string, unknown>>
+      : [];
+    segment.previewVideoVersions = [version, ...versions];
+    segment.selectedPreviewVideoVersionId = versionId;
+    segment.previewVideoUrl = videoApiUrl;
+    segment.previewVideoPath = undefined;
+    segment.videoUrl = videoApiUrl;
+    segment.pendingVideoSubmitId = undefined;
+    segment.lastVideoError = undefined;
+    segment.status = 'done';
+    segment.failReason = undefined;
+    segment.jobIds = appendJobId(segment.jobIds, job.id);
+  } else if (shot) {
+    const versions = Array.isArray(shot.previewVideoVersions)
+      ? shot.previewVideoVersions as Array<Record<string, unknown>>
+      : [];
+    shot.previewVideoVersions = [version, ...versions];
+    shot.selectedPreviewVideoVersionId = versionId;
+    shot.previewVideoUrl = videoApiUrl;
+    shot.previewVideoPath = undefined;
+    shot.pendingVideoSubmitId = undefined;
+    shot.lastVideoError = undefined;
+  }
   await persistProjectWriteback(data, filePath, metaPath);
 }
 
 async function writeBackFailedToProject(job: BatchJob, reason: string, cancelled = false): Promise<void> {
-  const loadedProject = await loadProjectShot(job);
+  const loadedProject = await loadProjectExecutionTarget(job);
   if (!loadedProject) return;
-  const { data, shot, filePath, metaPath } = loadedProject;
-  if (shot.previewVideoUrl || shot.previewVideoPath) return;
-  if (job.submitId && shot.pendingVideoSubmitId && shot.pendingVideoSubmitId !== job.submitId) return;
-  shot.pendingVideoSubmitId = undefined;
-  shot.lastVideoError = {
-    submitId: job.submitId || undefined,
-    jobId: job.id,
-    reason,
-    at: new Date().toISOString(),
-    cancelled,
-  };
+  const { data, shot, segment, filePath, metaPath } = loadedProject;
+  if (segment) {
+    if (segment.previewVideoUrl || segment.previewVideoPath) return;
+    if (job.submitId && segment.pendingVideoSubmitId && segment.pendingVideoSubmitId !== job.submitId) return;
+    segment.pendingVideoSubmitId = undefined;
+    segment.status = cancelled ? 'cancelled' : 'failed';
+    segment.failReason = reason;
+    segment.lastVideoError = {
+      submitId: job.submitId || undefined,
+      jobId: job.id,
+      reason,
+      at: new Date().toISOString(),
+      cancelled,
+    };
+    segment.jobIds = appendJobId(segment.jobIds, job.id);
+  } else if (shot) {
+    if (shot.previewVideoUrl || shot.previewVideoPath) return;
+    if (job.submitId && shot.pendingVideoSubmitId && shot.pendingVideoSubmitId !== job.submitId) return;
+    shot.pendingVideoSubmitId = undefined;
+    shot.lastVideoError = {
+      submitId: job.submitId || undefined,
+      jobId: job.id,
+      reason,
+      at: new Date().toISOString(),
+      cancelled,
+    };
+  }
   await persistProjectWriteback(data, filePath, metaPath);
 }
 

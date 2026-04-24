@@ -7,6 +7,9 @@ export interface BatchJobDto {
   taskId: string;
   projectId: string;
   shotIndex: number;
+  segmentId?: string;
+  sourceShotIndexes?: number[];
+  primaryShotIndex?: number;
   shotDescription: string;
   model: string;
   source?: 'production' | 'quickfilm';
@@ -50,6 +53,9 @@ export interface BatchSubmitShot {
 }
 
 export interface EnqueueProductionShotParams {
+  segmentId?: string;
+  sourceShotIndexes?: number[];
+  primaryShotIndex?: number;
   storyboardText?: string;
   prompt?: string;
   aspectRatio: string;
@@ -73,7 +79,14 @@ export async function enqueueProductionShot(
   shotIndex: number,
   submitParams: EnqueueProductionShotParams,
 ): Promise<{ jobId: string; globalQueuePos: number; etaSec: number; job?: BatchJobDto }> {
-  return apiPost('/api/batch-jobs/enqueue', { projectId, shotIndex, submitParams });
+  return apiPost('/api/batch-jobs/enqueue', {
+    projectId,
+    shotIndex,
+    segmentId: submitParams.segmentId,
+    sourceShotIndexes: submitParams.sourceShotIndexes,
+    primaryShotIndex: submitParams.primaryShotIndex,
+    submitParams,
+  });
 }
 
 export async function getBatchJobs(projectId?: string): Promise<{ jobs: BatchJobDto[] }> {

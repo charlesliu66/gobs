@@ -1,6 +1,9 @@
 import type { BatchJobDto } from '../api/batchJobs';
-import { hasProductionShotPreviewMedia, type ProductionShot } from './productionTypes.ts';
-import { getShotUserStatus, type ShotProviderStatus, type ShotUserStatus } from './shotUserStatus.ts';
+import type { ProductionShot } from './productionTypes.ts';
+import { type ShotProviderStatus, type ShotUserStatus } from './shotUserStatus.ts';
+import { getStoredExecutionSegmentsForShots } from './productionWizardStorage.ts';
+import { getSegmentsForShot } from './executionSegments.ts';
+import { resolveShotAggregateStatus } from './executionSegmentStatus.ts';
 
 export type ShotStatusMap = Partial<Record<string, ShotProviderStatus>>;
 export type ShotActiveJobMap = Partial<Record<string, BatchJobDto>>;
@@ -36,28 +39,30 @@ export function buildExportStoryboardShotStatuses(
   shotActiveJobMap?: ShotActiveJobMap,
   shotJobStatusMap?: ShotStatusMap,
 ): ExportStoryboardShotStatus[] {
+  const storedExecutionSegments = getStoredExecutionSegmentsForShots(shots);
   return shots.map((shot) => {
     const shotKey = String(shot.shotIndex);
     const activeJob = shotActiveJobMap?.[shotKey];
-    const providerStatus = (activeJob?.status ?? shotJobStatusMap?.[shotKey]) as ShotProviderStatus | undefined;
-    const hasVideo = hasProductionShotPreviewMedia(shot);
-    const userStatus = getShotUserStatus({
-      hasVideo,
-      jobStatus: providerStatus,
-      hasPendingSubmitId: !!shot.pendingVideoSubmitId,
-    });
+    const aggregateStatus = resolveShotAggregateStatus(
+      shot,
+      getSegmentsForShot({ executionSegments: storedExecutionSegments ?? [] }, shot),
+      {
+        shotActiveJobMap,
+        shotJobStatusMap,
+      },
+    );
 
     return {
       shot,
       shotKey,
-      hasVideo,
+      hasVideo: aggregateStatus.hasVideo,
       activeJob,
-      providerStatus,
-      userStatus: userStatus.status,
-      labelKey: userStatus.labelKey,
-      platformQueuePosition: typeof activeJob?.globalQueuePos === 'number' ? activeJob.globalQueuePos + 1 : undefined,
-      dreaminaQueuePosition: typeof activeJob?.queueInfo?.queue_idx === 'number' ? activeJob.queueInfo.queue_idx + 1 : undefined,
-      dreaminaQueueSize: typeof activeJob?.queueInfo?.queue_length === 'number' ? activeJob.queueInfo.queue_length : undefined,
+      providerStatus: aggregateStatus.providerStatus,
+      userStatus: aggregateStatus.userStatus,
+      labelKey: aggregateStatus.labelKey,
+      platformQueuePosition: aggregateStatus.platformQueuePosition,
+      dreaminaQueuePosition: aggregateStatus.dreaminaQueuePosition,
+      dreaminaQueueSize: aggregateStatus.dreaminaQueueSize,
     };
   });
 }

@@ -2,6 +2,7 @@ import {
   PRODUCTION_STORAGE_KEY,
   type CharacterSheet,
   hasProductionShotPreviewMedia,
+  type ProductionExecutionSegment,
   type ProductionProject,
   type ProductionShot,
   type ProductionShotVideoVersion,
@@ -16,6 +17,7 @@ import {
   mergePropSheetsPreservingImages,
   mergeSceneSheetsFromL2,
 } from './productionAssets';
+import { ensureExecutionSegments } from './executionSegments';
 
 export interface StoredWizard {
   project: ProductionProject;
@@ -94,7 +96,7 @@ export function migrateProject(p: ProductionProject): ProductionProject {
       } as ProductionShot;
     });
   }
-  return next;
+  return ensureExecutionSegments(next);
 }
 
 export function loadStored(): StoredWizard | null {
@@ -133,10 +135,26 @@ export function loadStored(): StoredWizard | null {
 
 export function saveStored(s: StoredWizard) {
   try {
-    localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify(s));
+    localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify({
+      ...s,
+      project: ensureExecutionSegments(s.project),
+    }));
   } catch {
     // ignore
   }
+}
+
+function areShotsCompatible(currentShots: ProductionShot[], storedShots: ProductionShot[]): boolean {
+  if (currentShots.length !== storedShots.length) return false;
+  return currentShots.every((shot, index) => storedShots[index]?.shotIndex === shot.shotIndex);
+}
+
+export function getStoredExecutionSegmentsForShots(shots: ProductionShot[]): ProductionExecutionSegment[] | undefined {
+  if (!Array.isArray(shots) || shots.length === 0) return [];
+  const stored = loadStored();
+  if (!stored?.project?.shots?.length) return undefined;
+  if (!areShotsCompatible(shots, stored.project.shots)) return undefined;
+  return stored.project.executionSegments;
 }
 
 function extractBatchJobId(version: ProductionShotVideoVersion): string | undefined {

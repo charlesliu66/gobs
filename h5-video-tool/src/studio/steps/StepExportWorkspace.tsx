@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 import { useProductionContext } from '../ProductionContext';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
 import { StepExportStoryboardOverview } from './StepExportStoryboardOverview';
 import { StepExportPromptConsistency } from './StepExportPromptConsistency';
+import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
+import type { QueueSnapshotDto } from '../../api/batchJobs';
 
 type AssembledShot = {
   shotIndex: number;
@@ -49,8 +50,8 @@ export function StepExportWorkspace({
   aspectRatio?: string;
   bgmPromptHint?: string;
   productionProjectId?: string;
-  shotActiveJobMap?: Record<string, BatchJobDto>;
-  shotJobStatusMap?: Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'>;
+  shotActiveJobMap?: ShotActiveJobMap;
+  shotJobStatusMap?: ShotStatusMap;
   queueSnapshot?: QueueSnapshotDto | null;
 }) {
   const { setStep } = useProductionContext();

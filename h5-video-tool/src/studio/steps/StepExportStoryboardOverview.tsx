@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
+import type { QueueSnapshotDto } from '../../api/batchJobs';
 import type { ProductionShot, SceneSheet } from '../productionTypes';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
@@ -11,6 +11,7 @@ import { syncSourceAudioClipsFromVideo } from '../../editor/types/timeline';
 import { toast } from '../../components/Toast';
 import {
   buildExportStoryboardShotStatuses,
+  type ShotActiveJobMap,
   summarizeExportStoryboardStatus,
   type ShotStatusMap,
 } from '../exportStoryboardStatus';
@@ -66,8 +67,8 @@ export function StepExportStoryboardOverview({
   aspectRatio?: string;
   bgmPromptHint?: string;
   productionProjectId?: string;
-  shotActiveJobMap?: Record<string, BatchJobDto>;
-  shotJobStatusMap?: Record<string, 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled'>;
+  shotActiveJobMap?: ShotActiveJobMap;
+  shotJobStatusMap?: ShotStatusMap;
   queueSnapshot?: QueueSnapshotDto | null;
 }) {
   const [showScreeningRoom, setShowScreeningRoom] = useState(true);
@@ -78,7 +79,7 @@ export function StepExportStoryboardOverview({
   const statusItems = buildExportStoryboardShotStatuses(
     shots,
     shotActiveJobMap,
-    shotJobStatusMap as ShotStatusMap | undefined,
+    shotJobStatusMap,
   );
   const statusSummary = summarizeExportStoryboardStatus(statusItems);
   const totalPlatformQueue = (queueSnapshot?.totalActive ?? 0) + (queueSnapshot?.totalWaiting ?? 0);
