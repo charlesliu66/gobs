@@ -14,6 +14,7 @@ export interface CharacterPortraitEditorModalProps {
   onClose: () => void;
   characterSheet: CharacterSheet;
   editIntent: PortraitEditIntent;
+  initialTab?: 'portrait' | 'wardrobe';
   storyBio?: string;
   /** 优先作为「补充描述」默认内容（制作清单 wardrobe 服化道） */
   wardrobeSupplementDefault?: string;
@@ -33,12 +34,14 @@ export interface CharacterPortraitEditorModalProps {
   styleRefImage?: string;
   /** 制作比例，透传给 WardrobePanel */
   productionAspectRatio?: string;
+  onOpenLightbox?: (src: string) => void;
 }
 
 export function CharacterPortraitEditorModal({
   onClose,
   characterSheet,
   editIntent,
+  initialTab = 'portrait',
   storyBio,
   wardrobeSupplementDefault,
   styleRef,
@@ -51,6 +54,7 @@ export function CharacterPortraitEditorModal({
   onSheetUpdate,
   styleRefImage,
   productionAspectRatio,
+  onOpenLightbox,
 }: CharacterPortraitEditorModalProps) {
   const sheet = useMemo(() => ensureCharacterLookTree(characterSheet), [characterSheet]);
   const lookTree = sheet.lookTree ?? [];
@@ -59,7 +63,7 @@ export function CharacterPortraitEditorModal({
   // the current modal view reflects changes immediately.
   const [wardrobeSheet, setWardrobeSheet] = useState<CharacterSheet>(() => ensureCharacterLookTree(characterSheet));
 
-  const [modalTab, setModalTab] = useState<'portrait' | 'wardrobe'>('portrait');
+  const [modalTab, setModalTab] = useState<'portrait' | 'wardrobe'>(initialTab);
   const [genMode, setGenMode] = useState<'text' | 'reference'>('text');
   const [extraPrompt, setExtraPrompt] = useState('');
   const [refDataUrl, setRefDataUrl] = useState<string | null>(null);
@@ -97,7 +101,11 @@ export function CharacterPortraitEditorModal({
 
   useEffect(() => {
     setWardrobeSheet(ensureCharacterLookTree(characterSheet));
-  }, [characterSheet.id]);
+  }, [characterSheet]);
+
+  useEffect(() => {
+    setModalTab(initialTab);
+  }, [characterSheet.id, initialTab]);
 
   const persistKey = useCallback((k: string) => {
     setCompassKey(k);
@@ -273,6 +281,7 @@ export function CharacterPortraitEditorModal({
               styleRef={styleRef}
               styleRefImage={styleRefImage}
               aspectRatio={productionAspectRatio ?? aspectRatio}
+              onOpenLightbox={onOpenLightbox}
               onUpdate={(updated) => {
                 setWardrobeSheet(updated);
                 onSheetUpdate?.(updated);

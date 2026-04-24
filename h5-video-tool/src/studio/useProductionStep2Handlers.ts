@@ -35,6 +35,7 @@ type ScenePropModalState = {
 type PortraitEditState = {
   sheet: CharacterSheet;
   intent: import('../components/production/CharacterPortraitEditorModal').PortraitEditIntent;
+  initialTab?: 'portrait' | 'wardrobe';
 } | null;
 
 export function useProductionStep2Handlers({
@@ -384,9 +385,8 @@ export function useProductionStep2Handlers({
     }));
   }, [setProject]);
 
-  const handleConfirmPortrait = useCallback((imageDataUrl: string) => {
-    if (!portraitEdit) return;
-    const { sheet, intent } = portraitEdit;
+  const confirmPortraitForTarget = useCallback((target: NonNullable<PortraitEditState>, imageDataUrl: string) => {
+    const { sheet, intent } = target;
     const key = getPortraitJobKey(sheet.id, intent);
     setPortraitJobs((prev) => {
       const next = { ...prev };
@@ -420,7 +420,6 @@ export function useProductionStep2Handlers({
     };
 
     applyImage(imageDataUrl);
-    setPortraitEdit(null);
 
     if (imageDataUrl.startsWith('data:')) {
       const mime = imageDataUrl.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg';
@@ -428,7 +427,13 @@ export function useProductionStep2Handlers({
         .then(({ url }) => applyImage(url))
         .catch((e) => console.warn('[portrait upload]', e));
     }
-  }, [portraitEdit, setPortraitEdit, setPortraitJobs, setProject]);
+  }, [setPortraitJobs, setProject]);
+
+  const handleConfirmPortrait = useCallback((imageDataUrl: string) => {
+    if (!portraitEdit) return;
+    confirmPortraitForTarget(portraitEdit, imageDataUrl);
+    setPortraitEdit(null);
+  }, [confirmPortraitForTarget, portraitEdit, setPortraitEdit]);
 
   return {
     runGenerateFrame,
@@ -444,6 +449,7 @@ export function useProductionStep2Handlers({
     handleTreeSheetChange,
     handleRemoveCharacterVariant,
     handlePortraitSheetUpdate,
+    confirmPortraitForTarget,
     handleConfirmPortrait,
   };
 }

@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
 import { CharacterPortraitEditorModal } from '../../components/production/CharacterPortraitEditorModal';
 import { getPortraitJobKey, type PortraitJobState } from '../../components/production/portraitJobKey';
 import { ScenePropImageModal } from '../../components/production/ScenePropImageModal';
 import type { LibraryCharacter } from '../../api/characterLibrary';
+import { getCharacterActiveNode } from '../productionAssets';
+import { summarizeDesignAssetReadiness } from '../designAssetStatus.ts';
 import type { CharacterSheet, ProductionDesignLayer, PropSheet, SceneSheet, StoryArcLayer } from '../productionTypes';
 import { useProductionContext } from '../ProductionContext';
 import { StepDesignHeader } from './StepDesignHeader';
@@ -19,10 +22,12 @@ export function StepDesignWorkspace({
   sceneCount,
   propCount,
   batchAssetGen,
+  batchAssetSummary,
   onGenerateMissingAssets,
   onCancelBatch,
   failedTaskCount,
   onRetryFailed,
+  onDismissBatchSummary,
   onAddManualCharacter,
   onImportFromLibrary,
   chSheets,
@@ -39,6 +44,9 @@ export function StepDesignWorkspace({
   styleRefSummary,
   styleRefImageDataUrl,
   productionDesign,
+  onQuickGenerateCharacterMainLook,
+  onConfirmCharacterMainLook,
+  onOpenCharacterWardrobe,
   onGenerateCharacterFrame,
   onRemoveCharacterVariant,
   onAddCharacterVariant,
@@ -68,10 +76,12 @@ export function StepDesignWorkspace({
   sceneCount: number;
   propCount: number;
   batchAssetGen: { current: number; total: number; success: number; failed: number; startedAt: number; currentLabel?: string } | null;
+  batchAssetSummary: { total: number; success: number; failed: number; cancelled?: boolean } | null;
   onGenerateMissingAssets: () => void;
   onCancelBatch: () => void;
   failedTaskCount: number;
   onRetryFailed: () => void;
+  onDismissBatchSummary: () => void;
   onAddManualCharacter: () => void;
   onImportFromLibrary: (char: LibraryCharacter) => void;
   chSheets: CharacterSheet[];
@@ -88,6 +98,9 @@ export function StepDesignWorkspace({
   styleRefSummary: string;
   styleRefImageDataUrl?: string;
   productionDesign: ProductionDesignLayer;
+  onQuickGenerateCharacterMainLook: (sheet: CharacterSheet) => void;
+  onConfirmCharacterMainLook: (sheetId: string, nodeId: string) => void;
+  onOpenCharacterWardrobe: (sheet: CharacterSheet) => void;
   onGenerateCharacterFrame: (prompt: string, sheetId: string, variantId: string) => void;
   onRemoveCharacterVariant: (sheetId: string, variantId: string) => void;
   onAddCharacterVariant: (sheetId: string) => void;
@@ -129,6 +142,40 @@ export function StepDesignWorkspace({
     setLightboxSrc,
   } = useProductionContext();
 
+  const readinessSummary = useMemo(() => summarizeDesignAssetReadiness({
+    characters: chSheets.map((sheet) => {
+      const activeNode = getCharacterActiveNode(sheet) ?? sheet.lookTree?.[0];
+      const portraitJob = activeNode
+        ? portraitJobs[getPortraitJobKey(sheet.id, { mode: 'replace', nodeId: activeNode.id })] ?? null
+        : null;
+      return { sheet, portraitJob };
+    }),
+    scenes: scSheets.map((sheet) => {
+      const mainVariantId = sheet.variants[0]?.id;
+      const isModalTarget = scenePropModal?.kind === 'scene'
+        && scenePropModal.sheetId === sheet.id
+        && scenePropModal.variantId === mainVariantId;
+      return {
+        sheet,
+        isGenerating: genKey === `scene:${sheet.id}:${mainVariantId}` || (isModalTarget && scenePropGenBusy),
+        hasPreview: Boolean(isModalTarget && scenePropPreview),
+        hasError: Boolean(isModalTarget && scenePropError),
+      };
+    }),
+    props: propSheets.map((sheet) => {
+      const mainVariantId = sheet.variants[0]?.id;
+      const isModalTarget = scenePropModal?.kind === 'prop'
+        && scenePropModal.sheetId === sheet.id
+        && scenePropModal.variantId === mainVariantId;
+      return {
+        sheet,
+        isGenerating: genKey === `prop:${sheet.id}:${mainVariantId}` || (isModalTarget && scenePropGenBusy),
+        hasPreview: Boolean(isModalTarget && scenePropPreview),
+        hasError: Boolean(isModalTarget && scenePropError),
+      };
+    }),
+  }), [chSheets, genKey, portraitJobs, propSheets, scSheets, scenePropError, scenePropGenBusy, scenePropModal, scenePropPreview]);
+
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
@@ -141,13 +188,18 @@ export function StepDesignWorkspace({
           characterCount={characterCount}
           sceneCount={sceneCount}
           propCount={propCount}
+          readinessSummary={readinessSummary}
           batchAssetGen={batchAssetGen}
+          batchAssetSummary={batchAssetSummary}
           onGenerateMissingAssets={onGenerateMissingAssets}
           onCancelBatch={onCancelBatch}
           failedTaskCount={failedTaskCount}
           onRetryFailed={onRetryFailed}
+          onDismissBatchSummary={onDismissBatchSummary}
           onAddManualCharacter={onAddManualCharacter}
           onToggleLibraryImport={() => setShowLibraryImport((v) => !v)}
+          styleRefSummary={styleRefSummary}
+          styleRefImageDataUrl={styleRefImageDataUrl}
         />
 
         <div className="p-4 sm:p-6">
@@ -160,7 +212,10 @@ export function StepDesignWorkspace({
               onTreeFocusChange={onTreeFocusChange}
               portraitJobs={portraitJobs}
               onTreeSheetChange={onTreeSheetChange}
-              onTreeRequestPortrait={(sheet, intent) => setPortraitEdit({ sheet, intent })}
+              onTreeRequestPortrait={(sheet, intent) => setPortraitEdit({ sheet, intent, initialTab: 'portrait' })}
+              onOpenWardrobeManager={onOpenCharacterWardrobe}
+              onQuickGenerateMainLook={onQuickGenerateCharacterMainLook}
+              onConfirmMainLook={onConfirmCharacterMainLook}
               onOpenLightbox={setLightboxSrc}
               onUploadVariant={onUploadCharacterVariant}
               genKey={genKey}
@@ -179,6 +234,10 @@ export function StepDesignWorkspace({
               styleRefSummary={styleRefSummary}
               styleRefImageDataUrl={styleRefImageDataUrl}
               productionDesign={productionDesign}
+              sceneModalState={scenePropModal?.kind === 'scene' ? scenePropModal : null}
+              sceneModalPreview={scenePropModal?.kind === 'scene' ? scenePropPreview : null}
+              sceneModalError={scenePropModal?.kind === 'scene' ? scenePropError : null}
+              sceneModalBusy={scenePropModal?.kind === 'scene' ? scenePropGenBusy : false}
               onOpenSceneModal={(args) => {
                 setScenePropModal({
                   kind: 'scene',
@@ -205,6 +264,10 @@ export function StepDesignWorkspace({
               styleRefSummary={styleRefSummary}
               styleRefImageDataUrl={styleRefImageDataUrl}
               productionDesign={productionDesign}
+              propModalState={scenePropModal?.kind === 'prop' ? scenePropModal : null}
+              propModalPreview={scenePropModal?.kind === 'prop' ? scenePropPreview : null}
+              propModalError={scenePropModal?.kind === 'prop' ? scenePropError : null}
+              propModalBusy={scenePropModal?.kind === 'prop' ? scenePropGenBusy : false}
               onOpenPropModal={(args) => {
                 setScenePropModal({
                   kind: 'prop',
@@ -240,6 +303,7 @@ export function StepDesignWorkspace({
           onClose={() => setPortraitEdit(null)}
           characterSheet={portraitEdit.sheet}
           editIntent={portraitEdit.intent}
+          initialTab={portraitEdit.initialTab}
           storyBio={characterStoryBio(portraitEdit.sheet.name)}
           wardrobeSupplementDefault={wardrobeSupplementForCharacter(portraitEdit.sheet.name)}
           styleRef={styleRefSummary}
@@ -251,6 +315,7 @@ export function StepDesignWorkspace({
           onSheetUpdate={onPortraitSheetUpdate}
           styleRefImage={styleRefImageDataUrl}
           productionAspectRatio={productionAspectRatio}
+          onOpenLightbox={setLightboxSrc}
           onConfirm={onConfirmPortrait}
         />
       ) : null}
@@ -284,4 +349,3 @@ export function StepDesignWorkspace({
     </div>
   );
 }
-

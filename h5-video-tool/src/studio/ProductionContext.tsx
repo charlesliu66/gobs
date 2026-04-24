@@ -4,7 +4,11 @@ import type { CharacterSheet, ProductionShot } from './productionTypes';
 
 type L2Tab = 'characters' | 'scenes' | 'props' | 'checklist';
 type ChecklistSubTab = 'wardrobe' | 'props' | 'raw';
-type PortraitEditState = { sheet: CharacterSheet; intent: PortraitEditIntent } | null;
+type PortraitEditState = {
+  sheet: CharacterSheet;
+  intent: PortraitEditIntent;
+  initialTab?: 'portrait' | 'wardrobe';
+} | null;
 type ScenePropModalState = {
   kind: 'scene' | 'prop';
   sheetId: string;

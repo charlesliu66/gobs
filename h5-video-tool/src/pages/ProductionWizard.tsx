@@ -193,6 +193,7 @@ export function ProductionWizard() {
   const [portraitEdit, setPortraitEdit] = useState<{
     sheet: CharacterSheet;
     intent: PortraitEditIntent;
+    initialTab?: 'portrait' | 'wardrobe';
   } | null>(null);
   const [scenePropModal, setScenePropModal] = useState<{
     kind: 'scene' | 'prop';
@@ -842,6 +843,12 @@ export function ProductionWizard() {
   const batchCancelRef = useRef<boolean>(false);
   const failedTasksRef = useRef<BatchTask[]>([]);
   const [failedTaskCount, setFailedTaskCount] = useState(0);
+  const [batchAssetSummary, setBatchAssetSummary] = useState<{
+    total: number;
+    success: number;
+    failed: number;
+    cancelled?: boolean;
+  } | null>(null);
   const handleBatchGenerateMissingAssets = useCallback(async () => {
     const pd = project.productionDesign;
     const styleLock = !!project.meta.styleRefImageDataUrl?.trim();
@@ -895,6 +902,7 @@ export function ProductionWizard() {
     batchCancelRef.current = false;
     failedTasksRef.current = [];
     setFailedTaskCount(0);
+    setBatchAssetSummary(null);
     setBatchAssetGen({
       current: 0,
       total: tasks.length,
@@ -1006,6 +1014,13 @@ export function ProductionWizard() {
       );
       await Promise.all(workers);
 
+      setBatchAssetSummary({
+        total: tasks.length,
+        success: successCount,
+        failed: failedCount,
+        cancelled: batchCancelRef.current || undefined,
+      });
+
       if (batchCancelRef.current) {
         setErr(t('productionWizard.missingAssetCancelled'));
       } else if (successCount === 0) {
@@ -1059,6 +1074,7 @@ export function ProductionWizard() {
     batchCancelRef.current = false;
     failedTasksRef.current = [];
     setFailedTaskCount(0);
+    setBatchAssetSummary(null);
     setBatchAssetGen({
       current: 0,
       total: tasks.length,
@@ -1137,6 +1153,12 @@ export function ProductionWizard() {
         }
       };
       await worker();
+      setBatchAssetSummary({
+        total: tasks.length,
+        success: successCount,
+        failed: failedCount,
+        cancelled: batchCancelRef.current || undefined,
+      });
       if (failedCount > 0) {
         const hint = failMessages[0] ? formatText('productionWizard.firstErrorHint', { reason: failMessages[0] }) : '';
         setErr(formatText('productionWizard.retryAssetPartial', { success: successCount, failed: failedCount, hint }));
@@ -1532,6 +1554,7 @@ export function ProductionWizard() {
     handleTreeSheetChange,
     handleRemoveCharacterVariant,
     handlePortraitSheetUpdate,
+    confirmPortraitForTarget,
     handleConfirmPortrait,
   } = useProductionStep2Handlers({
     ar,
@@ -1550,6 +1573,75 @@ export function ProductionWizard() {
     setPortraitJobs,
     setPortraitEdit,
   });
+
+  const handleQuickGenerateCharacterMainLook = useCallback((sheet: CharacterSheet) => {
+    const productionDesign = project.productionDesign;
+    if (!productionDesign) return;
+    const ensured = ensureCharacterLookTree(sheet);
+    const node = getCharacterActiveNode(ensured) ?? ensured.lookTree?.[0];
+    if (!node) return;
+    const jobKey = getPortraitJobKey(sheet.id, { mode: 'replace', nodeId: node.id });
+    if (portraitJobs[jobKey]?.status === 'generating') return;
+
+    const basePrompt = buildCharacterImagePrompt(
+      ensured,
+      { id: node.id, label: node.label, imageDataUrl: node.imageDataUrl },
+      project.meta.styleRefSummary,
+      productionDesign,
+      { enforceGlobalStyleLock: !!project.meta.styleRefImageDataUrl?.trim() },
+    );
+    const supplement = (
+      formatWardrobeSupplementForCharacter(sheet.name, productionDesign.wardrobe) ||
+      characterStoryBio(sheet.name) ||
+      ''
+    ).trim();
+    const prompt = supplement ? `${basePrompt}\n\n用户补充：${supplement}` : basePrompt;
+
+    handleStartPortraitGenerate(jobKey, {
+      prompt,
+      aspectRatio: '9:16',
+      ...(project.meta.styleRefImageDataUrl?.trim()
+        ? { globalStyleReferenceFrame: project.meta.styleRefImageDataUrl.trim() }
+        : {}),
+    });
+  }, [
+    characterStoryBio,
+    handleStartPortraitGenerate,
+    portraitJobs,
+    project.meta.styleRefImageDataUrl,
+    project.meta.styleRefSummary,
+    project.productionDesign,
+  ]);
+
+  const handleConfirmCharacterMainLook = useCallback((sheetId: string, nodeId: string) => {
+    const sheet = (project.characterAssets ?? []).find((item) => item.id === sheetId);
+    if (!sheet) return;
+    const job = portraitJobs[getPortraitJobKey(sheetId, { mode: 'replace', nodeId })];
+    if (job?.status !== 'done') return;
+    confirmPortraitForTarget(
+      {
+        sheet,
+        intent: { mode: 'replace', nodeId },
+        initialTab: 'portrait',
+      },
+      job.previewDataUrl,
+    );
+  }, [confirmPortraitForTarget, portraitJobs, project.characterAssets]);
+
+  const handleOpenCharacterWardrobe = useCallback((sheet: CharacterSheet) => {
+    const ensured = ensureCharacterLookTree(sheet);
+    const node = getCharacterActiveNode(ensured) ?? ensured.lookTree?.[0];
+    if (!node) return;
+    setPortraitEdit({
+      sheet: ensured,
+      intent: { mode: 'replace', nodeId: node.id },
+      initialTab: 'wardrobe',
+    });
+  }, []);
+
+  const handleDismissBatchSummary = useCallback(() => {
+    setBatchAssetSummary(null);
+  }, []);
 
   const handleFile = useCallback((file: File | null) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -2227,12 +2319,14 @@ export function ProductionWizard() {
             sceneCount={scSheets.length}
             propCount={(project.propAssets ?? []).length}
             batchAssetGen={batchAssetGen}
+            batchAssetSummary={batchAssetSummary}
             onGenerateMissingAssets={() => void handleBatchGenerateMissingAssets()}
             onCancelBatch={() => {
               batchCancelRef.current = true;
             }}
             failedTaskCount={failedTaskCount}
             onRetryFailed={() => void handleRetryFailed()}
+            onDismissBatchSummary={handleDismissBatchSummary}
             onAddManualCharacter={addManualCharacter}
             onImportFromLibrary={handleImportFromLibrary}
             chSheets={chSheets}
@@ -2255,6 +2349,9 @@ export function ProductionWizard() {
             styleRefSummary={project.meta.styleRefSummary}
             styleRefImageDataUrl={project.meta.styleRefImageDataUrl}
             productionDesign={project.productionDesign}
+            onQuickGenerateCharacterMainLook={handleQuickGenerateCharacterMainLook}
+            onConfirmCharacterMainLook={handleConfirmCharacterMainLook}
+            onOpenCharacterWardrobe={handleOpenCharacterWardrobe}
             onGenerateCharacterFrame={(prompt, sheetId, variantId) => {
               void runGenerateFrame(prompt, sheetId, variantId, 'char');
             }}

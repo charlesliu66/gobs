@@ -41,13 +41,14 @@
 | Step | 名称 | 功能 |
 |---|---|---|
 | 1 | 脚本设定 | 输入故事弧、风格参考、角色设定 |
-| 2 | 制作清单 | AI 自动生成角色定妆、场景美术、道具清单；角色状态衣橱支持自定义 prompt 生成受伤/童年/换装等多状态变体图 |
+| 2 | 制作清单 | AI 自动生成角色定妆、场景美术、道具清单；顶部就绪度看板可直接查看缺图情况，角色缺图卡支持点卡直生图，角色状态衣橱支持自定义 prompt 生成受伤/童年/换装等多状态变体图 |
 | 3 | 分镜表 | AI 自动生成逐镜分镜，可手动编辑 |
 | 4 | 分镜视频 | 每个分镜生成参考视频（支持即梦多模态、文生视频、图生视频）|
 | 5 | 导出 | 放映室连续审片 + 一键导入剪辑工作台 |
 
 **分镜工作台增强功能（v0.42+）：**
 - **高级制片分镜导演规则层（v0.129）**：后端新增统一 `productionStoryboardRules` 规则层，收编 `storyboard-studio`、`video-director` 与项目自定义时长约束；`/api/studio/storyboard-table` 生成阶段会自动注入导演规则，auto-refine 阶段也会校正镜头内容与 `durationSec` 的匹配度，减少明显过碎或过长的 narrative shots。
+- **高级制片服化道体验二次收口（v0.128）**：Step 2 新增角色 / 场景 / 道具就绪度看板、风格锚定提示和批量补图 ETA / 完成总结；角色缺图卡支持点卡直接生成主形象并在卡面内确认 / 重试，状态衣橱入口上提到主卡片；场景 / 道具卡统一缺图、生成中、待确认、已就绪反馈；状态衣橱支持放大基础形象与状态图，分镜侧栏明确区分默认状态、手动覆盖和建议状态，并在主编辑区显示当前镜头的状态参考摘要。
 - **高级制片分镜视频归属与导出状态收口（v0.127）**：批量分镜任务的创建、取消、手动轮询和视频文件访问统一校验当前登录账号；即梦孤儿任务恢复不再注册缺失账号/项目/分镜的任务；导出审片页复用分镜页状态模型，展示已完成、排队/生成、待处理统计和平台排队位次，确保视频只回到对应项目对应分镜的历史里。
 - **高级制片生图运行时脚本部署补齐（v0.126）**：后端发布会同步上传 Compass/Imagen Python 生图脚本到 prod/staging 运行时 `scripts/` 目录，覆盖角色定妆、形象状态衣橱、场景/道具图、分镜首帧等共用生图链路，避免线上缺少 `imagen_generate.py`。
 - **默认路径瘦身、状态导航与主操作增强（v0.125）**：分镜页默认保留生成视频、批量生成缺失视频、状态和预览；首帧生成、AI 审片、快速调整、连续性检查、A/B 对比等收进“高级工具”；分镜列表支持按待处理、未开始、等待提交、平台排队中、生成中、已完成、失败、已取消筛选，并提供上一镜 / 下一镜导航；状态导航上移到编辑区前，生成分镜视频升级为醒目主 CTA，并提示排队位次；从状态导航选中分镜后会直达主操作区。
@@ -248,6 +249,19 @@
 - **[docs] 补记并校验现有 `productionStoryboardRules` 规则层**（`h5-video-tool-api/src/services/productionStoryboardRules.ts`）：确认当前主干内的高级制片分镜规则层已经统一沉淀镜头类型/构图/时长基线、`4-15s` 平台约束和候选合并/拆分判断口径，并补齐对应 design / implementation / run 文档。
 - **[verify] 确认 `/api/studio/storyboard-table` 与 auto-refine 已接入导演规则上下文**（`h5-video-tool-api/src/routes/studio.ts`）：本轮通过构建与规则层自检命令，验证生成阶段会拼接导演规则，refine 阶段也会校正镜头内容与 `durationSec` 的匹配关系，同时保持 shot 数量不变。
 - **[verify] 记录发布构建所依赖的类型安全前置条件**：当前主干中的 `videoKling.ts` 响应头守卫与 `googleDriveService.ts` 显式类型补齐已通过本地严格编译，确保这轮发布验证链路稳定可复现。
+
+### v0.128 — 2026-04-24
+
+**高级制片服化道就绪度与状态引用体验收口**
+
+**Frontend / UX:**
+- **[frontend] Step 2 顶部加入就绪度看板、风格锚定与批量补图总结**（`h5-video-tool/src/studio/steps/StepDesignHeader.tsx`, `StepDesignWorkspace.tsx`, `src/studio/designAssetStatus.ts`）：角色 / 场景 / 道具统一计算 `missing / generating / review / ready / failed` 状态，在页头展示 ready 比例、缺图数量、预计补图时长和完成总结。
+- **[frontend] 角色卡主路径改为缺图即生图**（`StepDesignCharactersPanel.tsx`, `ProductionWizard.tsx`, `useProductionStep2Handlers.ts`）：缺图或失败的角色卡点击即可用默认 prompt 生成主形象；预览完成后可直接在卡面确认 / 重试；状态衣橱入口提升到主卡区域。
+- **[frontend] 场景 / 道具卡统一状态反馈**（`StepDesignScenesPanel.tsx`, `StepDesignPropsPanel.tsx`）：缺图卡改为虚线边框 + “点击生图”，已出图 / 生成中 / 待确认 / 失败使用统一角标与覆盖层反馈，保持角色 / 场景 / 道具体验一致。
+- **[frontend] 状态衣橱与分镜状态引用链路补齐**（`CharacterPortraitEditorModal.tsx`, `CharacterWardrobePanel.tsx`, `StepStoryboardAssetsSidebar.tsx`, `StepStoryboardWorkspace.tsx`）：基础形象与状态图支持放大；状态衣橱提示“默认状态”会作为分镜默认引用；分镜侧栏明确区分默认状态、手动覆盖和建议状态，并在主编辑区显示当前镜头状态参考摘要。
+
+**Test:**
+- **[test] 新增资产就绪度与分镜状态引用回归**（`h5-video-tool/tests/designAssetStatus.test.ts`, `storyboardCharacterStateReference.test.ts`）：覆盖 Step 2 ready / review / generating / failed / missing 口径，以及分镜状态引用优先级 `手动覆盖 > 默认状态 > 主形象`。
 
 ### v0.127 — 2026-04-23
 

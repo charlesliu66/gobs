@@ -257,6 +257,22 @@ export function StepStoryboardWorkspace({
     return null;
   })();
 
+  const shotStateSummary = chSheets
+    .map((ch) => {
+      const manualStateId = shot.characterStateOverrides?.[ch.id] ?? '';
+      const stateId = manualStateId || ch.activeStateId || '';
+      if (!stateId) return null;
+      const state = ch.states?.find((item) => item.id === stateId);
+      if (!state) return null;
+      return {
+        id: ch.id,
+        name: ch.name,
+        label: state.label,
+        manual: !!manualStateId,
+      };
+    })
+    .filter((item): item is { id: string; name: string; label: string; manual: boolean } => !!item);
+
   return (
     <div className="flex flex-col gap-4">
       <div className={`rounded-xl border px-4 py-3 ${platformSummary.className}`}>
@@ -377,6 +393,25 @@ export function StepStoryboardWorkspace({
               </button>
             </div>
           </div>
+          {shotStateSummary.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">
+                {uiText('当前状态参考', 'Current state refs')}
+              </span>
+              {shotStateSummary.map((item) => (
+                <span
+                  key={item.id}
+                  className={`rounded-full px-2.5 py-1 text-[10px] ${
+                    item.manual
+                      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+                      : 'bg-emerald-500/12 text-emerald-300'
+                  }`}
+                >
+                  {item.name}：{item.label}（{item.manual ? uiText('手动', 'Manual') : uiText('默认', 'Default')}）
+                </span>
+              ))}
+            </div>
+          )}
           <StepStoryboardMainHeader
             styleRefSummary={styleRefSummary}
             storySceneCoverage={storySceneCoverage}
