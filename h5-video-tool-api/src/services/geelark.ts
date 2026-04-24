@@ -193,6 +193,7 @@ function loadAccountsConfig(): AccountCfg[] {
     process.env.GEELARK_ACCOUNTS_CONFIG?.trim(),
     path.join(process.cwd(), 'config', 'geelark-accounts.json'),
     path.join(process.cwd(), '..', 'config', 'geelark-accounts.json'),
+    path.join(process.cwd(), '..', '..', 'config', 'geelark-accounts.json'),
   ].filter(Boolean) as string[];
 
   for (const candidate of candidates) {

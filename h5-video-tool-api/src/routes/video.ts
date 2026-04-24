@@ -42,10 +42,12 @@ import {
 } from '../services/dreaminaRecentSync.js';
 import {
   applyOutputGalleryFilters,
+  collectOutputRecentEntriesForUser,
   enrichOutputGalleryItemsForUser,
   getHiddenOutputPathKeys,
   hideOutputPathForUser,
   isOutputPathOwnedByUser,
+  resolveExistingOutputPathForUser,
   restoreOutputPathForUser,
 } from '../services/outputGalleryService.js';
 import dreaminaRouter from './videoDreamina.js';
@@ -127,45 +129,12 @@ async function collectOutputRecentItems(options: {
   username: string;
   onlyDreamina: boolean;
 }): Promise<OutputRecentVideoEntry[]> {
-  const apiRoot = getApiDataDir();
-  const outputDir = path.join(getDefaultVideoOutputDir(), options.username);
-  const items: OutputRecentVideoEntry[] = [];
-
-  async function walk(dir: string, depth: number): Promise<void> {
-    if (depth > 10) return;
-    let entries;
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const ent of entries) {
-      const abs = path.join(dir, ent.name);
-      if (ent.isDirectory()) {
-        await walk(abs, depth + 1);
-        continue;
-      }
-      const ext = path.extname(ent.name).toLowerCase();
-      if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) continue;
-      const rel = path.relative(apiRoot, abs).replace(/\\/g, '/');
-      if (!rel.startsWith('output/')) continue;
-      const lower = rel.toLowerCase();
-      if (options.onlyDreamina && !lower.includes('dreamina')) continue;
-      try {
-        const st = await fs.stat(abs);
-        items.push({ path: rel, mtimeMs: st.mtimeMs, size: st.size });
-      } catch {
-        /* ignore missing */
-      }
-    }
-  }
-
   try {
-    await walk(outputDir, 0);
+    return await collectOutputRecentEntriesForUser(options.username, { onlyDreamina: options.onlyDreamina });
   } catch (err) {
     console.error('[video/output-recent]', err);
+    return [];
   }
-  return items;
 }
 
 /** GET /api/video/file?path=output/xxx.mp4 - 提供已生成视频文件访问，供历史记录预览
@@ -188,15 +157,20 @@ videoRouter.get('/file', async (req: Request, res: Response) => {
     return;
   }
   const username = sanitizeUsername(callerUsername);
-  const outputDir = getDefaultVideoOutputDir();
-  const fullPath = path.resolve(getApiDataDir(), path.normalize(rawPath));
-  const userOutputDir = path.join(outputDir, username);
-  const userMultishotDir = path.join(MULTISHOT_JOBS_ROOT, username);
+  const normalizedRawPath = rawPath.replace(/\\/g, '/');
+  let fullPath: string | null = null;
 
-  const inUserOutputDir = fullPath === userOutputDir || fullPath.startsWith(userOutputDir + path.sep);
-  const inUserMultishotDir = fullPath === userMultishotDir || fullPath.startsWith(userMultishotDir + path.sep);
+  if (normalizedRawPath.startsWith(`output/${username}/`)) {
+    fullPath = await resolveExistingOutputPathForUser(username, normalizedRawPath);
+  } else {
+    const candidateFullPath = path.resolve(getApiDataDir(), path.normalize(rawPath));
+    const userMultishotDir = path.join(MULTISHOT_JOBS_ROOT, username);
+    const inUserMultishotDir =
+      candidateFullPath === userMultishotDir || candidateFullPath.startsWith(userMultishotDir + path.sep);
+    if (inUserMultishotDir) fullPath = candidateFullPath;
+  }
 
-  if (!inUserOutputDir && !inUserMultishotDir) {
+  if (!fullPath) {
     res.status(403).json({ error: '无权访问该视频' });
     return;
   }

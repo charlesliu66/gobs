@@ -2,7 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
-## v0.130 — 2026-04-24
+## v0.131 - 2026-04-24
+**Legacy path fallbacks for dual-env shared-data layout**
+**Backend / Compatibility:**
+- Editor projects now resolve from shared-data first and can rehome legacy files from old api/editor-projects paths.
+- Output gallery scanning and file serving now fall back to legacy api/output paths when shared-data output is empty.
+- GeeLark account config loaders now also check ../../config/geelark-accounts.json for split staging/prod layouts.
+- Imagen runtime script resolution now supports repo-root scripts/imagen_generate.py in deployed prod/api and staging/api layouts.
+- init_dual_env_server now copies legacy output, editor-projects, uploads, db, exports, assets and .data content into each env shared-data directory.
+**Tests:**
+- Added targeted fallback tests for editor project storage, output gallery legacy paths, GeeLark config path fallback, Imagen script path fallback and dual-env init migration commands.## v0.130 — 2026-04-24
 
 **高级制片 execution segment 执行层上线**
 

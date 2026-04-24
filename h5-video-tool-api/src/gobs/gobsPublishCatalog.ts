@@ -53,6 +53,7 @@ export async function loadPublishAccountsFromConfig(): Promise<PublishAccountOpt
   const candidates = [
     join(process.cwd(), '..', 'config', 'geelark-accounts.json'),
     join(process.cwd(), 'config', 'geelark-accounts.json'),
+    join(process.cwd(), '..', '..', 'config', 'geelark-accounts.json'),
   ];
   for (const p of candidates) {
     try {

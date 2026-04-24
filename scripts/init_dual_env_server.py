@@ -29,6 +29,19 @@ except ModuleNotFoundError:
 CURRENT_API_DIR = '/home/ubuntu/qas-h5/api'
 CURRENT_FRONTEND_DIR = '/home/ubuntu/qas-h5/frontend'
 CURRENT_NGINX_SITE = '/etc/nginx/sites-enabled/qas-h5'
+LEGACY_DATA_PATHS = [
+    'output',
+    'editor-projects',
+    'quickfilm',
+    'uploads',
+    'data',
+    'db',
+    '.data',
+    'exports',
+    'assets',
+    'asset-index.json',
+    'drive-cache',
+]
 
 
 def _exec(client: paramiko.SSHClient, cmd: str, *, check: bool = True) -> tuple[int, str, str]:
@@ -74,6 +87,31 @@ def _configure_env(client: paramiko.SSHClient, env_path: str, *, port: int, data
         },
     )
     _write_remote_file(client, env_path, updated_text, sudo=False)
+
+
+def _legacy_data_migration_commands(source_root: str, target_root: str) -> list[str]:
+    commands: list[str] = []
+    for relative_path in LEGACY_DATA_PATHS:
+        source_path = f'{source_root}/{relative_path}'
+        target_path = f'{target_root}/{relative_path}'
+        target_parent = _remote_parent(target_path)
+        commands.append(
+            ' '.join([
+                f"if [ -d '{source_path}' ]; then",
+                f"mkdir -p '{target_path}'",
+                f"cp -an '{source_path}/.' '{target_path}/'",
+                'fi',
+            ])
+        )
+        commands.append(
+            ' '.join([
+                f"if [ -f '{source_path}' ]; then",
+                f"mkdir -p '{target_parent}'",
+                f"cp -n '{source_path}' '{target_path}'",
+                'fi',
+            ])
+        )
+    return commands
 
 
 def _restart_pm2_process(client: paramiko.SSHClient, *, name: str, script_path: str, cwd: str) -> None:
@@ -143,6 +181,11 @@ def main() -> None:
             data_dir=f'{staging_base}/shared-data',
             environment='staging',
         )
+
+        for cmd in _legacy_data_migration_commands(CURRENT_API_DIR, f'{prod_base}/shared-data'):
+            _exec(client, cmd)
+        for cmd in _legacy_data_migration_commands(CURRENT_API_DIR, f'{staging_base}/shared-data'):
+            _exec(client, cmd)
 
         _exec(client, 'pm2 delete qas-api', check=False)
         _restart_pm2_process(client, name=prod.pm2_name, script_path=f'{prod.api_dir}/index.js', cwd=prod.api_dir)

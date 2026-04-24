@@ -3,9 +3,13 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import { nanoid } from 'nanoid';
-import { getApiDataDir } from '../config/apiDataDir.js';
 import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { resolveEditorProjectSaveName } from '../services/projectPersistenceGuards.js';
+import {
+  getEditorProjectDir,
+  rehomeAllLegacyEditorProjects,
+  resolveExistingEditorProjectFile,
+} from '../services/editorProjectStorage.js';
 import { normalizeEditorProjectMemory, type EditorProjectMemory } from '../types/editorAgentMemory.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
@@ -24,7 +28,7 @@ type EditorProjectDoc = {
 
 function getUserDir(req: Request): string {
   const username = sanitizeUsername(req.user?.username);
-  return path.join(getApiDataDir(), 'editor-projects', username);
+  return getEditorProjectDir(username);
 }
 
 function isSafeId(id: string): boolean {
@@ -41,7 +45,8 @@ router.post('/projects', async (req: Request, res: Response) => {
   const id = typeof body.id === 'string' && isSafeId(body.id) ? body.id : `ep_${nanoid(10)}`;
   const now = new Date().toISOString();
   const dir = getUserDir(req);
-  const file = path.join(dir, `${id}.json`);
+  const username = sanitizeUsername(req.user?.username);
+  const file = await resolveExistingEditorProjectFile(username, id);
 
   let createdAt = now;
   let previousMemory: unknown;
@@ -92,6 +97,7 @@ router.get('/projects', async (req: Request, res: Response) => {
   const dir = getUserDir(req);
   try {
     await fs.mkdir(dir, { recursive: true });
+    await rehomeAllLegacyEditorProjects(sanitizeUsername(req.user?.username));
     const files = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'));
     const list: Array<Pick<EditorProjectDoc, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'> & { sourceProductionProjectId?: string }> = [];
     for (const file of files) {
@@ -125,7 +131,9 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const raw = JSON.parse(await fs.readFile(path.join(getUserDir(req), `${id}.json`), 'utf-8')) as EditorProjectDoc;
+    const username = sanitizeUsername(req.user?.username);
+    const file = await resolveExistingEditorProjectFile(username, id);
+    const raw = JSON.parse(await fs.readFile(file, 'utf-8')) as EditorProjectDoc;
     res.json({
       success: true,
       data: {
@@ -150,9 +158,9 @@ router.patch('/projects/:id', async (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: '请提供有效的项目名称' });
     return;
   }
-  const dir = getUserDir(req);
-  const file = path.join(dir, `${id}.json`);
   try {
+    const username = sanitizeUsername(req.user?.username);
+    const file = await resolveExistingEditorProjectFile(username, id);
     const raw = JSON.parse(await fs.readFile(file, 'utf-8')) as EditorProjectDoc;
     raw.name = name;
     raw.updatedAt = new Date().toISOString();
@@ -170,7 +178,9 @@ router.delete('/projects/:id', async (req: Request, res: Response) => {
     return;
   }
   try {
-    await fs.unlink(path.join(getUserDir(req), `${id}.json`));
+    const username = sanitizeUsername(req.user?.username);
+    const file = await resolveExistingEditorProjectFile(username, id);
+    await fs.unlink(file);
     res.json({ success: true });
   } catch {
     res.status(404).json({ success: false, error: '剪辑项目不存在' });
@@ -234,9 +244,9 @@ router.post('/projects/:id/sync-production', async (req: Request, res: Response)
   if (!isSafeId(editorId)) { res.status(400).json({ error: '无效的项目 id' }); return; }
 
   try {
-    const editorDoc = JSON.parse(
-      await fs.readFile(path.join(getUserDir(req), `${editorId}.json`), 'utf-8'),
-    ) as EditorProjectDoc;
+    const username = sanitizeUsername(req.user?.username);
+    const editorFile = await resolveExistingEditorProjectFile(username, editorId);
+    const editorDoc = JSON.parse(await fs.readFile(editorFile, 'utf-8')) as EditorProjectDoc;
 
     const project = editorDoc.project as Record<string, unknown>;
     const prodProjectId = project.sourceProductionProjectId as string | undefined;
@@ -245,7 +255,6 @@ router.post('/projects/:id/sync-production', async (req: Request, res: Response)
       return;
     }
 
-    const username = sanitizeUsername(req.user?.username);
     const prodFile = path.join(getProductionProjDir(username), `${prodProjectId}.json`);
     let prodData: Record<string, unknown>;
     try {
@@ -317,8 +326,8 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
   }
 
   try {
-    const dir = getUserDir(req);
-    const file = path.join(dir, `${editorId}.json`);
+    const username = sanitizeUsername(req.user?.username);
+    const file = await resolveExistingEditorProjectFile(username, editorId);
     const doc = JSON.parse(await fs.readFile(file, 'utf-8')) as EditorProjectDoc;
     const project = doc.project as Record<string, unknown>;
     const prodProjectId = project.sourceProductionProjectId as string | undefined;
@@ -327,7 +336,6 @@ router.patch('/projects/:id/apply-sync', async (req: Request, res: Response) => 
       return;
     }
 
-    const username = sanitizeUsername(req.user?.username);
     const prodFile = path.join(getProductionProjDir(username), `${prodProjectId}.json`);
     let prodData: Record<string, unknown>;
     try {

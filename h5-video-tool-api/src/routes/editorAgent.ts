@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { Router, type Request } from 'express';
-import { getApiDataDir } from '../config/apiDataDir.js';
 import type { AspectRatioPreset, TimelineProject, VideoClip } from '../editor/timelineSchema.js';
 import { routeEditorAgentMessage } from '../services/editorAgentIntent.js';
 import { runEditorAgentChat } from '../services/editorAgentChat.js';
@@ -39,6 +38,10 @@ import {
   saveEditorUserCommunicationProfile,
   updateEditorUserCommunicationProfileForUser,
 } from '../services/editorUserProfileService.js';
+import {
+  getEditorProjectDir,
+  resolveExistingEditorProjectFile,
+} from '../services/editorProjectStorage.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
@@ -48,11 +51,12 @@ function isSafeProjectId(id: string): boolean {
 }
 
 function getEditorProjectFile(username: string, projectId: string): string {
-  return path.join(getApiDataDir(), 'editor-projects', sanitizeUsername(username), `${projectId}.json`);
+  return path.join(getEditorProjectDir(username), `${projectId}.json`);
 }
 
 async function readProjectDocForMemory(username: string, projectId: string): Promise<Record<string, unknown>> {
-  const raw = await fs.readFile(getEditorProjectFile(username, projectId), 'utf-8');
+  const filePath = await resolveExistingEditorProjectFile(username, projectId);
+  const raw = await fs.readFile(filePath, 'utf-8');
   return JSON.parse(raw) as Record<string, unknown>;
 }
 

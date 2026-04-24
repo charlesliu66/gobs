@@ -4,6 +4,7 @@
  * 环境变量: COMPASS_API_KEY2（优先）/ COMPASS_API_KEY, COMPASS_API_URL
  */
 import path from 'path';
+import fsSync from 'fs';
 import fs from 'fs/promises';
 import os from 'os';
 import { spawn } from 'child_process';
@@ -12,7 +13,23 @@ import { resolveCompassApiKeyCandidatesPreferKey2 } from './compassApiKey.js';
 import { recordKeyUsage } from './keyUsageStats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PY_SCRIPT = path.resolve(__dirname, '../../scripts/imagen_generate.py');
+
+function normalizeUniquePaths(paths: string[]): string[] {
+  return [...new Set(paths.map((item) => path.resolve(item)))];
+}
+
+export function resolveImagenScriptPath(moduleDir = __dirname): string {
+  const candidates = normalizeUniquePaths([
+    path.resolve(moduleDir, '../../scripts/imagen_generate.py'),
+    path.resolve(moduleDir, '../../../scripts/imagen_generate.py'),
+    path.resolve(process.cwd(), 'scripts', 'imagen_generate.py'),
+    path.resolve(process.cwd(), '..', 'scripts', 'imagen_generate.py'),
+    path.resolve(process.cwd(), '..', '..', 'scripts', 'imagen_generate.py'),
+  ]);
+  return candidates.find((candidate) => fsSync.existsSync(candidate)) ?? candidates[0]!;
+}
+
+const PY_SCRIPT = resolveImagenScriptPath();
 
 export interface ImagenPythonOptions {
   prompt: string;

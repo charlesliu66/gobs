@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'fs/promises';
+import { access, mkdir, readFile, readdir, rename, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { getApiDataDir } from '../config/apiDataDir.js';
+import { getDefaultVideoOutputDir } from '../config/apiDataDir.js';
 import { extractDreaminaSubmitKeyFromPath, type OutputRecentVideoEntry } from './dreaminaRecentSync.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 import { listOwnedBatchJobPromptCandidates } from './batchJobsQueue.js';
@@ -93,6 +94,110 @@ export function toOutputGalleryItem(item: OutputRecentVideoEntry): OutputGallery
     source: inferOutputGallerySource(item.path),
     hiddenKey: toOutputGalleryHiddenKey(item.path),
   };
+}
+
+function normalizeUniquePaths(paths: string[]): string[] {
+  return [...new Set(paths.map((item) => path.resolve(item)))];
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getOutputScanRoots(username: string): string[] {
+  const safeUser = sanitizeUsername(username);
+  return normalizeUniquePaths([
+    path.join(getDefaultVideoOutputDir(), safeUser),
+    path.join(process.cwd(), 'output', safeUser),
+  ]);
+}
+
+function getOutputResolveRoots(): string[] {
+  return normalizeUniquePaths([getApiDataDir(), process.cwd()]);
+}
+
+function toOutputRelativePath(absPath: string, apiRoots: string[]): string | null {
+  for (const apiRoot of apiRoots) {
+    const rel = path.relative(apiRoot, absPath).replace(/\\/g, '/');
+    if (rel.startsWith('output/')) return rel;
+  }
+  return null;
+}
+
+export async function collectOutputRecentEntriesForUser(
+  username: string,
+  options: { onlyDreamina: boolean },
+): Promise<OutputRecentVideoEntry[]> {
+  const apiRoots = getOutputResolveRoots();
+  const scanRoots = getOutputScanRoots(username);
+  const items: OutputRecentVideoEntry[] = [];
+  const seenPaths = new Set<string>();
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > 10) return;
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const absPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(absPath, depth + 1);
+        continue;
+      }
+
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) continue;
+
+      const relativePath = toOutputRelativePath(absPath, apiRoots);
+      if (!relativePath || seenPaths.has(relativePath)) continue;
+      if (options.onlyDreamina && !relativePath.toLowerCase().includes('dreamina')) continue;
+
+      try {
+        const fileStat = await stat(absPath);
+        items.push({
+          path: relativePath,
+          mtimeMs: fileStat.mtimeMs,
+          size: fileStat.size,
+        });
+        seenPaths.add(relativePath);
+      } catch {
+        // Ignore files that disappear mid-scan.
+      }
+    }
+  }
+
+  for (const scanRoot of scanRoots) {
+    await walk(scanRoot, 0);
+  }
+
+  return items;
+}
+
+export async function resolveExistingOutputPathForUser(
+  username: string,
+  videoPath: string,
+): Promise<string | null> {
+  if (!isOutputPathOwnedByUser(username, videoPath)) return null;
+
+  const normalizedVideoPath = videoPath.replace(/\\/g, '/');
+  for (const root of getOutputResolveRoots()) {
+    const candidate = path.resolve(root, path.normalize(normalizedVideoPath));
+    const allowedRoot = path.resolve(path.join(root, 'output', sanitizeUsername(username)));
+    const isAllowed = candidate === allowedRoot || candidate.startsWith(`${allowedRoot}${path.sep}`);
+    if (!isAllowed) continue;
+    if (await pathExists(candidate)) return candidate;
+  }
+
+  return null;
 }
 
 function normalizeOutputPromptSummary(text: string): string | undefined {
