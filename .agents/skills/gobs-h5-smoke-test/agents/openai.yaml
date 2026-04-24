@@ -1,0 +1,4 @@
+interface:
+  display_name: "GOBS H5 Smoke Test"
+  short_description: "Run GOBS H5 smoke checks for local, staging, or prod"
+  default_prompt: "Use $gobs-h5-smoke-test to run a quick or full GOBS H5 smoke test."

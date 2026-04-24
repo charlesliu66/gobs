@@ -2,6 +2,21 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.129 — 2026-04-24
+
+**Repo 私有发布门禁、H5 冒烟技能与高级制片分镜导演规则层文档补齐**
+
+**Internal / Release Ops:**
+- 新增仓库私有 skill `gobs-release-guard`，收口 `preflight / staging-release / prod-release / post-release` 检查，并通过 PowerShell 脚本统一输出 `GO / NO-GO / GO WITH WARNINGS`。
+- 新增仓库私有 skill `gobs-h5-smoke-test`，支持 `local / staging / prod` 的 `quick / full` 冒烟验证，覆盖版本接口、环境标识、关键路由与 expected commit 比对。
+- 补齐私有 skill 设计文档、实施计划与 4+1 run 产物，方便后续复用和自动化接入。
+
+**Advanced Production / Storyboard Rules:**
+- 补记并校验当前主干内已存在的 `productionStoryboardRules` 规则层，补齐 design / implementation / run 文档，明确高级制片分镜的镜头时长建议、`4-15s` 平台约束和候选合并/拆分判断口径。
+- 通过本轮验证确认 `/api/studio/storyboard-table` 已将导演规则上下文拼接进生成阶段的 `extraNotes`，并保留用户显式输入的补充说明。
+- 通过本轮验证确认 `autoRefineShots` 会在保持 shot 数量不变的前提下，连同结构化 prompt 一起保守修正不合理的 `durationSec`。
+- 记录当前主干中 `videoKling.ts` 与 `googleDriveService.ts` 的类型安全前置修复已通过本地严格编译，保证发布构建链路稳定。
+
 ## v0.127 — 2026-04-23
 
 **高级制片分镜视频归属与导出状态收口**

@@ -225,16 +225,29 @@
 
 ---
 
+### 10. 内部开发与发布工具
+
+- **Repo Private Skills**：仓库内置 `gobs-release-guard` 与 `gobs-h5-smoke-test` 两个私有 skill，分别用于发布门禁检查与 H5 冒烟验证。
+- **发布门禁脚本**：`gobs-release-guard/scripts/release_guard.ps1` 支持 `preflight / staging-release / prod-release / post-release` 四种模式，用于统一检查 run 资料、git 对齐、版本接口与 staging verified 条件。
+- **冒烟验证脚本**：`gobs-h5-smoke-test/scripts/smoke_http.ps1` 支持 `local / staging / prod` 和 `quick / full` 两种深度，用于快速确认页面、接口、环境标识和部署 SHA 是否符合预期。
+
+---
+
 ## 二、Changelog
 
 ### v0.129 — 2026-04-24
 
-**高级制片分镜导演规则层**
+**Repo 私有发布门禁、H5 冒烟技能与高级制片分镜导演规则层文档补齐**
+
+**Internal / Release Ops:**
+- **[repo-private skills] 新增 `gobs-release-guard`**：把 GOBS/QAS 的 `preflight / staging-release / prod-release / post-release` 门禁检查固化为仓库私有 skill，统一读取 `AGENTS.md`、`feedback.md`、`TASK-INDEX.md` 与 run 资料，并通过 PowerShell 脚本输出 `GO / NO-GO / GO WITH WARNINGS`。
+- **[repo-private skills] 新增 `gobs-h5-smoke-test`**：支持 `local / staging / prod` 三环境的 `quick / full` 冒烟检查，覆盖首页、关键路由、`/api/system/version`、环境标识与 expected commit 比对，便于发布后快速确认线上实际运行的 SHA。
+- **[docs] 补齐私有 skill 设计、实施与 run 产物**：新增 design / implementation plan、run anchor、planner、challenger、builder、verifier、release decision 文档，便于后续继续把发布 SOP 自动化沉淀到项目内。
 
 **Backend / Storyboard:**
-- **[backend] 新增统一 `productionStoryboardRules` 规则模块**（`h5-video-tool-api/src/services/productionStoryboardRules.ts`）：收编 `storyboard-studio` 的镜头类型/构图/时长基线、`video-director` 的平台节奏约束，以及项目自定义的 `4-15s` 叙事建议，形成可复用的生成/校正规则上下文。
-- **[backend] `/api/studio/storyboard-table` 自动注入导演规则上下文**（`h5-video-tool-api/src/routes/studio.ts`）：在不修改底层 `studioPipeline.ts` 的前提下，通过 `extraNotes` 将规则层接入分镜生成源头，让 shot 数量和 `durationSec` 更贴近导演逻辑而不是平均分配。
-- **[backend] auto-refine 新增时长合理性校正**（`h5-video-tool-api/src/routes/studio.ts`）：批量 refine 现在会同时检查 `durationSec`、镜头类型、动作复杂度和信息密度的匹配关系，对明显过短/过长的镜头做保守修正，但不改变镜头数量。
+- **[docs] 补记并校验现有 `productionStoryboardRules` 规则层**（`h5-video-tool-api/src/services/productionStoryboardRules.ts`）：确认当前主干内的高级制片分镜规则层已经统一沉淀镜头类型/构图/时长基线、`4-15s` 平台约束和候选合并/拆分判断口径，并补齐对应 design / implementation / run 文档。
+- **[verify] 确认 `/api/studio/storyboard-table` 与 auto-refine 已接入导演规则上下文**（`h5-video-tool-api/src/routes/studio.ts`）：本轮通过构建与规则层自检命令，验证生成阶段会拼接导演规则，refine 阶段也会校正镜头内容与 `durationSec` 的匹配关系，同时保持 shot 数量不变。
+- **[verify] 记录发布构建所依赖的类型安全前置条件**：当前主干中的 `videoKling.ts` 响应头守卫与 `googleDriveService.ts` 显式类型补齐已通过本地严格编译，确保这轮发布验证链路稳定可复现。
 
 ### v0.127 — 2026-04-23
 

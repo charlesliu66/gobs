@@ -1,0 +1,4 @@
+interface:
+  display_name: "GOBS Release Guard"
+  short_description: "Guard GOBS staging and prod release workflow"
+  default_prompt: "Use $gobs-release-guard to run a safe GOBS release preflight or release check."
