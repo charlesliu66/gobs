@@ -248,7 +248,9 @@
 - Imagen runtime script resolution now supports repo-root scripts/imagen_generate.py in deployed prod/api and staging/api layouts.
 - init_dual_env_server now copies key legacy data directories into each env shared-data root during dual-env initialization.
 **Tests:**
-- Added targeted fallback tests for editor project storage, output gallery, GeeLark config path lookup, Imagen script lookup and dual-env init migration commands.### v0.130 �?2026-04-24
+- Added targeted fallback tests for editor project storage, output gallery, GeeLark config path lookup, Imagen script lookup and dual-env init migration commands.
+
+### v0.130 �?2026-04-24
 
 **高级制片分镜入队状态回填与假成功提示修�?*
 
