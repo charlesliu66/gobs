@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { BatchJobDto, QueueSnapshotDto } from '../api/batchJobs';
+import { getBatchJobs, type BatchJobDto, type QueueSnapshotDto } from '../api/batchJobs';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 const STREAM_RETRY_BASE_MS = 1500;
@@ -13,6 +13,8 @@ export interface GlobalJobsState {
   togglePanel: () => void;
   closePanel: () => void;
   dismissJob: (id: string) => void;
+  refreshJobs: (projectId?: string) => Promise<void>;
+  upsertJobs: (jobs: BatchJobDto[]) => void;
 }
 
 const DEFAULT_SNAPSHOT: QueueSnapshotDto = {
@@ -29,6 +31,8 @@ const GlobalJobsContext = createContext<GlobalJobsState>({
   togglePanel: () => {},
   closePanel: () => {},
   dismissJob: () => {},
+  refreshJobs: async () => {},
+  upsertJobs: () => {},
 });
 
 export const useGlobalJobs = () => useContext(GlobalJobsContext);
@@ -39,6 +43,27 @@ export function useGlobalJobsProvider(): GlobalJobsState {
   const [snapshot, setSnapshot] = useState<QueueSnapshotDto>(DEFAULT_SNAPSHOT);
   const [panelOpen, setPanelOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const upsertJobs = useCallback((incomingJobs: BatchJobDto[]) => {
+    if (incomingJobs.length === 0) return;
+    setJobMap((prev) => {
+      const next = new Map(prev);
+      for (const job of incomingJobs) {
+        if (!job?.id) continue;
+        next.set(job.id, job);
+      }
+      return next;
+    });
+  }, []);
+
+  const refreshJobs = useCallback(async (projectId?: string) => {
+    try {
+      const { jobs } = await getBatchJobs(projectId);
+      upsertJobs(jobs);
+    } catch (error) {
+      console.warn('[global-jobs] refresh failed', error);
+    }
+  }, [upsertJobs]);
 
   useEffect(() => {
     const token = localStorage.getItem('gobs_token') ?? '';
@@ -56,16 +81,13 @@ export function useGlobalJobsProvider(): GlobalJobsState {
 
       es.onopen = () => {
         reconnectAttempts = 0;
+        void refreshJobs();
       };
 
       es.onmessage = (event: MessageEvent) => {
         try {
           const job = JSON.parse(event.data as string) as BatchJobDto;
-          setJobMap((prev) => {
-            const next = new Map(prev);
-            next.set(job.id, job);
-            return next;
-          });
+          upsertJobs([job]);
         } catch {
           // Ignore malformed events.
         }
@@ -89,6 +111,7 @@ export function useGlobalJobsProvider(): GlobalJobsState {
       };
     };
 
+    void refreshJobs();
     connect();
 
     return () => {
@@ -96,7 +119,7 @@ export function useGlobalJobsProvider(): GlobalJobsState {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, []);
+  }, [refreshJobs, upsertJobs]);
 
   const jobs = useMemo(() => (
     Array.from(jobMap.values())
@@ -115,5 +138,15 @@ export function useGlobalJobsProvider(): GlobalJobsState {
     setDismissed((prev) => new Set(prev).add(id));
   }, []);
 
-  return { jobs, snapshot, activeCount, panelOpen, togglePanel, closePanel, dismissJob };
+  return {
+    jobs,
+    snapshot,
+    activeCount,
+    panelOpen,
+    togglePanel,
+    closePanel,
+    dismissJob,
+    refreshJobs,
+    upsertJobs,
+  };
 }

@@ -98,6 +98,7 @@ import { StepStoryboardAbCompare } from '../studio/steps/StepStoryboardAbCompare
 import { useProductionShotReview } from '../studio/useProductionShotReview';
 import { useProductionShotVersions } from '../studio/useProductionShotVersions';
 import { useGlobalJobs } from '../hooks/useGlobalJobs';
+import { resolveEnqueueJobState, resolveStoryboardQueueSnapshot } from '../studio/storyboardQueueState';
 import { apiPost } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
@@ -513,7 +514,12 @@ export function ProductionWizard() {
   /** 仅内存：未确认的肖像预览；刷新页面即丢失，不写入 localStorage */
   const [portraitJobs, setPortraitJobs] = useState<Record<string, PortraitJobState>>({});
   const [shotBusyMap, setShotBusyMap] = useState<Record<string, 'frame' | 'video'>>({});
-  const { jobs: globalJobs, snapshot } = useGlobalJobs();
+  const {
+    jobs: globalJobs,
+    snapshot,
+    refreshJobs,
+    upsertJobs,
+  } = useGlobalJobs();
   const [syncing, setSyncing] = useState(false);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [bulkCancelling, setBulkCancelling] = useState(false);
@@ -625,12 +631,13 @@ export function ProductionWizard() {
       toast.success(formatText('productionWizard.syncCompleted', {
         summary: parts.join(' / ') || formatText('productionWizard.syncChecked', { count: data.polled }),
       }));
+      await refreshJobs();
     } catch (e) {
       toast.error(formatText('productionWizard.syncFailed', { reason: e instanceof Error ? e.message : String(e) }));
     } finally {
       setSyncing(false);
     }
-  }, [formatText, syncing, t]);
+  }, [formatText, refreshJobs, syncing, t]);
   const setShotBusy = useCallback(
     (shotId: string, status: 'frame' | 'video') =>
       setShotBusyMap((prev) => ({ ...prev, [shotId]: status })),
@@ -1954,7 +1961,35 @@ export function ProductionWizard() {
         ...(mv ? { dreaminaModelVersion: mv } : {}),
         ...extraBody,
       };
-      const { globalQueuePos, etaSec } = await enqueueProductionShot(serverProjectId, s.shotIndex, submitReq);
+      const { globalQueuePos, etaSec, job } = await enqueueProductionShot(serverProjectId, s.shotIndex, submitReq);
+      if (job) {
+        upsertJobs([job]);
+      } else {
+        void refreshJobs();
+      }
+      const enqueueState = resolveEnqueueJobState(job);
+      if (enqueueState.isError) {
+        const message = enqueueState.message || t('productionWizard.queueFailed');
+        setProject((p) => {
+          const shots = [...p.shots];
+          const cur = shots[shotIdx];
+          if (!cur) return p;
+          shots[shotIdx] = {
+            ...cur,
+            lastVideoError: {
+              submitId: job?.submitId || undefined,
+              jobId: job?.id,
+              reason: message,
+              cancelled: job?.status === 'cancelled',
+              at: new Date().toISOString(),
+            },
+          };
+          return { ...p, shots };
+        });
+        setErr(message);
+        toast.error(message);
+        return;
+      }
       setProject((p) => {
         const shots = [...p.shots];
         const cur = shots[shotIdx];
@@ -1991,7 +2026,9 @@ export function ProductionWizard() {
     setProject,
     formatText,
     formatEta,
+    refreshJobs,
     t,
+    upsertJobs,
   ]);
 
   const handleGenerateShotVideo = useCallback(async () => {
@@ -2107,7 +2144,10 @@ export function ProductionWizard() {
   const selectedShotJob = project.shots[selectedShotIdx]
     ? shotActiveJobMap[String(project.shots[selectedShotIdx].shotIndex)] ?? null
     : null;
-  const queueSnapshot: QueueSnapshotDto = snapshot ?? { totalActive: 0, totalWaiting: 0, avgSecPerJob: 120 };
+  const queueSnapshot: QueueSnapshotDto = resolveStoryboardQueueSnapshot(
+    snapshot ?? { totalActive: 0, totalWaiting: 0, avgSecPerJob: 120 },
+    projectJobs,
+  ).snapshot;
 
   const handleCancelActiveJob = useCallback(async (job: BatchJobDto) => {
     if (!job?.id) return;
@@ -2120,15 +2160,17 @@ export function ProductionWizard() {
       const result = await cancelBatchJob(job.id);
       if (!result.ok && result.reason === 'already_terminal') {
         toast.info(t('productionWizard.taskAlreadyFinished'));
+        await refreshJobs();
         return;
       }
       toast.info(result.note);
+      await refreshJobs();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('productionWizard.cancelFailed'));
     } finally {
       setCancellingJobId((current) => (current === job.id ? null : current));
     }
-  }, [t]);
+  }, [refreshJobs, t]);
 
   const handleCancelQueuedByProject = useCallback(async () => {
     if (!serverProjectId) return;
@@ -2138,12 +2180,13 @@ export function ProductionWizard() {
       toast.info(result.cancelled > 0
         ? formatText('productionWizard.cancelledQueuedCount', { count: result.cancelled })
         : t('productionWizard.noQueuedTasks'));
+      await refreshJobs();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('productionWizard.bulkCancelFailed'));
     } finally {
       setBulkCancelling(false);
     }
-  }, [formatText, serverProjectId, t]);
+  }, [formatText, refreshJobs, serverProjectId, t]);
 
   // ── AI 审片助手 ──────────────────────────────────────────────────────────
   // ── AI 审片 + 一致性检查 ────────────────────────────────────────────────────

@@ -236,6 +236,16 @@
 
 ## 二、Changelog
 
+### v0.130 — 2026-04-24
+
+**高级制片分镜入队状态回填与假成功提示修复**
+
+**Frontend / Storyboard Queue:**
+- **[frontend] `useGlobalJobs` 增加 HTTP 回填与本地 upsert**（`h5-video-tool/src/hooks/useGlobalJobs.ts`）：进入高级制片页后会主动拉取一次 `batch-jobs` 当前状态，SSE 重连后也会补拉，避免只靠流事件导致页面长期停留在默认空状态。
+- **[frontend] 分镜入队后立即写回本地 job 状态**（`h5-video-tool/src/pages/ProductionWizard.tsx`）：`/api/batch-jobs/enqueue` 返回的最新 job 会立刻注入当前页面；取消排队、批量取消和手动同步后也会主动 refresh，确保“队列中 / 已完成 / 当前分镜主操作”不再卡旧状态。
+- **[frontend] 修正入队假成功提示**（`h5-video-tool/src/pages/ProductionWizard.tsx`, `h5-video-tool/src/studio/storyboardQueueState.ts`）：如果后端在 enqueue 期间已经把 job 标成 `failed/cancelled`，前端现在会直接展示失败原因并保留当前分镜错误态，不再一律 toast “已入队”。
+- **[frontend] 平台状态条增加本地回退快照**（`h5-video-tool/src/studio/storyboardQueueState.ts`, `h5-video-tool/src/pages/ProductionWizard.tsx`）：当全局 `queue-snapshot` 还没回到前端，但当前项目已经存在 `awaiting_submit/pending/queuing/processing` job 时，页面不再错误显示“平台空闲”。
+
 ### v0.129 — 2026-04-24
 
 **Repo 私有发布门禁、H5 冒烟技能与高级制片分镜导演规则层文档补齐**
@@ -1937,4 +1947,4 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-04-24 (v0.129)*
+*Last updated: 2026-04-24 (v0.130)*
