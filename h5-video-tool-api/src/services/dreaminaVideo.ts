@@ -38,10 +38,30 @@ export function isDreaminaEnabled(): boolean {
   }
 }
 
-export function getDreaminaScriptsDir(): string {
+export function getDreaminaScriptsDirCandidates(baseDir = process.cwd()): string[] {
+  const seen = new Set<string>();
+  const add = (candidate: string) => {
+    const resolved = path.resolve(candidate);
+    if (!seen.has(resolved)) seen.add(resolved);
+  };
+  add(path.resolve(baseDir, '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'));
+  add(path.resolve(baseDir, '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'));
+  add(path.resolve(baseDir, '..', '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'));
+  return [...seen];
+}
+
+export function getDreaminaScriptsDir(requiredScript = 'dreamina_wrapper.py'): string {
   const env = process.env.DREAMINA_SCRIPTS_DIR?.trim();
-  if (env) return path.resolve(env);
-  return path.resolve(process.cwd(), '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts');
+  if (env) {
+    const envResolved = path.resolve(env);
+    if (fsSync.existsSync(path.join(envResolved, requiredScript))) {
+      return envResolved;
+    }
+  }
+  const hit = getDreaminaScriptsDirCandidates().find((candidate) =>
+    fsSync.existsSync(path.join(candidate, requiredScript)),
+  );
+  return hit ?? getDreaminaScriptsDirCandidates()[0]!;
 }
 
 /** Windows：未配置 PYTHON_EXE 时扫描常见安装目录，避免 PATH 不含 `python` 导致 spawn ENOENT */
@@ -221,7 +241,7 @@ function parseWrapperStdout(stdout: string): WrapperJson {
 }
 
 async function runWrapper(script: string, args: string[], timeoutMs = 0): Promise<WrapperJson> {
-  const scriptsDir = getDreaminaScriptsDir();
+  const scriptsDir = getDreaminaScriptsDir(script);
   const scriptPath = path.join(scriptsDir, script);
   if (!fsSync.existsSync(scriptPath)) {
     throw new Error(

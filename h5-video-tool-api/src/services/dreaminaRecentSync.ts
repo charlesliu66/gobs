@@ -1,4 +1,6 @@
 import {
+  getDreaminaScriptsDir,
+  getDreaminaScriptsDirCandidates,
   isDreaminaEnabled,
   listDreaminaTasks,
   pollDreaminaTask,
@@ -50,10 +52,7 @@ function ensureDreaminaRuntimeHints(): void {
   }
 
   if (!process.env.DREAMINA_SCRIPTS_DIR?.trim()) {
-    const scriptCandidates = [
-      path.resolve(process.cwd(), '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'),
-      path.resolve(process.cwd(), '.cursor', 'skills', 'dreamina-cli-skill', 'scripts'),
-    ];
+    const scriptCandidates = getDreaminaScriptsDirCandidates();
     const hit = scriptCandidates.find((item) => fsSync.existsSync(path.join(item, 'list_task.py')));
     if (hit) {
       process.env.DREAMINA_SCRIPTS_DIR = hit;
@@ -62,9 +61,7 @@ function ensureDreaminaRuntimeHints(): void {
 }
 
 function getDreaminaScriptsDirForSync(): string {
-  const env = process.env.DREAMINA_SCRIPTS_DIR?.trim();
-  if (env) return path.resolve(env);
-  return path.resolve(process.cwd(), '..', '.cursor', 'skills', 'dreamina-cli-skill', 'scripts');
+  return getDreaminaScriptsDir('list_task.py');
 }
 
 function getPythonExecutableForSync(): string {
