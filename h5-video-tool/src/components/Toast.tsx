@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { disposePortalRoot, ensurePortalRoot } from './portalRoot';
 
 type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -111,6 +112,7 @@ function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: (id: string)
 
 export function ToastContainer() {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
 
   const remove = useCallback((id: string) => {
     setItems((prev) => prev.filter((x) => x.id !== id));
@@ -124,7 +126,13 @@ export function ToastContainer() {
     return () => { listeners.delete(handler); };
   }, []);
 
-  if (items.length === 0) return null;
+  useEffect(() => {
+    const root = ensurePortalRoot('gobs-toast-root');
+    setPortalRoot(root);
+    return () => disposePortalRoot(root);
+  }, []);
+
+  if (items.length === 0 || !portalRoot) return null;
 
   return createPortal(
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 items-end pointer-events-none">
@@ -134,6 +142,6 @@ export function ToastContainer() {
         </div>
       ))}
     </div>,
-    document.body,
+    portalRoot,
   );
 }

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { disposePortalRoot, ensurePortalRoot } from './portalRoot';
 
 interface ImageLightboxProps {
   src: string;
@@ -8,6 +9,8 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
+  const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -15,6 +18,14 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  useEffect(() => {
+    const root = ensurePortalRoot('gobs-lightbox-root');
+    setPortalRoot(root);
+    return () => disposePortalRoot(root);
+  }, []);
+
+  if (!portalRoot) return null;
 
   return createPortal(
     <div
@@ -41,6 +52,6 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
         </button>
       </div>
     </div>,
-    document.body,
+    portalRoot,
   );
 }
