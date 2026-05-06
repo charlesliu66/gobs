@@ -246,6 +246,13 @@
 
 ## 浜屻€丆hangelog
 
+### v0.145 - 2026-05-06
+**English localization sweep for agent guidance and ProductionWizard core steps**
+
+- **[editor agent] AgentMemoryPanel now uses shared locale keys and formatting helpers for memory summaries, counters, confidence labels, and action copy** (`h5-video-tool/src/editor/components/AgentMemoryPanel.tsx`, `h5-video-tool/src/i18n/messages.ts`, `h5-video-tool/src/i18n/locale.test.ts`): English operators can review project preferences, avoid lists, open issues, and communication profiles without mixed Chinese fallback text.
+- **[production wizard] StepInput and StepStoryArc now route high-traffic controls, asset-picker states, and interpolated beat labels through shared i18n keys** (`h5-video-tool/src/studio/steps/StepInput.tsx`, `h5-video-tool/src/studio/steps/StepStoryArc.tsx`, `h5-video-tool/src/i18n/messages.ts`, `h5-video-tool/src/i18n/locale.test.ts`): English mode now keeps style-reference setup, outline generation, and story-beat editing consistently localized.
+- **[targeted residue sweep] AgentPanel and StepStoryboardWorkspace no longer appear in the repo `pickUiText(...)` residue list, and the next cleanup queue is now narrowed to EditorWorkbench plus the remaining StepDesign / StepStoryboard helper panels** (`h5-video-tool/src/editor/components/AgentPanel.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx`): this release keeps the next English-i18n backlog explicit instead of silently carrying mixed-surface debt forward.
+
 ### v0.142 - 2026-05-06
 **Campaign Creative knowledge consumption**
 
@@ -288,7 +295,6 @@
 - **[knowledge import] Added the first fastpublish-inspired default knowledge bundle and structured derivation contract** (h5-video-tool-api/src/services/campaignKnowledgeImport.ts, h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts): the backend can seed tone/compliance/visual-style/market/persona/live-ops/selling-point packs and reduce selected packs into prompt-safe fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, and `hookCandidates`.
 - **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
 - **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
-
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
 
@@ -2054,7 +2060,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.144)*
+*Last updated: 2026-05-06 (v0.145)*
 
 Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 

@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import type { LibraryAsset } from '../../api/assetLibraryApi';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
 import type { StructureTemplate } from '../productionTypes';
 
 export function resolveStyleRefPickerPreviewUrl(
@@ -59,17 +58,16 @@ export function StepInput({
   const [assetPickerError, setAssetPickerError] = useState<string | null>(null);
   const [assetList, setAssetList] = useState<LibraryAsset[]>([]);
   const [selectingAssetId, setSelectingAssetId] = useState<string | null>(null);
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t } = useLocale();
 
   const getTemplateLabel = (value: StructureTemplate, fallback: string) => {
     switch (value) {
       case 'three_act':
-        return uiText('三幕式', 'Three-act');
+        return t('productionWizard.templateThreeAct');
       case 'five_act':
-        return uiText('五幕式', 'Five-act');
+        return t('productionWizard.templateFiveAct');
       case 'save_the_cat':
-        return uiText('Save the Cat 节拍', 'Save the Cat beats');
+        return t('productionWizard.templateSaveTheCat');
       default:
         return fallback;
     }
@@ -88,11 +86,13 @@ export function StepInput({
       });
       setAssetList(images);
     } catch (error) {
-      setAssetPickerError(error instanceof Error ? error.message : uiText('加载素材库失败', 'Failed to load the asset library'));
+      setAssetPickerError(
+        error instanceof Error ? error.message : t('productionWizard.input.assetLibraryLoadFailed'),
+      );
     } finally {
       setLoadingAssets(false);
     }
-  }, [uiLocale]);
+  }, [t]);
 
   const handleSelectAsset = useCallback(async (asset: LibraryAsset) => {
     setSelectingAssetId(asset.id);
@@ -102,12 +102,12 @@ export function StepInput({
       const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
       const response = await fetch(fileUrl);
       if (!response.ok) {
-        throw new Error(uiText('获取素材图片失败', 'Failed to fetch the asset image'));
+        throw new Error(t('productionWizard.input.assetImageFetchFailed'));
       }
       const blob = await response.blob();
       const mime = blob.type || asset.mimetype || asset.mime_type || 'image/jpeg';
       if (!mime.startsWith('image/')) {
-        throw new Error(uiText('只能选择图片素材作为参考图', 'Only image assets can be used as style references'));
+        throw new Error(t('productionWizard.input.imageOnlyStyleReference'));
       }
       const fallbackExt = mime.split('/')[1] || 'jpg';
       const filename = asset.filename?.trim() || `${asset.id}.${fallbackExt}`;
@@ -116,28 +116,30 @@ export function StepInput({
       setShowAssetPicker(false);
       void recordUsage(asset.id, 'production');
     } catch (error) {
-      setAssetPickerError(error instanceof Error ? error.message : uiText('获取素材图片失败', 'Failed to fetch the asset image'));
+      setAssetPickerError(
+        error instanceof Error ? error.message : t('productionWizard.input.assetImageFetchFailed'),
+      );
     } finally {
       setSelectingAssetId(null);
     }
-  }, [onStyleRefFileChange, uiLocale]);
+  }, [onStyleRefFileChange, t]);
 
   return (
     <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 shadow-sm">
-      <h2 className="text-sm font-semibold text-[var(--color-text)]">{uiText('立项与梗概', 'Concept & Synopsis')}</h2>
+      <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('productionWizard.input.title')}</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-xs text-[var(--color-text-muted)] sm:col-span-2">
-          {uiText('视频风格（摘要）', 'Visual style summary')}
+          {t('productionWizard.input.visualStyleSummary')}
           <textarea
             value={styleRefSummary}
             onChange={(e) => onStyleRefSummaryChange(e.target.value)}
             rows={3}
-            placeholder={uiText('可手写；或上传参考图反解析', 'Write it manually or upload a reference image to reverse-analyze')}
+            placeholder={t('productionWizard.input.visualStyleSummaryPlaceholder')}
             className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
           />
         </label>
         <label className="text-xs text-[var(--color-text-muted)]">
-          {uiText('画面比例', 'Aspect ratio')}
+          {t('productionWizard.input.aspectRatio')}
           <select
             value={aspectRatio}
             onChange={(e) => onAspectRatioChange(e.target.value)}
@@ -151,17 +153,17 @@ export function StepInput({
           </select>
         </label>
         <label className="text-xs text-[var(--color-text-muted)]">
-          {uiText('故事类型（可选）', 'Genre (optional)')}
+          {t('productionWizard.input.genreOptional')}
           <input
             value={storyGenre}
             onChange={(e) => onStoryGenreChange(e.target.value)}
-            placeholder={uiText('如：女频、悬疑、都市', 'Examples: romance, mystery, urban drama')}
+            placeholder={t('productionWizard.input.genrePlaceholder')}
             className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
           />
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[var(--color-text-muted)]">{uiText('参考图反解析', 'Style reference analysis')}</span>
+        <span className="text-xs text-[var(--color-text-muted)]">{t('productionWizard.input.styleReferenceAnalysis')}</span>
         <input
           type="file"
           accept="image/*"
@@ -175,16 +177,23 @@ export function StepInput({
           onClick={() => void handleOpenAssetPicker()}
           className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loadingAssets && showAssetPicker ? uiText('加载素材中…', 'Loading assets…') : uiText('从素材库选择', 'Pick from asset library')}
+          {loadingAssets && showAssetPicker
+            ? t('productionWizard.input.loadingAssets')
+            : t('productionWizard.input.pickFromAssetLibrary')}
         </button>
-        {selectingAssetId && <span className="text-xs text-[var(--color-text-muted)]">{uiText('导入素材中…', 'Importing asset…')}</span>}
-        {busyStyle && <span className="text-xs text-[var(--color-text-muted)]">{uiText('分析中…', 'Analyzing…')}</span>}
+        {selectingAssetId && (
+          <span className="text-xs text-[var(--color-text-muted)]">
+            {t('productionWizard.input.importingAsset')}
+          </span>
+        )}
+        {busyStyle && (
+          <span className="text-xs text-[var(--color-text-muted)]">
+            {t('productionWizard.input.analyzing')}
+          </span>
+        )}
       </div>
       <p className="text-xs text-[var(--color-text-muted)]">
-        {uiText(
-          '上传的参考图将作为全片画风基准；后续各镜分镜图会按该图与上方风格摘要做多模态画风锁定。',
-          'The uploaded reference image becomes the visual anchor for the whole project. Later storyboard frames will lock style against both this image and the summary above.',
-        )}
+        {t('productionWizard.input.styleReferenceDescription')}
       </p>
       {styleRefPreview && (
         <img
@@ -194,7 +203,7 @@ export function StepInput({
         />
       )}
       <label className="block text-xs text-[var(--color-text-muted)]">
-        {uiText('角色设定 / 背景', 'Character setup / world background')}
+        {t('productionWizard.input.characterSetup')}
         <textarea
           value={characterBible}
           onChange={(e) => onCharacterBibleChange(e.target.value)}
@@ -203,7 +212,7 @@ export function StepInput({
         />
       </label>
       <label className="block text-xs text-[var(--color-text-muted)]">
-        {uiText('故事梗概', 'Synopsis')}
+        {t('productionWizard.input.synopsis')}
         <textarea
           value={synopsis}
           onChange={(e) => onSynopsisChange(e.target.value)}
@@ -212,7 +221,7 @@ export function StepInput({
         />
       </label>
       <label className="block text-xs text-[var(--color-text-muted)]">
-        {uiText('结构模板', 'Structure template')}
+        {t('productionWizard.input.structureTemplate')}
         <select
           value={structureTemplate}
           onChange={(e) => onStructureTemplateChange(e.target.value as StructureTemplate)}
@@ -231,7 +240,7 @@ export function StepInput({
         onClick={() => void onGenerateStoryArc()}
         className="rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
       >
-        {busyL1 ? uiText('生成中…', 'Generating…') : uiText('生成剧本大纲', 'Generate story outline')}
+        {busyL1 ? t('productionWizard.input.generating') : t('productionWizard.input.generateStoryOutline')}
       </button>
 
       {showAssetPicker && (
@@ -248,12 +257,9 @@ export function StepInput({
           >
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-[var(--color-text)]">{uiText('从素材库选择参考图', 'Choose a style reference from the asset library')}</h3>
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('productionWizard.input.chooseStyleReference')}</h3>
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  {uiText(
-                    '选择后会自动走当前的风格反解析链路，更新预览和摘要。',
-                    'After selection, the current style-analysis flow will run automatically and refresh the preview and summary.',
-                  )}
+                  {t('productionWizard.input.assetPickerDescription')}
                 </p>
               </div>
               <button
@@ -261,9 +267,9 @@ export function StepInput({
                 onClick={() => setShowAssetPicker(false)}
                 disabled={selectingAssetId !== null}
                 className="text-lg text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] disabled:opacity-40"
-                aria-label={uiText('关闭素材库选择', 'Close asset picker')}
+                aria-label={t('productionWizard.input.closeAssetPicker')}
               >
-                ×
+                x
               </button>
             </div>
 
@@ -274,10 +280,12 @@ export function StepInput({
             )}
 
             {loadingAssets ? (
-              <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">{uiText('正在加载素材库图片…', 'Loading asset library images…')}</div>
+              <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+                {t('productionWizard.input.loadingAssetLibraryImages')}
+              </div>
             ) : assetList.length === 0 ? (
               <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-                {uiText('素材库里还没有图片素材，请先到“素材库”导入图片。', 'There are no image assets yet. Import some images in Asset Library first.')}
+                {t('productionWizard.input.noImageAssets')}
               </div>
             ) : (
               <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
@@ -301,14 +309,16 @@ export function StepInput({
                           <img src={thumbUrl} alt={displayName} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-[var(--color-text-muted)]">
-                            {uiText('无预览', 'No preview')}
+                            {t('productionWizard.input.noPreview')}
                           </div>
                         )}
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-xs font-medium text-[var(--color-text)]">{displayName}</div>
                         <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                          {isSelecting ? uiText('导入中…', 'Importing…') : asset.ai_category || uiText('图片素材', 'Image asset')}
+                          {isSelecting
+                            ? t('productionWizard.input.importingAsset')
+                            : asset.ai_category || t('productionWizard.input.imageAsset')}
                         </div>
                       </div>
                     </button>
@@ -322,4 +332,3 @@ export function StepInput({
     </section>
   );
 }
-
