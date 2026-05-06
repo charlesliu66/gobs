@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import type { LoadingScene, Speaker } from './loading/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pickCopy, SPEAKER_NAMES, getSceneSpeaker } from './loading/copyPool';
+import type { LoadingScene, Speaker } from './loading/types';
 import { useLocale } from '../i18n/LocaleContext.tsx';
-import { pickUiText } from '../i18n/uiText.ts';
+import { formatMessage } from '../i18n/locale.ts';
 
 interface RunningStatusProps {
   active: boolean;
   label?: string;
   stallAfterSec?: number;
   className?: string;
-  /** 传入剧院场景后，>3s 自动升级为卡片式，显示角色名 + 文案轮播 */
   scene?: LoadingScene;
 }
 
@@ -22,8 +21,7 @@ export function RunningStatus({
   className = '',
   scene,
 }: RunningStatusProps) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { uiLocale, t } = useLocale();
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
   const [theaterCopy, setTheaterCopy] = useState('');
@@ -44,8 +42,8 @@ export function RunningStatus({
 
   useEffect(() => {
     if (!active) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [active]);
 
   const elapsedSec = useMemo(() => {
@@ -65,7 +63,6 @@ export function RunningStatus({
     }, 300);
   }, [scene]);
 
-  // 3s 阈值触发剧院文案 + 轮播
   useEffect(() => {
     if (!scene || !active || elapsedSec < 3) {
       if (rotateTimer.current) clearInterval(rotateTimer.current);
@@ -73,16 +70,17 @@ export function RunningStatus({
     }
     if (!theaterCopy) rotateCopy();
     rotateTimer.current = setInterval(rotateCopy, COPY_ROTATE_MS);
-    return () => { if (rotateTimer.current) clearInterval(rotateTimer.current); };
-  }, [scene, active, elapsedSec >= 3, rotateCopy]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      if (rotateTimer.current) clearInterval(rotateTimer.current);
+    };
+  }, [scene, active, elapsedSec, rotateCopy, theaterCopy]);
 
   if (!active) return null;
 
   const stalled = elapsedSec >= stallAfterSec;
-  const resolvedLabel = label ?? uiText('处理中', 'Processing');
+  const resolvedLabel = label ?? t('runningStatus.processing');
   const showTheater = uiLocale !== 'en' && !!scene && elapsedSec >= 3 && theaterCopy;
 
-  // 升级模式：卡片式剧院文案
   if (showTheater) {
     return (
       <div
@@ -111,7 +109,6 @@ export function RunningStatus({
     );
   }
 
-  // 默认模式：保持原有 inline 样式
   return (
     <div
       className={`inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs ${
@@ -128,8 +125,8 @@ export function RunningStatus({
       </span>
       <span>
         {stalled
-          ? uiText(`可能卡住（已运行 ${elapsedSec}s）`, `Possibly stuck (${elapsedSec}s)`)
-          : uiText(`${resolvedLabel}（${elapsedSec}s）`, `${resolvedLabel} (${elapsedSec}s)`)}
+          ? formatMessage(t('runningStatus.possiblyStuck'), { elapsedSec })
+          : formatMessage(t('runningStatus.activeWithElapsed'), { label: resolvedLabel, elapsedSec })}
       </span>
     </div>
   );

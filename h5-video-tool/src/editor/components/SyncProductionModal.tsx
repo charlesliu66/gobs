@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  syncProductionCheck,
   applySyncReplacements,
-  type SyncDiffItem,
+  syncProductionCheck,
   type ApplySyncReplacement,
+  type SyncDiffItem,
 } from '../../api/editor';
 import { toast } from '../../components/Toast';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage } from '../../i18n/locale.ts';
 
 interface SyncProductionModalProps {
   editorProjectId: string;
@@ -16,8 +16,7 @@ interface SyncProductionModalProps {
 }
 
 export function SyncProductionModal({ editorProjectId, onSynced, onClose }: SyncProductionModalProps) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t } = useLocale();
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +32,10 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
         if (cancelled) return;
         setDiffs(res.diffs);
         setProductionTitle(res.productionTitle);
-        const updatedShots = new Set(res.diffs.filter((d) => d.hasUpdate).map((d) => d.shotIndex));
-        setSelected(updatedShots);
+        setSelected(new Set(res.diffs.filter((diff) => diff.hasUpdate).map((diff) => diff.shotIndex)));
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : uiText('同步检查失败', 'Failed to check sync updates'));
+        setError(e instanceof Error ? e.message : t('syncProductionModal.syncCheckFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -45,9 +43,9 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
     return () => {
       cancelled = true;
     };
-  }, [editorProjectId, uiLocale]);
+  }, [editorProjectId, t]);
 
-  const updatedCount = diffs.filter((d) => d.hasUpdate).length;
+  const updatedCount = diffs.filter((diff) => diff.hasUpdate).length;
 
   const handleApply = useCallback(async () => {
     if (selected.size === 0) {
@@ -57,49 +55,49 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
     setApplying(true);
     try {
       const replacements: ApplySyncReplacement[] = diffs
-        .filter((d) => d.hasUpdate && selected.has(d.shotIndex))
-        .map((d) => ({
-          shotIndex: d.shotIndex,
-          newVersionId: d.latestVersionId,
+        .filter((diff) => diff.hasUpdate && selected.has(diff.shotIndex))
+        .map((diff) => ({
+          shotIndex: diff.shotIndex,
+          newVersionId: diff.latestVersionId,
         }));
       await applySyncReplacements(editorProjectId, replacements);
-      toast.success(uiText(`已同步 ${replacements.length} 个分镜`, `Synced ${replacements.length} shots`));
+      toast.success(formatMessage(t('syncProductionModal.syncedShots'), { count: replacements.length }));
       onSynced();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : uiText('同步失败', 'Sync failed'));
+      toast.error(e instanceof Error ? e.message : t('syncProductionModal.syncFailed'));
     } finally {
       setApplying(false);
     }
-  }, [diffs, selected, editorProjectId, onSynced, onClose, uiLocale]);
+  }, [diffs, editorProjectId, onClose, onSynced, selected, t]);
 
-  const toggleShot = (idx: number) => {
+  const toggleShot = (shotIndex: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(shotIndex)) next.delete(shotIndex);
+      else next.add(shotIndex);
       return next;
     });
   };
 
   const selectAll = () => {
-    setSelected(new Set(diffs.filter((d) => d.hasUpdate).map((d) => d.shotIndex)));
+    setSelected(new Set(diffs.filter((diff) => diff.hasUpdate).map((diff) => diff.shotIndex)));
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !applying) onClose();
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !applying) onClose();
       }}
     >
       <div className="flex max-h-[80vh] w-[480px] max-w-[92vw] flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl">
         <div className="shrink-0 px-6 pb-3 pt-5">
           <h3 className="text-sm font-semibold text-[var(--color-text)]">
-            {uiText('🔄 同步制片更新', '🔄 Sync production updates')}
+            {t('syncProductionModal.title')}
           </h3>
           {productionTitle && (
             <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
-              {uiText(`来源：「${productionTitle}」`, `Source: “${productionTitle}”`)}
+              {formatMessage(t('syncProductionModal.source'), { title: productionTitle })}
             </p>
           )}
         </div>
@@ -110,49 +108,49 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
           {loading ? (
             <div className="flex items-center justify-center py-10 text-xs text-[var(--color-text-muted)]">
               <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)]" />
-              {uiText('正在对比版本…', 'Comparing versions…')}
+              {t('syncProductionModal.comparing')}
             </div>
           ) : error ? (
             <div className="py-6 text-center text-xs text-red-400">{error}</div>
           ) : updatedCount === 0 ? (
             <div className="py-10 text-center">
-              <span className="text-2xl">✅</span>
+              <span className="text-2xl">OK</span>
               <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                {uiText('所有分镜已是最新版本', 'All storyboard shots are already up to date')}
+                {t('syncProductionModal.allUpToDate')}
               </p>
             </div>
           ) : (
             <div className="space-y-1.5">
-              {diffs.map((d) => (
+              {diffs.map((diff) => (
                 <label
-                  key={d.shotIndex}
+                  key={diff.shotIndex}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
-                    d.hasUpdate
+                    diff.hasUpdate
                       ? 'cursor-pointer hover:bg-[var(--color-surface-hover)]'
                       : 'opacity-50'
                   }`}
                 >
                   <input
                     type="checkbox"
-                    checked={selected.has(d.shotIndex)}
-                    disabled={!d.hasUpdate}
-                    onChange={() => toggleShot(d.shotIndex)}
+                    checked={selected.has(diff.shotIndex)}
+                    disabled={!diff.hasUpdate}
+                    onChange={() => toggleShot(diff.shotIndex)}
                     className="h-3.5 w-3.5 accent-[var(--color-primary)]"
                   />
                   <span className="flex-1 text-xs text-[var(--color-text)]">
-                    {uiText(`镜 ${d.shotIndex}`, `Shot ${d.shotIndex}`)}
+                    {formatMessage(t('syncProductionModal.shotLabel'), { shotIndex: diff.shotIndex })}
                   </span>
-                  {d.hasUpdate ? (
+                  {diff.hasUpdate ? (
                     <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                      {uiText('有新版本', 'New version')}
+                      {t('syncProductionModal.newVersion')}
                     </span>
                   ) : (
                     <span className="text-[10px] text-[var(--color-text-muted)]">
-                      {uiText('无变化', 'No change')}
+                      {t('syncProductionModal.noChange')}
                     </span>
                   )}
                   <span className="text-[10px] text-[var(--color-text-muted)]">
-                    {d.latestDurationSec.toFixed(1)}s
+                    {diff.latestDurationSec.toFixed(1)}s
                   </span>
                 </label>
               ))}
@@ -170,7 +168,7 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
                 onClick={selectAll}
                 className="underline hover:text-[var(--color-text)]"
               >
-                {uiText(`全选 (${updatedCount})`, `Select all (${updatedCount})`)}
+                {formatMessage(t('syncProductionModal.selectAll'), { count: updatedCount })}
               </button>
             )}
           </div>
@@ -181,7 +179,7 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
               disabled={applying}
               className="rounded-lg border border-[var(--color-border)] px-4 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
             >
-              {updatedCount === 0 ? uiText('关闭', 'Close') : uiText('跳过', 'Skip')}
+              {updatedCount === 0 ? t('common.close') : t('syncProductionModal.skip')}
             </button>
             {updatedCount > 0 && !loading && (
               <button
@@ -193,10 +191,10 @@ export function SyncProductionModal({ editorProjectId, onSynced, onClose }: Sync
                 {applying ? (
                   <>
                     <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    {uiText('替换中…', 'Replacing…')}
+                    {t('syncProductionModal.replacing')}
                   </>
                 ) : (
-                  uiText(`替换 ${selected.size} 个分镜`, `Replace ${selected.size} shots`)
+                  formatMessage(t('syncProductionModal.replaceShots'), { count: selected.size })
                 )}
               </button>
             )}

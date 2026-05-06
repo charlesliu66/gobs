@@ -1,6 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  formatDateTime,
+  getInitialUiLocale,
+  readStoredUiLocale,
+  type UiLocale,
+} from '../i18n/locale.ts';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const UI_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+};
+
+function getCurrentUiLocale(): UiLocale {
+  if (typeof window === 'undefined') return getInitialUiLocale(null, null);
+  return readStoredUiLocale(window.localStorage);
+}
+
+function formatUiDateTime(value: string | number | Date): string {
+  return formatDateTime(value, getCurrentUiLocale(), UI_DATE_TIME_OPTIONS);
+}
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('gobs_token');
@@ -695,9 +719,7 @@ export function RiskSentimentPage() {
           </button>
           <div className="text-[11px] text-zinc-400">
             最近更新：
-            {snapshot?.updatedAt
-              ? new Date(snapshot.updatedAt).toLocaleString('zh-CN', { hour12: false })
-              : '—'}
+            {snapshot?.updatedAt ? formatUiDateTime(snapshot.updatedAt) : '—'}
           </div>
         </div>
         {snapshot?.apifyUsedMock && (
@@ -767,7 +789,7 @@ export function RiskSentimentPage() {
                     className="rounded-xl border border-zinc-800 bg-zinc-800/50 p-4 text-sm"
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                      <span>{new Date(log.at).toLocaleString('zh-CN', { hour12: false })}</span>
+                      <span>{formatUiDateTime(log.at)}</span>
                       <span
                         className={
                           log.ok
