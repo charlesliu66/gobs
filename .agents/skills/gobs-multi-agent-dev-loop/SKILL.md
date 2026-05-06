@@ -9,6 +9,8 @@ Use this skill for repo-specific, lower-touch development on GOBS/QAS.
 
 Invoke it explicitly with `$gobs-multi-agent-dev-loop` when you want the guarded workflow to take over.
 
+If the client supports repo-local plugin slash entries, the same workflow may also be exposed through `/gobs-loop`.
+
 This skill is for requests such as:
 
 - "用这套流程跑这个需求"

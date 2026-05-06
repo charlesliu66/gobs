@@ -1,0 +1,39 @@
+{
+  "name": "gobs-loop",
+  "version": "0.1.0",
+  "description": "Slash-style entry point for the GOBS guarded multi-agent development workflow.",
+  "author": {
+    "name": "wei.liu",
+    "email": "wei.liu@local",
+    "url": "https://github.com/charlesliu66/gobs"
+  },
+  "homepage": "https://github.com/charlesliu66/gobs",
+  "repository": "https://github.com/charlesliu66/gobs",
+  "license": "UNLICENSED",
+  "keywords": [
+    "gobs",
+    "workflow",
+    "multi-agent",
+    "slash-command",
+    "4+1"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "GOBS Loop",
+    "shortDescription": "Slash entry for the guarded GOBS 4+1 workflow",
+    "longDescription": "Use GOBS Loop to enter the repo's guarded Planner -> Challenger -> Builder -> Verifier workflow through a shorter slash-style command while still reusing the core repo skill.",
+    "developerName": "wei.liu",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "/gobs-loop bootstrap a run and drive this task with the guarded 4+1 workflow",
+      "/gobs-loop use the guarded workflow for this task",
+      "/gobs-loop keep my manual coordination low and move this implementation forward"
+    ],
+    "brandColor": "#2563EB"
+  }
+}

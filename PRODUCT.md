@@ -231,7 +231,8 @@
 
 ### 10. 内部开发与发布工具
 
-- **Repo Private Skills**：仓库内已有 `gobs-release-guard`、`gobs-h5-smoke-test`、`gobs-multi-agent-dev-loop` 三个私有 skill，分别覆盖发布门禁、H5 冒烟验证、多 Agent 自循环开发协作。
+- **Repo Private Skills**: repo-private `gobs-release-guard`, `gobs-h5-smoke-test`, and `gobs-multi-agent-dev-loop` cover release gating, H5 smoke checks, and guarded multi-agent development.
+- **Slash entry**: repo-local plugin `gobs-loop` adds a shorter `/gobs-loop` wrapper while `$gobs-multi-agent-dev-loop` remains the portable fallback.
 - **技能可移植性**：`gobs-multi-agent-dev-loop` 现已包含 `agents/openai.yaml` 与 `references/` 目录，支持显式 `$gobs-multi-agent-dev-loop` 调用，并保持 repo 相对路径，便于在其他电脑 `git pull` 后继续使用。
 - **Run 初始化脚本**：`scripts/init_workflow_run.py` 用一条命令生成 `SESSION-ANCHOR.md`、`planner-spec.md`、`challenger-review.md`、`builder-report.md`、`verifier-report.md`、`release-decision.md`，减少每轮手工搭骨架的时间。
 - **Workflow Guard**：`scripts/workflow_guard.py` 在 build / verify / release 前检查 run 资料是否齐全、是否触碰禁区文件、是否越过 `SESSION-ANCHOR.md` 里声明的 editable scope，以及 verify/release 前是否同步更新 `PRODUCT.md`。
@@ -242,6 +243,11 @@
 
 ## 二、Changelog
 
+### v0.134 - 2026-05-06
+**Repo-local slash entry for the guarded GOBS multi-agent workflow**
+- Added repo-local plugin plugins/gobs-loop plus .agents/plugins/marketplace.json so compatible clients can expose a slash-style /gobs-loop entry.
+- Added plugins/gobs-loop/skills/gobs-loop-entry/SKILL.md as a thin wrapper that routes slash invocation back into the canonical repo skill gobs-multi-agent-dev-loop.
+- Updated the core workflow skill metadata and invocation docs so /gobs-loop and $gobs-multi-agent-dev-loop are documented together, with the explicit skill call kept as the portable fallback.
 ### v0.133 - 2026-05-06
 **Portable slash-invokable packaging for the repo multi-agent workflow skill**
 **Internal / Dev Workflow:**
@@ -1974,5 +1980,5 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.133)*
+*Last updated: 2026-05-06 (v0.134)*
 

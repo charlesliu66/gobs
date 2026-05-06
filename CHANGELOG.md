@@ -2,6 +2,12 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.134 - 2026-05-06
+**Repo-local slash entry for the guarded GOBS multi-agent workflow**
+**Internal / Dev Workflow:**
+- Added repo-local plugin plugins/gobs-loop plus .agents/plugins/marketplace.json so compatible clients can expose a slash-style /gobs-loop entry.
+- Added plugins/gobs-loop/skills/gobs-loop-entry/SKILL.md as a thin wrapper that routes slash invocation back into the canonical repo skill gobs-multi-agent-dev-loop.
+- Updated the core workflow skill metadata and invocation docs so /gobs-loop and $gobs-multi-agent-dev-loop are documented together, with the explicit skill call kept as the portable fallback.
 ## v0.133 - 2026-05-06
 **Portable slash-invokable packaging for the repo multi-agent workflow skill**
 **Internal / Dev Workflow:**
