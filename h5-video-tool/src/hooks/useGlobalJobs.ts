@@ -23,6 +23,8 @@ const DEFAULT_SNAPSHOT: QueueSnapshotDto = {
   totalActive: 0,
   totalWaiting: 0,
   avgSecPerJob: 120,
+  recentSuccessAvgSec: 120,
+  recentSuccessSampleCount: 0,
   maxConcurrent: 3,
   availableSlots: 3,
 };

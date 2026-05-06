@@ -41,6 +41,8 @@ export interface QueueSnapshotDto {
   totalActive: number;
   totalWaiting: number;
   avgSecPerJob: number;
+  recentSuccessAvgSec?: number;
+  recentSuccessSampleCount?: number;
   maxConcurrent?: number;
   availableSlots?: number;
 }

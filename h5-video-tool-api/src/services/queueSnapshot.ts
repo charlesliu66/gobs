@@ -2,7 +2,7 @@ import type { BatchJob, BatchJobStatus, QueueSnapshot } from './batchJobsQueue.j
 import { getArkSeedanceMaxConcurrent, isArkSeedanceEnabled } from './arkSeedanceVideo.js';
 
 const DEFAULT_AVG_SEC_PER_JOB = 120;
-const DONE_SAMPLE_SIZE = 20;
+const RECENT_SUCCESS_SAMPLE_SIZE = 10;
 
 function getDreaminaMaxConcurrentFallback(): number {
   const raw = Number.parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '1', 10);
@@ -23,16 +23,20 @@ export function computeSnapshotFromJobs(jobs: BatchJob[]): QueueSnapshot {
   const totalWaiting = jobs.filter((job) => job.status === 'awaiting_submit').length;
   const doneRecent = jobs
     .filter((job) => job.status === 'done')
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, DONE_SAMPLE_SIZE);
+    .sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt))
+    .slice(0, RECENT_SUCCESS_SAMPLE_SIZE);
 
-  const avgSecPerJob = doneRecent.length > 0
+  const recentSuccessAvgSec = doneRecent.length > 0
     ? Math.max(
         1,
         Math.round(
           doneRecent.reduce((sum, job) => {
+            if (typeof job.actualDurationSec === 'number' && Number.isFinite(job.actualDurationSec)) {
+              return sum + Math.max(0, job.actualDurationSec * 1000);
+            }
             const startedAt = job.submittedAt ?? job.createdAt;
-            const ageMs = new Date(job.updatedAt).getTime() - new Date(startedAt).getTime();
+            const endedAt = job.completedAt ?? job.updatedAt;
+            const ageMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
             return sum + Math.max(0, ageMs);
           }, 0) / doneRecent.length / 1000,
         ),
@@ -42,7 +46,9 @@ export function computeSnapshotFromJobs(jobs: BatchJob[]): QueueSnapshot {
   return {
     totalActive,
     totalWaiting,
-    avgSecPerJob,
+    avgSecPerJob: recentSuccessAvgSec,
+    recentSuccessAvgSec,
+    recentSuccessSampleCount: doneRecent.length,
     maxConcurrent,
     availableSlots: Math.max(0, maxConcurrent - totalActive),
   };

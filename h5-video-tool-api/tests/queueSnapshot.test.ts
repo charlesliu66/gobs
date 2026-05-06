@@ -50,9 +50,44 @@ test('computeSnapshotFromJobs uses submittedAt service time and Ark concurrency 
       totalActive: 2,
       totalWaiting: 0,
       avgSecPerJob: 90,
+      recentSuccessAvgSec: 90,
+      recentSuccessSampleCount: 2,
       maxConcurrent: 3,
       availableSlots: 1,
     });
+  } finally {
+    if (prevKey == null) delete process.env.ARK_API_KEY;
+    else process.env.ARK_API_KEY = prevKey;
+    if (prevConcurrent == null) delete process.env.ARK_SEEDANCE_MAX_CONCURRENT;
+    else process.env.ARK_SEEDANCE_MAX_CONCURRENT = prevConcurrent;
+  }
+});
+
+test('computeSnapshotFromJobs only uses the latest 10 successful jobs for recent actual averages', () => {
+  const prevKey = process.env.ARK_API_KEY;
+  const prevConcurrent = process.env.ARK_SEEDANCE_MAX_CONCURRENT;
+  process.env.ARK_API_KEY = 'test-key';
+  process.env.ARK_SEEDANCE_MAX_CONCURRENT = '3';
+
+  try {
+    const jobs: BatchJob[] = Array.from({ length: 12 }, (_, index) => {
+      const durationSec = index < 2 ? 30 : 60;
+      const minute = String(index).padStart(2, '0');
+      return makeJob({
+        id: `done_${index}`,
+        status: 'done',
+        submittedAt: `2026-05-06T00:${minute}:00.000Z`,
+        completedAt: `2026-05-06T00:${minute}:${String(durationSec).padStart(2, '0')}.000Z`,
+        updatedAt: `2026-05-06T00:${minute}:${String(durationSec).padStart(2, '0')}.000Z`,
+        actualDurationSec: durationSec,
+      });
+    });
+
+    const snapshot = computeSnapshotFromJobs(jobs);
+
+    assert.equal(snapshot.avgSecPerJob, 60);
+    assert.equal(snapshot.recentSuccessAvgSec, 60);
+    assert.equal(snapshot.recentSuccessSampleCount, 10);
   } finally {
     if (prevKey == null) delete process.env.ARK_API_KEY;
     else process.env.ARK_API_KEY = prevKey;

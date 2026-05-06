@@ -51,12 +51,17 @@ Reminder logic must avoid duplicate firing on SSE reconnect or job list refresh.
 
 Existing consumers that read `failReason`, `lastVideoError.reason`, `pendingVideoSubmitId`, and current job statuses must keep working even if they do not yet understand new structured queue metadata.
 
+### AC7 - Recent actual duration baseline
+
+The backend should record the real elapsed time for successful storyboard video jobs from provider submission to final video availability, then expose the rolling average across the latest `10` successful jobs so H5 can show users a realistic recent baseline.
+
 ## Risks
 
 - Ark delete API still cannot stop already running tasks.
 - SSE reconnects can replay updates, so reminder logic must be idempotent.
 - Some legacy UI files still contain provider-specific wording and mixed encoding history.
 - Persisted job/project shapes require optional-field compatibility.
+- Recent-duration math should tolerate older completed jobs that predate the new persisted fields.
 
 ## Recommended Implementation Shape
 
@@ -64,7 +69,8 @@ Existing consumers that read `failReason`, `lastVideoError.reason`, `pendingVide
 2. Use an Ark-aware max concurrent value of 3 in the scheduler when Ark mode is enabled.
 3. Refine active job state mapping so Ark `queued` stays queued/submitted while Ark `running` maps to processing/rendering.
 4. Extend queue snapshot DTOs with concurrency metadata needed by the frontend.
-5. Centralize completion reminder dedupe in the global jobs stream layer rather than scattering it across multiple pages.
+5. Record actual successful-job duration at the moment the video is written back, then derive a recent-10 success average from persisted jobs.
+6. Centralize completion reminder dedupe in the global jobs stream layer rather than scattering it across multiple pages.
 
 ## Verification Matrix
 
@@ -74,3 +80,4 @@ Existing consumers that read `failReason`, `lastVideoError.reason`, `pendingVide
 4. Backend `npm run build`.
 5. Frontend `npm run build`.
 6. Staging smoke plus one real end-to-end Ark queue probe before prod.
+7. Frontend/state tests proving the recent-success average survives local snapshot fallback.

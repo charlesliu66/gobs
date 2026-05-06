@@ -8,7 +8,7 @@ import {
 
 test('resolveStoryboardQueueSnapshot falls back to local queued jobs when stream snapshot is still empty', () => {
   const result = resolveStoryboardQueueSnapshot(
-    { totalActive: 0, totalWaiting: 0, avgSecPerJob: 120 },
+    { totalActive: 0, totalWaiting: 0, avgSecPerJob: 120, recentSuccessAvgSec: 96, recentSuccessSampleCount: 7 },
     [
       {
         id: 'bj_waiting',
@@ -31,6 +31,8 @@ test('resolveStoryboardQueueSnapshot falls back to local queued jobs when stream
     totalActive: 0,
     totalWaiting: 1,
     avgSecPerJob: 120,
+    recentSuccessAvgSec: 96,
+    recentSuccessSampleCount: 7,
     maxConcurrent: 3,
     availableSlots: 3,
   });
@@ -38,7 +40,15 @@ test('resolveStoryboardQueueSnapshot falls back to local queued jobs when stream
 
 test('resolveStoryboardQueueSnapshot keeps the stream snapshot once it has real platform data', () => {
   const result = resolveStoryboardQueueSnapshot(
-    { totalActive: 2, totalWaiting: 3, avgSecPerJob: 95, maxConcurrent: 3, availableSlots: 1 },
+    {
+      totalActive: 2,
+      totalWaiting: 3,
+      avgSecPerJob: 95,
+      recentSuccessAvgSec: 88,
+      recentSuccessSampleCount: 10,
+      maxConcurrent: 3,
+      availableSlots: 1,
+    },
     [
       {
         id: 'bj_waiting',
@@ -61,6 +71,8 @@ test('resolveStoryboardQueueSnapshot keeps the stream snapshot once it has real 
     totalActive: 2,
     totalWaiting: 3,
     avgSecPerJob: 95,
+    recentSuccessAvgSec: 88,
+    recentSuccessSampleCount: 10,
     maxConcurrent: 3,
     availableSlots: 1,
   });

@@ -243,6 +243,13 @@
 
 ## 浜屻€丆hangelog
 
+### v0.136 - 2026-05-06
+**Recent 10-success video duration baseline for Ark queue UX**
+
+- **[video queue] Successful storyboard jobs now record real submit-to-video elapsed time** (h5-video-tool-api/src/services/batchJobsQueue.ts, h5-video-tool-api/src/services/queueSnapshot.ts): the backend persists actual successful duration at writeback time and computes a rolling average from the latest 10 successful videos.
+- **[production wizard] Platform summary now shows a recent real-world speed baseline** (h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx, h5-video-tool/src/studio/storyboardQueueState.ts, h5-video-tool/src/api/batchJobs.ts): users can see the recent average sec/job based on successful Ark videos, with a transparent fallback when there is not enough history yet.
+- **[state sync] Queue snapshot DTOs now preserve recent-success average metadata through SSE and local fallback paths** (h5-video-tool/src/hooks/useGlobalJobs.ts, h5-video-tool/tests/storyboardQueueState.test.ts, h5-video-tool-api/tests/queueSnapshot.test.ts): the new duration baseline stays visible even while the storyboard page is still using a locally reconstructed snapshot.
+
 ### v0.135 - 2026-05-06
 **Ark concurrency-3 queue UX refresh**
 
@@ -1988,7 +1995,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.135)*
+*Last updated: 2026-05-06 (v0.136)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

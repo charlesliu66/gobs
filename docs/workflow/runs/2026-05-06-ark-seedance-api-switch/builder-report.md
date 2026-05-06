@@ -3,7 +3,7 @@
 ## Scope
 
 - Run id: `2026-05-06-ark-seedance-api-switch`
-- Builder goal: align Ark personal API concurrency with a `3`-slot scheduler and refresh the H5 queue UX so users can tell whether a shot is still in the platform queue, already submitted to Ark, waiting in Ark, or actively rendering.
+- Builder goal: align Ark personal API concurrency with a `3`-slot scheduler, refresh the H5 queue UX, and surface a recent real-world duration baseline based on the latest `10` successful storyboard videos.
 
 ## Implemented
 
@@ -14,6 +14,7 @@
   - `h5-video-tool-api/src/services/batchJobsQueue.ts`
   - `h5-video-tool-api/src/routes/batchJobs.ts`
 - Queue snapshots now expose `maxConcurrent` and `availableSlots`, and waiting ETA is derived from submitted service time plus `3`-lane capacity instead of old single-lane age math.
+- Successful jobs now persist real `submittedAt -> completedAt` duration so queue snapshots can expose a rolling average across the latest `10` successful videos instead of relying on a generic static pace.
 - Batch-job polling now preserves the Ark phase split:
   - `awaiting_submit` = local platform queue
   - `pending` = submitted to Ark, waiting for provider acceptance
@@ -31,6 +32,9 @@
   - `h5-video-tool/src/hooks/useGlobalJobs.ts`
   - `h5-video-tool/src/i18n/messages.ts`
 - Browser reminders are now emitted from the SSE global-jobs layer so completed / failed / stopped jobs can still notify after the user leaves the current shot view.
+- The storyboard platform summary card now prefers the recent-success average label:
+  - when enough history exists, it shows the latest successful sample count plus average sec/job
+  - when no success history exists yet, it honestly falls back to an estimate instead of presenting a fake “recent average”
 
 ## Self-check Evidence
 

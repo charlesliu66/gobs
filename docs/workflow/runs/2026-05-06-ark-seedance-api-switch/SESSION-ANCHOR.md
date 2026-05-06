@@ -11,6 +11,7 @@
 - AC-01: Ark mode uses provider concurrency `3` consistently for local admission, queue ETA, and active-slot accounting.
 - AC-02: H5 clearly distinguishes platform queue, Ark accepted, Ark queued, Ark rendering, and terminal states in zh/en.
 - AC-03: Users receive completion reminders without duplicate spam on SSE reconnect or manual polling.
+- AC-04: Queue snapshots record recent successful submit-to-video completion durations and expose the rolling average of the latest `10` successes for H5 display.
 
 ## Editable Files (Builder Ownership)
 - h5-video-tool-api/src/services/arkSeedanceVideo.ts

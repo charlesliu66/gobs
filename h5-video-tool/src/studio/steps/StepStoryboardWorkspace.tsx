@@ -215,13 +215,24 @@ export function StepStoryboardWorkspace({
 
   const platformSummary = (() => {
     const avgSec = Math.max(1, Math.round(queueSnapshot.avgSecPerJob || 120));
+    const recentAvgSec = Math.max(1, Math.round(queueSnapshot.recentSuccessAvgSec || avgSec));
+    const recentSampleCount = Math.max(0, Math.round(queueSnapshot.recentSuccessSampleCount || 0));
+    const recentAvgLabel = recentSampleCount > 0
+      ? uiText(
+          `最近 ${recentSampleCount} 条成功视频平均 ${recentAvgSec} 秒/个`,
+          `Recent ${recentSampleCount} successful videos average ${recentAvgSec} sec/job`,
+        )
+      : uiText(
+          `暂无成功样本，先按 ${recentAvgSec} 秒/个估算`,
+          `No completed sample yet, so the platform is estimating with ${recentAvgSec} sec/job for now`,
+        );
     if (queueSnapshot.totalActive === 0 && queueSnapshot.totalWaiting === 0) {
       return {
         className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
         title: uiText('平台空闲', 'Platform idle'),
         detail: uiText(
-          `当前没有任务占用 Ark 槽位。平台支持最多 ${maxConcurrent} 并发，最近平均 ${avgSec} 秒/个。`,
-          `No jobs are using Ark slots right now. The platform supports up to ${maxConcurrent} concurrent jobs, with a recent average of ${avgSec} sec/job.`,
+          `当前没有任务占用 Ark 槽位。平台支持最多 ${maxConcurrent} 并发，${recentAvgLabel}。`,
+          `No jobs are using Ark slots right now. The platform supports up to ${maxConcurrent} concurrent jobs, and ${recentAvgLabel.toLowerCase()}.`,
         ),
       };
     }
@@ -231,8 +242,8 @@ export function StepStoryboardWorkspace({
         className: 'border-red-500/30 bg-red-500/10 text-red-200',
         title: uiText('平台繁忙', 'Platform busy'),
         detail: uiText(
-          `平台排队 ${queueSnapshot.totalWaiting} 个，Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，预计约 ${etaMin} 分钟后轮到新任务。`,
-          `${queueSnapshot.totalWaiting} jobs are waiting and ${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy. A newly queued job should start in about ${etaMin} minutes.`,
+          `平台排队 ${queueSnapshot.totalWaiting} 个，Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，${recentAvgLabel}，预计约 ${etaMin} 分钟后轮到新任务。`,
+          `${queueSnapshot.totalWaiting} jobs are waiting and ${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy. ${recentAvgLabel} and a newly queued job should start in about ${etaMin} minutes.`,
         ),
       };
     }
@@ -240,8 +251,8 @@ export function StepStoryboardWorkspace({
       className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
       title: uiText('平台使用中', 'Platform in use'),
       detail: uiText(
-        `Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，平台排队 ${queueSnapshot.totalWaiting} 个，最近平均 ${avgSec} 秒/个。`,
-        `${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy, ${queueSnapshot.totalWaiting} jobs are in the platform queue, and the recent average pace is ${avgSec} sec/job.`,
+        `Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，平台排队 ${queueSnapshot.totalWaiting} 个，${recentAvgLabel}。`,
+        `${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy, ${queueSnapshot.totalWaiting} jobs are in the platform queue, and ${recentAvgLabel.toLowerCase()}.`,
       ),
     };
   })();

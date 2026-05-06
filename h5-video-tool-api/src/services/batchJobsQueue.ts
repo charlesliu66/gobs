@@ -64,6 +64,8 @@ export interface BatchJob {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
+  completedAt?: string;
+  actualDurationSec?: number;
   lastPolledAt?: string;
   videoUrl?: string;
   videoFilePath?: string;
@@ -97,6 +99,8 @@ export interface QueueSnapshot {
   totalActive: number;
   totalWaiting: number;
   avgSecPerJob: number;
+  recentSuccessAvgSec?: number;
+  recentSuccessSampleCount?: number;
   maxConcurrent: number;
   availableSlots: number;
 }
@@ -524,11 +528,19 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
       await fs.rm(filePath, { force: true });
       return null;
     }
+    const completedAt = new Date().toISOString();
+    const startedAt = job.submittedAt ?? job.createdAt;
+    const actualDurationSec = Math.max(
+      1,
+      Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000),
+    );
     const updated = await applyJobPatch(job.id, {
       status: 'done',
+      completedAt,
+      actualDurationSec,
       videoFilePath: filePath,
       videoUrl: `/api/batch-jobs/video/${job.id}`,
-      lastPolledAt: new Date().toISOString(),
+      lastPolledAt: completedAt,
       globalQueuePos: undefined,
       etaSec: undefined,
       failReason: undefined,
