@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from '../components/Toast';
 import { ExportPanel } from '../editor/components/ExportPanel';
@@ -94,6 +94,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatMessage } from '../i18n/locale.ts';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
 import { pickUiText } from '../i18n/uiText.ts';
 
@@ -308,7 +309,7 @@ function mergeAssetsForTimelineClips(
 }
 
 export function EditorWorkbench() {
-  const { contentLocale, uiLocale } = useLocale();
+  const { contentLocale, uiLocale, t } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
   const {
     aspectRatio,
@@ -455,7 +456,7 @@ export function EditorWorkbench() {
   const handleConfirmProjectNaming = useCallback(() => {
     const name = projectNamingModal.name.trim();
     if (!name) {
-      toast.error(uiText('请先填写项目名称', 'Enter a project name first.'));
+      toast.error(t('editorWorkbench.projectNameRequired'));
       return;
     }
     if (projectNamingModal.mode === 'new') {
@@ -469,7 +470,7 @@ export function EditorWorkbench() {
       setProjectName(name);
     }
     setProjectNamingModal({ open: false, mode: 'new', name: '' });
-  }, [createNewProject, projectNamingModal.mode, projectNamingModal.name, setProjectName, setSearchParams, uiText]);
+  }, [createNewProject, projectNamingModal.mode, projectNamingModal.name, setProjectName, setSearchParams, t]);
 
   const handleRemoveProject = useCallback(async (id: string) => {
     await removeProject(id);
@@ -485,7 +486,7 @@ export function EditorWorkbench() {
   const handleGovernUnnamedProjects = useCallback(async () => {
     const targets = projectList.filter((item) => isUnnamedEditorProjectName(item.name));
     if (targets.length === 0) {
-      toast.info(uiText('当前没有待治理的未命名项目', 'There are no unnamed projects to clean up.'));
+      toast.info(t('editorWorkbench.noUnnamedProjects'));
       return;
     }
     setGovernanceBusy(true);
@@ -528,19 +529,19 @@ export function EditorWorkbench() {
       }
       await refreshProjectList();
       if (renamed > 0 || deleted > 0) {
+        const failedPart = failed > 0
+          ? formatMessage(t('editorWorkbench.failedSuffix'), { failed })
+          : '';
         toast.success(
-          uiText(
-            `已治理未命名项目：重命名 ${renamed} 个，删除 ${deleted} 个${failed ? `，失败 ${failed} 个` : ''}`,
-            `Unnamed project cleanup finished: renamed ${renamed}, deleted ${deleted}${failed ? `, failed ${failed}` : ''}.`,
-          ),
+          formatMessage(t('editorWorkbench.unnamedProjectsCleanupDone'), { renamed, deleted, failedPart }),
         );
       } else {
-        toast.info(uiText('未命名项目没有可治理的内容', 'No unnamed projects needed cleanup.'));
+        toast.info(t('editorWorkbench.unnamedProjectsNoContent'));
       }
     } finally {
       setGovernanceBusy(false);
     }
-  }, [buildSuggestedProjectName, handleRemoveProject, projectList, refreshProjectList, renameProject, uiText]);
+  }, [buildSuggestedProjectName, handleRemoveProject, projectList, refreshProjectList, renameProject, t]);
 
   useEffect(() => {
     setAgentChatHistory(projectMemoryToChatTurns(projectMemory));
@@ -1705,7 +1706,7 @@ export function EditorWorkbench() {
 
     const handleCaptureCover = useCallback(() => {
     const video = document.querySelector<HTMLVideoElement>('video');
-    if (!video) { toast.info('暂无视频可截取'); return; }
+    if (!video) { toast.info(uiText('暂无视频可截取', 'No video is available to capture yet.')); return; }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth || 1080;
     canvas.height = video.videoHeight || 1920;
@@ -1720,7 +1721,7 @@ export function EditorWorkbench() {
       a.download = `cover_${Date.now()}.jpg`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('封面已截取，请检查下载文件');
+      toast.success(uiText('封面已截取，请检查下载文件', 'Cover captured. Check the downloaded file.'));
     }, 'image/jpeg', 0.92);
   }, []);
 
@@ -1735,13 +1736,13 @@ export function EditorWorkbench() {
           showTextPanel ? (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-                <span className="text-xs font-semibold text-[var(--color-text)]">{uiText('文字编辑', 'Text editing')}</span>
+                <span className="text-xs font-semibold text-[var(--color-text)]">{t('editorWorkbench.textEditing')}</span>
                 <button
                   type="button"
                   onClick={() => setShowTextPanel(false)}
                   className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs"
                 >
-                  {uiText('← 素材', '← Media')}
+                  {t('editorWorkbench.mediaBack')}
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1781,7 +1782,7 @@ export function EditorWorkbench() {
             className="flex h-full min-h-0 flex-col bg-[var(--color-surface)] [&:fullscreen]:bg-black"
           >
             <div className="border-b border-[var(--color-border)] px-3 py-2">
-              <span className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('预览', 'Preview')}</span>
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">{t('editorWorkbench.preview')}</span>
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black p-2">
               <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
@@ -1853,7 +1854,7 @@ export function EditorWorkbench() {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-xs text-white/50">
-                    {uiText('加载示例、上传素材或 Agent 生成时间轴后预览', 'Load the demo, upload media, or let the agent build a timeline to preview here')}
+                    {t('editorWorkbench.previewEmptyHint')}
                   </div>
                 )}
                 {activeSubtitleText ? (
@@ -1983,9 +1984,9 @@ export function EditorWorkbench() {
                 <a
                   href={`/studio/production${project.sourceProductionProjectId ? `?projectId=${project.sourceProductionProjectId}` : ''}`}
                   className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
-                  title={uiText('打开来源制片项目', 'Open source production project')}
+                  title={t('editorWorkbench.openSourceProject')}
                 >
-                  {uiText(`📎 来自「${project.sourceProductionTitle}」`, `📎 From “${project.sourceProductionTitle}”`)}
+                  {formatMessage(t('editorWorkbench.sourceProductionTag'), { title: project.sourceProductionTitle })}
                   <span className="opacity-60">→</span>
                 </a>
                 {project.sourceProductionProjectId && projectId && (
@@ -1993,9 +1994,9 @@ export function EditorWorkbench() {
                     type="button"
                     onClick={() => setShowSyncModal(true)}
                     className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
-                    title={uiText('从制片项目同步最新版本', 'Sync the latest versions from production')}
+                    title={t('editorWorkbench.syncLatest')}
                   >
-                    {uiText('🔄 同步更新', '🔄 Sync')}
+                    {t('editorWorkbench.syncLatest')}
                   </button>
                 )}
               </>
@@ -2005,16 +2006,16 @@ export function EditorWorkbench() {
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 className="w-[140px] bg-transparent text-xs text-[var(--color-text)] outline-none"
-                placeholder={uiText('项目名', 'Project name')}
+                placeholder={t('editorWorkbench.projectNamePlaceholder')}
               />
               <span className={`text-[10px] ${saveState === 'needs_name' ? 'text-amber-300' : 'text-[var(--color-text-muted)]'}`}>
                 {saveState === 'saving'
-                  ? uiText('保存中...', 'Saving...')
+                  ? t('editorWorkbench.saveStateSaving')
                   : saveState === 'saved'
-                    ? uiText('已保存', 'Saved')
+                    ? t('editorWorkbench.saveStateSaved')
                     : saveState === 'error'
-                      ? uiText('保存失败', 'Save failed')
-                      : uiText('未保存', 'Unsaved')}
+                      ? t('editorWorkbench.saveStateFailed')
+                      : t('editorWorkbench.saveStateUnsaved')}
               </span>
             </div>
             <button
@@ -2022,7 +2023,7 @@ export function EditorWorkbench() {
               onClick={() => setShowProjectManager(true)}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              {uiText('我的项目', 'My projects')}{projectList.length > 0 ? ` (${projectList.length})` : ''}
+              {t('editorWorkbench.myProjects')}{projectList.length > 0 ? ` (${projectList.length})` : ''}
             </button>
             <button
               type="button"
@@ -2034,59 +2035,59 @@ export function EditorWorkbench() {
               }}
               className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
             >
-              {uiText('+ 新建', '+ New')}
+              {t('editorWorkbench.newProject')}
             </button>
             <button
               type="button"
               onClick={undo}
               disabled={!canUndo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title={uiText('撤销 Ctrl+Z', 'Undo Ctrl+Z')}
+              title={t('editorWorkbench.undoTitle')}
             >
-              {uiText('撤销', 'Undo')}
+              {t('editorWorkbench.undo')}
             </button>
             <button
               type="button"
               onClick={redo}
               disabled={!canRedo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title={uiText('重做 Ctrl+Shift+Z', 'Redo Ctrl+Shift+Z')}
+              title={t('editorWorkbench.redoTitle')}
             >
-              {uiText('重做', 'Redo')}
+              {t('editorWorkbench.redo')}
             </button>
             <div className="flex items-center gap-1 border-r border-[var(--color-border)] pr-2 mr-1">
               <button
                 type="button"
                 onClick={handleAddIntro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在开头添加片头', 'Add a title card at the beginning')}
+                title={t('editorWorkbench.addIntroTitle')}
               >
-                {uiText('片头', 'Intro')}
+                {t('editorWorkbench.addIntro')}
               </button>
               <button
                 type="button"
                 onClick={handleAddSubtitleText}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在当前时间添加字幕', 'Add a subtitle at the current time')}
+                title={t('editorWorkbench.addSubtitleTitle')}
               >
-                {uiText('+ 字幕', '+ Subtitle')}
+                {t('editorWorkbench.addSubtitle')}
               </button>
               <button
                 type="button"
                 onClick={handleAddOutro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在末尾添加片尾', 'Add an outro at the end')}
+                title={t('editorWorkbench.addOutroTitle')}
               >
-                {uiText('片尾', 'Outro')}
+                {t('editorWorkbench.addOutro')}
               </button>
             </div>
             <button
               type="button"
               onClick={handleCaptureCover}
-              title={uiText('截取当前帧为封面', 'Capture the current frame as cover')}
+              title={t('editorWorkbench.captureFrameTitle')}
               className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
-              {uiText('📷 截帧', '📷 Capture')}
+              {t('editorWorkbench.captureFrame')}
             </button>
             <ExportPanel
               project={project}
@@ -2166,8 +2167,8 @@ export function EditorWorkbench() {
         onClick={(e) => { if (e.target === e.currentTarget) closeProjectNamingModal(); }}
       >
         <div className="w-80 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
-          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{uiText('新建剪辑项目', 'Create a new editing project')}</h3>
-          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">{uiText('为新项目起一个名字，之后可以随时修改', 'Give the new project a name. You can rename it later any time.')}</p>
+          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{t('editorWorkbench.namingModalTitle')}</h3>
+          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">{t('editorWorkbench.namingModalBody')}</p>
           <input
             autoFocus
             type="text"
@@ -2179,7 +2180,7 @@ export function EditorWorkbench() {
               }
               if (e.key === 'Escape') closeProjectNamingModal();
             }}
-            placeholder={uiText('例：产品宣传片-0415', 'Example: Product launch cut - 0415')}
+            placeholder={t('editorWorkbench.namingModalPlaceholder')}
             className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
           />
           <div className="flex justify-end gap-2">
@@ -2188,14 +2189,14 @@ export function EditorWorkbench() {
               onClick={closeProjectNamingModal}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              {uiText('取消', 'Cancel')}
+              {t('common.cancel')}
             </button>
             <button
               type="button"
               onClick={handleConfirmProjectNaming}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
-              {uiText('创建', 'Create')}
+              {t('editorWorkbench.create')}
             </button>
           </div>
         </div>
@@ -2209,20 +2210,20 @@ export function EditorWorkbench() {
         <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-bold text-[var(--color-text)]">
-              {uiText('欢迎使用剪辑工作台', 'Welcome to the editing workbench')}
+              {t('editorWorkbench.onboardingTitle')}
             </h2>
             <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">1</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('告诉 AI 你想怎么剪', 'Tell AI how you want to edit')}</strong> {uiText('— 右侧「AI 助手」面板支持自然语言指令，例如"帮我把第 2 段移到开头"、"加一段欢快的 BGM"。', '— The AI Assistant panel on the right accepts natural language instructions like “move clip 2 to the opening” or “add an upbeat BGM track.”')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingTellAiTitle')}</strong> - {t('editorWorkbench.onboardingTellAiBody')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">2</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('左侧添加素材', 'Add source media on the left')}</strong> {uiText('— 上传视频或从素材库选择，点击即可加入时间轴。', '— Upload videos or choose them from the asset library, then click to place them on the timeline.')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingAddMediaTitle')}</strong> - {t('editorWorkbench.onboardingAddMediaBody')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">3</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('一键导出', 'Export in one click')}</strong> {uiText('— 满意后点击导出，AI 自动合成高清视频。', '— When you are happy with the cut, export and let AI assemble the final HD video.')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingExportTitle')}</strong> - {t('editorWorkbench.onboardingExportBody')}</p>
               </div>
             </div>
             <button
@@ -2233,7 +2234,7 @@ export function EditorWorkbench() {
               }}
               className="w-full py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition"
             >
-              {uiText('开始剪辑', 'Start editing')}
+              {t('editorWorkbench.onboardingStartEditing')}
             </button>
           </div>
         </div>

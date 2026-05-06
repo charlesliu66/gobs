@@ -7,6 +7,13 @@ import {
   type CampaignKnowledgePackType,
 } from '../api/campaignKnowledge';
 
+import {
+  formatDateTime,
+  getInitialUiLocale,
+  readStoredUiLocale,
+  type UiLocale,
+} from '../i18n/locale.ts';
+
 export type PlatformDecision = '接受' | '拒绝' | '人工修改';
 export type PlatformOutcome = '强正反馈' | '轻正反馈' | '负反馈' | '风险规避';
 
@@ -237,8 +244,18 @@ const initialHeartbeats: HeartbeatLog[] = [
 const initialUploadedFiles = ['世界观设定.pdf', '版本卖点整理.docx', '近30天素材表现.xlsx'];
 const stableKnowledgeGameIds = new Set(initialGames.map((game) => game.id));
 
+function getCurrentUiLocale(): UiLocale {
+  if (typeof window === 'undefined') return getInitialUiLocale(null, null);
+  return readStoredUiLocale(window.localStorage);
+}
+
 function nowLabel() {
-  return new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(new Date(), getCurrentUiLocale(), {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function isStableKnowledgeGameId(gameId: string): boolean {
@@ -330,17 +347,21 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
       else { weightDelta = strategy.risk === '高风险' ? 4 : -3; priorityDelta = -6; learning = '规避了高风险事件，应优先走人工审核门。'; result = '避免了可能的舆情或品牌风险。'; impact = '风险控制'; }
     }
 
-    // Update budget spent
     setAgentBudgets((prev) =>
-      prev.map((b) =>
-        b.agentType === strategy.agentType
+      prev.map((budget) =>
+        budget.agentType === strategy.agentType
           ? {
-              ...b,
-              spent: b.spent + b.avgCost,
-              actionCount: b.actionCount + 1,
-              status: (b.spent + b.avgCost) / b.monthlyBudget > 0.9 ? '已超限' : (b.spent + b.avgCost) / b.monthlyBudget > 0.7 ? '预警' : '正常',
+              ...budget,
+              spent: budget.spent + budget.avgCost,
+              actionCount: budget.actionCount + 1,
+              status:
+                (budget.spent + budget.avgCost) / budget.monthlyBudget > 0.9
+                  ? '已超限'
+                  : (budget.spent + budget.avgCost) / budget.monthlyBudget > 0.7
+                    ? '预警'
+                    : '正常',
             }
-          : b,
+          : budget,
       ),
     );
 
@@ -438,7 +459,7 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
 }
 
 export function usePlatformMemory() {
-  const ctx = useContext(PlatformMemoryContext);
-  if (!ctx) throw new Error('usePlatformMemory must be used within PlatformMemoryProvider');
-  return ctx;
+  const context = useContext(PlatformMemoryContext);
+  if (!context) throw new Error('usePlatformMemory must be used within PlatformMemoryProvider');
+  return context;
 }

@@ -15,6 +15,7 @@ type LocaleContextValue = {
   uiLocale: UiLocale;
   contentLocale: ContentLocale;
   setLanguage: (next: UiLocale) => void;
+  setLocalePair: (next: { uiLocale: UiLocale; contentLocale: ContentLocale }) => void;
   setUiLocale: (next: UiLocale) => void;
   setContentLocale: (next: ContentLocale) => void;
   t: (path: string) => string;
@@ -35,14 +36,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     getInitialContentLocale(typeof window === 'undefined' ? null : window.localStorage, uiLocale),
   );
 
-  const setLanguage = (next: UiLocale) => {
-    const pair = getLocalePairForLanguage(next);
-    setUiLocaleState(pair.uiLocale);
-    setContentLocaleState(pair.contentLocale);
+  const setLocalePair = (next: { uiLocale: UiLocale; contentLocale: ContentLocale }) => {
+    setUiLocaleState(next.uiLocale);
+    setContentLocaleState(next.contentLocale);
     if (typeof window !== 'undefined') {
-      writeStoredUiLocale(window.localStorage, pair.uiLocale);
-      writeStoredContentLocale(window.localStorage, pair.contentLocale);
+      writeStoredUiLocale(window.localStorage, next.uiLocale);
+      writeStoredContentLocale(window.localStorage, next.contentLocale);
     }
+  };
+
+  const setLanguage = (next: UiLocale) => {
+    setLocalePair(getLocalePairForLanguage(next));
   };
 
   const setUiLocale = (next: UiLocale) => {
@@ -64,6 +68,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       uiLocale,
       contentLocale,
       setLanguage,
+      setLocalePair,
       setUiLocale,
       setContentLocale,
       t: (path: string) => getMessage(uiLocale, path),

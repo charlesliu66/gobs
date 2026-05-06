@@ -1,5 +1,9 @@
 export type UiLocale = 'zh-CN' | 'en';
 export type ContentLocale = 'zh' | 'en';
+export type LocalePresetId =
+  | 'zh-ui-zh-content'
+  | 'en-ui-zh-content'
+  | 'en-ui-en-content';
 
 export const UI_LOCALE_STORAGE_KEY = 'gobs_ui_locale';
 export const CONTENT_LOCALE_STORAGE_KEY = 'gobs_content_locale';
@@ -49,6 +53,30 @@ export function getLocalePairForLanguage(uiLocale: UiLocale): {
     uiLocale,
     contentLocale: defaultContentLocaleFor(uiLocale),
   };
+}
+
+export function getLocalePairForPreset(preset: LocalePresetId): {
+  uiLocale: UiLocale;
+  contentLocale: ContentLocale;
+} {
+  switch (preset) {
+    case 'en-ui-zh-content':
+      return { uiLocale: 'en', contentLocale: 'zh' };
+    case 'en-ui-en-content':
+      return { uiLocale: 'en', contentLocale: 'en' };
+    case 'zh-ui-zh-content':
+    default:
+      return { uiLocale: 'zh-CN', contentLocale: 'zh' };
+  }
+}
+
+export function getLocalePreset(
+  uiLocale: UiLocale,
+  contentLocale: ContentLocale,
+): LocalePresetId {
+  if (uiLocale === 'en' && contentLocale === 'zh') return 'en-ui-zh-content';
+  if (uiLocale === 'en' && contentLocale === 'en') return 'en-ui-en-content';
+  return 'zh-ui-zh-content';
 }
 
 export function readStoredUiLocale(storage?: StorageLike | null): UiLocale {
@@ -112,5 +140,70 @@ export function formatDateTime(
       hour: '2-digit',
       minute: '2-digit',
     },
+  );
+}
+
+export function formatDate(
+  value: string | number | Date,
+  locale: UiLocale,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleDateString(
+    locale,
+    options ?? {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    },
+  );
+}
+
+export function formatTime(
+  value: string | number | Date,
+  locale: UiLocale,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleTimeString(
+    locale,
+    options ?? {
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  );
+}
+
+export function formatRelativeTime(
+  value: string | number | Date,
+  locale: UiLocale,
+  now = Date.now(),
+): string {
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  const diff = Math.max(0, now - timestamp);
+
+  if (diff < 60_000) {
+    return locale === 'en' ? 'just now' : '刚刚';
+  }
+  if (diff < 3_600_000) {
+    const minutes = Math.floor(diff / 60_000);
+    return locale === 'en' ? `${minutes} min ago` : `${minutes}分钟前`;
+  }
+  if (diff < 86_400_000) {
+    const hours = Math.floor(diff / 3_600_000);
+    return locale === 'en' ? `${hours} hr ago` : `${hours}小时前`;
+  }
+  const days = Math.floor(diff / 86_400_000);
+  return locale === 'en' ? `${days} day${days === 1 ? '' : 's'} ago` : `${days}天前`;
+}
+
+export function formatMessage(
+  template: string,
+  values?: Record<string, string | number>,
+): string {
+  if (!values) return template;
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+    template,
   );
 }
