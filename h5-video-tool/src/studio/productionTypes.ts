@@ -136,6 +136,19 @@ export type ProductionExecutionSegmentStatus =
   | 'failed'
   | 'cancelled';
 
+export interface ProductionVideoError {
+  submitId?: string;
+  jobId?: string;
+  cancelled?: boolean;
+  reason: string;
+  at: string;
+  errorCode?: string;
+  displayMessageZh?: string;
+  displayMessageEn?: string;
+  providerMessage?: string;
+  providerStatus?: string;
+}
+
 export interface ProductionExecutionSegment {
   id: string;
   segmentOrder: number;
@@ -157,13 +170,7 @@ export interface ProductionExecutionSegment {
   previewVideoVersions?: ProductionShotVideoVersion[];
   selectedPreviewVideoVersionId?: string;
   failReason?: string;
-  lastVideoError?: {
-    submitId?: string;
-    jobId?: string;
-    cancelled?: boolean;
-    reason: string;
-    at: string;
-  };
+  lastVideoError?: ProductionVideoError;
   queueInfo?: {
     queue_idx?: number;
     queue_length?: number;
@@ -207,13 +214,7 @@ export interface ProductionShot {
   pendingVideoSubmitId?: string;
   /**
    * 鏈€杩戜竴娆¤棰戠敓鎴愬け璐ョ殑鍘熷洜涓庡嚭閿?submitId锛堝悗绔?batch-job 澶辫触鏃跺啓鍥烇級銆?   * UI 鐢ㄤ簬灞曠ず"澶辫触 + 鍙噸璇?锛岃€屼笉鏄户缁崱鍦?鎻愪氦涓?銆?   * 鐢ㄦ埛鍐嶆鐐瑰嚮鐢熸垚鎴愬姛鍚庝細琚鐩栵紱鎷垮埌鏂拌棰戞椂鍙繚鐣欎篃鍙竻绌猴紙鍓嶇瀹归敊澶勭悊锛夈€?   */
-  lastVideoError?: {
-    submitId?: string;
-    jobId?: string;
-    cancelled?: boolean;
-    reason: string;
-    at: string;
-  };
+  lastVideoError?: ProductionVideoError;
   /**
    * 浠呭綋鍒嗛暅瑙嗛妯″紡涓恒€屽叏鑳藉弬鑰?dreamina-multimodal銆嶆椂鏈夋晥锛氳鐩栧彂缁欐帴鍙ｇ殑 storyboardText銆?   * 鏈缃椂浣跨敤鑷姩鎷兼帴锛堢粨鏋勫寲鍙欎簨 + @鍥剧墖 璇存槑琛岋級銆?   */
   videoStoryboardOverride?: string;

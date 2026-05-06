@@ -452,9 +452,13 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
         status: 'failed' as const,
         phase: polled.phase,
         genStatus: polled.genStatus,
+        providerStatus: polled.providerStatus,
         queueInfo: polled.queueInfo,
         failReason: polled.failReason,
-        errorCode: classifyDreaminaFailReason(polled.failReason),
+        errorCode: polled.errorCode ?? classifyDreaminaFailReason(polled.failReason),
+        displayMessageZh: polled.displayMessageZh,
+        displayMessageEn: polled.displayMessageEn,
+        providerMessage: polled.providerMessage,
       });
       return;
     }
@@ -467,6 +471,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
         status: 'pending' as const,
         phase: polled.phase,
         genStatus: polled.genStatus,
+        providerStatus: polled.providerStatus,
         queueInfo: polled.queueInfo,
       });
       return;
@@ -515,6 +520,10 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
         genStatus: polled.genStatus,
         failReason: '视频已生成但服务端落盘失败，请重试或检查服务器磁盘空间',
         errorCode: 'PERSIST_FAILED',
+        providerStatus: polled.providerStatus,
+        displayMessageZh: '视频已生成，但服务端落盘失败，请重试或检查服务器磁盘空间。',
+        displayMessageEn: 'The video finished, but server persistence failed. Please retry or check server disk space.',
+        providerMessage: 'Video generation succeeded but persistence to local storage failed.',
       });
       return;
     }
@@ -525,6 +534,7 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
       status: 'completed' as const,
       phase: polled.phase,
       genStatus: polled.genStatus,
+      providerStatus: polled.providerStatus,
       videoUrl: finalUrl,
       videoPath,
     });
@@ -536,4 +546,3 @@ dreaminaRouter.get('/task/:submitId', async (req: Request, res: Response) => {
 });
 
 export default dreaminaRouter;
-

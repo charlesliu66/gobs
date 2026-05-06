@@ -9,6 +9,16 @@ import os from 'os';
 import fsSync from 'fs';
 import { randomBytes } from 'crypto';
 import { getUploadsPath } from '../config/apiDataDir.js';
+import {
+  buildArkSeedanceCreatePayload,
+  createArkSeedanceTask,
+  deleteArkSeedanceTask,
+  downloadArkVideoAsDataUrl,
+  getArkSeedanceTask,
+  isArkSeedanceEnabled,
+  normalizeArkSeedanceTask,
+  resolveArkProviderModel,
+} from './arkSeedanceVideo.js';
 
 const DREAMINA_TEXT2VIDEO = 'dreamina-text2video';
 const DREAMINA_IMAGE2VIDEO = 'dreamina-image2video';
@@ -31,6 +41,7 @@ export function getDreaminaModelIds(): string[] {
 export function isDreaminaEnabled(): boolean {
   if (process.env.DREAMINA_ENABLED === '0' || process.env.DREAMINA_ENABLED === 'false') return false;
   if (process.env.DREAMINA_ENABLED === '1' || process.env.DREAMINA_ENABLED === 'true') return true;
+  if (isArkSeedanceEnabled()) return true;
   try {
     return fsSync.existsSync(getDreaminaScriptsDir());
   } catch {
@@ -166,6 +177,86 @@ function dreaminaFailureMessage(raw: string | undefined): string {
 function pollSec(): number {
   const n = parseInt(process.env.DREAMINA_POLL_SEC || '600', 10);
   return Number.isFinite(n) && n >= 30 ? Math.min(n, 3600) : 600;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatLocalizedProviderReason(
+  displayMessageZh?: string,
+  displayMessageEn?: string,
+  providerMessage?: string,
+): string {
+  if (displayMessageZh && displayMessageEn) {
+    return `${displayMessageZh} / ${displayMessageEn}`;
+  }
+  return displayMessageZh || displayMessageEn || providerMessage || 'Video generation failed.';
+}
+
+async function submitArkTaskForDreaminaCompat(
+  submitParams: {
+    storyboardText?: string;
+    prompt?: string;
+    aspectRatio?: string;
+    duration?: number;
+    model: string;
+    imageBase64?: string;
+    imageMimeType?: string;
+    multimodalImages?: Array<{ base64: string; mimeType?: string }>;
+    multimodalVideos?: Array<{ base64: string; mimeType?: string }>;
+    multimodalAudios?: Array<{ base64: string; mimeType?: string }>;
+    dreaminaModelVersion?: string;
+  },
+): Promise<{ submitId: string; taskId: string }> {
+  const providerModel = resolveArkProviderModel({
+    requestedModel: submitParams.model,
+    requestedModelVersion: submitParams.dreaminaModelVersion,
+  });
+  const payload = buildArkSeedanceCreatePayload({
+    providerModel,
+    submitParams,
+  });
+  const created = await createArkSeedanceTask(payload);
+  return {
+    submitId: created.id,
+    taskId: `dreamina-${created.id}`,
+  };
+}
+
+async function pollArkTaskUntilTerminal(submitId: string): Promise<{ videoUrl: string; taskId: string }> {
+  const timeoutAt = Date.now() + pollSec() * 1000;
+  while (Date.now() < timeoutAt) {
+    const remote = await getArkSeedanceTask(submitId);
+    const normalized = normalizeArkSeedanceTask(remote);
+    if (normalized.phase === 'success') {
+      const rawUrl = normalized.videoUrl?.trim();
+      if (!rawUrl) {
+        throw new Error('Ark task succeeded but did not return a video URL.');
+      }
+      const videoUrl = /^data:video\//i.test(rawUrl) ? rawUrl : await downloadArkVideoAsDataUrl(rawUrl);
+      return {
+        videoUrl,
+        taskId: `dreamina-${submitId}`,
+      };
+    }
+    if (normalized.phase === 'failed') {
+      throw new Error(
+        formatLocalizedProviderReason(
+          normalized.displayMessageZh,
+          normalized.displayMessageEn,
+          normalized.providerMessage,
+        ),
+      );
+    }
+    await sleep(10_000);
+  }
+  throw new Error(`Ark task polling timed out after ${pollSec()} seconds.`);
+}
+
+export async function cancelDreaminaProviderTask(submitId: string): Promise<void> {
+  if (!isArkSeedanceEnabled()) return;
+  await deleteArkSeedanceTask(submitId);
 }
 
 /**
@@ -384,6 +475,9 @@ export async function checkDreaminaAuth(): Promise<{
   username?: string;
   error?: string;
 }> {
+  if (isArkSeedanceEnabled()) {
+    return { loggedIn: true, username: 'ark-api' };
+  }
   if (!isDreaminaEnabled()) {
     return { loggedIn: false, error: '即梦服务未启用' };
   }
@@ -465,6 +559,11 @@ export interface DreaminaTaskStatusResult {
   genStatus?: string;
   queueInfo?: DreaminaQueueInfo;
   failReason?: string;
+  errorCode?: string;
+  displayMessageZh?: string;
+  displayMessageEn?: string;
+  providerMessage?: string;
+  providerStatus?: string;
   /** gen_status=success 且已下载时返回 */
   videoUrl?: string;
   /**
@@ -482,6 +581,56 @@ export async function pollDreaminaTask(submitId: string): Promise<DreaminaTaskSt
   const sid = submitId.trim();
   if (!sid) {
     return { submitId: sid, phase: 'failed', failReason: '缺少 submit_id' };
+  }
+  if (isArkSeedanceEnabled()) {
+    const remote = await getArkSeedanceTask(sid);
+    const normalized = normalizeArkSeedanceTask(remote);
+    if (normalized.phase === 'success') {
+      const rawUrl = normalized.videoUrl?.trim();
+      if (!rawUrl) {
+        return {
+          submitId: sid,
+          phase: 'failed',
+          failReason: 'Ark task succeeded but no video URL was returned.',
+          providerStatus: normalized.providerStatus,
+          providerMessage: 'Ark task succeeded but no video URL was returned.',
+        };
+      }
+      const videoUrl = /^data:video\//i.test(rawUrl) ? rawUrl : await downloadArkVideoAsDataUrl(rawUrl);
+      return {
+        submitId: sid,
+        phase: 'success',
+        genStatus: normalized.providerStatus,
+        providerStatus: normalized.providerStatus,
+        videoUrl,
+      };
+    }
+    if (normalized.phase === 'failed') {
+      return {
+        submitId: sid,
+        phase: 'failed',
+        genStatus: normalized.providerStatus,
+        providerStatus: normalized.providerStatus,
+        failReason: formatLocalizedProviderReason(
+          normalized.displayMessageZh,
+          normalized.displayMessageEn,
+          normalized.providerMessage,
+        ),
+        errorCode: normalized.errorCode,
+        displayMessageZh: normalized.displayMessageZh,
+        displayMessageEn: normalized.displayMessageEn,
+        providerMessage: normalized.providerMessage,
+      };
+    }
+    return {
+      submitId: sid,
+      phase: 'querying',
+      genStatus: normalized.providerStatus,
+      providerStatus: normalized.providerStatus,
+      queueInfo: {
+        queue_status: normalized.providerStatus,
+      },
+    };
   }
   const wrap = await runWrapper('query_result.py', ['--submit-id', sid]);
   if (!wrap.ok) {
@@ -569,6 +718,18 @@ export async function submitDreaminaMultimodalVideo(options: {
   /** 覆盖 DREAMINA_MULTIMODAL_MODEL，传给 CLI --model-version */
   modelVersion?: string;
 }): Promise<{ submitId: string; taskId: string }> {
+  if (isArkSeedanceEnabled()) {
+    return submitArkTaskForDreaminaCompat({
+      storyboardText: options.prompt,
+      aspectRatio: options.aspectRatio,
+      duration: options.duration,
+      model: DREAMINA_MULTIMODAL,
+      multimodalImages: options.images,
+      multimodalVideos: options.videos,
+      multimodalAudios: options.audios,
+      dreaminaModelVersion: options.modelVersion,
+    });
+  }
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error('请提供 prompt（可用 @图片1 @视频1 等引用素材）');
 
@@ -653,6 +814,17 @@ export async function submitDreaminaMultimodalVideo(options: {
  * 文生 / 图生：仅提交任务，立即返回 submit_id。
  */
 export async function submitDreaminaVideo(options: DreaminaVideoOptions): Promise<{ submitId: string; taskId: string }> {
+  if (isArkSeedanceEnabled()) {
+    return submitArkTaskForDreaminaCompat({
+      storyboardText: options.prompt,
+      aspectRatio: options.aspectRatio,
+      duration: options.duration,
+      model: options.model,
+      imageBase64: options.imageBase64,
+      imageMimeType: options.imageMimeType,
+      dreaminaModelVersion: options.modelVersion,
+    });
+  }
   const m = options.model.trim().toLowerCase();
   if (m === DREAMINA_MULTIMODAL) {
     throw new Error('全能参考应走 submitDreaminaMultimodalVideo');
@@ -739,6 +911,18 @@ export interface DreaminaVideoOptions {
  * 文生视频或图生视频，返回 data URL（mp4 base64）与 submit_id 作 taskId。
  */
 export async function generateDreaminaVideo(options: DreaminaVideoOptions): Promise<{ videoUrl: string; taskId: string }> {
+  if (isArkSeedanceEnabled()) {
+    const { submitId } = await submitArkTaskForDreaminaCompat({
+      storyboardText: options.prompt,
+      aspectRatio: options.aspectRatio,
+      duration: options.duration,
+      model: options.model,
+      imageBase64: options.imageBase64,
+      imageMimeType: options.imageMimeType,
+      dreaminaModelVersion: options.modelVersion,
+    });
+    return pollArkTaskUntilTerminal(submitId);
+  }
   const m = options.model.trim().toLowerCase();
   if (m === DREAMINA_MULTIMODAL) {
     throw new Error('全能参考应走 generateDreaminaMultimodalVideo');
@@ -859,6 +1043,19 @@ export async function generateDreaminaMultimodalVideo(options: {
   /** 覆盖 DREAMINA_MULTIMODAL_MODEL */
   modelVersion?: string;
 }): Promise<{ videoUrl: string; taskId: string }> {
+  if (isArkSeedanceEnabled()) {
+    const { submitId } = await submitArkTaskForDreaminaCompat({
+      storyboardText: options.prompt,
+      aspectRatio: options.aspectRatio,
+      duration: options.duration,
+      model: DREAMINA_MULTIMODAL,
+      multimodalImages: options.images,
+      multimodalVideos: options.videos,
+      multimodalAudios: options.audios,
+      dreaminaModelVersion: options.modelVersion,
+    });
+    return pollArkTaskUntilTerminal(submitId);
+  }
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error('请提供 prompt（可用 @图片1 @视频1 等引用素材）');
 

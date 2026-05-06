@@ -235,6 +235,7 @@ export interface DreaminaTaskPollResponse {
   status: 'pending' | 'completed' | 'failed';
   phase?: string;
   genStatus?: string;
+  providerStatus?: string;
   queueInfo?: {
     queue_idx?: number;
     queue_length?: number;
@@ -245,6 +246,9 @@ export interface DreaminaTaskPollResponse {
   videoUrl?: string;
   videoPath?: string;
   errorCode?: string;
+  displayMessageZh?: string;
+  displayMessageEn?: string;
+  providerMessage?: string;
 }
 
 /** 轮询即梦任务：排队中返回 queueInfo；完成返回 videoUrl */

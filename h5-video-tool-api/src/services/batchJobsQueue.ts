@@ -3,7 +3,11 @@ import fsSync from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js';
-import { pollDreaminaTask, submitDreaminaVideo } from './dreaminaVideo.js';
+import {
+  cancelDreaminaProviderTask,
+  pollDreaminaTask,
+  submitDreaminaVideo,
+} from './dreaminaVideo.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 import { scheduleTick } from './dreaminaScheduler.js';
 import {
@@ -37,6 +41,8 @@ export interface BatchJobSubmitParams {
   imageBase64?: string;
   imageMimeType?: string;
   multimodalImages?: Array<{ base64: string; mimeType?: string }>;
+  multimodalVideos?: Array<{ base64: string; mimeType?: string }>;
+  multimodalAudios?: Array<{ base64: string; mimeType?: string }>;
   dreaminaModelVersion?: string;
 }
 
@@ -60,6 +66,11 @@ export interface BatchJob {
   videoUrl?: string;
   videoFilePath?: string;
   failReason?: string;
+  errorCode?: string;
+  displayMessageZh?: string;
+  displayMessageEn?: string;
+  providerMessage?: string;
+  providerStatus?: string;
   queueInfo?: {
     queue_idx?: number;
     queue_length?: number;
@@ -222,6 +233,11 @@ async function requestScheduleTick(): Promise<void> {
               taskId: payload.taskId,
               submitParams: undefined,
               failReason: undefined,
+              errorCode: undefined,
+              displayMessageZh: undefined,
+              displayMessageEn: undefined,
+              providerMessage: undefined,
+              providerStatus: undefined,
             }),
           markRetry: async (id, attempts) =>
             applyJobPatch(id, { submitAttempts: attempts }),
@@ -233,6 +249,11 @@ async function requestScheduleTick(): Promise<void> {
               submitParams: undefined,
               globalQueuePos: undefined,
               etaSec: undefined,
+              errorCode: undefined,
+              displayMessageZh: undefined,
+              displayMessageEn: undefined,
+              providerMessage: undefined,
+              providerStatus: undefined,
             });
             if (updated?.source === 'production' && updated.username) {
               await writeBackFailedToProject(updated, failReason);
@@ -322,17 +343,31 @@ export async function updateJob(id: string, patch: Partial<BatchJob>): Promise<B
   return updated;
 }
 
-function buildCancelResult(status: BatchJobStatus): CancelResult {
+function buildCancelResult(
+  status: BatchJobStatus,
+  options?: { remoteCancelled?: boolean },
+): CancelResult {
   if (status === 'awaiting_submit') {
     return { ok: true, wasteCredit: false, note: '已从队列移除，未消耗积分' };
   }
   if (status === 'processing') {
-    return { ok: true, wasteCredit: true, note: '任务已在即梦 GPU 渲染中，本次积分无法退回' };
+    return {
+      ok: true,
+      wasteCredit: true,
+      note: '已停止本地跟踪；云端任务可能仍在生成，已消耗额度通常无法退回',
+    };
+  }
+  if (options?.remoteCancelled) {
+    return {
+      ok: true,
+      wasteCredit: false,
+      note: '已从云端队列移除，通常不会继续生成',
+    };
   }
   return {
     ok: true,
     wasteCredit: false,
-    note: '已通知平台不再跟进，即梦侧一般不会扣积分（无保证）',
+    note: '已停止本地跟踪；云端任务可能仍在排队或处理中',
   };
 }
 
@@ -349,7 +384,17 @@ export async function cancelJob(
     return { ok: false, wasteCredit: false, note: '任务已是终态', reason: 'already_terminal' };
   }
 
-  const result = buildCancelResult(job.status);
+  let remoteCancelled = false;
+  if (job.submitId && (job.status === 'pending' || job.status === 'queuing')) {
+    try {
+      await cancelDreaminaProviderTask(job.submitId);
+      remoteCancelled = true;
+    } catch (error) {
+      console.warn(`[batch-jobs] remote cancel skipped for ${job.id}`, error);
+    }
+  }
+
+  const result = buildCancelResult(job.status, { remoteCancelled });
   const updated = await applyJobPatch(id, {
     status: 'cancelled',
     cancelReason: reason,
@@ -357,6 +402,12 @@ export async function cancelJob(
     submitParams: undefined,
     globalQueuePos: undefined,
     etaSec: undefined,
+    failReason: result.note,
+    errorCode: undefined,
+    displayMessageZh: undefined,
+    displayMessageEn: undefined,
+    providerMessage: undefined,
+    providerStatus: undefined,
   });
   if (updated?.source === 'production' && updated.username) {
     await writeBackCancelledToProject(updated, result.note);
@@ -418,6 +469,12 @@ async function submitNextQuickfilmShot(completedJob: BatchJob): Promise<void> {
       submitId,
       taskId: taskId || `dreamina-${submitId}`,
       submitParams: undefined,
+      failReason: undefined,
+      errorCode: undefined,
+      displayMessageZh: undefined,
+      displayMessageEn: undefined,
+      providerMessage: undefined,
+      providerStatus: undefined,
     });
     await queueMaintenance();
   } catch (error) {
@@ -429,6 +486,11 @@ async function submitNextQuickfilmShot(completedJob: BatchJob): Promise<void> {
       status: 'failed',
       failReason: message,
       submitParams: undefined,
+      errorCode: undefined,
+      displayMessageZh: undefined,
+      displayMessageEn: undefined,
+      providerMessage: undefined,
+      providerStatus: undefined,
     });
     void submitNextQuickfilmShot(next).catch(() => {});
   }
@@ -463,6 +525,13 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
       lastPolledAt: new Date().toISOString(),
       globalQueuePos: undefined,
       etaSec: undefined,
+      failReason: undefined,
+      errorCode: undefined,
+      displayMessageZh: undefined,
+      displayMessageEn: undefined,
+      providerMessage: undefined,
+      providerStatus: result.providerStatus,
+      queueInfo: undefined,
     });
     if (updated?.source === 'production' && updated.username) {
       await writeBackToProject(updated, `/api/batch-jobs/video/${updated.id}`);
@@ -485,6 +554,11 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
       lastPolledAt: new Date().toISOString(),
       globalQueuePos: undefined,
       etaSec: undefined,
+      errorCode: result.errorCode,
+      displayMessageZh: result.displayMessageZh,
+      displayMessageEn: result.displayMessageEn,
+      providerMessage: result.providerMessage,
+      providerStatus: result.providerStatus,
     });
     if (updated?.source === 'production' && updated.username) {
       await writeBackFailedToProject(updated, reason);
@@ -506,6 +580,7 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
     status: result.genStatus === 'generate' ? 'processing' : 'queuing',
     queueInfo: result.queueInfo,
     lastPolledAt: new Date().toISOString(),
+    providerStatus: result.providerStatus,
   });
   await queueMaintenance();
   return updated;
@@ -538,6 +613,11 @@ async function pollPendingJobs(): Promise<void> {
       failReason: `生成超时（超过 ${Math.round(MAX_JOB_AGE_MS / 3600_000)} 小时未完成）`,
       globalQueuePos: undefined,
       etaSec: undefined,
+      errorCode: 'TIMEOUT',
+      displayMessageZh: '生成超时，请稍后重试。',
+      displayMessageEn: 'Generation timed out. Please try again later.',
+      providerMessage: 'Generation timed out while polling job status.',
+      providerStatus: job.providerStatus,
     });
     if (updated?.source === 'production' && updated.username) {
       await writeBackFailedToProject(updated, updated.failReason ?? '生成超时');
@@ -724,6 +804,11 @@ async function writeBackFailedToProject(job: BatchJob, reason: string, cancelled
       reason,
       at: new Date().toISOString(),
       cancelled,
+      errorCode: job.errorCode,
+      displayMessageZh: job.displayMessageZh,
+      displayMessageEn: job.displayMessageEn,
+      providerMessage: job.providerMessage,
+      providerStatus: job.providerStatus,
     };
     segment.jobIds = appendJobId(segment.jobIds, job.id);
   } else if (shot) {
@@ -736,6 +821,11 @@ async function writeBackFailedToProject(job: BatchJob, reason: string, cancelled
       reason,
       at: new Date().toISOString(),
       cancelled,
+      errorCode: job.errorCode,
+      displayMessageZh: job.displayMessageZh,
+      displayMessageEn: job.displayMessageEn,
+      providerMessage: job.providerMessage,
+      providerStatus: job.providerStatus,
     };
   }
   await persistProjectWriteback(data, filePath, metaPath);

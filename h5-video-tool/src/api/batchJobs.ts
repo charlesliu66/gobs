@@ -19,6 +19,11 @@ export interface BatchJobDto {
   updatedAt: string;
   videoUrl?: string;
   failReason?: string;
+  errorCode?: string;
+  displayMessageZh?: string;
+  displayMessageEn?: string;
+  providerMessage?: string;
+  providerStatus?: string;
   cancelledAt?: string;
   cancelReason?: 'user' | 'project_deleted' | 'admin';
   globalQueuePos?: number;
@@ -64,6 +69,8 @@ export interface EnqueueProductionShotParams {
   imageBase64?: string;
   imageMimeType?: string;
   multimodalImages?: Array<{ base64: string; mimeType?: string }>;
+  multimodalVideos?: Array<{ base64: string; mimeType?: string }>;
+  multimodalAudios?: Array<{ base64: string; mimeType?: string }>;
   dreaminaModelVersion?: string;
 }
 

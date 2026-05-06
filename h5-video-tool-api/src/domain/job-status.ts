@@ -1,65 +1,81 @@
 /**
- * 统一任务状态机 & 错误码
- *
- * 所有视频生成（Dreamina / Compass / Kling）使用同一套状态/错误码体系，
- * 前端根据 errorCode 精确展示提示，不再猜测错误原因。
+ * Unified job status and error code helpers shared across providers.
  */
-
-// ── 任务状态 ──────────────────────────────────────────────────────────────────
 
 export type JobStatus =
-  | 'queued'     // 已入队，等待执行
-  | 'running'    // 执行中
-  | 'succeeded'  // 成功完成
-  | 'failed'     // 失败（可重试或需用户介入）
-  | 'timeout'    // 超时（未在期望时间内完成）
-  | 'canceled'   // 已取消
-
-// ── 错误码枚举 ────────────────────────────────────────────────────────────────
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'canceled';
 
 export type JobErrorCode =
-  // Dreamina（即梦）相关
-  | 'DREAMINA_NOT_LOGGED_IN'   // CLI 未登录
-  | 'DREAMINA_CONCURRENCY'     // 超出并发限制（ret=1310）
-  | 'DREAMINA_UPLOAD_FAILED'   // TOS 上传失败（素材上传阶段）
-  | 'DREAMINA_CONTENT_RISK'    // 内容审核拦截
-  | 'DREAMINA_TASK_FAILED'     // 任务通用失败（即梦侧报错）
-  // Compass（罗盘）相关
-  | 'COMPASS_RATE_LIMIT'       // 请求频率超限（429）
-  | 'COMPASS_UNAVAILABLE'      // 服务不可达（网络 / 内网不通）
-  | 'COMPASS_QUOTA_EXCEEDED'   // 配额耗尽
-  // Kling（可灵）相关
-  | 'KLING_UNAUTHORIZED'       // API Key 无效或未配置
-  | 'KLING_RATE_LIMIT'         // 可灵频率限制
-  | 'KLING_TASK_FAILED'        // 可灵任务失败
-  // 通用
-  | 'TIMEOUT'                  // 轮询超时
-  | 'INPUT_INVALID'            // 参数校验失败
-  | 'UNKNOWN'                  // 未知/未分类错误
-
-// ── 统一结果载体 ──────────────────────────────────────────────────────────────
+  | 'ARK_AUTH_INVALID'
+  | 'ARK_CONTENT_POLICY'
+  | 'ARK_COPYRIGHT_RISK'
+  | 'ARK_INPUT_INVALID'
+  | 'ARK_ASSET_UNAVAILABLE'
+  | 'ARK_RATE_LIMIT'
+  | 'ARK_TIMEOUT'
+  | 'ARK_TASK_FAILED'
+  | 'DREAMINA_NOT_LOGGED_IN'
+  | 'DREAMINA_CONCURRENCY'
+  | 'DREAMINA_UPLOAD_FAILED'
+  | 'DREAMINA_CONTENT_RISK'
+  | 'DREAMINA_TASK_FAILED'
+  | 'COMPASS_RATE_LIMIT'
+  | 'COMPASS_UNAVAILABLE'
+  | 'COMPASS_QUOTA_EXCEEDED'
+  | 'KLING_UNAUTHORIZED'
+  | 'KLING_RATE_LIMIT'
+  | 'KLING_TASK_FAILED'
+  | 'PERSIST_FAILED'
+  | 'TIMEOUT'
+  | 'INPUT_INVALID'
+  | 'UNKNOWN';
 
 export interface JobResult<T = unknown> {
-  status: JobStatus
-  data?: T
-  errorCode?: JobErrorCode
-  errorMessage?: string
-  startedAt?: string
-  endedAt?: string
+  status: JobStatus;
+  data?: T;
+  errorCode?: JobErrorCode;
+  errorMessage?: string;
+  startedAt?: string;
+  endedAt?: string;
 }
 
-// ── 错误分类工具 ──────────────────────────────────────────────────────────────
-
-/**
- * 将任意错误对象映射到 errorCode + errorMessage。
- * 用于 catch 块中标准化错误响应，保留原始错误信息供调试。
- */
 export function classifyError(err: unknown): { errorCode: JobErrorCode; errorMessage: string } {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
 
-  // ── Dreamina ──
-  if (/未登录|not logged in|login.*required|dreamina.*login|cli.*login/i.test(msg)) {
+  // Ark / Seedance
+  if (/ark.*api.*key|invalid api key|authorization|bearer/i.test(msg)) {
+    return { errorCode: 'ARK_AUTH_INVALID', errorMessage: msg };
+  }
+  if (/copyright|trademark|brand|lyrics|ip restriction|受保护作品/i.test(msg)) {
+    return { errorCode: 'ARK_COPYRIGHT_RISK', errorMessage: msg };
+  }
+  if (/policy|safety|moderation|content.*restricted|内容安全|审核拦截/i.test(msg)) {
+    return { errorCode: 'ARK_CONTENT_POLICY', errorMessage: msg };
+  }
+  if (/invalid.*input|bad request|missing required|参数.*错误|格式.*错误/i.test(msg)) {
+    return { errorCode: 'ARK_INPUT_INVALID', errorMessage: msg };
+  }
+  if (/asset.*unavailable|download.*failed|image.*unreachable|video.*unreachable|audio.*unreachable/i.test(msg)) {
+    return { errorCode: 'ARK_ASSET_UNAVAILABLE', errorMessage: msg };
+  }
+  if (/429|rate.?limit|too many request/i.test(msg) && /(ark|seedance)/i.test(msg)) {
+    return { errorCode: 'ARK_RATE_LIMIT', errorMessage: msg };
+  }
+  if (/timeout|timed.?out/i.test(lower) && /(ark|seedance)/i.test(lower)) {
+    return { errorCode: 'ARK_TIMEOUT', errorMessage: msg };
+  }
+  if (/(ark|seedance)/i.test(lower) && /(fail|error)/i.test(lower)) {
+    return { errorCode: 'ARK_TASK_FAILED', errorMessage: msg };
+  }
+
+  // Dreamina
+  if (/not logged in|login.*required|dreamina.*login|cli.*login|未登录/i.test(msg)) {
     return { errorCode: 'DREAMINA_NOT_LOGGED_IN', errorMessage: msg };
   }
   if (/ret=1310|exceed.*concurrency|concurrency.*limit/i.test(msg)) {
@@ -71,11 +87,11 @@ export function classifyError(err: unknown): { errorCode: JobErrorCode; errorMes
   if (/content.*risk|risk.*content|审核|违规/i.test(msg)) {
     return { errorCode: 'DREAMINA_CONTENT_RISK', errorMessage: msg };
   }
-  if (/dreamina/i.test(msg) && /fail|error|err/i.test(msg)) {
+  if (/dreamina/i.test(msg) && /(fail|error|err)/i.test(msg)) {
     return { errorCode: 'DREAMINA_TASK_FAILED', errorMessage: msg };
   }
 
-  // ── Compass ──
+  // Compass
   if (/429|rate.?limit|too many request/i.test(msg)) {
     return { errorCode: 'COMPASS_RATE_LIMIT', errorMessage: msg };
   }
@@ -86,43 +102,49 @@ export function classifyError(err: unknown): { errorCode: JobErrorCode; errorMes
     return { errorCode: 'COMPASS_UNAVAILABLE', errorMessage: msg };
   }
 
-  // ── Kling ──
+  // Kling
   if (/401|unauthorized|kling.*key|api.*key.*invalid/i.test(lower)) {
     return { errorCode: 'KLING_UNAUTHORIZED', errorMessage: msg };
   }
   if (/kling.*rate|rate.*kling/i.test(lower)) {
     return { errorCode: 'KLING_RATE_LIMIT', errorMessage: msg };
   }
-  if (/kling/i.test(lower) && /fail|error/i.test(lower)) {
+  if (/kling/i.test(lower) && /(fail|error)/i.test(lower)) {
     return { errorCode: 'KLING_TASK_FAILED', errorMessage: msg };
   }
 
-  // ── 通用 ──
+  if (/persist.*failed|落盘失败/i.test(msg)) {
+    return { errorCode: 'PERSIST_FAILED', errorMessage: msg };
+  }
   if (/timeout|timed.?out/i.test(lower)) {
     return { errorCode: 'TIMEOUT', errorMessage: msg };
+  }
+  if (/input.*invalid|参数.*错误|格式.*错误/i.test(msg)) {
+    return { errorCode: 'INPUT_INVALID', errorMessage: msg };
   }
 
   return { errorCode: 'UNKNOWN', errorMessage: msg };
 }
 
-/**
- * 从即梦 failReason 字符串提取 errorCode（用于 pollDreaminaTask 返回后分类）
- */
 export function classifyDreaminaFailReason(failReason: string | undefined): JobErrorCode {
   if (!failReason) return 'DREAMINA_TASK_FAILED';
   const lower = failReason.toLowerCase();
+
+  if (lower.includes('ark_auth_invalid')) return 'ARK_AUTH_INVALID';
+  if (lower.includes('ark_content_policy')) return 'ARK_CONTENT_POLICY';
+  if (lower.includes('ark_copyright_risk')) return 'ARK_COPYRIGHT_RISK';
+  if (lower.includes('ark_input_invalid')) return 'ARK_INPUT_INVALID';
+  if (lower.includes('ark_asset_unavailable')) return 'ARK_ASSET_UNAVAILABLE';
+  if (lower.includes('ark_rate_limit')) return 'ARK_RATE_LIMIT';
+  if (lower.includes('ark_timeout')) return 'ARK_TIMEOUT';
+  if (lower.includes('ark_task_failed')) return 'ARK_TASK_FAILED';
+
   if (/content.*risk|risk.*content|审核|违规/.test(lower)) return 'DREAMINA_CONTENT_RISK';
   if (/upload|tos/.test(lower)) return 'DREAMINA_UPLOAD_FAILED';
   if (/concurren|1310/.test(lower)) return 'DREAMINA_CONCURRENCY';
   return 'DREAMINA_TASK_FAILED';
 }
 
-// ── 各服务状态 → 统一 JobStatus 适配层 ──────────────────────────────────────
-
-/**
- * 映射 BatchJobStatus → 统一 JobStatus
- * BatchJobStatus: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit'
- */
 export function fromBatchJobStatus(
   s: 'pending' | 'queuing' | 'processing' | 'done' | 'failed' | 'cancelled' | 'awaiting_submit',
 ): JobStatus {
@@ -142,13 +164,7 @@ export function fromBatchJobStatus(
   }
 }
 
-/**
- * 映射 DreaminaPollPhase → 统一 JobStatus
- * DreaminaPollPhase: 'querying' | 'success' | 'failed'
- */
-export function fromDreaminaPhase(
-  phase: 'querying' | 'success' | 'failed',
-): JobStatus {
+export function fromDreaminaPhase(phase: 'querying' | 'success' | 'failed'): JobStatus {
   switch (phase) {
     case 'querying':
       return 'running';
@@ -159,10 +175,6 @@ export function fromDreaminaPhase(
   }
 }
 
-/**
- * 映射 KlingPollPhase → 统一 JobStatus
- * KlingPollPhase: 'pending' | 'processing' | 'succeeded' | 'failed'
- */
 export function fromKlingPhase(
   phase: 'pending' | 'processing' | 'succeeded' | 'failed',
 ): JobStatus {
@@ -178,13 +190,7 @@ export function fromKlingPhase(
   }
 }
 
-/**
- * 映射 QuickFilm JobStatus → 统一 JobStatus
- * QuickFilm: 'pending' | 'running' | 'done' | 'error'
- */
-export function fromQuickFilmStatus(
-  s: 'pending' | 'running' | 'done' | 'error',
-): JobStatus {
+export function fromQuickFilmStatus(s: 'pending' | 'running' | 'done' | 'error'): JobStatus {
   switch (s) {
     case 'pending':
       return 'queued';
@@ -197,13 +203,7 @@ export function fromQuickFilmStatus(
   }
 }
 
-/**
- * 映射 Dreamina HTTP 路由状态 → 统一 JobStatus
- * videoDreamina route: 'pending' | 'completed' | 'failed'
- */
-export function fromDreaminaHttpStatus(
-  s: 'pending' | 'completed' | 'failed',
-): JobStatus {
+export function fromDreaminaHttpStatus(s: 'pending' | 'completed' | 'failed'): JobStatus {
   switch (s) {
     case 'pending':
       return 'running';
@@ -214,13 +214,7 @@ export function fromDreaminaHttpStatus(
   }
 }
 
-/**
- * 映射 Editor 导出状态 → 统一 JobStatus
- * Editor export: 'queued' | 'processing' | 'done' | 'error'
- */
-export function fromEditorExportStatus(
-  s: 'queued' | 'processing' | 'done' | 'error',
-): JobStatus {
+export function fromEditorExportStatus(s: 'queued' | 'processing' | 'done' | 'error'): JobStatus {
   switch (s) {
     case 'queued':
       return 'queued';
@@ -233,13 +227,7 @@ export function fromEditorExportStatus(
   }
 }
 
-/**
- * 映射 Remix 状态 → 统一 JobStatus
- * Remix: 'pending' | 'rendering' | 'done' | 'failed'
- */
-export function fromRemixStatus(
-  s: 'pending' | 'rendering' | 'done' | 'failed',
-): JobStatus {
+export function fromRemixStatus(s: 'pending' | 'rendering' | 'done' | 'failed'): JobStatus {
   switch (s) {
     case 'pending':
       return 'queued';
@@ -252,7 +240,6 @@ export function fromRemixStatus(
   }
 }
 
-/** 判断是否为终态（succeeded / failed / timeout / canceled） */
 export function isTerminalStatus(s: JobStatus): boolean {
   return s === 'succeeded' || s === 'failed' || s === 'timeout' || s === 'canceled';
 }

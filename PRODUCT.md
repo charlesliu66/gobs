@@ -1982,3 +1982,5 @@ ole="presentation"
 
 *Last updated: 2026-05-06 (v0.134)*
 
+
+Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

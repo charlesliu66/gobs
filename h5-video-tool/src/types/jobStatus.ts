@@ -1,18 +1,24 @@
 /**
- * 统一任务状态机（前端）
- * 与后端 domain/job-status.ts 保持对齐。
- * 前端只依据这套状态枚举渲染 UI，不做客户端猜测。
+ * Frontend mirror of the unified backend job status model.
  */
 
 export type UnifiedJobStatus =
-  | 'queued'     // 已入队，等待执行
-  | 'running'    // 执行中
-  | 'succeeded'  // 成功完成
-  | 'failed'     // 失败
-  | 'timeout'    // 超时
-  | 'canceled';  // 已取消
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'canceled';
 
 export type JobErrorCode =
+  | 'ARK_AUTH_INVALID'
+  | 'ARK_CONTENT_POLICY'
+  | 'ARK_COPYRIGHT_RISK'
+  | 'ARK_INPUT_INVALID'
+  | 'ARK_ASSET_UNAVAILABLE'
+  | 'ARK_RATE_LIMIT'
+  | 'ARK_TIMEOUT'
+  | 'ARK_TASK_FAILED'
   | 'DREAMINA_NOT_LOGGED_IN'
   | 'DREAMINA_CONCURRENCY'
   | 'DREAMINA_UPLOAD_FAILED'
@@ -24,6 +30,7 @@ export type JobErrorCode =
   | 'KLING_UNAUTHORIZED'
   | 'KLING_RATE_LIMIT'
   | 'KLING_TASK_FAILED'
+  | 'PERSIST_FAILED'
   | 'TIMEOUT'
   | 'INPUT_INVALID'
   | 'UNKNOWN';
@@ -37,15 +44,10 @@ export interface UnifiedJobResult<T = unknown> {
   endedAt?: string;
 }
 
-/** 判断是否为终态 */
 export function isTerminalStatus(s: UnifiedJobStatus): boolean {
   return s === 'succeeded' || s === 'failed' || s === 'timeout' || s === 'canceled';
 }
 
-/**
- * 适配各服务原生状态到统一状态。
- * 在前端适配层调用，用于统一 UI 渲染逻辑。
- */
 export function toUnifiedStatus(raw: string): UnifiedJobStatus {
   switch (raw) {
     case 'queued':
