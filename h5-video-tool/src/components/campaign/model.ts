@@ -34,6 +34,14 @@ export interface CampaignCreativeStrategy {
   tone?: string;
   assetNeeds: string[];
   riskNotes: string[];
+  knowledgePackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
 }
 
 export interface CampaignCreativeStrategyTuning {

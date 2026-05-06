@@ -252,6 +252,12 @@
 - **[api] persistent publish history and campaign-aware caption context are now wired end-to-end without new env vars** (`h5-video-tool-api/src/routes/geelark.ts`, `h5-video-tool-api/src/routes/prompt.ts`, `h5-video-tool-api/src/services/promptPolish.ts`, `h5-video-tool-api/tests/geelarkTaskHistoryShape.test.ts`, `h5-video-tool-api/tests/promptCaptionCampaignContext.test.ts`): `/api/geelark/tasks` returns normalized `history` alongside compatible `items`, and `/api/prompt/generate-caption` accepts optional `campaignContext` fields for objective, audience, CTA, market, tone, and banned phrases.
 - **[docs] captured the P2 scheduling follow-up as a design spike instead of shipping runtime scheduling prematurely** (`docs/plans/2026-05-06-video-distribution-marketer-ux-design.md`, `docs/plans/2026-05-06-video-distribution-marketer-ux-implementation-plan.md`, `docs/plans/2026-05-06-video-distribution-scheduling-design-spike.md`): this run stays within the approved P0/P1 runtime slice while preserving the next-stage roadmap.
 
+### v0.142 - 2026-05-06
+**Campaign Creative knowledge consumption**
+
+- **[campaign creative] Added a Knowledge Brain selector inside /campaign-creative** (h5-video-tool/src/pages/CampaignCreative.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgeSelector.tsx): users can now see the current game's reusable packs, select which ones should inform the strategy, and refresh the pack list without leaving the page.
+- **[campaign strategy] Strategy generation now consumes derived knowledge context** (h5-video-tool/src/components/campaign/strategy.ts, h5-video-tool/src/components/campaign/model.ts, h5-video-tool/src/components/campaign/CampaignStrategyCard.tsx, h5-video-tool/src/i18n/messages.ts): strategy cards now surface market truth, audience tension, tone rules, forbidden claims, visual cues, approved angles, and knowledge-driven hooks while still falling back cleanly when no pack is selected.
+- **[tests] Added targeted Campaign Creative knowledge regression coverage** (h5-video-tool/tests/campaignStrategyKnowledge.test.ts, h5-video-tool/tests/campaignVariantPack.test.ts): protects derived-context merge behavior and knowledge-aware variant differentiation before the next Editor integration slice.
 ### v0.140 - 2026-05-06
 **English localization hardening for language presets, editor API errors, and export overview**
 
@@ -2032,7 +2038,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.141)*
+*Last updated: 2026-05-06 (v0.142)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
@@ -2044,6 +2050,11 @@ Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jo
 
 ---
 
+## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
+- Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.
+- Upgraded local strategy generation and the Strategy Card to consume derived knowledge context, surfacing market truth, audience tension, tone rules, forbidden claims, visual cues, approved angles, and knowledge-driven hooks.
+- Reused the same knowledge-aware strategy state when building the Variant Pack, keeping regenerated variants aligned with the selected knowledge context.
+- Added targeted regression coverage for derived-context merge behavior and knowledge-aware variant differentiation on the frontend.
 ## v0.135 - 2026-05-06 (Campaign Creative Addendum)
 - Added a dedicated /campaign-creative entry path from homepage and top navigation.
 - Added a brief-first campaign workflow with Brand Content and TikTok UA modes.
@@ -2068,3 +2079,5 @@ Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jo
 - Upgraded Campaign Creative handoff so Editor receives the selected variant alongside the shared brief and strategy, and the first creative-agent apply can reuse that variant context.
 - Added targeted regression coverage for variant-pack generation and variant handoff normalization on both the frontend and backend.
 - Preserved explicit brief CTA wording inside generated variants and hardened variant normalization so legacy handoff payloads without variant fields still restore safely.
+
+

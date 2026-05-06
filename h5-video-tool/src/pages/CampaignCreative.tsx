@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  deriveKnowledgeContext,
+  type DerivedCampaignKnowledgeContext,
+} from '../api/campaignKnowledge.ts';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { CampaignBriefForm } from '../components/campaign/CampaignBriefForm';
+import { CampaignKnowledgeSelector } from '../components/campaign/CampaignKnowledgeSelector';
 import { CampaignModeSwitch } from '../components/campaign/CampaignModeSwitch';
 import { CampaignStrategyCard } from '../components/campaign/CampaignStrategyCard';
 import { CampaignStrategyTuningPanel } from '../components/campaign/CampaignStrategyTuningPanel';
@@ -19,6 +24,7 @@ import {
   buildStrategyFromBrief,
   buildVariantPackFromStrategy,
 } from '../components/campaign/strategy';
+import { usePlatformMemory } from '../context/PlatformMemoryContext.tsx';
 
 const CAMPAIGN_CREATIVE_HANDOFF_STORAGE_KEYS = [
   'campaign_creative_handoff',
@@ -41,11 +47,28 @@ const DEFAULT_FORM_STATE: CampaignCreativeFormState = {
   forbiddenClaimsText: '',
 };
 
+function sameStringList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
 export function CampaignCreative() {
   const { t, uiLocale } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = location.state as CampaignCreativeLocationState;
+  const {
+    games,
+    selectedGameId,
+    knowledgePacks,
+    knowledgeLoading,
+    knowledgeError,
+    knowledgeGameSupported,
+    refreshKnowledgePacks,
+  } = usePlatformMemory();
 
   const [formState, setFormState] = useState<CampaignCreativeFormState>(() => ({
     ...DEFAULT_FORM_STATE,
@@ -57,6 +80,27 @@ export function CampaignCreative() {
   const [strategyTuning, setStrategyTuning] = useState<CampaignCreativeStrategyTuning | null>(null);
   const [variantPack, setVariantPack] = useState<CampaignCreativeVariantPack | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [knowledgeContext, setKnowledgeContext] = useState<DerivedCampaignKnowledgeContext | null>(null);
+  const [selectedKnowledgeByGame, setSelectedKnowledgeByGame] = useState<Record<string, string[]>>({});
+  const [knowledgeNotice, setKnowledgeNotice] = useState<string | null>(null);
+
+  const selectedGame = useMemo(
+    () => games.find((game) => game.id === selectedGameId) ?? games[0] ?? null,
+    [games, selectedGameId],
+  );
+  const currentGameId = selectedGame?.id ?? selectedGameId;
+  const selectedKnowledgePackIds = useMemo(() => {
+    if (!currentGameId || !knowledgeGameSupported) {
+      return [];
+    }
+
+    return selectedKnowledgeByGame[currentGameId] ?? [];
+  }, [currentGameId, knowledgeGameSupported, selectedKnowledgeByGame]);
+  const strategySelectionChanged =
+    !!strategy && !sameStringList(strategy.knowledgePackIds, selectedKnowledgePackIds);
+  const strategyNotice =
+    knowledgeNotice ??
+    (strategySelectionChanged ? t('campaignCreative.knowledge.selectionChanged') : null);
 
   useEffect(() => {
     if (!routeState) return;
@@ -66,6 +110,33 @@ export function CampaignCreative() {
       objective: prev.objective || routeState.seedIdea || '',
     }));
   }, [routeState]);
+
+  useEffect(() => {
+    if (!currentGameId || !knowledgeGameSupported) {
+      return;
+    }
+
+    setSelectedKnowledgeByGame((prev) => {
+      const hasSelection = Object.prototype.hasOwnProperty.call(prev, currentGameId);
+      const availablePackIds = knowledgePacks.map((pack) => pack.packId);
+
+      if (!hasSelection) {
+        const readyPackIds = knowledgePacks
+          .filter((pack) => pack.status === 'ready')
+          .map((pack) => pack.packId);
+        const defaultSelection = readyPackIds.length > 0 ? readyPackIds : availablePackIds;
+        return { ...prev, [currentGameId]: defaultSelection };
+      }
+
+      const currentSelection = prev[currentGameId] ?? [];
+      const filteredSelection = currentSelection.filter((packId) => availablePackIds.includes(packId));
+      if (sameStringList(currentSelection, filteredSelection)) {
+        return prev;
+      }
+
+      return { ...prev, [currentGameId]: filteredSelection };
+    });
+  }, [currentGameId, knowledgeGameSupported, knowledgePacks]);
 
   const modeOptions = useMemo(
     () => [
@@ -91,16 +162,34 @@ export function CampaignCreative() {
     setFormState((prev) => ({ ...prev, mode }));
   };
 
-  const handleGenerateStrategy = () => {
+  const handleGenerateStrategy = async () => {
     const nextBrief = buildBriefFromForm(formState);
     const nextTuning = buildDefaultStrategyTuning(nextBrief);
-    const nextStrategy = buildStrategyFromBrief(nextBrief, { tuning: nextTuning });
+    let nextKnowledgeContext: DerivedCampaignKnowledgeContext | undefined;
+    let nextKnowledgeNotice: string | null = null;
+
+    if (currentGameId && knowledgeGameSupported && selectedKnowledgePackIds.length > 0) {
+      try {
+        const result = await deriveKnowledgeContext(currentGameId, selectedKnowledgePackIds);
+        nextKnowledgeContext = result.context;
+      } catch (error) {
+        console.warn('Failed to derive campaign knowledge context', error);
+        nextKnowledgeNotice = t('campaignCreative.knowledge.fallbackWarning');
+      }
+    }
+
+    const nextStrategy = buildStrategyFromBrief(nextBrief, {
+      tuning: nextTuning,
+      knowledgeContext: nextKnowledgeContext,
+    });
     const nextVariantPack = buildVariantPackFromStrategy(nextBrief, nextStrategy);
     setBrief(nextBrief);
     setStrategyTuning(nextTuning);
     setStrategy(nextStrategy);
     setVariantPack(nextVariantPack);
     setSelectedVariantId(nextVariantPack.selectedVariantId);
+    setKnowledgeContext(nextKnowledgeContext ?? null);
+    setKnowledgeNotice(nextKnowledgeNotice);
   };
 
   const handleStrategyTuningChange = (patch: Partial<CampaignCreativeStrategyTuning>) => {
@@ -111,6 +200,7 @@ export function CampaignCreative() {
       const nextStrategy = buildStrategyFromBrief(brief, {
         tuning: nextTuning,
         strategyId: current?.strategyId,
+        knowledgeContext: knowledgeContext ?? undefined,
       });
       const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
       setVariantPack(nextVariantPack);
@@ -131,6 +221,7 @@ export function CampaignCreative() {
       const nextStrategy = buildStrategyFromBrief(brief, {
         tuning: nextTuning,
         strategyId: current?.strategyId,
+        knowledgeContext: knowledgeContext ?? undefined,
       });
       const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
       setVariantPack(nextVariantPack);
@@ -172,6 +263,50 @@ export function CampaignCreative() {
     setVariantPack((current) => (current ? { ...current, selectedVariantId: variantId } : current));
   };
 
+  const handleToggleKnowledgePack = (packId: string) => {
+    if (!currentGameId || !knowledgeGameSupported) {
+      return;
+    }
+
+    setKnowledgeNotice(null);
+    setSelectedKnowledgeByGame((prev) => {
+      const currentSelection = prev[currentGameId] ?? [];
+      const nextSelection = currentSelection.includes(packId)
+        ? currentSelection.filter((currentPackId) => currentPackId !== packId)
+        : [...currentSelection, packId];
+      return { ...prev, [currentGameId]: nextSelection };
+    });
+  };
+
+  const handleSelectAllKnowledgePacks = () => {
+    if (!currentGameId || !knowledgeGameSupported) {
+      return;
+    }
+
+    setKnowledgeNotice(null);
+    setSelectedKnowledgeByGame((prev) => ({
+      ...prev,
+      [currentGameId]: knowledgePacks.map((pack) => pack.packId),
+    }));
+  };
+
+  const handleClearKnowledgeSelection = () => {
+    if (!currentGameId || !knowledgeGameSupported) {
+      return;
+    }
+
+    setKnowledgeNotice(null);
+    setSelectedKnowledgeByGame((prev) => ({
+      ...prev,
+      [currentGameId]: [],
+    }));
+  };
+
+  const handleRefreshKnowledge = () => {
+    setKnowledgeNotice(null);
+    void refreshKnowledgePacks();
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12 pt-3">
       <section className="gobs-card relative overflow-hidden rounded-[28px] px-6 py-8 sm:px-8 sm:py-10">
@@ -201,6 +336,41 @@ export function CampaignCreative() {
             </div>
             <CampaignModeSwitch value={formState.mode} options={modeOptions} onChange={handleModeChange} />
           </div>
+
+          <CampaignKnowledgeSelector
+            gameName={selectedGame?.name ?? t('common.unknown')}
+            supported={knowledgeGameSupported}
+            loading={knowledgeLoading}
+            error={knowledgeError}
+            selectedCountLabel={
+              uiLocale === 'en'
+                ? `${selectedKnowledgePackIds.length} selected`
+                : `已选 ${selectedKnowledgePackIds.length} 个`
+            }
+            packs={knowledgePacks}
+            selectedPackIds={selectedKnowledgePackIds}
+            onTogglePack={handleToggleKnowledgePack}
+            onSelectAll={handleSelectAllKnowledgePacks}
+            onClearSelection={handleClearKnowledgeSelection}
+            onRefresh={handleRefreshKnowledge}
+            copy={{
+              title: t('campaignCreative.knowledge.title'),
+              subtitle: t('campaignCreative.knowledge.subtitle'),
+              currentGame: t('campaignCreative.knowledge.currentGame'),
+              unsupportedTitle: t('campaignCreative.knowledge.unsupportedTitle'),
+              unsupportedBody: t('campaignCreative.knowledge.unsupportedBody'),
+              emptyTitle: t('campaignCreative.knowledge.emptyTitle'),
+              emptyBody: t('campaignCreative.knowledge.emptyBody'),
+              selectAll: t('campaignCreative.knowledge.selectAll'),
+              clearSelection: t('campaignCreative.knowledge.clearSelection'),
+              refresh: t('campaignCreative.knowledge.refresh'),
+              packFacts: t('campaignCreative.knowledge.packFacts'),
+              packHooks: t('campaignCreative.knowledge.packHooks'),
+              packVisuals: t('campaignCreative.knowledge.packVisuals'),
+              selected: t('campaignCreative.knowledge.selected'),
+              optional: t('campaignCreative.knowledge.optional'),
+            }}
+          />
 
           <CampaignBriefForm
             value={formState}
@@ -254,6 +424,12 @@ export function CampaignCreative() {
             }}
           />
 
+          {strategyNotice ? (
+            <div className="rounded-2xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 px-4 py-3 text-sm leading-6 text-[var(--color-text)]">
+              {strategyNotice}
+            </div>
+          ) : null}
+
           <CampaignStrategyCard
             brief={brief}
             strategy={strategy}
@@ -279,6 +455,14 @@ export function CampaignCreative() {
               rationale: t('campaignCreative.strategy.rationale'),
               assetNeeds: t('campaignCreative.strategy.assetNeeds'),
               riskNotes: t('campaignCreative.strategy.riskNotes'),
+              knowledgeSectionTitle: t('campaignCreative.strategy.knowledgeSectionTitle'),
+              marketTruth: t('campaignCreative.strategy.marketTruth'),
+              audienceTension: t('campaignCreative.strategy.audienceTension'),
+              toneRules: t('campaignCreative.strategy.toneRules'),
+              forbiddenClaims: t('campaignCreative.strategy.forbiddenClaims'),
+              visualCues: t('campaignCreative.strategy.visualCues'),
+              approvedAngles: t('campaignCreative.strategy.approvedAngles'),
+              hookCandidates: t('campaignCreative.strategy.hookCandidates'),
               variantPackTitle: uiLocale === 'en' ? 'Variant Pack' : 'Variant Pack',
               variantPackSubtitle: uiLocale === 'en'
                 ? 'Compare three creative directions before handing one to the Editor.'

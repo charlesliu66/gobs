@@ -9,10 +9,12 @@ import type {
   CampaignCreativeVariantEmphasis,
   CampaignCreativeVariantPack,
 } from './model';
+import type { DerivedCampaignKnowledgeContext } from '../../api/campaignKnowledge';
 
 interface BuildStrategyOptions {
   strategyId?: string;
   tuning?: Partial<CampaignCreativeStrategyTuning>;
+  knowledgeContext?: DerivedCampaignKnowledgeContext;
 }
 
 function firstLine(items: string[], fallback: string): string {
@@ -25,6 +27,60 @@ function createObjectId(prefix: 'brief' | 'strategy' | 'variant_pack'): string {
       ? crypto.randomUUID().slice(0, 8)
       : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   return `${prefix}_${suffix}`;
+}
+
+function mergeUniqueStrings(...lists: ReadonlyArray<ReadonlyArray<string> | undefined>): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const list of lists) {
+    if (!list) continue;
+    for (const item of list) {
+      const normalized = item.trim();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      merged.push(normalized);
+    }
+  }
+
+  return merged;
+}
+
+function resolveKnowledgeHookOptions(
+  hookApproach: CampaignCreativeHookApproach,
+  knowledgeCandidates: string[],
+  baseOptions: string[],
+): string[] {
+  if (knowledgeCandidates.length === 0) {
+    return baseOptions;
+  }
+
+  const preferredIndex =
+    hookApproach === 'benefit_first' ? 0 : hookApproach === 'conflict_first' ? 1 : 2;
+  const preferredCandidate = knowledgeCandidates[preferredIndex % knowledgeCandidates.length];
+  const remainingKnowledgeCandidates = knowledgeCandidates.filter(
+    (candidate) => candidate !== preferredCandidate,
+  );
+
+  return mergeUniqueStrings([preferredCandidate], remainingKnowledgeCandidates, baseOptions);
+}
+
+function buildKnowledgeAwareAngle(baseAngle: string, approvedAngles: string[]): string {
+  const approvedAngle = approvedAngles[0];
+  if (!approvedAngle) {
+    return baseAngle;
+  }
+
+  return `${approvedAngle} | ${baseAngle}`;
+}
+
+function buildKnowledgeAwareTone(baseTone: string, toneRules: string[]): string {
+  const toneRule = toneRules[0];
+  if (!toneRule) {
+    return baseTone;
+  }
+
+  return `${baseTone} | ${toneRule}`;
 }
 
 function resolveDefaultCtaType(mode: CampaignCreativeMode): CampaignCreativeCtaType {
@@ -228,6 +284,40 @@ function buildRiskNotes(brief: CampaignCreativeBrief): string[] {
   return riskNotes;
 }
 
+function buildMergedRiskNotes(
+  brief: CampaignCreativeBrief,
+  forbiddenClaims: string[],
+): string[] {
+  const riskNotes = mergeUniqueStrings(forbiddenClaims).map((claim) => `避免宣称：${claim}`);
+
+  if (brief.region) {
+    riskNotes.push(`保持 ${brief.region} 市场语境与表达边界一致`);
+  }
+
+  if (riskNotes.length === 0) {
+    return buildRiskNotes(brief);
+  }
+
+  return riskNotes;
+}
+
+function buildMergedRiskNotesSafe(
+  brief: CampaignCreativeBrief,
+  forbiddenClaims: string[],
+): string[] {
+  const riskNotes = mergeUniqueStrings(forbiddenClaims).map((claim) => `Avoid claim: ${claim}`);
+
+  if (brief.region) {
+    riskNotes.push(`Keep the ${brief.region} market context and claim boundaries consistent`);
+  }
+
+  if (riskNotes.length === 0) {
+    return buildMergedRiskNotes(brief, forbiddenClaims);
+  }
+
+  return riskNotes;
+}
+
 function buildRationale(
   brief: CampaignCreativeBrief,
   sellingPointFocus: string,
@@ -311,13 +401,32 @@ export function buildStrategyFromBrief(
 
   const objective = buildObjective(brief);
   const cta = buildCtaCopy(brief, tuning.ctaType);
-  const hookOptions = buildHookOptions(
+  const knowledgeContext = options?.knowledgeContext;
+  const knowledgePackIds = mergeUniqueStrings(knowledgeContext?.selectedPackIds);
+  const marketTruth = mergeUniqueStrings(knowledgeContext?.marketTruth);
+  const audienceTension = mergeUniqueStrings(knowledgeContext?.audienceTension);
+  const toneRules = mergeUniqueStrings(knowledgeContext?.toneRules);
+  const forbiddenClaims = mergeUniqueStrings(
+    brief.forbiddenClaims ?? [],
+    knowledgeContext?.forbiddenClaims,
+  );
+  const visualCues = mergeUniqueStrings(knowledgeContext?.visualCues);
+  const approvedAngles = mergeUniqueStrings(knowledgeContext?.approvedAngles);
+  const hookCandidates = mergeUniqueStrings(knowledgeContext?.hookCandidates);
+  const baseHookOptions = buildHookOptions(
     brief.mode,
     objective,
     tuning.sellingPointFocus,
     tuning.hookApproach,
   );
+  const hookOptions = resolveKnowledgeHookOptions(
+    tuning.hookApproach,
+    hookCandidates,
+    baseHookOptions,
+  );
   const targetAudience = brief.audience;
+  const baseAngle = buildAngle(brief.mode, tuning.hookApproach, tuning.ctaType);
+  const baseTone = buildTone(brief.mode, tuning.hookApproach, tuning.ctaType);
 
   return {
     strategyId: options?.strategyId ?? createObjectId('strategy'),
@@ -332,16 +441,24 @@ export function buildStrategyFromBrief(
     recommendedHook: hookOptions[0] ?? tuning.sellingPointFocus,
     cta,
     ctaType: tuning.ctaType,
-    angle: buildAngle(brief.mode, tuning.hookApproach, tuning.ctaType),
-    tone: buildTone(brief.mode, tuning.hookApproach, tuning.ctaType),
+    angle: buildKnowledgeAwareAngle(baseAngle, approvedAngles),
+    tone: buildKnowledgeAwareTone(baseTone, toneRules),
     assetNeeds: buildAssetNeeds(
       brief.mode,
       tuning.sellingPointFocus,
       targetAudience,
       tuning.hookApproach,
     ),
-    riskNotes: buildRiskNotes(brief),
+    riskNotes: buildMergedRiskNotesSafe(brief, forbiddenClaims),
     rationale: buildRationale(brief, tuning.sellingPointFocus, tuning.hookApproach, cta),
+    knowledgePackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    visualCues,
+    approvedAngles,
+    hookCandidates,
   };
 }
 
@@ -498,6 +615,36 @@ function buildVariantCta(
   return fallbackCta;
 }
 
+function createKnowledgeContextFromStrategy(
+  strategy: CampaignCreativeStrategy,
+): DerivedCampaignKnowledgeContext | undefined {
+  const hasKnowledge =
+    strategy.knowledgePackIds.length > 0 ||
+    strategy.marketTruth.length > 0 ||
+    strategy.audienceTension.length > 0 ||
+    strategy.toneRules.length > 0 ||
+    strategy.forbiddenClaims.length > 0 ||
+    strategy.approvedAngles.length > 0 ||
+    strategy.hookCandidates.length > 0 ||
+    strategy.visualCues.length > 0;
+
+  if (!hasKnowledge) {
+    return undefined;
+  }
+
+  return {
+    selectedPackIds: strategy.knowledgePackIds,
+    marketTruth: strategy.marketTruth,
+    audienceTension: strategy.audienceTension,
+    toneRules: strategy.toneRules,
+    forbiddenClaims: strategy.forbiddenClaims,
+    approvedAngles: strategy.approvedAngles,
+    hookCandidates: strategy.hookCandidates,
+    visualCues: strategy.visualCues,
+    rationaleNotes: [],
+  };
+}
+
 export function buildVariantPackFromStrategy(
   brief: CampaignCreativeBrief,
   strategy: CampaignCreativeStrategy,
@@ -505,11 +652,13 @@ export function buildVariantPackFromStrategy(
   const variantPackId = strategy.strategyId
     ? `variant_pack_${strategy.strategyId}`
     : createObjectId('variant_pack');
+  const knowledgeContext = createKnowledgeContextFromStrategy(strategy);
   const variants: CampaignCreativeVariant[] = VARIANT_SLOT_ORDER.map((emphasis, index) => {
     const tuning = buildVariantTuning(brief, strategy, emphasis);
     const derivedStrategy = buildStrategyFromBrief(brief, {
       strategyId: strategy.strategyId,
       tuning,
+      knowledgeContext,
     });
     const hook = derivedStrategy.recommendedHook;
     const focus = derivedStrategy.sellingPointFocus ?? tuning.sellingPointFocus;

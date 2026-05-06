@@ -25,6 +25,14 @@ type Copy = {
   rationale: string;
   assetNeeds: string;
   riskNotes: string;
+  knowledgeSectionTitle: string;
+  marketTruth: string;
+  audienceTension: string;
+  toneRules: string;
+  forbiddenClaims: string;
+  visualCues: string;
+  approvedAngles: string;
+  hookCandidates: string;
   variantPackTitle: string;
   variantPackSubtitle: string;
   variantHook: string;
@@ -86,6 +94,15 @@ export function CampaignStrategyCard({
     variantPack?.variants.find((variant) => variant.variantId === selectedVariantId) ??
     variantPack?.variants[0] ??
     null;
+  const knowledgeBlocks = [
+    { label: copy.marketTruth, items: strategy.marketTruth },
+    { label: copy.audienceTension, items: strategy.audienceTension },
+    { label: copy.toneRules, items: strategy.toneRules },
+    { label: copy.forbiddenClaims, items: strategy.forbiddenClaims },
+    { label: copy.approvedAngles, items: strategy.approvedAngles },
+    { label: copy.hookCandidates, items: strategy.hookCandidates },
+    { label: copy.visualCues, items: strategy.visualCues },
+  ].filter((block) => block.items.length > 0);
 
   return (
     <section className="rounded-3xl border border-[var(--color-primary)]/25 bg-[var(--color-surface-elevated)] p-6 shadow-[0_20px_70px_rgba(124,141,255,0.12)]">
@@ -163,6 +180,17 @@ export function CampaignStrategyCard({
             </ul>
           </div>
         </div>
+
+        {knowledgeBlocks.length > 0 ? (
+          <div className="rounded-3xl border border-[var(--color-border)]/60 bg-[var(--color-surface)] p-4">
+            <div className="text-sm font-semibold text-[var(--color-text)]">{copy.knowledgeSectionTitle}</div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {knowledgeBlocks.map((block) => (
+                <ListBlock key={block.label} label={block.label} items={block.items} />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {variantPack ? (
@@ -256,6 +284,26 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{value}</p>
+    </div>
+  );
+}
+
+function ListBlock({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-subtle)]">
+        {label}
+      </div>
+      <ul className="mt-3 grid gap-2">
+        {items.map((item) => (
+          <li
+            key={item}
+            className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
