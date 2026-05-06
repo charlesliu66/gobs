@@ -34,6 +34,7 @@ export interface ApplyEditorCreativeAgentBody {
   currentProject: TimelineProject;
   projectMemory?: EditorProjectMemory;
   creativeBrief?: EditorCreativeBrief;
+  creativeStrategy?: EditorCreativeStrategy;
   visionFocus?: EditorVisionFocus;
   replyLocale?: 'zh-CN' | 'en';
 }

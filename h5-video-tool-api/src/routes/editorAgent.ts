@@ -340,7 +340,7 @@ function buildEditorApplyInput(
   const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
   const creativeStrategy = normalizeEditorCreativeStrategy(body.creativeStrategy);
   const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
-  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, replyLocale) : '');
+  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, creativeStrategy, replyLocale) : '');
 
   if (!msg) {
     return { ok: false, error: 'Please provide userMessage or creativeBrief' };

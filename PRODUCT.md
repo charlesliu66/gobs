@@ -1995,7 +1995,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.136)*
+*Last updated: 2026-05-06 (v0.137)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
@@ -2012,3 +2012,15 @@ Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jo
 - Added a brief-first campaign workflow with Brand Content and TikTok UA modes.
 - Added a strategy-card artifact and a brief-to-Editor handoff path.
 - Added region and forbiddenClaims to the shared brief contract used by Editor Agent.
+
+## v0.136 - 2026-05-06 (Strategy Productization Addendum)
+- Added briefId and strategyId so Campaign Creative strategy objects can be traced across page, Editor handoff, and agent prompt paths.
+- Expanded the shared strategy contract with targetAudience, sellingPointFocus, ctaType, assetNeeds, and riskNotes.
+- Upgraded the Campaign Strategy Card and Editor-side strategy summary to surface richer creative-planning context.
+- Fixed Campaign Creative handoff storage-key compatibility and replaced brittle JSON string equality with brief-aware matching.
+
+## v0.137 - 2026-05-06 (Strategy Tuning Addendum)
+- Added a lightweight strategy tuning layer on `/campaign-creative` so users can adjust hook direction, selling-point focus, and CTA type without rewriting the brief.
+- Reworked local strategy generation so tuned strategy objects keep stable IDs while recomputing hook options, angle, tone, rationale, and CTA framing.
+- Extended Editor handoff and creative prompt payloads to preserve `hookApproach`, making the tuned strategy visible in the Editor-side summary and agent context.
+- Added regression coverage for default hook-approach generation and tuned strategy prompt composition.

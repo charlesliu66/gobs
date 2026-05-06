@@ -1,36 +1,261 @@
 import type {
   CampaignCreativeBrief,
+  CampaignCreativeCtaType,
+  CampaignCreativeHookApproach,
   CampaignCreativeMode,
   CampaignCreativeStrategy,
+  CampaignCreativeStrategyTuning,
 } from './model';
+
+interface BuildStrategyOptions {
+  strategyId?: string;
+  tuning?: Partial<CampaignCreativeStrategyTuning>;
+}
 
 function firstLine(items: string[], fallback: string): string {
   return items[0] ?? fallback;
 }
 
+function createObjectId(prefix: 'brief' | 'strategy'): string {
+  const suffix =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().slice(0, 8)
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `${prefix}_${suffix}`;
+}
+
+function resolveDefaultCtaType(mode: CampaignCreativeMode): CampaignCreativeCtaType {
+  return mode === 'tiktok_ua' ? 'direct_response' : 'brand_follow';
+}
+
+function resolveDefaultHookApproach(mode: CampaignCreativeMode): CampaignCreativeHookApproach {
+  return mode === 'tiktok_ua' ? 'conflict_first' : 'story_first';
+}
+
+function buildDefaultSellingPointFocus(brief: CampaignCreativeBrief): string {
+  return firstLine(
+    brief.sellingPoints,
+    brief.mode === 'tiktok_ua' ? '核心玩法或高收益瞬间' : '品牌主卖点与使用场景',
+  );
+}
+
+function buildObjective(brief: CampaignCreativeBrief): string {
+  return (
+    brief.objective ||
+    (brief.mode === 'tiktok_ua' ? '快速验证高转化创意方向' : '建立可复用的品牌内容记忆点')
+  );
+}
+
+function buildCtaCopy(
+  brief: CampaignCreativeBrief,
+  ctaType: CampaignCreativeCtaType,
+): string {
+  if (brief.cta?.trim()) {
+    return brief.cta.trim();
+  }
+
+  if (ctaType === 'direct_response') {
+    return '现在下载并立刻开玩';
+  }
+  if (ctaType === 'soft_conversion') {
+    return brief.mode === 'tiktok_ua' ? '先点进来看看这次活动值不值得' : '先看看完整内容再决定要不要继续了解';
+  }
+  return '关注并进入品牌主页了解更多';
+}
+
 function buildHookOptions(
   mode: CampaignCreativeMode,
   objective: string,
-  primarySellingPoint: string,
+  sellingPointFocus: string,
+  hookApproach: CampaignCreativeHookApproach,
 ): string[] {
   if (mode === 'tiktok_ua') {
+    if (hookApproach === 'benefit_first') {
+      return [
+        `开场直接让用户看到“${sellingPointFocus}”的收益结果`,
+        `先给结果，再补一句为什么现在就该点进来`,
+        `把最强 payoff 放进前 2 秒，再立刻承接下载动作`,
+      ];
+    }
+    if (hookApproach === 'story_first') {
+      return [
+        `先丢一个 1 句话的小剧情，再让“${sellingPointFocus}”接管节奏`,
+        `从 POV 或人物瞬间切入，再把 payoff 翻出来`,
+        `让用户先进入情境，再把“现在就试”落到 CTA 上`,
+      ];
+    }
     return [
-      `前 2 秒直给冲突：${objective}`,
-      `用结果反推卖点：${primarySellingPoint}`,
-      '先抛低门槛 CTA，再补核心机制亮点',
+      `先抛冲突：为什么大家都在被“${objective}”卡住？`,
+      `把痛点和结果做正反对撞，再立刻给出“${sellingPointFocus}”`,
+      `前三秒先制造不舒服，再用 payoff 解答并落下 CTA`,
     ];
   }
 
+  if (hookApproach === 'benefit_first') {
+    return [
+      `先把“${sellingPointFocus}”的直观价值露出来，再延展内容氛围`,
+      `先给用户一个马上能记住的结果，再承接品牌世界观`,
+      `开头先收获，再解释为什么它值得被关注`,
+    ];
+  }
+  if (hookApproach === 'conflict_first') {
+    return [
+      `先用反差或 tension 抓住注意力，再引出“${sellingPointFocus}”`,
+      `把使用前后或情绪落差做成开场冲突`,
+      `先抛一个“为什么会这样”的问题，再回收卖点`,
+    ];
+  }
   return [
-    `先用品牌世界观抓住注意力：${objective}`,
-    `用真实使用场景放大卖点：${primarySellingPoint}`,
-    '以情绪转场承接品牌调性与 CTA',
+    `先从角色、场景或氛围切入，再让“${sellingPointFocus}”自然浮出`,
+    `让用户先进入情境，再把卖点变成剧情里的发现`,
+    `用一小段叙事做开头，让品牌记忆点后置出现`,
   ];
+}
+
+function buildAngle(
+  mode: CampaignCreativeMode,
+  hookApproach: CampaignCreativeHookApproach,
+  ctaType: CampaignCreativeCtaType,
+): string {
+  if (mode === 'tiktok_ua') {
+    if (hookApproach === 'benefit_first') {
+      return ctaType === 'direct_response'
+        ? '收益先行开场 + 高频 payoff 证明 + 直接转化 CTA'
+        : '收益先行开场 + 快速建立价值感 + 低门槛转化 CTA';
+    }
+    if (hookApproach === 'story_first') {
+      return '微剧情切入 + payoff 接管节奏 + 结尾回收 CTA';
+    }
+    return '强冲突开场 + 结果反转回收 + 前置转化 CTA';
+  }
+
+  if (hookApproach === 'benefit_first') {
+    return ctaType === 'brand_follow'
+      ? '价值先露出 + 品牌氛围承接 + 轻关注 CTA'
+      : '价值先露出 + 品牌场景延展 + 轻转化 CTA';
+  }
+  if (hookApproach === 'conflict_first') {
+    return '反差冲突开场 + 卖点解释回收 + 情绪化收尾';
+  }
+  return '角色或场景先入场 + 卖点后置浮出 + 情绪化品牌收尾';
+}
+
+function buildTone(
+  mode: CampaignCreativeMode,
+  hookApproach: CampaignCreativeHookApproach,
+  ctaType: CampaignCreativeCtaType,
+): string {
+  if (mode === 'tiktok_ua') {
+    if (hookApproach === 'benefit_first') {
+      return ctaType === 'direct_response'
+        ? '节奏快、结果先行、每个镜头都为点击服务'
+        : '节奏快、价值表达明确、转化动作不拖沓';
+    }
+    if (hookApproach === 'story_first') {
+      return '先给情境，再快速提速，让 payoff 和 CTA 在中后段收紧';
+    }
+    return '高压、高反差、前三秒必须抓人并尽快给出答案';
+  }
+
+  if (hookApproach === 'benefit_first') {
+    return '先清楚传达价值，再慢慢铺开品牌语气与场景感';
+  }
+  if (hookApproach === 'conflict_first') {
+    return '先制造张力，再回收情绪，整体仍保持品牌可读性';
+  }
+  return '品牌调性优先、叙事清晰、保留原生内容感';
+}
+
+function buildAssetNeeds(
+  mode: CampaignCreativeMode,
+  sellingPointFocus: string,
+  targetAudience: string | undefined,
+  hookApproach: CampaignCreativeHookApproach,
+): string[] {
+  const audienceAsset = targetAudience
+    ? `1 组更贴近“${targetAudience}”视角的封面或字幕文案`
+    : '1 组适合封面与前贴字幕的开场 Hook 文案';
+
+  if (mode === 'tiktok_ua') {
+    const openerAsset =
+      hookApproach === 'benefit_first'
+        ? `1 组能在开场立刻说明“${sellingPointFocus}”结果感的高收益素材`
+        : hookApproach === 'story_first'
+          ? `1 组适合从人物或 POV 切入，再回收“${sellingPointFocus}”的开场素材`
+          : '1 组能在前 3 秒制造冲突、压迫或悬念的强刺激镜头';
+
+    return [
+      openerAsset,
+      '1 组适合前 3 秒直出的冲突镜头或结果镜头',
+      audienceAsset,
+    ];
+  }
+
+  const openerAsset =
+    hookApproach === 'benefit_first'
+      ? `1 组能先把“${sellingPointFocus}”价值露出来的主视觉素材`
+      : hookApproach === 'conflict_first'
+        ? '1 组适合做前后反差或情绪 tension 的对照镜头'
+        : `1 组能建立氛围并承接“${sellingPointFocus}”的角色或场景素材`;
+
+  return [
+    openerAsset,
+    '1 组贴近真实使用场景或角色关系的叙事镜头',
+    targetAudience
+      ? `1 组更容易让“${targetAudience}”代入的收尾素材`
+      : '1 组适合品牌 CTA 与情绪承接的结尾素材',
+  ];
+}
+
+function buildRiskNotes(brief: CampaignCreativeBrief): string[] {
+  const riskNotes = (brief.forbiddenClaims ?? []).map((claim) => `避免宣称：${claim}`);
+
+  if (brief.region) {
+    riskNotes.push(`保持 ${brief.region} 市场语境与表达边界一致`);
+  }
+
+  if (riskNotes.length === 0) {
+    riskNotes.push(
+      brief.mode === 'tiktok_ua'
+        ? '避免夸大收益、暗示必得结果或制造无法兑现的承诺'
+        : '避免品牌语气失真，或为了强转化破坏内容原生感',
+    );
+  }
+
+  return riskNotes;
+}
+
+function buildRationale(
+  brief: CampaignCreativeBrief,
+  sellingPointFocus: string,
+  hookApproach: CampaignCreativeHookApproach,
+  cta: string,
+): string {
+  const audienceBlock = brief.audience ? `，优先对“${brief.audience}”说话` : '';
+  const regionBlock = brief.region ? `，并保持 ${brief.region} 市场语境一致` : '';
+
+  if (brief.mode === 'tiktok_ua') {
+    if (hookApproach === 'benefit_first') {
+      return `先把“${sellingPointFocus}”打成最直观的收益感${audienceBlock}${regionBlock}，让用户几乎不用理解背景就能感知价值，再尽快把 CTA“${cta}”落下。`;
+    }
+    if (hookApproach === 'story_first') {
+      return `先给一个足够短的小剧情把人带进来${audienceBlock}${regionBlock}，再把“${sellingPointFocus}”作为 payoff 抬出来，最后把 CTA“${cta}”收紧，兼顾吸引力和转化。`;
+    }
+    return `优先制造冲突和不适感${audienceBlock}${regionBlock}，让“${sellingPointFocus}”承担解答与回收的角色，再把 CTA“${cta}”提前落下，更适合 UA 的抢注意力场景。`;
+  }
+
+  if (hookApproach === 'benefit_first') {
+    return `先让用户立刻看见“${sellingPointFocus}”的价值${audienceBlock}${regionBlock}，再把品牌氛围和场景补齐，最后用更轻的 CTA“${cta}”承接。`;
+  }
+  if (hookApproach === 'conflict_first') {
+    return `通过反差或 tension 先抓住注意力${audienceBlock}${regionBlock}，再让“${sellingPointFocus}”回收问题，能让内容更有记忆点但不至于太像硬广。`;
+  }
+  return `围绕“${sellingPointFocus}”建立更稳定的内容情境${audienceBlock}${regionBlock}，让用户先进入角色或场景，再自然接受 CTA“${cta}”，更适合品牌内容沉淀。`;
 }
 
 export function parseMultilineList(value: string): string[] {
   return value
-    .split(/\r?\n|,|;/)
+    .split(/\r?\n|,|;|，|；/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -46,6 +271,7 @@ export function buildBriefFromForm(input: {
   forbiddenClaimsText: string;
 }): CampaignCreativeBrief {
   return {
+    briefId: createObjectId('brief'),
     platform: 'tiktok',
     mode: input.mode,
     objective: input.objective.trim() || undefined,
@@ -58,52 +284,60 @@ export function buildBriefFromForm(input: {
   };
 }
 
-export function buildStrategyFromBrief(brief: CampaignCreativeBrief): CampaignCreativeStrategy {
-  const objective = brief.objective || (brief.mode === 'tiktok_ua' ? '快速验证转化创意' : '建立品牌内容记忆点');
-  const primarySellingPoint = firstLine(
-    brief.sellingPoints,
-    brief.mode === 'tiktok_ua' ? '核心玩法或收益感知' : '品牌主卖点',
-  );
-  const cta = brief.cta || (brief.mode === 'tiktok_ua' ? '现在下载并立即开玩' : '了解更多并进入品牌主页');
-  const hookOptions = buildHookOptions(brief.mode, objective, primarySellingPoint);
+export function buildDefaultStrategyTuning(
+  brief: CampaignCreativeBrief,
+): CampaignCreativeStrategyTuning {
+  return {
+    hookApproach: resolveDefaultHookApproach(brief.mode),
+    sellingPointFocus: buildDefaultSellingPointFocus(brief),
+    ctaType: resolveDefaultCtaType(brief.mode),
+  };
+}
 
-  if (brief.mode === 'tiktok_ua') {
-    return {
-      platform: 'tiktok',
-      mode: brief.mode,
-      objective,
-      audience: brief.audience,
-      primarySellingPoint,
-      hookOptions,
-      recommendedHook: hookOptions[0],
-      cta,
-      angle: '强冲突 + 高收益感知 + 低门槛 CTA',
-      tone: '快节奏、结果导向、前 3 秒强钩子',
-      assetNeeds: [
-        '1 条最能体现冲突或结果的角色/玩法素材',
-        '1 组强化收益感的 UI 或数值画面',
-        '1 组适合前 3 秒直出的封面/字幕文案',
-      ],
-      rationale: `优先把“${primarySellingPoint}”放到最前面，用结果或冲突先抓住注意力，再补玩法与 CTA，适合 TikTok UA 的首轮创意验证。`,
-    };
-  }
+export function buildStrategyFromBrief(
+  brief: CampaignCreativeBrief,
+  options?: BuildStrategyOptions,
+): CampaignCreativeStrategy {
+  const defaultTuning = buildDefaultStrategyTuning(brief);
+  const tuning: CampaignCreativeStrategyTuning = {
+    ...defaultTuning,
+    ...options?.tuning,
+    sellingPointFocus:
+      options?.tuning?.sellingPointFocus?.trim() || defaultTuning.sellingPointFocus,
+  };
+
+  const objective = buildObjective(brief);
+  const cta = buildCtaCopy(brief, tuning.ctaType);
+  const hookOptions = buildHookOptions(
+    brief.mode,
+    objective,
+    tuning.sellingPointFocus,
+    tuning.hookApproach,
+  );
+  const targetAudience = brief.audience;
 
   return {
+    strategyId: options?.strategyId ?? createObjectId('strategy'),
+    briefId: brief.briefId,
     platform: 'tiktok',
     mode: brief.mode,
     objective,
-    audience: brief.audience,
-    primarySellingPoint,
+    targetAudience,
+    sellingPointFocus: tuning.sellingPointFocus,
+    hookApproach: tuning.hookApproach,
     hookOptions,
-    recommendedHook: hookOptions[0],
+    recommendedHook: hookOptions[0] ?? tuning.sellingPointFocus,
     cta,
-    angle: '品牌记忆点 + 使用场景 + 情绪共鸣',
-    tone: '品牌调性优先、节奏清晰、情绪渐进',
-    assetNeeds: [
-      '1 组能体现品牌调性的主视觉或角色素材',
-      '1 组贴近用户场景的演示/剧情镜头',
-      '1 版适合封面与结尾的品牌 CTA 文案',
-    ],
-    rationale: `围绕“${primarySellingPoint}”建立品牌记忆点，先让用户理解品牌气质，再用场景化内容承接 CTA，更适合 Brand Content 的长期内容资产积累。`,
+    ctaType: tuning.ctaType,
+    angle: buildAngle(brief.mode, tuning.hookApproach, tuning.ctaType),
+    tone: buildTone(brief.mode, tuning.hookApproach, tuning.ctaType),
+    assetNeeds: buildAssetNeeds(
+      brief.mode,
+      tuning.sellingPointFocus,
+      targetAudience,
+      tuning.hookApproach,
+    ),
+    riskNotes: buildRiskNotes(brief),
+    rationale: buildRationale(brief, tuning.sellingPointFocus, tuning.hookApproach, cta),
   };
 }

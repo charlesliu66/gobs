@@ -1,4 +1,9 @@
-import type { CampaignCreativeBrief, CampaignCreativeStrategy } from './model';
+import type {
+  CampaignCreativeBrief,
+  CampaignCreativeCtaType,
+  CampaignCreativeHookApproach,
+  CampaignCreativeStrategy,
+} from './model';
 
 type Copy = {
   emptyTitle: string;
@@ -6,17 +11,31 @@ type Copy = {
   title: string;
   badge: string;
   angle: string;
+  objective: string;
   audience: string;
   tone: string;
+  hookApproach: string;
   recommendedHook: string;
   hookOptions: string;
-  primarySellingPoint: string;
+  sellingPointFocus: string;
   cta: string;
+  ctaType: string;
   rationale: string;
   assetNeeds: string;
+  riskNotes: string;
   nextStepTitle: string;
   nextStepBody: string;
   launchEditor: string;
+  ctaTypeLabels: {
+    directResponse: string;
+    softConversion: string;
+    brandFollow: string;
+  };
+  hookApproachLabels: {
+    benefitFirst: string;
+    conflictFirst: string;
+    storyFirst: string;
+  };
 };
 
 interface CampaignStrategyCardProps {
@@ -49,10 +68,15 @@ export function CampaignStrategyCard({
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <InfoBlock label={copy.objective} value={strategy.objective} />
         <InfoBlock label={copy.angle} value={strategy.angle} />
-        <InfoBlock label={copy.audience} value={strategy.audience || brief.audience || 'General'} />
-        <InfoBlock label={copy.tone} value={strategy.tone} />
-        <InfoBlock label={copy.primarySellingPoint} value={strategy.primarySellingPoint || brief.sellingPoints[0] || '-'} />
+        <InfoBlock label={copy.audience} value={strategy.targetAudience || brief.audience || 'General'} />
+        <InfoBlock label={copy.tone} value={strategy.tone || '-'} />
+        <InfoBlock
+          label={copy.hookApproach}
+          value={resolveHookApproachLabel(strategy.hookApproach, copy.hookApproachLabels)}
+        />
+        <InfoBlock label={copy.sellingPointFocus} value={strategy.sellingPointFocus || brief.sellingPoints[0] || '-'} />
       </div>
 
       <div className="mt-6 rounded-2xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/8 p-4">
@@ -77,21 +101,40 @@ export function CampaignStrategyCard({
           </div>
         </div>
 
-        <InfoBlock label={copy.cta} value={strategy.cta} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <InfoBlock label={copy.cta} value={strategy.cta} />
+          <InfoBlock label={copy.ctaType} value={resolveCtaTypeLabel(strategy.ctaType, copy.ctaTypeLabels)} />
+        </div>
         <InfoBlock label={copy.rationale} value={strategy.rationale} />
 
-        <div>
-          <div className="text-sm font-medium text-[var(--color-text)]">{copy.assetNeeds}</div>
-          <ul className="mt-3 grid gap-3">
-            {strategy.assetNeeds.map((item) => (
-              <li
-                key={item}
-                className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <div className="text-sm font-medium text-[var(--color-text)]">{copy.assetNeeds}</div>
+            <ul className="mt-3 grid gap-3">
+              {strategy.assetNeeds.map((item) => (
+                <li
+                  key={item}
+                  className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]"
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="text-sm font-medium text-[var(--color-text)]">{copy.riskNotes}</div>
+            <ul className="mt-3 grid gap-3">
+              {strategy.riskNotes.map((item) => (
+                <li
+                  key={item}
+                  className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]"
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -115,4 +158,24 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{value}</p>
     </div>
   );
+}
+
+function resolveCtaTypeLabel(
+  value: CampaignCreativeCtaType | undefined,
+  labels: Copy['ctaTypeLabels'],
+): string {
+  if (value === 'direct_response') return labels.directResponse;
+  if (value === 'soft_conversion') return labels.softConversion;
+  if (value === 'brand_follow') return labels.brandFollow;
+  return '-';
+}
+
+function resolveHookApproachLabel(
+  value: CampaignCreativeHookApproach | undefined,
+  labels: Copy['hookApproachLabels'],
+): string {
+  if (value === 'benefit_first') return labels.benefitFirst;
+  if (value === 'conflict_first') return labels.conflictFirst;
+  if (value === 'story_first') return labels.storyFirst;
+  return '-';
 }

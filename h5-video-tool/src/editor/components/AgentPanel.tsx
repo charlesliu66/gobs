@@ -76,6 +76,26 @@ function modeLabel(mode: EditorCreativeMode, uiLocale: 'zh-CN' | 'en'): string {
     : (uiLocale === 'en' ? 'TikTok content' : 'TikTok 内容');
 }
 
+function hookApproachLabel(
+  value: EditorCreativeStrategy['hookApproach'],
+  uiLocale: 'zh-CN' | 'en',
+): string | null {
+  if (value === 'benefit_first') return uiLocale === 'en' ? 'Benefit-first' : '收益先行';
+  if (value === 'conflict_first') return uiLocale === 'en' ? 'Conflict-first' : '冲突先行';
+  if (value === 'story_first') return uiLocale === 'en' ? 'Story-first' : '剧情先行';
+  return null;
+}
+
+function ctaTypeLabel(
+  value: EditorCreativeStrategy['ctaType'],
+  uiLocale: 'zh-CN' | 'en',
+): string | null {
+  if (value === 'direct_response') return uiLocale === 'en' ? 'Direct response' : '直接转化';
+  if (value === 'soft_conversion') return uiLocale === 'en' ? 'Soft conversion' : '轻转化';
+  if (value === 'brand_follow') return uiLocale === 'en' ? 'Brand follow' : '品牌关注';
+  return null;
+}
+
 export function AgentPanel({
   logs,
   onPushLog,
@@ -181,6 +201,8 @@ export function AgentPanel({
         : uiText('请先勾选素材，或先往时间轴放入视频', 'Select source assets first, or add videos to the timeline');
 
   const recentHistory = chatHistory && chatHistory.length > 0 ? chatHistory.slice(-10) : [];
+  const creativeHookApproachLabel = hookApproachLabel(creativeStrategy?.hookApproach, uiLocale);
+  const creativeCtaTypeLabel = ctaTypeLabel(creativeStrategy?.ctaType, uiLocale);
 
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
@@ -312,6 +334,46 @@ export function AgentPanel({
                 {creativeStrategy.recommendedHook}
               </div>
             </div>
+            {(creativeStrategy.angle || creativeStrategy.sellingPointFocus || creativeStrategy.targetAudience || creativeStrategy.tone || creativeHookApproachLabel || creativeCtaTypeLabel) ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {creativeStrategy.angle ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('鍒涙剰瑙掑害', 'Creative angle')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeStrategy.angle}</div>
+                  </div>
+                ) : null}
+                {creativeStrategy.sellingPointFocus ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('浼樺厛鍗栫偣', 'Selling point focus')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeStrategy.sellingPointFocus}</div>
+                  </div>
+                ) : null}
+                {creativeHookApproachLabel ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('Hook 方向', 'Hook direction')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeHookApproachLabel}</div>
+                  </div>
+                ) : null}
+                {creativeStrategy.targetAudience ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('鐩爣鍙椾紬', 'Target audience')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeStrategy.targetAudience}</div>
+                  </div>
+                ) : null}
+                {creativeStrategy.tone ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('鑺傚涓庤姘?', 'Tone & pacing')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeStrategy.tone}</div>
+                  </div>
+                ) : null}
+                {creativeCtaTypeLabel ? (
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                    <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('CTA 类型', 'CTA type')}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeCtaTypeLabel}</div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {creativeStrategy.hookOptions.length > 1 ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {creativeStrategy.hookOptions.map((hook) => (
@@ -327,6 +389,36 @@ export function AgentPanel({
             <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
               {creativeStrategy.rationale}
             </p>
+            {creativeStrategy.assetNeeds.length > 0 ? (
+              <div className="mt-2">
+                <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('寤鸿绱犳潗', 'Asset needs')}</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {creativeStrategy.assetNeeds.map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)]"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {creativeStrategy.riskNotes.length > 0 ? (
+              <div className="mt-2">
+                <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('椋庨櫓绾︽潫', 'Risk notes')}</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {creativeStrategy.riskNotes.map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-amber-500/25 bg-amber-500/8 px-2 py-1 text-[10px] text-amber-200"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

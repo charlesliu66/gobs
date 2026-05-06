@@ -1371,7 +1371,7 @@ ${planText}`;
   });
   const localizedCreativeStrategy = creativeStrategy
     ? await localizeStructuredPayload(creativeStrategy, replyLocale, {
-      preserveKeys: ['mode', 'platform'],
+      preserveKeys: ['mode', 'platform', 'briefId', 'strategyId', 'ctaType', 'hookApproach'],
     })
     : undefined;
 

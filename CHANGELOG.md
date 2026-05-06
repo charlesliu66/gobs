@@ -214,3 +214,27 @@
 **Backend / Editor Agent:**
 - Extended the editor creative brief and strategy normalization chain to carry region, forbiddenClaims, and handoff strategy payloads through /api/editor/agent/apply.
 - Updated Editor fallback behavior so malformed or missing handoff state safely falls back to the legacy editor workflow instead of breaking the page.
+
+## v0.136 - 2026-05-06
+**Strategy Productization**
+**Frontend / Campaign Creative:**
+- Added stable briefId and strategyId generation and expanded the strategy object with targetAudience, sellingPointFocus, ctaType, assetNeeds, and riskNotes.
+- Upgraded the Strategy Card and Editor summary panel to display richer creative-planning fields.
+- Fixed Campaign Creative handoff storage-key compatibility and switched first-run strategy reuse away from brittle JSON.stringify equality.
+**Backend / Editor Agent:**
+- Expanded creative brief and strategy normalization so richer strategy fields survive request parsing, prompt building, and localized response payloads.
+- Updated default creative user-message and prompt-block generation to consume richer strategy context instead of only minimal brief fields.
+**Verification:**
+- Added and updated editorCreativeBrief regression tests for the richer strategy contract and locale-aware prompt behavior.
+
+## v0.137 - 2026-05-06
+**Strategy Tuning**
+**Frontend / Campaign Creative:**
+- Added a lightweight tuning panel so users can switch hook direction, selling-point focus, and CTA type after generating a strategy.
+- Reworked local strategy generation to preserve strategyId while recomputing hook options, angle, tone, rationale, and CTA framing from the tuned state.
+- Extended Strategy Card and Editor-side strategy summary to surface hook direction and tuned CTA type more clearly.
+**Backend / Editor Agent:**
+- Added hookApproach to the shared creative strategy contract and preserved it through normalization, localization, Editor handoff, and prompt building.
+- Updated default creative user messages and prompt blocks so tuned hook direction appears in agent-facing context.
+**Verification:**
+- Added editorCreativeBrief regression coverage for default hookApproach generation and tuned-strategy prompt composition.

@@ -97,6 +97,7 @@ const MIN_EDIT_SEC = 0.12;
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 const CAMPAIGN_HANDOFF_STORAGE_KEYS = [
+  'campaign_creative_handoff',
   'campaign_creative_editor_handoff',
   'campaignCreativeEditorHandoff',
   'editor_campaign_creative_handoff',
@@ -115,34 +116,79 @@ function cleanHandoffText(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeHandoffStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => cleanHandoffText(item))
+      .filter((item): item is string => Boolean(item));
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n|,|;|，|；/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function isSameCreativeBrief(
+  a?: EditorCreativeBrief,
+  b?: EditorCreativeBrief,
+): boolean {
+  if (!a || !b) return false;
+  if (a.briefId && b.briefId) return a.briefId === b.briefId;
+  return (
+    a.mode === b.mode &&
+    (a.objective ?? '') === (b.objective ?? '') &&
+    (a.audience ?? '') === (b.audience ?? '') &&
+    (a.cta ?? '') === (b.cta ?? '') &&
+    (a.referenceStyle ?? '') === (b.referenceStyle ?? '') &&
+    (a.region ?? '') === (b.region ?? '') &&
+    (a.sellingPoints ?? []).join('|') === (b.sellingPoints ?? []).join('|') &&
+    (a.forbiddenClaims ?? []).join('|') === (b.forbiddenClaims ?? []).join('|')
+  );
+}
+
 function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const raw = input as Record<string, unknown>;
+  const strategyId = cleanHandoffText(raw.strategyId);
+  const briefId = cleanHandoffText(raw.briefId);
   const objective = cleanHandoffText(raw.objective);
   const recommendedHook = cleanHandoffText(raw.recommendedHook);
   const cta = cleanHandoffText(raw.cta);
   const rationale = cleanHandoffText(raw.rationale);
-  const primarySellingPoint = cleanHandoffText(raw.primarySellingPoint);
-  const audience = cleanHandoffText(raw.audience);
+  const targetAudience = cleanHandoffText(raw.targetAudience) ?? cleanHandoffText(raw.audience);
+  const sellingPointFocus = cleanHandoffText(raw.sellingPointFocus) ?? cleanHandoffText(raw.primarySellingPoint);
+  const hookApproach = cleanHandoffText(raw.hookApproach) as EditorCreativeStrategy['hookApproach'];
   const mode = raw.mode === 'tiktok_ua' ? 'tiktok_ua' : 'tiktok_content';
-  const hookOptions = Array.isArray(raw.hookOptions)
-    ? raw.hookOptions
-        .map((item) => cleanHandoffText(item))
-        .filter((item): item is string => Boolean(item))
-    : [];
+  const angle = cleanHandoffText(raw.angle);
+  const tone = cleanHandoffText(raw.tone);
+  const ctaType = cleanHandoffText(raw.ctaType) as EditorCreativeStrategy['ctaType'];
+  const hookOptions = normalizeHandoffStringList(raw.hookOptions);
+  const assetNeeds = normalizeHandoffStringList(raw.assetNeeds);
+  const riskNotes = normalizeHandoffStringList(raw.riskNotes);
 
   if (!objective || !recommendedHook || !cta || !rationale) return undefined;
 
   return {
+    strategyId,
+    briefId,
     platform: 'tiktok',
     mode,
     objective,
-    audience,
-    primarySellingPoint,
+    targetAudience,
+    sellingPointFocus,
+    hookApproach,
     hookOptions: hookOptions.length > 0 ? hookOptions : [recommendedHook],
     recommendedHook,
     cta,
+    ctaType,
     rationale,
+    angle,
+    tone,
+    assetNeeds,
+    riskNotes,
   };
 }
 
@@ -931,12 +977,17 @@ export function EditorWorkbench() {
         campaignCreativeHandoff?.strategy &&
         (
           !creativeBrief ||
-          JSON.stringify(creativeBrief) === JSON.stringify(campaignCreativeHandoff?.brief)
+          isSameCreativeBrief(creativeBrief, campaignCreativeHandoff?.brief)
         ),
       );
       const activeCreativeStrategy = shouldUseHandoffStrategy
         ? campaignCreativeHandoff?.strategy
         : undefined;
+      const shouldConsumeCampaignHandoff = Boolean(
+        !campaignCreativeHandoffConsumed &&
+        campaignCreativeHandoff?.brief &&
+        (shouldUseHandoffStrategy || !creativeBrief),
+      );
       const replyLocale = resolveEditorReplyLocale(activeCreativeBrief, [trimmedMessage]);
       const shouldForceEdit = Boolean(activeCreativeBrief);
       let agentOk = false;
@@ -1066,7 +1117,9 @@ export function EditorWorkbench() {
         setCurrentTime(0);
         setIsPlaying(false);
         setAgentCreativeStrategy(creativeStrategy ?? activeCreativeStrategy ?? null);
-        setCampaignCreativeHandoffConsumed(true);
+        if (shouldConsumeCampaignHandoff) {
+          setCampaignCreativeHandoffConsumed(true);
+        }
 
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));

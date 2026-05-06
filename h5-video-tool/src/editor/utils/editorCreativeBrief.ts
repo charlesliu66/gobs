@@ -1,6 +1,9 @@
 export type EditorCreativeMode = 'tiktok_content' | 'tiktok_ua';
+export type EditorCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
+export type EditorCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
 
 export interface EditorCreativeBrief {
+  briefId?: string;
   platform: 'tiktok';
   mode: EditorCreativeMode;
   objective?: string;
@@ -13,15 +16,23 @@ export interface EditorCreativeBrief {
 }
 
 export interface EditorCreativeStrategy {
+  strategyId?: string;
+  briefId?: string;
   platform: 'tiktok';
   mode: EditorCreativeMode;
   objective: string;
-  audience?: string;
-  primarySellingPoint?: string;
+  targetAudience?: string;
+  sellingPointFocus?: string;
+  hookApproach?: EditorCreativeHookApproach;
   hookOptions: string[];
   recommendedHook: string;
   cta: string;
+  ctaType?: EditorCreativeCtaType;
   rationale: string;
+  angle?: string;
+  tone?: string;
+  assetNeeds: string[];
+  riskNotes: string[];
 }
 
 function cleanText(value: unknown): string | undefined {
@@ -30,22 +41,7 @@ function cleanText(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function normalizeSellingPoints(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => cleanText(item))
-      .filter((item): item is string => Boolean(item));
-  }
-  if (typeof value === 'string') {
-    return value
-      .split(/\r?\n|,|;|，|；/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function normalizeBriefStringList(value: unknown): string[] {
+function normalizeStringList(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
       .map((item) => cleanText(item))
@@ -61,6 +57,7 @@ function normalizeBriefStringList(value: unknown): string[] {
 }
 
 export function normalizeEditorCreativeBriefForRequest(input: {
+  briefId?: string;
   mode?: EditorCreativeMode;
   objective?: string;
   audience?: string;
@@ -70,16 +67,18 @@ export function normalizeEditorCreativeBriefForRequest(input: {
   region?: string;
   forbiddenClaims?: string[] | string;
 }): EditorCreativeBrief | undefined {
-  const sellingPoints = normalizeSellingPoints(input.sellingPoints);
+  const briefId = cleanText(input.briefId);
+  const sellingPoints = normalizeStringList(input.sellingPoints);
   const objective = cleanText(input.objective);
   const audience = cleanText(input.audience);
   const cta = cleanText(input.cta);
   const referenceStyle = cleanText(input.referenceStyle);
   const region = cleanText(input.region);
-  const forbiddenClaims = normalizeBriefStringList(input.forbiddenClaims);
+  const forbiddenClaims = normalizeStringList(input.forbiddenClaims);
   const mode = input.mode === 'tiktok_ua' ? 'tiktok_ua' : 'tiktok_content';
 
   const hasContent = Boolean(
+    briefId ||
     objective ||
     audience ||
     cta ||
@@ -92,6 +91,7 @@ export function normalizeEditorCreativeBriefForRequest(input: {
   if (!hasContent) return undefined;
 
   return {
+    briefId,
     platform: 'tiktok',
     mode,
     objective,
