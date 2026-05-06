@@ -243,6 +243,12 @@
 
 ## 浜屻€丆hangelog
 
+### v0.137 - 2026-05-06
+**Production Wizard shot success-state reconciliation**
+
+- **[production wizard] Shot strip and aggregate status now prefer any playable shot video result over the latest failed retry** (h5-video-tool/src/studio/executionSegmentStatus.ts, h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx): if a shot already has at least one playable video version, the main status is shown as completed instead of failed.
+- **[tests] Added a regression test for shot-level status reconciliation when playable versions and failed retries coexist** (h5-video-tool-api/tests/productionStoryboardStatus.test.ts): protects against the UI showing “failed” while the preview panel already has a valid video result.
+
 ### v0.136 - 2026-05-06
 **Recent 10-success video duration baseline for Ark queue UX**
 

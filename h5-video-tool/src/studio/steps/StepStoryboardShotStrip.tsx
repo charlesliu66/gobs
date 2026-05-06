@@ -13,6 +13,7 @@ function resolveShotStatus(
   shotJobStatusMap: ShotStatusMap,
 ): ShotStatus {
   const shotKey = String(shot.shotIndex);
+  if (hasProductionShotPreviewMedia(shot)) return 'done';
   if (shotBusyMap[shotKey] === 'video') return 'processing';
 
   const activeJob = shotActiveJobMap[shotKey];
@@ -39,7 +40,6 @@ function resolveShotStatus(
     return mapped;
   }
 
-  if (hasProductionShotPreviewMedia(shot)) return 'done';
   if (shot.lastVideoError?.cancelled) return 'cancelled';
   if (shot.lastVideoError?.reason) return 'failed';
   return 'idle';

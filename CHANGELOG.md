@@ -2,6 +2,12 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.137 - 2026-05-06
+**Production Wizard shot success-state reconciliation**
+**Advanced Production / Storyboard:**
+- Shot strip and aggregate shot status now prefer any playable preview video result over a later failed retry, so recovered shots stay marked as completed.
+- Execution-segment aggregate status now treats existing shot-level or segment-level preview media as a successful provider result before surfacing stored failed states.
+- Added a regression test covering the case where a shot keeps a playable version while a newer execution attempt fails.
 ## v0.134 - 2026-05-06
 **Repo-local slash entry for the guarded GOBS multi-agent workflow**
 **Internal / Dev Workflow:**

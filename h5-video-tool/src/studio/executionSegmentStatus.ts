@@ -255,6 +255,7 @@ export function resolveShotAggregateStatus(
 
   const runtimeSegments = segments.map((segment) => resolveExecutionSegmentRuntimeState(shot, segment, options));
   const summary = buildSummary(runtimeSegments);
+  const shotHasPlayableVideo = hasProductionShotPreviewMedia(shot);
   const counts = runtimeSegments.reduce(
     (acc, runtime) => {
       acc[runtime.userStatus] += 1;
@@ -272,7 +273,7 @@ export function resolveShotAggregateStatus(
   );
 
   let userStatus: ShotUserStatus = 'not_started';
-  if (counts.completed === runtimeSegments.length) {
+  if (shotHasPlayableVideo || counts.completed === runtimeSegments.length) {
     userStatus = 'completed';
   } else if (counts.generating > 0) {
     userStatus = 'generating';
@@ -296,7 +297,7 @@ export function resolveShotAggregateStatus(
     userStatus,
     labelKey: getShotUserStatusLabelKey(userStatus),
     providerStatus,
-    hasVideo: summary.completedSegments > 0,
+    hasVideo: shotHasPlayableVideo || summary.completedSegments > 0,
     runtimeSegments,
     summary,
     platformQueuePosition: queueLeader?.platformQueuePosition,
@@ -310,11 +311,13 @@ export function resolveShotAggregateProviderStatus(
   shot: ProductionShot,
   segments: ProductionExecutionSegment[],
 ): ShotProviderStatus | undefined {
+  if (hasProductionShotPreviewMedia(shot)) return 'done';
   if (!segments.length) {
-    return hasProductionShotPreviewMedia(shot) ? 'done' : undefined;
+    return undefined;
   }
 
   const statuses = segments.map((segment) => normalizeStoredProviderStatus(segment.status));
+  if (segments.some((segment) => hasProductionExecutionSegmentPreviewMedia(segment))) return 'done';
   if (statuses.every((status) => status === 'done')) return 'done';
   if (statuses.some((status) => status === 'processing')) return 'processing';
   if (statuses.some((status) => status === 'queuing' || status === 'pending')) return 'queuing';
