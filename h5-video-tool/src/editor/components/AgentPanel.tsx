@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { EditorAgentJobProgress } from '../../api/editor';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
 import type {
   EditorProjectMemoryBucket,
   EditorUserProfileDimensionKey,
@@ -120,7 +119,7 @@ export function AgentPanel({
   initialCreativeBrief,
 }: AgentPanelProps) {
   const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const uiText = <T,>(zh: T, en: T) => (uiLocale === 'en' ? en : zh);
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showBrief, setShowBrief] = useState(true);

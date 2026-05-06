@@ -1,6 +1,6 @@
-import type { StoryArcLayer, StoryBeat } from '../productionTypes';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage } from '../../i18n/locale.ts';
+import type { StoryArcLayer, StoryBeat } from '../productionTypes';
 
 export function StepStoryArc({
   styleRefSummary,
@@ -23,14 +23,15 @@ export function StepStoryArc({
   busyL2: boolean;
   onGenerateL2: () => void | Promise<void>;
 }) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) =>
+    formatMessage(t(path), values);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 sm:grid-cols-2">
         <label className="text-xs text-[var(--color-text-muted)] sm:col-span-2">
-          {uiText('视频风格摘要（可与「输入」页一致）', 'Visual style summary (keep in sync with Input if needed)')}
+          {t('productionWizard.storyArc.visualStyleSummary')}
           <textarea
             value={styleRefSummary}
             onChange={(e) => onStyleRefSummaryChange(e.target.value)}
@@ -39,25 +40,31 @@ export function StepStoryArc({
           />
         </label>
         <div>
-          <div className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('画面比例', 'Aspect ratio')}</div>
-          <p className="mt-1 text-sm text-[var(--color-text)]">{aspectRatioText} {uiText('（在「输入」页修改）', '(edit in Input)')}</p>
+          <div className="text-xs font-medium text-[var(--color-text-muted)]">
+            {t('productionWizard.storyArc.aspectRatio')}
+          </div>
+          <p className="mt-1 text-sm text-[var(--color-text)]">
+            {aspectRatioText} {t('productionWizard.storyArc.editInInput')}
+          </p>
         </div>
         <div>
-          <div className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('故事类型', 'Genre')}</div>
+          <div className="text-xs font-medium text-[var(--color-text-muted)]">
+            {t('productionWizard.storyArc.genre')}
+          </div>
           <input
             value={storyGenre}
             onChange={(e) => onStoryGenreChange(e.target.value)}
             className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-            placeholder={uiText('如：悬疑、都市', 'Examples: mystery, urban drama')}
+            placeholder={t('productionWizard.storyArc.genrePlaceholder')}
           />
         </div>
       </div>
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
-        <h3 className="text-sm font-semibold text-[var(--color-text)]">{uiText('剧本摘要（可编辑）', 'Story summary (editable)')}</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('productionWizard.storyArc.storySummary')}</h3>
         <div className="mt-3 space-y-4 text-sm">
           <label className="block text-xs text-[var(--color-text-muted)]">
-            {uiText('一句话故事（logline）', 'Logline')}
+            {t('productionWizard.storyArc.logline')}
             <textarea
               value={story.logline}
               onChange={(e) => patchStory((s) => ({ ...s, logline: e.target.value }))}
@@ -66,7 +73,7 @@ export function StepStoryArc({
             />
           </label>
           <label className="block text-xs text-[var(--color-text-muted)]">
-            {uiText('故事梗概', 'Synopsis')}
+            {t('productionWizard.storyArc.synopsis')}
             <textarea
               value={story.synopsis}
               onChange={(e) => patchStory((s) => ({ ...s, synopsis: e.target.value }))}
@@ -75,7 +82,7 @@ export function StepStoryArc({
             />
           </label>
           <label className="block text-xs text-[var(--color-text-muted)]">
-            {uiText('节奏说明（可选）', 'Pacing notes (optional)')}
+            {t('productionWizard.storyArc.pacingNotes')}
             <textarea
               value={story.pacingNotes ?? ''}
               onChange={(e) => patchStory((s) => ({ ...s, pacingNotes: e.target.value }))}
@@ -88,7 +95,7 @@ export function StepStoryArc({
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--color-text)]">{uiText('剧本节拍', 'Story beats')}</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('productionWizard.storyArc.storyBeats')}</h3>
           <button
             type="button"
             onClick={() =>
@@ -98,7 +105,9 @@ export function StepStoryArc({
                   ...s.beats,
                   {
                     id: `b-${Date.now()}`,
-                    label: uiText(`节拍 ${s.beats.length + 1}`, `Beat ${s.beats.length + 1}`),
+                    label: tx('productionWizard.storyArc.beatLabel', {
+                      index: s.beats.length + 1,
+                    }),
                     storyPercent: Math.min(1, (s.beats.length + 1) * 0.1),
                     description: '',
                   } satisfies StoryBeat,
@@ -107,7 +116,7 @@ export function StepStoryArc({
             }
             className="text-xs text-[var(--color-primary)] hover:underline"
           >
-            {uiText('+ 添加节拍', '+ Add beat')}
+            {t('productionWizard.storyArc.addBeat')}
           </button>
         </div>
         <div className="mt-3 space-y-3">
@@ -129,7 +138,7 @@ export function StepStoryArc({
                   className="min-w-[6rem] flex-1 rounded border border-[var(--color-border)] px-2 py-1 text-sm font-medium"
                 />
                 <label className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
-                  {uiText('位置 %', 'Position %')}
+                  {t('productionWizard.storyArc.positionPercent')}
                   <input
                     type="number"
                     min={0}
@@ -156,7 +165,7 @@ export function StepStoryArc({
                   }
                   className="text-xs text-red-400 hover:underline"
                 >
-                  {uiText('删除', 'Remove')}
+                  {t('productionWizard.storyArc.remove')}
                 </button>
               </div>
               <textarea
@@ -170,7 +179,7 @@ export function StepStoryArc({
                   }))
                 }
                 rows={2}
-                placeholder={uiText('本节拍发生什么', 'What happens in this beat')}
+                placeholder={t('productionWizard.storyArc.beatDescriptionPlaceholder')}
                 className="mt-2 w-full rounded border border-[var(--color-border)] px-2 py-1 text-sm"
               />
             </div>
@@ -184,9 +193,10 @@ export function StepStoryArc({
         onClick={() => void onGenerateL2()}
         className="rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
       >
-        {busyL2 ? uiText('生成中…', 'Generating…') : uiText('生成角色与场景设定', 'Generate character and scene design')}
+        {busyL2
+          ? t('productionWizard.input.generating')
+          : t('productionWizard.storyArc.generateCharacterAndSceneDesign')}
       </button>
     </div>
   );
 }
-

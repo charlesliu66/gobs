@@ -245,6 +245,13 @@
 
 ## 浜屻€丆hangelog
 
+### v0.144 - 2026-05-06
+**English localization sweep for agent guidance and ProductionWizard core steps**
+
+- **[editor agent] AgentMemoryPanel now uses shared locale keys and formatting helpers for memory summaries, counters, confidence labels, and action copy** (`h5-video-tool/src/editor/components/AgentMemoryPanel.tsx`, `h5-video-tool/src/i18n/messages.ts`, `h5-video-tool/src/i18n/locale.test.ts`): English operators can review project preferences, avoid lists, open issues, and communication profiles without mixed Chinese fallback text.
+- **[production wizard] StepInput and StepStoryArc now route high-traffic controls, asset-picker states, and interpolated beat labels through shared i18n keys** (`h5-video-tool/src/studio/steps/StepInput.tsx`, `h5-video-tool/src/studio/steps/StepStoryArc.tsx`, `h5-video-tool/src/i18n/messages.ts`, `h5-video-tool/src/i18n/locale.test.ts`): English mode now keeps style-reference setup, outline generation, and story-beat editing consistently localized.
+- **[targeted residue sweep] AgentPanel and StepStoryboardWorkspace no longer appear in the repo `pickUiText(...)` residue list, and the next cleanup queue is now narrowed to EditorWorkbench plus the remaining StepDesign / StepStoryboard helper panels** (`h5-video-tool/src/editor/components/AgentPanel.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx`): this release keeps the next English-i18n backlog explicit instead of silently carrying mixed-surface debt forward.
+
 ### v0.142 - 2026-05-06
 **Campaign Creative knowledge consumption**
 
@@ -273,9 +280,6 @@
 - **[language presets] UI/content language switching now supports explicit preset combinations instead of forcing both layers to move together** (`h5-video-tool/src/i18n/locale.ts`, `h5-video-tool/src/i18n/LocaleContext.tsx`, `h5-video-tool/src/components/LocalePresetSwitcher.tsx`, `h5-video-tool/src/i18n/locale.test.ts`): added `中文界面 + 中文内容` / `English UI + 中文内容` / `English UI + English Content` presets and covered the mapping logic with tests.
 - **[editor i18n] Login and editor-side direct fetch flows now pass locale headers and return localized fallback errors** (`h5-video-tool/src/api/auth.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool/src/i18n/messages.ts`): upload, timeout, stream parsing, session expiry, and editing-task failures now reuse shared i18n error keys instead of hardcoded Chinese strings.
 - **[production wizard] Storyboard export overview now uses message keys and locale-aware date formatting end to end** (`h5-video-tool/src/studio/steps/StepExportStoryboardOverview.tsx`): removed page-level `pickUiText` branching, localized the editor handoff flow, and replaced hardcoded `zh-CN` date/time formatting with shared locale utilities.
-
-=======
->>>>>>> d0058e0 (feat: harden english i18n shell surfaces)
 ### v0.139 - 2026-05-06
 **Campaign Knowledge Brain foundation**
 
@@ -283,8 +287,6 @@
 - **[knowledge import] Added the first fastpublish-inspired default knowledge bundle and structured derivation contract** (h5-video-tool-api/src/services/campaignKnowledgeImport.ts, h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts): the backend can seed tone/compliance/visual-style/market/persona/live-ops/selling-point packs and reduce selected packs into prompt-safe fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, and `hookCandidates`.
 - **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
 - **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
-
-<<<<<<< HEAD
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
 
@@ -2050,7 +2052,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.143)*
+*Last updated: 2026-05-06 (v0.144)*
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
 

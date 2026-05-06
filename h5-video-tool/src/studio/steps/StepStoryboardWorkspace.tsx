@@ -10,7 +10,6 @@ import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
 import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
 import { useProductionContext } from '../ProductionContext';
 import { StepStoryboardAssetsSidebar } from './StepStoryboardAssetsSidebar';
@@ -154,7 +153,7 @@ export function StepStoryboardWorkspace({
 }) {
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
   const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const uiText = <T,>(zh: T, en: T) => (uiLocale === 'en' ? en : zh);
   const maxConcurrent = queueSnapshot.maxConcurrent ?? 3;
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const shotActionRef = useRef<HTMLDivElement | null>(null);
