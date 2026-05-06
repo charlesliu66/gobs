@@ -250,3 +250,4 @@
 - Added stable `variantPackId` and `variantId` contracts plus per-variant hook, opening beat, selling-point focus, CTA, editing direction, asset suggestion, and difference summary fields.
 - Upgraded Campaign Creative handoff so Editor receives the selected variant alongside the shared brief and strategy, and the first creative-agent apply can reuse that variant context.
 - Added targeted regression coverage for variant-pack generation and variant handoff normalization on both the frontend and backend.
+- Follow-up fix: preserved explicit brief CTA wording inside generated variants and made variant normalizers tolerant of legacy handoff payloads without variant fields.

@@ -157,6 +157,7 @@ export function normalizeEditorCreativeVariantForRequest(input: {
   differenceSummary?: string;
   isRecommended?: boolean;
 }): EditorCreativeVariant | undefined {
+  if (!input || typeof input !== 'object') return undefined;
   const title = cleanText(input.title);
   const hook = cleanText(input.hook);
   const cta = cleanText(input.cta);
@@ -197,6 +198,7 @@ export function normalizeEditorCreativeVariantPackForRequest(input: {
   variants?: Array<Parameters<typeof normalizeEditorCreativeVariantForRequest>[0]> | unknown;
   selectedVariantId?: string;
 }): EditorCreativeVariantPack | undefined {
+  if (!input || typeof input !== 'object') return undefined;
   const variants = Array.isArray(input.variants)
     ? input.variants
         .map((variant) => normalizeEditorCreativeVariantForRequest(

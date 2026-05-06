@@ -68,3 +68,47 @@ test('buildVariantPackFromStrategy keeps stable slot ids when strategy id is reu
     secondPack.variants.map((variant) => variant.variantId),
   );
 });
+
+test('buildVariantPackFromStrategy respects explicit brief CTA and still keeps hook directions distinct', () => {
+  const brief = buildBriefFromForm({
+    mode: 'tiktok_content',
+    objective: 'Drive store visits',
+    audience: 'fantasy fans',
+    sellingPointsText: 'Ice queen reveal',
+    cta: 'Visit our store',
+    referenceStyle: 'story-led reveal',
+    region: 'US',
+    forbiddenClaimsText: '',
+  });
+  const strategy = buildStrategyFromBrief(brief, {
+    strategyId: 'strategy_cta',
+    tuning: buildDefaultStrategyTuning(brief),
+  });
+
+  const pack = buildVariantPackFromStrategy(brief, strategy);
+
+  assert.ok(pack.variants.every((variant) => variant.cta === 'Visit our store'));
+  assert.equal(new Set(pack.variants.map((variant) => variant.hook)).size, 3);
+});
+
+test('buildVariantPackFromStrategy stays differentiated even with one selling point', () => {
+  const brief = buildBriefFromForm({
+    mode: 'tiktok_ua',
+    objective: 'Drive installs',
+    audience: 'anime RPG players',
+    sellingPointsText: 'Boss-fight payoff',
+    cta: '',
+    referenceStyle: 'fast hook + gameplay proof',
+    region: 'US',
+    forbiddenClaimsText: '',
+  });
+  const strategy = buildStrategyFromBrief(brief, {
+    strategyId: 'strategy_single_point',
+    tuning: buildDefaultStrategyTuning(brief),
+  });
+
+  const pack = buildVariantPackFromStrategy(brief, strategy);
+
+  assert.equal(new Set(pack.variants.map((variant) => variant.hook)).size, 3);
+  assert.equal(new Set(pack.variants.map((variant) => variant.differenceSummary)).size, 3);
+});

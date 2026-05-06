@@ -361,7 +361,7 @@ function resolveVariantCtaType(
   if (emphasis === 'selling_point_focus') {
     return 'soft_conversion';
   }
-  return 'direct_response';
+  return mode === 'tiktok_ua' ? 'direct_response' : 'soft_conversion';
 }
 
 function resolveVariantSellingPoint(
@@ -387,16 +387,15 @@ function resolveVariantSellingPoint(
 
 function resolveVariantHookApproach(
   brief: CampaignCreativeBrief,
-  strategy: CampaignCreativeStrategy,
   emphasis: CampaignCreativeVariantEmphasis,
 ): CampaignCreativeHookApproach {
   if (emphasis === 'hook_focus') {
-    return strategy.hookApproach ?? resolveDefaultHookApproach(brief.mode);
+    return brief.mode === 'tiktok_ua' ? 'conflict_first' : 'story_first';
   }
   if (emphasis === 'selling_point_focus') {
     return 'benefit_first';
   }
-  return brief.mode === 'tiktok_ua' ? 'conflict_first' : 'benefit_first';
+  return brief.mode === 'tiktok_ua' ? 'story_first' : 'conflict_first';
 }
 
 function buildVariantTitle(
@@ -474,10 +473,29 @@ function buildVariantTuning(
 ): CampaignCreativeStrategyTuning {
   const fallbackFocus = strategy.sellingPointFocus ?? buildDefaultSellingPointFocus(brief);
   return {
-    hookApproach: resolveVariantHookApproach(brief, strategy, emphasis),
+    hookApproach: resolveVariantHookApproach(brief, emphasis),
     sellingPointFocus: resolveVariantSellingPoint(brief, fallbackFocus, emphasis),
     ctaType: resolveVariantCtaType(brief.mode, emphasis),
   };
+}
+
+function buildVariantCta(
+  brief: CampaignCreativeBrief,
+  emphasis: CampaignCreativeVariantEmphasis,
+  fallbackCta: string,
+): string {
+  const explicitCta = brief.cta?.trim();
+  if (explicitCta) {
+    return explicitCta;
+  }
+
+  if (emphasis === 'selling_point_focus') {
+    return brief.mode === 'tiktok_ua'
+      ? 'See the payoff, then tap in.'
+      : 'Stay through the reveal, then follow for more.';
+  }
+
+  return fallbackCta;
 }
 
 export function buildVariantPackFromStrategy(
@@ -487,10 +505,9 @@ export function buildVariantPackFromStrategy(
   const variantPackId = strategy.strategyId
     ? `variant_pack_${strategy.strategyId}`
     : createObjectId('variant_pack');
-  const strategySeedBrief = brief.cta?.trim() ? { ...brief, cta: undefined } : brief;
   const variants: CampaignCreativeVariant[] = VARIANT_SLOT_ORDER.map((emphasis, index) => {
     const tuning = buildVariantTuning(brief, strategy, emphasis);
-    const derivedStrategy = buildStrategyFromBrief(strategySeedBrief, {
+    const derivedStrategy = buildStrategyFromBrief(brief, {
       strategyId: strategy.strategyId,
       tuning,
     });
@@ -506,7 +523,7 @@ export function buildVariantPackFromStrategy(
       hook,
       openingBeat: buildVariantOpeningBeat(brief.mode, emphasis, hook, focus),
       sellingPointFocus: focus,
-      cta: derivedStrategy.cta,
+      cta: buildVariantCta(brief, emphasis, derivedStrategy.cta),
       ctaType: derivedStrategy.ctaType,
       editingDirection: buildVariantEditingDirection(brief.mode, emphasis),
       assetSuggestion: derivedStrategy.assetNeeds[0] ?? strategy.assetNeeds[0] ?? '',

@@ -112,3 +112,8 @@ test('normalizeEditorCreativeVariantPackForRequest keeps only valid variants', (
   assert.deepEqual(pack?.comparisonAxes, ['Hook', 'CTA']);
   assert.equal(pack?.variants.length, 2);
 });
+
+test('normalizeEditorCreativeVariant helpers return undefined for missing payloads', () => {
+  assert.equal(normalizeEditorCreativeVariantForRequest(undefined), undefined);
+  assert.equal(normalizeEditorCreativeVariantPackForRequest(undefined), undefined);
+});
