@@ -4,6 +4,7 @@ import { localizedText, type ReplyLocale } from './replyLocale.js';
 export type EditorCreativeMode = 'tiktok_content' | 'tiktok_ua';
 export type EditorCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
 export type EditorCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
+export type EditorCreativeVariantEmphasis = 'hook_focus' | 'selling_point_focus' | 'cta_focus';
 
 export interface EditorCreativeBrief {
   briefId?: string;
@@ -38,6 +39,35 @@ export interface EditorCreativeStrategy {
   riskNotes: string[];
 }
 
+export interface EditorCreativeVariant {
+  variantId?: string;
+  variantPackId?: string;
+  strategyId?: string;
+  briefId?: string;
+  emphasis?: EditorCreativeVariantEmphasis;
+  title: string;
+  hook: string;
+  openingBeat?: string;
+  sellingPointFocus?: string;
+  cta: string;
+  ctaType?: EditorCreativeCtaType;
+  editingDirection?: string;
+  assetSuggestion?: string;
+  differenceSummary: string;
+  isRecommended?: boolean;
+}
+
+export interface EditorCreativeVariantPack {
+  variantPackId?: string;
+  briefId?: string;
+  strategyId?: string;
+  mode?: EditorCreativeMode;
+  summary?: string;
+  comparisonAxes: string[];
+  variants: EditorCreativeVariant[];
+  selectedVariantId?: string;
+}
+
 function cleanText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -57,6 +87,12 @@ function normalizeStringList(value: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis | undefined {
+  return value === 'hook_focus' || value === 'selling_point_focus' || value === 'cta_focus'
+    ? value
+    : undefined;
 }
 
 function fallbackId(prefix: 'brief' | 'strategy'): string {
@@ -163,6 +199,68 @@ export function normalizeEditorCreativeStrategy(input: unknown): EditorCreativeS
     tone,
     assetNeeds,
     riskNotes,
+  };
+}
+
+export function normalizeEditorCreativeVariant(input: unknown): EditorCreativeVariant | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const title = cleanText(raw.title);
+  const hook = cleanText(raw.hook);
+  const cta = cleanText(raw.cta);
+  const differenceSummary = cleanText(raw.differenceSummary);
+  if (!title || !hook || !cta || !differenceSummary) {
+    return undefined;
+  }
+
+  return {
+    variantId: cleanText(raw.variantId),
+    variantPackId: cleanText(raw.variantPackId),
+    strategyId: cleanText(raw.strategyId),
+    briefId: cleanText(raw.briefId),
+    emphasis: normalizeVariantEmphasis(raw.emphasis),
+    title,
+    hook,
+    openingBeat: cleanText(raw.openingBeat),
+    sellingPointFocus: cleanText(raw.sellingPointFocus),
+    cta,
+    ctaType: cleanText(raw.ctaType) as EditorCreativeCtaType | undefined,
+    editingDirection: cleanText(raw.editingDirection),
+    assetSuggestion: cleanText(raw.assetSuggestion),
+    differenceSummary,
+    isRecommended: raw.isRecommended === true,
+  };
+}
+
+export function normalizeEditorCreativeVariantPack(input: unknown): EditorCreativeVariantPack | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const variants = Array.isArray(raw.variants)
+    ? raw.variants
+        .map((variant) => normalizeEditorCreativeVariant(variant))
+        .filter((variant): variant is EditorCreativeVariant => Boolean(variant))
+    : [];
+  if (variants.length === 0) {
+    return undefined;
+  }
+
+  const selectedVariantId = cleanText(raw.selectedVariantId);
+  const modeRaw = cleanText(raw.mode);
+  return {
+    variantPackId: cleanText(raw.variantPackId),
+    briefId: cleanText(raw.briefId),
+    strategyId: cleanText(raw.strategyId),
+    mode:
+      modeRaw === 'tiktok_ua' || modeRaw === 'tiktok_content'
+        ? modeRaw
+        : undefined,
+    summary: cleanText(raw.summary),
+    comparisonAxes: normalizeStringList(raw.comparisonAxes),
+    variants,
+    selectedVariantId:
+      selectedVariantId && variants.some((variant) => variant.variantId === selectedVariantId)
+        ? selectedVariantId
+        : variants[0]?.variantId,
   };
 }
 

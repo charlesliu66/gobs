@@ -7,7 +7,12 @@ import {
   buildDefaultCreativeUserMessage,
   normalizeEditorCreativeBrief,
   normalizeEditorCreativeStrategy,
+  normalizeEditorCreativeVariant,
+  normalizeEditorCreativeVariantPack,
 } from '../src/services/editorCreativeBrief.ts';
+import {
+  buildCreativeBriefPromptBlockWithVariant,
+} from '../src/services/editorCreativeVariantContext.ts';
 
 test('normalizeEditorCreativeBrief trims blanks and defaults content mode', () => {
   const brief = normalizeEditorCreativeBrief({
@@ -133,4 +138,67 @@ test('buildDefaultCreativeUserMessage respects tuned hook approach', () => {
 
   const message = buildDefaultCreativeUserMessage(brief!, strategy!, 'en');
   assert.match(message, /story-first/i);
+});
+
+test('normalizeEditorCreativeVariantPack keeps selected variant and ignores broken entries', () => {
+  const pack = normalizeEditorCreativeVariantPack({
+    variantPackId: 'pack_a',
+    briefId: 'brief_a',
+    strategyId: 'strategy_a',
+    mode: 'tiktok_ua',
+    selectedVariantId: 'variant_b',
+    comparisonAxes: 'Hook, CTA',
+    variants: [
+      {
+        variantId: 'variant_a',
+        title: 'Hook punch',
+        hook: 'Open on reward',
+        cta: 'Download now',
+        differenceSummary: 'Aggressive hook',
+      },
+      {
+        variantId: 'variant_b',
+        title: 'CTA push',
+        hook: 'Show the payoff',
+        cta: 'Install today',
+        differenceSummary: 'CTA-forward close',
+      },
+      { variantId: 'broken' },
+    ],
+  });
+
+  assert.equal(pack?.selectedVariantId, 'variant_b');
+  assert.deepEqual(pack?.comparisonAxes, ['Hook', 'CTA']);
+  assert.equal(pack?.variants.length, 2);
+});
+
+test('buildCreativeBriefPromptBlock includes selected variant context', () => {
+  const brief = normalizeEditorCreativeBrief({
+    mode: 'tiktok_ua',
+    sellingPoints: ['launch rewards', 'boss payoff'],
+    objective: 'drive installs',
+    cta: 'Play now',
+  });
+  const strategy = buildCreativeStrategy(brief!, 'en');
+  const variant = normalizeEditorCreativeVariant({
+    variantId: 'variant_a',
+    variantPackId: 'pack_a',
+    strategyId: strategy?.strategyId,
+    briefId: brief?.briefId,
+    emphasis: 'hook_focus',
+    title: 'Hook punch',
+    hook: 'Open on launch rewards before the logo appears.',
+    openingBeat: 'Start on the reward screen, then snap into gameplay.',
+    sellingPointFocus: 'launch rewards',
+    cta: 'Play now',
+    ctaType: 'direct_response',
+    editingDirection: 'Cut hard inside the first 2 seconds.',
+    assetSuggestion: 'Reward splash frame',
+    differenceSummary: 'Most aggressive opening of the pack.',
+  });
+
+  const promptBlock = buildCreativeBriefPromptBlockWithVariant(brief!, strategy, variant, undefined, 'en');
+  assert.match(promptBlock, /Selected variant/i);
+  assert.match(promptBlock, /Hook punch/);
+  assert.match(promptBlock, /Cut hard inside the first 2 seconds/i);
 });

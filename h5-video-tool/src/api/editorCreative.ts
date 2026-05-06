@@ -11,6 +11,8 @@ import {
   type EditorCreativeBrief,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 } from '../editor/utils/editorCreativeBrief';
 
 const BASE = (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || '';
@@ -35,6 +37,8 @@ export interface ApplyEditorCreativeAgentBody {
   projectMemory?: EditorProjectMemory;
   creativeBrief?: EditorCreativeBrief;
   creativeStrategy?: EditorCreativeStrategy;
+  creativeVariant?: EditorCreativeVariant;
+  creativeVariantPack?: EditorCreativeVariantPack;
   visionFocus?: EditorVisionFocus;
   replyLocale?: 'zh-CN' | 'en';
 }
@@ -48,6 +52,8 @@ export {
   type EditorCreativeBrief,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 };
 
 export async function applyEditorAgentCreativeStream(

@@ -244,3 +244,9 @@
 - Updated default creative user messages and prompt blocks so tuned hook direction appears in agent-facing context.
 **Verification:**
 - Added editorCreativeBrief regression coverage for default hookApproach generation and tuned-strategy prompt composition.
+
+## v0.138 - 2026-05-06 (Variant Pack MVP Addendum)
+- Added a `Variant Pack` layer on `/campaign-creative` that expands one brief plus one strategy into exactly three structured variants before editing.
+- Added stable `variantPackId` and `variantId` contracts plus per-variant hook, opening beat, selling-point focus, CTA, editing direction, asset suggestion, and difference summary fields.
+- Upgraded Campaign Creative handoff so Editor receives the selected variant alongside the shared brief and strategy, and the first creative-agent apply can reuse that variant context.
+- Added targeted regression coverage for variant-pack generation and variant handoff normalization on both the frontend and backend.

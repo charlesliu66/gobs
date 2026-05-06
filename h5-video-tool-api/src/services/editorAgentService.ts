@@ -28,11 +28,13 @@ import { loadGameTaxonomy } from './video/gameTaxonomy.js';
 import { buildAovDslPlan, looksLikeAovRequest } from './aovDslPlanner.js';
 import { getActiveAovRuleset } from './aovRulesetService.js';
 import {
-  buildCreativeBriefPromptBlock,
   buildCreativeStrategy,
   type EditorCreativeBrief,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 } from './editorCreativeBrief.js';
+import { buildCreativeBriefPromptBlockWithVariant } from './editorCreativeVariantContext.js';
 import {
   localizedText,
   localizeStructuredPayload,
@@ -60,6 +62,8 @@ export interface EditorAgentApplyInput {
   projectMemory?: unknown;
   creativeBrief?: EditorCreativeBrief;
   creativeStrategy?: EditorCreativeStrategy;
+  creativeVariant?: EditorCreativeVariant;
+  creativeVariantPack?: EditorCreativeVariantPack;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
   replyLocale: ReplyLocale;
@@ -995,7 +999,13 @@ export async function runEditorAgentApply(
     contentManifest,
     beatGuide: beatGuideBlock,
     currentClipsMetaBlock,
-    creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy, replyLocale),
+    creativeBriefBlock: buildCreativeBriefPromptBlockWithVariant(
+      input.creativeBrief,
+      creativeStrategy,
+      input.creativeVariant,
+      input.creativeVariantPack,
+      replyLocale,
+    ),
     memoryContextBlock,
   });
 

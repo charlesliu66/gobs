@@ -11,11 +11,13 @@ import type {
   CampaignCreativeMode,
   CampaignCreativeStrategy,
   CampaignCreativeStrategyTuning,
+  CampaignCreativeVariantPack,
 } from '../components/campaign/model';
 import {
   buildBriefFromForm,
   buildDefaultStrategyTuning,
   buildStrategyFromBrief,
+  buildVariantPackFromStrategy,
 } from '../components/campaign/strategy';
 
 const CAMPAIGN_CREATIVE_HANDOFF_STORAGE_KEYS = [
@@ -40,7 +42,7 @@ const DEFAULT_FORM_STATE: CampaignCreativeFormState = {
 };
 
 export function CampaignCreative() {
-  const { t } = useLocale();
+  const { t, uiLocale } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = location.state as CampaignCreativeLocationState;
@@ -53,6 +55,8 @@ export function CampaignCreative() {
   const [brief, setBrief] = useState<CampaignCreativeBrief | null>(null);
   const [strategy, setStrategy] = useState<CampaignCreativeStrategy | null>(null);
   const [strategyTuning, setStrategyTuning] = useState<CampaignCreativeStrategyTuning | null>(null);
+  const [variantPack, setVariantPack] = useState<CampaignCreativeVariantPack | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!routeState) return;
@@ -91,40 +95,69 @@ export function CampaignCreative() {
     const nextBrief = buildBriefFromForm(formState);
     const nextTuning = buildDefaultStrategyTuning(nextBrief);
     const nextStrategy = buildStrategyFromBrief(nextBrief, { tuning: nextTuning });
+    const nextVariantPack = buildVariantPackFromStrategy(nextBrief, nextStrategy);
     setBrief(nextBrief);
     setStrategyTuning(nextTuning);
     setStrategy(nextStrategy);
+    setVariantPack(nextVariantPack);
+    setSelectedVariantId(nextVariantPack.selectedVariantId);
   };
 
   const handleStrategyTuningChange = (patch: Partial<CampaignCreativeStrategyTuning>) => {
     if (!brief || !strategyTuning) return;
     const nextTuning = { ...strategyTuning, ...patch };
     setStrategyTuning(nextTuning);
-    setStrategy((current) =>
-      buildStrategyFromBrief(brief, {
+    setStrategy((current) => {
+      const nextStrategy = buildStrategyFromBrief(brief, {
         tuning: nextTuning,
         strategyId: current?.strategyId,
-      }),
-    );
+      });
+      const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
+      setVariantPack(nextVariantPack);
+      setSelectedVariantId((currentSelected) =>
+        currentSelected && nextVariantPack.variants.some((variant) => variant.variantId === currentSelected)
+          ? currentSelected
+          : nextVariantPack.selectedVariantId,
+      );
+      return nextStrategy;
+    });
   };
 
   const handleStrategyTuningReset = () => {
     if (!brief) return;
     const nextTuning = buildDefaultStrategyTuning(brief);
     setStrategyTuning(nextTuning);
-    setStrategy((current) =>
-      buildStrategyFromBrief(brief, {
+    setStrategy((current) => {
+      const nextStrategy = buildStrategyFromBrief(brief, {
         tuning: nextTuning,
         strategyId: current?.strategyId,
-      }),
-    );
+      });
+      const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
+      setVariantPack(nextVariantPack);
+      setSelectedVariantId((currentSelected) =>
+        currentSelected && nextVariantPack.variants.some((variant) => variant.variantId === currentSelected)
+          ? currentSelected
+          : nextVariantPack.selectedVariantId,
+      );
+      return nextStrategy;
+    });
   };
 
   const handleLaunchEditor = () => {
     if (!brief || !strategy) return;
+    const selectedVariant =
+      variantPack?.variants.find((variant) => variant.variantId === selectedVariantId) ??
+      variantPack?.variants[0];
     const payload = JSON.stringify({
       brief,
       strategy,
+      variantPack: variantPack
+        ? {
+            ...variantPack,
+            selectedVariantId: selectedVariant?.variantId ?? variantPack.selectedVariantId,
+          }
+        : undefined,
+      selectedVariant,
       source: 'campaign-creative',
       createdAt: Date.now(),
     });
@@ -132,6 +165,11 @@ export function CampaignCreative() {
       sessionStorage.setItem(key, payload);
     });
     navigate('/editor', { state: { fromCampaignCreative: true } });
+  };
+
+  const handleSelectVariant = (variantId: string) => {
+    setSelectedVariantId(variantId);
+    setVariantPack((current) => (current ? { ...current, selectedVariantId: variantId } : current));
   };
 
   return (
@@ -219,6 +257,9 @@ export function CampaignCreative() {
           <CampaignStrategyCard
             brief={brief}
             strategy={strategy}
+            variantPack={variantPack}
+            selectedVariantId={selectedVariantId}
+            onSelectVariant={handleSelectVariant}
             onLaunchEditor={handleLaunchEditor}
             copy={{
               emptyTitle: t('campaignCreative.strategy.emptyTitle'),
@@ -238,6 +279,17 @@ export function CampaignCreative() {
               rationale: t('campaignCreative.strategy.rationale'),
               assetNeeds: t('campaignCreative.strategy.assetNeeds'),
               riskNotes: t('campaignCreative.strategy.riskNotes'),
+              variantPackTitle: uiLocale === 'en' ? 'Variant Pack' : 'Variant Pack',
+              variantPackSubtitle: uiLocale === 'en'
+                ? 'Compare three creative directions before handing one to the Editor.'
+                : '先比较 3 个创意变体，再决定把哪一条送进 Editor。',
+              variantHook: uiLocale === 'en' ? 'Variant hook' : 'Variant Hook',
+              variantOpeningBeat: uiLocale === 'en' ? 'Opening beat' : '开场节奏',
+              variantEditingDirection: uiLocale === 'en' ? 'Editing direction' : '剪辑方向',
+              variantAssetSuggestion: uiLocale === 'en' ? 'Asset suggestion' : '素材建议',
+              variantDifferenceSummary: uiLocale === 'en' ? 'Difference summary' : '差异说明',
+              variantSelect: uiLocale === 'en' ? 'Choose this variant' : '选择这个变体',
+              selectedVariant: uiLocale === 'en' ? 'Selected variant' : '当前变体',
               nextStepTitle: t('campaignCreative.strategy.nextStepTitle'),
               nextStepBody: t('campaignCreative.strategy.nextStepBody'),
               launchEditor: t('campaignCreative.strategy.launchEditor'),
@@ -251,6 +303,17 @@ export function CampaignCreative() {
                 conflictFirst: t('campaignCreative.tuning.optionLabels.conflictFirst'),
                 storyFirst: t('campaignCreative.tuning.optionLabels.storyFirst'),
               },
+              variantEmphasisLabels: uiLocale === 'en'
+                ? {
+                    hookFocus: 'Hook difference',
+                    sellingPointFocus: 'Selling-point difference',
+                    ctaFocus: 'CTA difference',
+                  }
+                : {
+                    hookFocus: 'Hook 差异',
+                    sellingPointFocus: '卖点差异',
+                    ctaFocus: 'CTA 差异',
+                  },
             }}
           />
         </div>

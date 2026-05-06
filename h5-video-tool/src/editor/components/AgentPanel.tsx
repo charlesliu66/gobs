@@ -11,6 +11,7 @@ import {
   type EditorCreativeBrief,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
 } from '../../api/editorCreative';
 import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../types/agentMemory';
 import { AgentMemoryPanel } from './AgentMemoryPanel';
@@ -67,6 +68,7 @@ interface AgentPanelProps {
   chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   onAbort?: () => void;
   creativeStrategy?: EditorCreativeStrategy | null;
+  creativeVariant?: EditorCreativeVariant | null;
   initialCreativeBrief?: EditorCreativeBrief | null;
 }
 
@@ -114,6 +116,7 @@ export function AgentPanel({
   chatHistory,
   onAbort,
   creativeStrategy,
+  creativeVariant,
   initialCreativeBrief,
 }: AgentPanelProps) {
   const { uiLocale } = useLocale();
@@ -419,6 +422,47 @@ export function AgentPanel({
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {creativeVariant ? (
+        <div className="border-b border-[var(--color-border)] px-3 py-2">
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold text-[var(--color-text)]">
+                  {uiText('当前 Variant', 'Selected variant')}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+                  {creativeVariant.title}
+                </div>
+              </div>
+              <span className="rounded-full border border-sky-500/30 px-2 py-0.5 text-[10px] text-sky-200">
+                {creativeVariant.cta}
+              </span>
+            </div>
+            <div className="mt-2 grid gap-2">
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('Variant Hook', 'Variant hook')}</div>
+                <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeVariant.hook}</div>
+              </div>
+              {creativeVariant.openingBeat ? (
+                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                  <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('开场节奏', 'Opening beat')}</div>
+                  <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeVariant.openingBeat}</div>
+                </div>
+              ) : null}
+              <p className="text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                {creativeVariant.differenceSummary}
+              </p>
+              {creativeVariant.editingDirection ? (
+                <p className="text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                  {uiText('剪辑方向：', 'Editing direction: ')}
+                  {creativeVariant.editingDirection}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

@@ -3,6 +3,8 @@ import type {
   CampaignCreativeCtaType,
   CampaignCreativeHookApproach,
   CampaignCreativeStrategy,
+  CampaignCreativeVariantEmphasis,
+  CampaignCreativeVariantPack,
 } from './model';
 
 type Copy = {
@@ -23,6 +25,15 @@ type Copy = {
   rationale: string;
   assetNeeds: string;
   riskNotes: string;
+  variantPackTitle: string;
+  variantPackSubtitle: string;
+  variantHook: string;
+  variantOpeningBeat: string;
+  variantEditingDirection: string;
+  variantAssetSuggestion: string;
+  variantDifferenceSummary: string;
+  variantSelect: string;
+  selectedVariant: string;
   nextStepTitle: string;
   nextStepBody: string;
   launchEditor: string;
@@ -36,19 +47,30 @@ type Copy = {
     conflictFirst: string;
     storyFirst: string;
   };
+  variantEmphasisLabels: {
+    hookFocus: string;
+    sellingPointFocus: string;
+    ctaFocus: string;
+  };
 };
 
 interface CampaignStrategyCardProps {
   brief: CampaignCreativeBrief | null;
   strategy: CampaignCreativeStrategy | null;
+  variantPack: CampaignCreativeVariantPack | null;
+  selectedVariantId: string | null;
   copy: Copy;
+  onSelectVariant: (variantId: string) => void;
   onLaunchEditor: () => void;
 }
 
 export function CampaignStrategyCard({
   brief,
   strategy,
+  variantPack,
+  selectedVariantId,
   copy,
+  onSelectVariant,
   onLaunchEditor,
 }: CampaignStrategyCardProps) {
   if (!strategy || !brief) {
@@ -59,6 +81,11 @@ export function CampaignStrategyCard({
       </section>
     );
   }
+
+  const selectedVariant =
+    variantPack?.variants.find((variant) => variant.variantId === selectedVariantId) ??
+    variantPack?.variants[0] ??
+    null;
 
   return (
     <section className="rounded-3xl border border-[var(--color-primary)]/25 bg-[var(--color-surface-elevated)] p-6 shadow-[0_20px_70px_rgba(124,141,255,0.12)]">
@@ -138,9 +165,82 @@ export function CampaignStrategyCard({
         </div>
       </div>
 
+      {variantPack ? (
+        <div className="mt-6 rounded-3xl border border-[var(--color-border)]/60 bg-[var(--color-surface)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-[var(--color-text)]">{copy.variantPackTitle}</div>
+              <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">
+                {variantPack.summary || copy.variantPackSubtitle}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {variantPack.comparisonAxes.map((axis) => (
+                <span
+                  key={axis}
+                  className="rounded-full border border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)] px-3 py-1 text-xs text-[var(--color-text-muted)]"
+                >
+                  {axis}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {variantPack.variants.map((variant) => {
+              const isSelected = variant.variantId === selectedVariant?.variantId;
+              return (
+                <button
+                  key={variant.variantId}
+                  type="button"
+                  onClick={() => onSelectVariant(variant.variantId)}
+                  className={`rounded-3xl border p-4 text-left transition ${
+                    isSelected
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 shadow-[0_16px_40px_rgba(124,141,255,0.12)]'
+                      : 'border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="chip">{resolveVariantEmphasisLabel(variant.emphasis, copy.variantEmphasisLabels)}</span>
+                        <span className="text-base font-semibold text-[var(--color-text)]">{variant.title}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                        {variant.differenceSummary}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        isSelected
+                          ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/12 text-[var(--color-primary)]'
+                          : 'border-[var(--color-border)]/60 text-[var(--color-text-muted)]'
+                      }`}
+                    >
+                      {isSelected ? copy.selectedVariant : copy.variantSelect}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <InfoBlock label={copy.variantHook} value={variant.hook} />
+                    <InfoBlock label={copy.variantOpeningBeat} value={variant.openingBeat || '-'} />
+                    <InfoBlock label={copy.sellingPointFocus} value={variant.sellingPointFocus || '-'} />
+                    <InfoBlock label={copy.cta} value={variant.cta} />
+                    <InfoBlock label={copy.variantEditingDirection} value={variant.editingDirection || '-'} />
+                    <InfoBlock label={copy.variantAssetSuggestion} value={variant.assetSuggestion || '-'} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-6 rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] p-4">
         <div className="text-sm font-semibold text-[var(--color-text)]">{copy.nextStepTitle}</div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{copy.nextStepBody}</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
+          {selectedVariant ? `${copy.nextStepBody} ${copy.selectedVariant}: ${selectedVariant.title}` : copy.nextStepBody}
+        </p>
         <button type="button" onClick={onLaunchEditor} className="btn-primary mt-4">
           {copy.launchEditor}
         </button>
@@ -178,4 +278,13 @@ function resolveHookApproachLabel(
   if (value === 'conflict_first') return labels.conflictFirst;
   if (value === 'story_first') return labels.storyFirst;
   return '-';
+}
+
+function resolveVariantEmphasisLabel(
+  value: CampaignCreativeVariantEmphasis,
+  labels: Copy['variantEmphasisLabels'],
+): string {
+  if (value === 'hook_focus') return labels.hookFocus;
+  if (value === 'selling_point_focus') return labels.sellingPointFocus;
+  return labels.ctaFocus;
 }

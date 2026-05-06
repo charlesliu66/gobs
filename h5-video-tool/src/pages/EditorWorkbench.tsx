@@ -62,9 +62,13 @@ import {
 import {
   applyEditorAgentCreativeStream,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 } from '../api/editorCreative';
 import {
   normalizeEditorCreativeBriefForRequest,
+  normalizeEditorCreativeVariantForRequest,
+  normalizeEditorCreativeVariantPackForRequest,
   type EditorCreativeBrief,
 } from '../editor/utils/editorCreativeBrief';
 import {
@@ -106,6 +110,8 @@ const CAMPAIGN_HANDOFF_STORAGE_KEYS = [
 interface CampaignCreativeEditorHandoff {
   brief: EditorCreativeBrief;
   strategy?: EditorCreativeStrategy;
+  variantPack?: EditorCreativeVariantPack;
+  selectedVariant?: EditorCreativeVariant;
   source: 'campaign-creative';
   createdAt: number;
 }
@@ -212,9 +218,20 @@ function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEdito
       ? raw.createdAt
       : Date.now();
 
+  const variantPack = normalizeEditorCreativeVariantPackForRequest(
+    (raw.variantPack ?? raw.creativeVariantPack) as Parameters<typeof normalizeEditorCreativeVariantPackForRequest>[0],
+  );
+  const selectedVariant =
+    normalizeEditorCreativeVariantForRequest(
+      (raw.selectedVariant ?? raw.creativeVariant ?? raw.variant) as Parameters<typeof normalizeEditorCreativeVariantForRequest>[0],
+    ) ??
+    (variantPack?.variants.find((variant) => variant.variantId === variantPack.selectedVariantId) ?? undefined);
+
   return {
     brief,
     strategy: normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy),
+    variantPack,
+    selectedVariant,
     source,
     createdAt,
   };
@@ -356,6 +373,7 @@ export function EditorWorkbench() {
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
   const [agentDeliverable, setAgentDeliverable] = useState<string | null>(null);
   const [agentCreativeStrategy, setAgentCreativeStrategy] = useState<EditorCreativeStrategy | null>(null);
+  const [agentCreativeVariant, setAgentCreativeVariant] = useState<EditorCreativeVariant | null>(null);
   const [campaignCreativeHandoff, setCampaignCreativeHandoff] = useState<CampaignCreativeEditorHandoff | null>(null);
   const [campaignCreativeHandoffConsumed, setCampaignCreativeHandoffConsumed] = useState(false);
   /** Agent 自动配乐成功后同步到左下「配乐生成」文案 */
@@ -532,6 +550,7 @@ export function EditorWorkbench() {
     setAgentLogs([]);
     setAgentDeliverable(null);
     setAgentCreativeStrategy(null);
+    setAgentCreativeVariant(null);
     setAgentJobProgress(null);
     setAgentUserCommunicationProfile(null);
     setCampaignCreativeHandoffConsumed(false);
@@ -582,6 +601,7 @@ export function EditorWorkbench() {
       setCampaignCreativeHandoff(normalized);
       setCampaignCreativeHandoffConsumed(false);
       setAgentCreativeStrategy(normalized.strategy ?? null);
+      setAgentCreativeVariant(normalized.selectedVariant ?? null);
       pushLog(pickUiText(
         uiLocale,
         '已接收 Campaign Creative handoff，上下文会优先用于首次 Agent 执行。',
@@ -983,10 +1003,24 @@ export function EditorWorkbench() {
       const activeCreativeStrategy = shouldUseHandoffStrategy
         ? campaignCreativeHandoff?.strategy
         : undefined;
+      const shouldUseHandoffVariant = Boolean(
+        !campaignCreativeHandoffConsumed &&
+        campaignCreativeHandoff?.selectedVariant &&
+        (
+          !creativeBrief ||
+          isSameCreativeBrief(creativeBrief, campaignCreativeHandoff?.brief)
+        ),
+      );
+      const activeCreativeVariant = shouldUseHandoffVariant
+        ? campaignCreativeHandoff?.selectedVariant
+        : undefined;
+      const activeCreativeVariantPack = shouldUseHandoffVariant
+        ? campaignCreativeHandoff?.variantPack
+        : undefined;
       const shouldConsumeCampaignHandoff = Boolean(
         !campaignCreativeHandoffConsumed &&
         campaignCreativeHandoff?.brief &&
-        (shouldUseHandoffStrategy || !creativeBrief),
+        ((shouldUseHandoffStrategy || shouldUseHandoffVariant) || !creativeBrief),
       );
       const replyLocale = resolveEditorReplyLocale(activeCreativeBrief, [trimmedMessage]);
       const shouldForceEdit = Boolean(activeCreativeBrief);
@@ -995,6 +1029,7 @@ export function EditorWorkbench() {
       setAgentBusy(true);
       setAgentDeliverable(null);
       setAgentCreativeStrategy(activeCreativeStrategy ?? null);
+      setAgentCreativeVariant(activeCreativeVariant ?? null);
       setAgentJobProgress(null);
 
       try {
@@ -1101,6 +1136,8 @@ export function EditorWorkbench() {
             projectMemory,
             creativeBrief: activeCreativeBrief,
             creativeStrategy: activeCreativeStrategy,
+            creativeVariant: activeCreativeVariant,
+            creativeVariantPack: activeCreativeVariantPack,
             replyLocale,
           } as Parameters<typeof applyEditorAgentCreativeStream>[0],
           (progress) => setAgentJobProgress(progress),
@@ -1117,6 +1154,7 @@ export function EditorWorkbench() {
         setCurrentTime(0);
         setIsPlaying(false);
         setAgentCreativeStrategy(creativeStrategy ?? activeCreativeStrategy ?? null);
+        setAgentCreativeVariant(activeCreativeVariant ?? null);
         if (shouldConsumeCampaignHandoff) {
           setCampaignCreativeHandoffConsumed(true);
         }
@@ -1862,6 +1900,7 @@ export function EditorWorkbench() {
             deliverableMarkdown={agentDeliverable}
             chatHistory={agentChatHistory}
             creativeStrategy={agentCreativeStrategy}
+            creativeVariant={agentCreativeVariant ?? campaignCreativeHandoff?.selectedVariant ?? null}
             initialCreativeBrief={campaignCreativeHandoff?.brief ?? null}
           />
         }

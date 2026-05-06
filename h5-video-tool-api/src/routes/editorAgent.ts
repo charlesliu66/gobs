@@ -12,10 +12,12 @@ import {
   type UserProfileDimensionKey,
 } from '../services/editorMemoryControls.js';
 import {
-  buildDefaultCreativeUserMessage,
+  normalizeEditorCreativeVariant,
+  normalizeEditorCreativeVariantPack,
   normalizeEditorCreativeBrief,
   normalizeEditorCreativeStrategy,
 } from '../services/editorCreativeBrief.js';
+import { buildDefaultCreativeUserMessageWithVariant } from '../services/editorCreativeVariantContext.js';
 import {
   collectStringSamples,
   resolveReplyLocale,
@@ -329,6 +331,8 @@ interface ApplyBody {
   projectMemory?: unknown;
   creativeBrief?: unknown;
   creativeStrategy?: unknown;
+  creativeVariant?: unknown;
+  creativeVariantPack?: unknown;
   visionFocus?: unknown;
   replyLocale?: string;
 }
@@ -339,8 +343,17 @@ function buildEditorApplyInput(
 ): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
   const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
   const creativeStrategy = normalizeEditorCreativeStrategy(body.creativeStrategy);
+  const creativeVariant = normalizeEditorCreativeVariant(body.creativeVariant);
+  const creativeVariantPack = normalizeEditorCreativeVariantPack(body.creativeVariantPack);
   const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
-  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, creativeStrategy, replyLocale) : '');
+  const msg = rawMessage || (creativeBrief
+    ? buildDefaultCreativeUserMessageWithVariant(
+        creativeBrief,
+        creativeStrategy,
+        creativeVariant,
+        replyLocale,
+      )
+    : '');
 
   if (!msg) {
     return { ok: false, error: 'Please provide userMessage or creativeBrief' };
@@ -410,6 +423,8 @@ function buildEditorApplyInput(
       projectMemory: body.projectMemory,
       creativeBrief,
       creativeStrategy,
+      creativeVariant,
+      creativeVariantPack,
       visionFocus,
       replyLocale,
     },

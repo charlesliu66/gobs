@@ -5,6 +5,9 @@ import type {
   CampaignCreativeMode,
   CampaignCreativeStrategy,
   CampaignCreativeStrategyTuning,
+  CampaignCreativeVariant,
+  CampaignCreativeVariantEmphasis,
+  CampaignCreativeVariantPack,
 } from './model';
 
 interface BuildStrategyOptions {
@@ -16,7 +19,7 @@ function firstLine(items: string[], fallback: string): string {
   return items[0] ?? fallback;
 }
 
-function createObjectId(prefix: 'brief' | 'strategy'): string {
+function createObjectId(prefix: 'brief' | 'strategy' | 'variant_pack'): string {
   const suffix =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID().slice(0, 8)
@@ -339,5 +342,187 @@ export function buildStrategyFromBrief(
     ),
     riskNotes: buildRiskNotes(brief),
     rationale: buildRationale(brief, tuning.sellingPointFocus, tuning.hookApproach, cta),
+  };
+}
+
+const VARIANT_SLOT_ORDER: CampaignCreativeVariantEmphasis[] = [
+  'hook_focus',
+  'selling_point_focus',
+  'cta_focus',
+];
+
+function resolveVariantCtaType(
+  mode: CampaignCreativeMode,
+  emphasis: CampaignCreativeVariantEmphasis,
+): CampaignCreativeCtaType {
+  if (emphasis === 'hook_focus') {
+    return mode === 'tiktok_ua' ? 'soft_conversion' : 'brand_follow';
+  }
+  if (emphasis === 'selling_point_focus') {
+    return 'soft_conversion';
+  }
+  return 'direct_response';
+}
+
+function resolveVariantSellingPoint(
+  brief: CampaignCreativeBrief,
+  fallback: string,
+  emphasis: CampaignCreativeVariantEmphasis,
+): string {
+  const alternativeOrder =
+    emphasis === 'selling_point_focus'
+      ? [1, 2, 0]
+      : emphasis === 'cta_focus'
+        ? [2, 1, 0]
+        : [0, 1, 2];
+
+  for (const index of alternativeOrder) {
+    const candidate = brief.sellingPoints[index]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return fallback;
+}
+
+function resolveVariantHookApproach(
+  brief: CampaignCreativeBrief,
+  strategy: CampaignCreativeStrategy,
+  emphasis: CampaignCreativeVariantEmphasis,
+): CampaignCreativeHookApproach {
+  if (emphasis === 'hook_focus') {
+    return strategy.hookApproach ?? resolveDefaultHookApproach(brief.mode);
+  }
+  if (emphasis === 'selling_point_focus') {
+    return 'benefit_first';
+  }
+  return brief.mode === 'tiktok_ua' ? 'conflict_first' : 'benefit_first';
+}
+
+function buildVariantTitle(
+  mode: CampaignCreativeMode,
+  emphasis: CampaignCreativeVariantEmphasis,
+): string {
+  if (emphasis === 'hook_focus') {
+    return mode === 'tiktok_ua' ? 'Variant A · Hook punch' : 'Variant A · Opening memory point';
+  }
+  if (emphasis === 'selling_point_focus') {
+    return 'Variant B · Selling-point proof';
+  }
+  return mode === 'tiktok_ua' ? 'Variant C · CTA push' : 'Variant C · Response close';
+}
+
+function buildVariantOpeningBeat(
+  mode: CampaignCreativeMode,
+  emphasis: CampaignCreativeVariantEmphasis,
+  hook: string,
+  focus: string,
+): string {
+  if (emphasis === 'hook_focus') {
+    return mode === 'tiktok_ua'
+      ? `Start on the payoff frame, then snap directly into "${hook}".`
+      : `Open inside the mood first, then let "${hook}" become the first memory point.`;
+  }
+  if (emphasis === 'selling_point_focus') {
+    return `Use the first beat to prove "${focus}" before widening into the rest of the story.`;
+  }
+  return mode === 'tiktok_ua'
+    ? `Keep the hook compact, surface the payoff, and place the CTA on-screen before the midpoint.`
+    : `Build value quickly, then reserve the final beat for an explicit response action.`;
+}
+
+function buildVariantEditingDirection(
+  mode: CampaignCreativeMode,
+  emphasis: CampaignCreativeVariantEmphasis,
+): string {
+  if (emphasis === 'hook_focus') {
+    return mode === 'tiktok_ua'
+      ? 'Cut hard in the first 2 seconds, keep the payoff visible, and avoid slow setup.'
+      : 'Protect the opening mood, but make the first hook line land before the user can scroll away.';
+  }
+  if (emphasis === 'selling_point_focus') {
+    return 'Hold one extra proof beat on the selling point, then let the supporting footage reinforce the same idea.';
+  }
+  return mode === 'tiktok_ua'
+    ? 'Bring the CTA on-screen earlier, repeat it in the close, and make the response action impossible to miss.'
+    : 'Let the reveal settle, then close with a clearer action cue than the base strategy.';
+}
+
+function buildVariantDifferenceSummary(
+  emphasis: CampaignCreativeVariantEmphasis,
+  focus: string,
+): string {
+  if (emphasis === 'hook_focus') {
+    return 'This is the most opening-led variant in the pack, optimized to win attention before detail.';
+  }
+  if (emphasis === 'selling_point_focus') {
+    return `This variant spends more screen time proving "${focus}" instead of pushing the CTA early.`;
+  }
+  return 'This is the most response-forward variant in the pack, trading some setup for a clearer action close.';
+}
+
+function buildVariantSummary(mode: CampaignCreativeMode): string {
+  return mode === 'tiktok_ua'
+    ? 'Compare three UA directions before editing: strongest hook, clearest selling-point proof, and hardest CTA close.'
+    : 'Compare three content directions before editing: memory-point opening, selling-point proof, and stronger response close.';
+}
+
+function buildVariantTuning(
+  brief: CampaignCreativeBrief,
+  strategy: CampaignCreativeStrategy,
+  emphasis: CampaignCreativeVariantEmphasis,
+): CampaignCreativeStrategyTuning {
+  const fallbackFocus = strategy.sellingPointFocus ?? buildDefaultSellingPointFocus(brief);
+  return {
+    hookApproach: resolveVariantHookApproach(brief, strategy, emphasis),
+    sellingPointFocus: resolveVariantSellingPoint(brief, fallbackFocus, emphasis),
+    ctaType: resolveVariantCtaType(brief.mode, emphasis),
+  };
+}
+
+export function buildVariantPackFromStrategy(
+  brief: CampaignCreativeBrief,
+  strategy: CampaignCreativeStrategy,
+): CampaignCreativeVariantPack {
+  const variantPackId = strategy.strategyId
+    ? `variant_pack_${strategy.strategyId}`
+    : createObjectId('variant_pack');
+  const strategySeedBrief = brief.cta?.trim() ? { ...brief, cta: undefined } : brief;
+  const variants: CampaignCreativeVariant[] = VARIANT_SLOT_ORDER.map((emphasis, index) => {
+    const tuning = buildVariantTuning(brief, strategy, emphasis);
+    const derivedStrategy = buildStrategyFromBrief(strategySeedBrief, {
+      strategyId: strategy.strategyId,
+      tuning,
+    });
+    const hook = derivedStrategy.recommendedHook;
+    const focus = derivedStrategy.sellingPointFocus ?? tuning.sellingPointFocus;
+    return {
+      variantId: `${variantPackId}_${emphasis}`,
+      variantPackId,
+      briefId: brief.briefId,
+      strategyId: strategy.strategyId,
+      emphasis,
+      title: buildVariantTitle(brief.mode, emphasis),
+      hook,
+      openingBeat: buildVariantOpeningBeat(brief.mode, emphasis, hook, focus),
+      sellingPointFocus: focus,
+      cta: derivedStrategy.cta,
+      ctaType: derivedStrategy.ctaType,
+      editingDirection: buildVariantEditingDirection(brief.mode, emphasis),
+      assetSuggestion: derivedStrategy.assetNeeds[0] ?? strategy.assetNeeds[0] ?? '',
+      differenceSummary: buildVariantDifferenceSummary(emphasis, focus),
+      isRecommended: index === 0,
+    };
+  });
+
+  return {
+    variantPackId,
+    briefId: brief.briefId,
+    strategyId: strategy.strategyId,
+    mode: brief.mode,
+    summary: buildVariantSummary(brief.mode),
+    comparisonAxes: ['Hook', 'Selling point focus', 'CTA'],
+    variants,
+    selectedVariantId: variants[0]?.variantId ?? '',
   };
 }
