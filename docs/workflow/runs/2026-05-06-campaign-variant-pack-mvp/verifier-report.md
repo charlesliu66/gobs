@@ -3,7 +3,7 @@
 ## 1) Validation Scope
 - Spec file: `docs/workflow/runs/2026-05-06-campaign-variant-pack-mvp/planner-spec.md`
 - Build report file: `docs/workflow/runs/2026-05-06-campaign-variant-pack-mvp/builder-report.md`
-- Version or commit under test: codex/campaign-variant-pack-mvp@28f4842
+- Version or commit under test: codex/campaign-variant-pack-mvp@f294741
 
 ## 2) Coverage Checklist
 - Happy path: Covered by pure generator tests for brief -> strategy -> 3 variants, plus backend prompt-block regression for selected variant context.

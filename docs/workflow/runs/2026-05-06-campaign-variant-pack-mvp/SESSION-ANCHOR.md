@@ -4,7 +4,7 @@
 - Run ID: 2026-05-06-campaign-variant-pack-mvp
 - Goal: Turn one campaign strategy into a 3-variant pack with clear hook, selling-point, and CTA differences that can be handed off to Editor.
 - Owner: codex
-- Branch or commit context: codex/campaign-variant-pack-mvp@28f4842
+- Branch or commit context: codex/campaign-variant-pack-mvp@f294741
 - Last updated: 2026-05-06T09:15:25Z
 - North Star: `Campaign Creative Agent` must start from a campaign brief, reliably produce creative assets or variants, and move them into distribution.
 
