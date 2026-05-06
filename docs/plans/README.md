@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-01-campaign-creative-agent-implementation-plan.md](</Users/wei.liu/Documents/work/ai projects/gobs/docs/plans/2026-05-01-campaign-creative-agent-implementation-plan.md>)
+  - 基于“游戏营销创意生产系统 / Campaign Creative Agent”目标的收口方向与分阶段落地建议
 - [2026-04-21-i18n-phase0-phase1-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-i18n-phase0-phase1-implementation-plan.md>)
   - 当前 H5 中英文切换 Phase 0/1 的可执行计划
 - [2026-04-21-distribute-caption-auth-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-distribute-caption-auth-design.md>)
