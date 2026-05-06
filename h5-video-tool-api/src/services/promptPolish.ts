@@ -541,6 +541,15 @@ export interface CaptionAccountContext {
   remark?: string;
 }
 
+export interface CaptionCampaignContext {
+  objective?: string;
+  targetAudience?: string;
+  callToAction?: string;
+  targetMarket?: string;
+  complianceNotes?: string;
+  bannedPhrases?: string[];
+}
+
 interface CaptionCandidate {
   caption?: string;
   hashtags?: string;
@@ -756,6 +765,7 @@ export interface GenerateCaptionOptions {
   existingCaption?: string;
   existingHashtags?: string;
   language?: 'EN' | 'CN' | 'TH' | 'ID';
+  campaignContext?: CaptionCampaignContext;
 }
 
 export function scoreCaptionQuality(caption: string, language: CaptionLanguage = 'EN'): number {
@@ -839,6 +849,25 @@ function sanitizeCaptionText(caption: string): string {
   );
 }
 
+function sanitizeCampaignContextText(value: string): string {
+  return normalizeWhitespace(stripBlockedPublishText(value.replace(/#[^\s#]+/g, ' ')));
+}
+
+function sanitizeCampaignPhraseList(values?: string[]): string[] {
+  if (!values?.length) return [];
+  const phrases: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const sanitized = sanitizeCampaignContextText(value);
+    if (!sanitized || seen.has(sanitized)) continue;
+    seen.add(sanitized);
+    phrases.push(sanitized);
+    if (phrases.length >= 6) break;
+  }
+  return phrases;
+}
+
 export function pickBestCaptionResult(
   candidates: Array<Partial<CaptionResult>>,
   fallback: CaptionResult,
@@ -882,6 +911,7 @@ export interface GenerateCaptionOptions {
   videoPath?: string;
   videoUrl?: string;
   accountContext?: CaptionAccountContext[];
+  campaignContext?: CaptionCampaignContext;
   requestUsername?: string;
 }
 
@@ -1065,20 +1095,28 @@ async function analyzeCaptionVideo(
   };
 }
 
-function buildCaptionContextBlock(input: {
+export function buildCaptionContextBlock(input: {
   prompt: string;
   language: CaptionLanguage;
   existingCaption?: string;
   existingHashtags?: string;
   platforms?: string[];
   accountContext?: CaptionAccountContext[];
+  campaignContext?: CaptionCampaignContext;
   vision?: CaptionVisionSummary | null;
 }): string {
+  const bannedPhrases = sanitizeCampaignPhraseList(input.campaignContext?.bannedPhrases);
   const lines = [
     `Requested language: ${input.language}`,
     input.platforms?.length ? `Target platforms: ${input.platforms.join(', ')}` : '',
     summarizeAccountContext(input.accountContext) ? `Selected accounts: ${summarizeAccountContext(input.accountContext)}` : '',
     input.prompt ? `Source idea: ${sanitizePromptIdeaText(input.prompt)}` : '',
+    input.campaignContext?.objective ? `Campaign objective: ${sanitizeCampaignContextText(input.campaignContext.objective)}` : '',
+    input.campaignContext?.targetAudience ? `Target audience: ${sanitizeCampaignContextText(input.campaignContext.targetAudience)}` : '',
+    input.campaignContext?.callToAction ? `Desired CTA: ${sanitizeCampaignContextText(input.campaignContext.callToAction)}` : '',
+    input.campaignContext?.targetMarket ? `Target market: ${sanitizeCampaignContextText(input.campaignContext.targetMarket)}` : '',
+    input.campaignContext?.complianceNotes ? `Compliance notes: ${sanitizeCampaignContextText(input.campaignContext.complianceNotes)}` : '',
+    bannedPhrases.length ? `Avoid phrases: ${bannedPhrases.join(', ')}` : '',
     input.vision?.subject ? `Visual subject: ${input.vision.subject}` : '',
     input.vision?.action ? `Visual action: ${input.vision.action}` : '',
     input.vision?.vibe ? `Visual vibe: ${input.vision.vibe}` : '',
@@ -1131,6 +1169,7 @@ export async function generateCaptionForPost(
       existingHashtags: exHashtags || undefined,
       platforms: precomputedPlatforms,
       accountContext: options?.accountContext,
+      campaignContext: options?.campaignContext,
       vision: vision2,
     });
     if (precomputedPlatforms.length > 0) {

@@ -215,6 +215,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
+- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片三路选资产，显式勾选账号、按平台维护文案草稿、发布前检查与近期发布历史。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
@@ -243,13 +244,13 @@
 
 ## 浜屻€丆hangelog
 
-### v0.139 - 2026-05-06
-**Campaign Knowledge Brain foundation**
+### v0.141 - 2026-05-06
+**Marketer-first video distribution workspace foundations**
 
-- **[campaign knowledge] Added resolver-managed local knowledge pack storage and route surface** (h5-video-tool-api/src/infra/storage/resolver.ts, h5-video-tool-api/src/services/campaignKnowledgeStore.ts, h5-video-tool-api/src/routes/campaignKnowledge.ts, h5-video-tool-api/src/index.ts): GOBS now has a dedicated campaign knowledge root plus list/import/source/derive APIs for game-scoped knowledge packs.
-- **[knowledge import] Added the first fastpublish-inspired default knowledge bundle and structured derivation contract** (h5-video-tool-api/src/services/campaignKnowledgeImport.ts, h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts): the backend can seed tone/compliance/visual-style/market/persona/live-ops/selling-point packs and reduce selected packs into prompt-safe fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, and `hookCandidates`.
-- **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
-- **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
+- **[frontend] `TabDistribute` now runs as an asset-first publishing workspace instead of a create-flow-only continuation** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/components/distribute/*`, `h5-video-tool/src/utils/videoHistory.ts`, `h5-video-tool/src/api/video.ts`): users can pick from current flow, local gallery, or server outputs, keep a selected asset across refresh-safe helpers, and review a real asset preview before publish.
+- **[frontend] account selection is now explicit and platform copy is managed as visible draft cards** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/api/geelark.ts`, `h5-video-tool/src/i18n/messages.ts`): the page no longer auto-selects the first account, shows campaign framing inputs plus `markAI` / `needShareLink`, and lets operators switch between default and platform-specific drafts.
+- **[api] persistent publish history and campaign-aware caption context are now wired end-to-end without new env vars** (`h5-video-tool-api/src/routes/geelark.ts`, `h5-video-tool-api/src/routes/prompt.ts`, `h5-video-tool-api/src/services/promptPolish.ts`, `h5-video-tool-api/tests/geelarkTaskHistoryShape.test.ts`, `h5-video-tool-api/tests/promptCaptionCampaignContext.test.ts`): `/api/geelark/tasks` returns normalized `history` alongside compatible `items`, and `/api/prompt/generate-caption` accepts optional `campaignContext` fields for objective, audience, CTA, market, tone, and banned phrases.
+- **[docs] captured the P2 scheduling follow-up as a design spike instead of shipping runtime scheduling prematurely** (`docs/plans/2026-05-06-video-distribution-marketer-ux-design.md`, `docs/plans/2026-05-06-video-distribution-marketer-ux-implementation-plan.md`, `docs/plans/2026-05-06-video-distribution-scheduling-design-spike.md`): this run stays within the approved P0/P1 runtime slice while preserving the next-stage roadmap.
 
 ### v0.140 - 2026-05-06
 **English localization hardening for language presets, editor API errors, and export overview**
@@ -257,6 +258,14 @@
 - **[language presets] UI/content language switching now supports explicit preset combinations instead of forcing both layers to move together** (`h5-video-tool/src/i18n/locale.ts`, `h5-video-tool/src/i18n/LocaleContext.tsx`, `h5-video-tool/src/components/LocalePresetSwitcher.tsx`, `h5-video-tool/src/i18n/locale.test.ts`): added `中文界面 + 中文内容` / `English UI + 中文内容` / `English UI + English Content` presets and covered the mapping logic with tests.
 - **[editor i18n] Login and editor-side direct fetch flows now pass locale headers and return localized fallback errors** (`h5-video-tool/src/api/auth.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool/src/i18n/messages.ts`): upload, timeout, stream parsing, session expiry, and editing-task failures now reuse shared i18n error keys instead of hardcoded Chinese strings.
 - **[production wizard] Storyboard export overview now uses message keys and locale-aware date formatting end to end** (`h5-video-tool/src/studio/steps/StepExportStoryboardOverview.tsx`): removed page-level `pickUiText` branching, localized the editor handoff flow, and replaced hardcoded `zh-CN` date/time formatting with shared locale utilities.
+
+### v0.139 - 2026-05-06
+**Campaign Knowledge Brain foundation**
+
+- **[campaign knowledge] Added resolver-managed local knowledge pack storage and route surface** (h5-video-tool-api/src/infra/storage/resolver.ts, h5-video-tool-api/src/services/campaignKnowledgeStore.ts, h5-video-tool-api/src/routes/campaignKnowledge.ts, h5-video-tool-api/src/index.ts): GOBS now has a dedicated campaign knowledge root plus list/import/source/derive APIs for game-scoped knowledge packs.
+- **[knowledge import] Added the first fastpublish-inspired default knowledge bundle and structured derivation contract** (h5-video-tool-api/src/services/campaignKnowledgeImport.ts, h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts): the backend can seed tone/compliance/visual-style/market/persona/live-ops/selling-point packs and reduce selected packs into prompt-safe fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, and `hookCandidates`.
+- **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
+- **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
 
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
@@ -2023,7 +2032,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.140)*
+*Last updated: 2026-05-06 (v0.141)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

@@ -211,6 +211,15 @@ export interface CaptionAccountContext {
   remark?: string;
 }
 
+export interface CaptionCampaignContext {
+  campaignObjective?: string;
+  targetAudience?: string;
+  callToAction?: string;
+  targetMarket?: string;
+  complianceNotes?: string;
+  bannedPhrases?: string[];
+}
+
 export interface GenerateCaptionRequestOptions {
   existingCaption?: string;
   existingHashtags?: string;
@@ -218,6 +227,7 @@ export interface GenerateCaptionRequestOptions {
   videoPath?: string;
   videoUrl?: string;
   accountContext?: CaptionAccountContext[];
+  campaignContext?: CaptionCampaignContext;
 }
 
 export function buildGenerateCaptionRequestBody(
@@ -235,6 +245,12 @@ export function buildGenerateCaptionRequestBody(
   if (opts?.videoPath) body.videoPath = opts.videoPath;
   if (opts?.videoUrl) body.videoUrl = opts.videoUrl;
   if (opts?.accountContext?.length) body.accountContext = opts.accountContext;
+  if (opts?.campaignContext?.campaignObjective) body.campaignObjective = opts.campaignContext.campaignObjective;
+  if (opts?.campaignContext?.targetAudience) body.targetAudience = opts.campaignContext.targetAudience;
+  if (opts?.campaignContext?.callToAction) body.callToAction = opts.campaignContext.callToAction;
+  if (opts?.campaignContext?.targetMarket) body.targetMarket = opts.campaignContext.targetMarket;
+  if (opts?.campaignContext?.complianceNotes) body.complianceNotes = opts.campaignContext.complianceNotes;
+  if (opts?.campaignContext?.bannedPhrases?.length) body.bannedPhrases = opts.campaignContext.bannedPhrases;
   return body;
 }
 

@@ -2,6 +2,21 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.141 - 2026-05-06
+**Marketer-first video distribution workspace foundations**
+**Distribution / UX / Prompt Wiring:**
+- `TabDistribute` now starts from a selected asset workspace instead of relying on fresh Studio-only state, and users can pick from current flow, local gallery, or recent server outputs before publishing.
+- Account selection is now explicit, per-platform drafts are visible and editable, and the page surfaces campaign framing inputs plus existing publish options like `markAI` and `needShareLink`.
+- `/api/geelark/tasks` now returns normalized publish `history` alongside compatible raw `items`, and `/api/prompt/generate-caption` accepts optional `campaignContext` fields without new env vars.
+- Added targeted frontend/backend regression tests plus a P2 scheduling design spike document, while keeping runtime scheduling and approval flow out of scope for this slice.
+
+## v0.140 - 2026-05-06
+**English localization hardening for language presets, editor API errors, and export overview**
+**i18n / Editor / Production Wizard:**
+- UI/content language switching now supports explicit preset combinations instead of forcing both layers to move together.
+- Login and editor-side direct fetch flows now pass locale headers and return localized fallback errors instead of hardcoded Chinese strings.
+- Storyboard export overview now uses message keys and locale-aware date formatting end to end.
+
 ## v0.139 - 2026-05-06
 **Campaign Knowledge Brain foundation**
 **Campaign / Knowledge Brain:**
