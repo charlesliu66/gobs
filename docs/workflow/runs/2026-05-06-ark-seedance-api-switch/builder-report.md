@@ -45,3 +45,4 @@ Run: `2026-05-06-ark-seedance-api-switch`
 
 - `h5-video-tool-api/src/services/dreaminaVideo.ts` was updated narrowly because this task explicitly requires replacing the Dreamina provider path.
 - Some large legacy UI files in the repo use non-UTF-8 encoding, so the current implementation prioritizes provider-side bilingual error propagation first. The main queue/project flow now carries zh/en error metadata end-to-end.
+- Follow-up on 2026-05-06: fixed the Ark provider model mapping from display names to real callable model IDs (`doubao-seedance-2-0-260128` / `doubao-seedance-2-0-fast-260128`) after production validation showed submissions were failing before provider acceptance.

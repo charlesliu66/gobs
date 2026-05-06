@@ -1,6 +1,6 @@
 const DEFAULT_ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-const DEFAULT_ARK_MODEL = 'Doubao-Seedance-2.0';
-const DEFAULT_ARK_FAST_MODEL = 'Doubao-Seedance-2.0-fast';
+const DEFAULT_ARK_MODEL = 'doubao-seedance-2-0-260128';
+const DEFAULT_ARK_FAST_MODEL = 'doubao-seedance-2-0-fast-260128';
 
 export type ArkSeedanceErrorCode =
   | 'ARK_AUTH_INVALID'
@@ -113,6 +113,8 @@ export function resolveArkProviderModel(params: {
 }): string {
   const explicitVersion = params.requestedModelVersion?.trim();
   if (explicitVersion) {
+    if (/doubao-seedance-2-0-fast-260128/i.test(explicitVersion)) return explicitVersion;
+    if (/doubao-seedance-2-0-260128/i.test(explicitVersion)) return explicitVersion;
     if (/doubao-seedance-2\.0-fast/i.test(explicitVersion)) return DEFAULT_ARK_FAST_MODEL;
     if (/doubao-seedance-2\.0/i.test(explicitVersion)) return DEFAULT_ARK_MODEL;
     if (/seedance2\.0fast/i.test(explicitVersion)) return DEFAULT_ARK_FAST_MODEL;

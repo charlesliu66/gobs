@@ -1984,3 +1984,5 @@ ole="presentation"
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
+
+Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jobs submit to the actual callable Ark video models.
