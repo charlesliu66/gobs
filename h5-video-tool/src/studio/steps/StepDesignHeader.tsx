@@ -1,6 +1,6 @@
 import { RunningStatus } from '../../components/RunningStatus';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage } from '../../i18n/locale.ts';
 import { StoryAssetFieldsFromOutline } from '../components/StoryAssetFieldsFromOutline';
 import type { DesignAssetStatusCounts } from '../designAssetStatus';
 import type { StoryArcLayer } from '../productionTypes';
@@ -101,8 +101,8 @@ export function StepDesignHeader({
   styleRefSummary: string;
   styleRefImageDataUrl?: string;
 }) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) => formatMessage(t(path), values);
   const styleHint = styleRefSummary.trim();
 
   return (
@@ -111,30 +111,24 @@ export function StepDesignHeader({
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-[var(--color-text)] [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <span className="text-[var(--color-text-muted)]">+</span>
-            {uiText('剧本要素核对（可选）', 'Story element checklist (optional)')}
+            {t('productionWizard.designHeader.storyElementChecklist')}
           </span>
         </summary>
         <div className="space-y-4 border-t border-[var(--color-border)] px-4 py-4">
           <div className="rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-surface)] p-4">
-            <h4 className="text-xs font-semibold text-[var(--color-text)]">{uiText('关键物料', 'Key assets')}</h4>
+            <h4 className="text-xs font-semibold text-[var(--color-text)]">{t('productionWizard.designHeader.keyAssets')}</h4>
             <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
-              {uiText(
-                '根据故事先补齐角色、场景与关键道具，再为每张卡片生成主图，后面进入分镜会顺很多。',
-                'Fill in characters, scenes, and key props from the story first, then generate a primary image for each card before moving into storyboard work.',
-              )}
+              {t('productionWizard.designHeader.keyAssetsHint')}
             </p>
             <button
               type="button"
               onClick={onSyncAssetsFromStory}
               className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
             >
-              {uiText('从故事大纲同步角色与场景资产', 'Sync character and scene assets from outline')}
+              {t('productionWizard.designHeader.syncAssetsFromOutline')}
             </button>
             <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
-              {uiText(
-                '同步时会尽量保留同名角色与同 sceneRef 的已有图片。',
-                'Sync tries to preserve existing images for same-name characters and matching sceneRef values.',
-              )}
+              {t('productionWizard.designHeader.syncAssetsHint')}
             </p>
           </div>
           {story ? <StoryAssetFieldsFromOutline story={story} patchStory={patchStory} /> : null}
@@ -146,10 +140,10 @@ export function StepDesignHeader({
           <div className="flex min-w-0 gap-6 sm:gap-10">
             {(
               [
-                { id: 'characters' as const, label: uiText(`全部角色 ${characterCount}`, `Characters ${characterCount}`) },
-                { id: 'scenes' as const, label: uiText(`全部场景 ${sceneCount}`, `Scenes ${sceneCount}`) },
-                { id: 'props' as const, label: uiText(`全部道具 ${propCount}`, `Props ${propCount}`) },
-                { id: 'checklist' as const, label: uiText('制作清单', 'Production checklist') },
+                { id: 'characters' as const, label: tx('productionWizard.designHeader.allCharacters', { count: characterCount }) },
+                { id: 'scenes' as const, label: tx('productionWizard.designHeader.allScenes', { count: sceneCount }) },
+                { id: 'props' as const, label: tx('productionWizard.designHeader.allProps', { count: propCount }) },
+                { id: 'checklist' as const, label: t('productionWizard.designHeader.productionChecklist') },
               ] as const
             ).map(({ id, label }) => (
               <button
@@ -175,14 +169,14 @@ export function StepDesignHeader({
                   onClick={onAddManualCharacter}
                   className="text-xs font-medium text-[var(--color-primary)] hover:underline"
                 >
-                  {uiText('+ 添加角色', '+ Add character')}
+                  {t('productionWizard.designHeader.addCharacter')}
                 </button>
                 <button
                   type="button"
                   onClick={onToggleLibraryImport}
                   className="text-xs font-medium text-[var(--color-primary)] hover:underline"
                 >
-                  {uiText('从形象库导入', 'Import from character library')}
+                  {t('productionWizard.designHeader.importFromCharacterLibrary')}
                 </button>
               </>
             ) : null}
@@ -190,18 +184,18 @@ export function StepDesignHeader({
             {batchAssetGen ? (
               <>
                 <span className="text-[11px] text-[var(--color-text-muted)]">
-                  {uiText(
-                    `成功 ${batchAssetGen.success} / 失败 ${batchAssetGen.failed}`,
-                    `Success ${batchAssetGen.success} / Failed ${batchAssetGen.failed}`,
-                  )}
+                  {tx('productionWizard.designHeader.batchSuccessFailed', {
+                    success: batchAssetGen.success,
+                    failed: batchAssetGen.failed,
+                  })}
                   {batchAssetGen.currentLabel ? ` · ${batchAssetGen.currentLabel}` : ''}
                 </span>
                 <RunningStatus
                   active={true}
-                  label={uiText(
-                    `正在补全缺图 ${batchAssetGen.current}/${batchAssetGen.total}`,
-                    `Generating missing images ${batchAssetGen.current}/${batchAssetGen.total}`,
-                  )}
+                  label={tx('productionWizard.designHeader.generatingMissingImagesInline', {
+                    current: batchAssetGen.current,
+                    total: batchAssetGen.total,
+                  })}
                   stallAfterSec={30}
                   scene="props-room"
                 />
@@ -210,7 +204,7 @@ export function StepDesignHeader({
                   onClick={onCancelBatch}
                   className="text-xs text-red-400 transition-colors hover:text-red-300"
                 >
-                  {uiText('取消', 'Cancel')}
+                  {t('common.cancel')}
                 </button>
               </>
             ) : batchAssetSummary?.failed ? (
@@ -219,7 +213,7 @@ export function StepDesignHeader({
                 onClick={onRetryFailed}
                 className="text-xs text-yellow-400 transition-colors hover:text-yellow-300"
               >
-                {uiText(`重试失败项（${batchAssetSummary.failed}）`, `Retry failed items (${batchAssetSummary.failed})`)}
+                {tx('productionWizard.designHeader.retryFailedItemsWithCount', { count: batchAssetSummary.failed })}
               </button>
             ) : batchAssetSummary === null && failedTaskCount > 0 ? (
               <button
@@ -227,7 +221,7 @@ export function StepDesignHeader({
                 onClick={onRetryFailed}
                 className="text-xs text-yellow-400 transition-colors hover:text-yellow-300"
               >
-                {uiText(`重试失败项（${failedTaskCount}）`, `Retry failed items (${failedTaskCount})`)}
+                {tx('productionWizard.designHeader.retryFailedItemsWithCount', { count: failedTaskCount })}
               </button>
             ) : null}
           </div>
@@ -236,7 +230,7 @@ export function StepDesignHeader({
         {(styleHint || styleRefImageDataUrl) && (
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)]/70 py-3">
             <span className="rounded-full border border-[var(--color-border)]/70 px-2 py-1 text-[10px] font-medium text-[var(--color-text-muted)]">
-              {uiText('风格锚定', 'Style anchor')}
+              {t('productionWizard.designHeader.styleAnchor')}
             </span>
             {styleRefImageDataUrl ? (
               <img
@@ -246,7 +240,7 @@ export function StepDesignHeader({
               />
             ) : null}
             <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-muted)]">
-              {styleHint || uiText('已上传风格参考图', 'Style reference uploaded')}
+              {styleHint || t('productionWizard.designHeader.styleReferenceUploaded')}
             </span>
           </div>
         )}
@@ -254,25 +248,25 @@ export function StepDesignHeader({
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)]/70 py-3">
           {[
             {
-              label: uiText('角色', 'Characters'),
+              label: t('productionWizard.designHeader.readinessCharacters'),
               counts: readinessSummary.characters,
-              readyLabel: uiText('已定妆', 'ready'),
-              attentionLabel: uiText('待补图', 'need images'),
-              progressLabel: uiText('处理中', 'in progress'),
+              readyLabel: t('productionWizard.designHeader.readyPortrait'),
+              attentionLabel: t('productionWizard.designHeader.needImages'),
+              progressLabel: t('productionWizard.designHeader.inProgress'),
             },
             {
-              label: uiText('场景', 'Scenes'),
+              label: t('productionWizard.designHeader.readinessScenes'),
               counts: readinessSummary.scenes,
-              readyLabel: uiText('已出图', 'ready'),
-              attentionLabel: uiText('待补图', 'need images'),
-              progressLabel: uiText('处理中', 'in progress'),
+              readyLabel: t('productionWizard.designHeader.readyImage'),
+              attentionLabel: t('productionWizard.designHeader.needImages'),
+              progressLabel: t('productionWizard.designHeader.inProgress'),
             },
             {
-              label: uiText('道具', 'Props'),
+              label: t('productionWizard.designHeader.readinessProps'),
               counts: readinessSummary.props,
-              readyLabel: uiText('已出图', 'ready'),
-              attentionLabel: uiText('待补图', 'need images'),
-              progressLabel: uiText('处理中', 'in progress'),
+              readyLabel: t('productionWizard.designHeader.readyImage'),
+              attentionLabel: t('productionWizard.designHeader.needImages'),
+              progressLabel: t('productionWizard.designHeader.inProgress'),
             },
           ].map((item) => (
             <div
@@ -294,18 +288,23 @@ export function StepDesignHeader({
               className="ml-auto rounded-lg border border-[var(--color-primary)]/50 bg-[var(--color-primary)]/15 px-3 py-1.5 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/25 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {batchAssetGen
-                ? uiText(`补图中 ${batchAssetGen.current}/${batchAssetGen.total}`, `Generating ${batchAssetGen.current}/${batchAssetGen.total}`)
-                : uiText(`一键补全缺图（还差 ${readinessSummary.missingTotal} 张）`, `Generate missing images (${readinessSummary.missingTotal} left)`)}
+                ? tx('productionWizard.designHeader.generatingButton', {
+                  current: batchAssetGen.current,
+                  total: batchAssetGen.total,
+                })
+                : tx('productionWizard.designHeader.generateMissingButton', {
+                  count: readinessSummary.missingTotal,
+                })}
             </button>
           ) : null}
         </div>
 
         {batchAssetGen && (
           <div className="pb-3 text-[11px] text-[var(--color-text-muted)]">
-            {uiText(
-              `预计约 ${estimateBatchMinutes(batchAssetGen.total)} 分钟生成 ${batchAssetGen.total} 张图`,
-              `Estimated ${estimateBatchMinutes(batchAssetGen.total)} min for ${batchAssetGen.total} images`,
-            )}
+            {tx('productionWizard.designHeader.estimatedBatchMinutes', {
+              minutes: estimateBatchMinutes(batchAssetGen.total),
+              count: batchAssetGen.total,
+            })}
           </div>
         )}
 
@@ -315,16 +314,17 @@ export function StepDesignHeader({
               <div className="space-y-1">
                 <div className="text-sm font-semibold text-[var(--color-text)]">
                   {batchAssetSummary.failed > 0
-                    ? uiText('缺图补全已完成，但仍有失败项', 'Missing-image batch finished with failures')
+                    ? t('productionWizard.designHeader.batchFinishedWithFailures')
                     : batchAssetSummary.cancelled
-                      ? uiText('缺图补全已取消', 'Missing-image batch cancelled')
-                      : uiText('缺图补全已完成', 'Missing-image batch finished')}
+                      ? t('productionWizard.designHeader.batchCancelled')
+                      : t('productionWizard.designHeader.batchFinished')}
                 </div>
                 <div className="text-xs text-[var(--color-text-muted)]">
-                  {uiText(
-                    `共 ${batchAssetSummary.total} 张，成功 ${batchAssetSummary.success} 张，失败 ${batchAssetSummary.failed} 张`,
-                    `${batchAssetSummary.total} total, ${batchAssetSummary.success} succeeded, ${batchAssetSummary.failed} failed`,
-                  )}
+                  {tx('productionWizard.designHeader.batchSummary', {
+                    total: batchAssetSummary.total,
+                    success: batchAssetSummary.success,
+                    failed: batchAssetSummary.failed,
+                  })}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -334,7 +334,7 @@ export function StepDesignHeader({
                     onClick={onRetryFailed}
                     className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-1.5 text-xs font-medium text-yellow-200 hover:bg-yellow-500/20"
                   >
-                    {uiText('重试失败项', 'Retry failed items')}
+                    {t('productionWizard.designHeader.retryFailedItems')}
                   </button>
                 ) : null}
                 <button
@@ -342,7 +342,7 @@ export function StepDesignHeader({
                   onClick={onDismissBatchSummary}
                   className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
                 >
-                  {uiText('收起', 'Dismiss')}
+                  {t('productionWizard.designHeader.dismiss')}
                 </button>
               </div>
             </div>

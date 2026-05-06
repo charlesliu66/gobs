@@ -96,6 +96,7 @@
 - 銆? 鏂板缓銆嶆寜閽細鐐瑰嚮鍚庡脊鍑?*鍛藉悕瀵硅瘽妗?*锛屾敮鎸侀粯璁ゅ悕绉帮紙鍚棩鏈熸椂闂达級锛屽洖杞?鐐广€屽垱寤恒€嶅悗鐢熸晥锛汦sc 鍙栨秷
 
 - **English UI shell hardening (v0.141)**: Running status, project governance toasts, top-bar controls, import/sync dialogs, onboarding, and preview labels now follow shared locale keys so English operators can finish the core editor flow without mixed Chinese chrome.
+- **English mainline interaction closeout (v0.146)**: Advanced Production design/storyboard/export helper panels plus EditorWorkbench agent logs, capture-cover feedback, imported-storyboard music prompts, and timeline memory/status toasts now all follow shared locale keys, so English users can stay in English from Production through Editor handoff.
 #### 3.2 绱犳潗搴?
 
 - 鏀寔涓婁紶瑙嗛鏂囦欢锛堟渶澶?2GB锛屽彲鍦ㄨ缃腑璋冩暣锛?
@@ -245,6 +246,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.146 - 2026-05-06
+**English mainline closeout for Production -> Editor**
+
+- **[editor workbench] Replaced the remaining mixed-language editor feedback with shared locale keys** (`h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool/src/i18n/messages.ts`): project-open failures, cover capture feedback, auto-BGM logs, storyboard-import music prompts, agent cancellation, timeline clip actions, and project-memory toasts now respect the active UI language.
+- **[production wizard] Localized the last helper panels that still depended on inline `pickUiText(...)` copy** (`h5-video-tool/src/studio/components/ShotExecutionSegmentsPanel.tsx`, `h5-video-tool/src/studio/steps/StepDesignActions.tsx`, `h5-video-tool/src/studio/steps/StepDesignHeader.tsx`, `h5-video-tool/src/studio/steps/StepExportWorkspace.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardMainHeader.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardPreviewPanel.tsx`, `h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx`): English mode now stays consistent across design readiness, execution segments, storyboard progress, export tabs, and shot-strip status.
+- **[tests/build] Added locale coverage for the new message groups and re-ran frontend verification** (`h5-video-tool/src/i18n/locale.test.ts`): the sweep is now covered by locale lookup/interpolation assertions plus a clean `npm run build`.
 
 ### v0.145 - 2026-05-06
 **English localization sweep for agent guidance and ProductionWizard core steps**
@@ -2060,13 +2068,15 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.145)*
+*Last updated: 2026-05-06 (v0.146)*
 
 Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
 
 Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jobs submit to the actual callable Ark video models.
+
+Latest update 2026-05-06: Advanced Production and Editor mainline English interactions now stay localized across design/storyboard/export helpers, editor agent feedback, and storyboard-to-editor handoff prompts.
 
 
 

@@ -99,7 +99,6 @@ import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { formatMessage } from '../i18n/locale.ts';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
-import { pickUiText } from '../i18n/uiText.ts';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -398,8 +397,8 @@ function mergeAssetsForTimelineClips(
 }
 
 export function EditorWorkbench() {
-  const { contentLocale, uiLocale, t } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { contentLocale, t } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) => formatMessage(t(path), values);
   const {
     aspectRatio,
     setAspectRatio,
@@ -692,14 +691,10 @@ export function EditorWorkbench() {
       setCampaignCreativeHandoffConsumed(false);
       setAgentCreativeStrategy(normalized.strategy ?? null);
       setAgentCreativeVariant(normalized.selectedVariant ?? null);
-      pushLog(pickUiText(
-        uiLocale,
-        '已接收 Campaign Creative handoff，上下文会优先用于首次 Agent 执行。',
-        'Campaign Creative handoff received. The first agent run will prioritize this context.',
-      ));
+      pushLog(t('editorWorkbench.handoffReceived'));
       return;
     }
-  }, [campaignCreativeHandoff, pushLog, uiLocale]);
+  }, [campaignCreativeHandoff, pushLog, t]);
 
   useEffect(() => {
     if (!requiresProjectNaming || hasPersistedProject) return;
@@ -771,10 +766,10 @@ export function EditorWorkbench() {
       try {
         await openProject(qp);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : '加载剪辑项目失败');
+        toast.error(e instanceof Error ? e.message : t('editorWorkbench.projectOpenFailed'));
       }
     })();
-  }, [searchParams, openProject, projectId]);
+  }, [searchParams, openProject, projectId, t]);
 
   useEffect(() => {
     // sync URL param to reflect current projectId
@@ -867,12 +862,12 @@ export function EditorWorkbench() {
 
   const runAutoBgmFromAgentMessage = useCallback(
     async (userMessage: string) => {
-      pushLog(uiText('进度：检测到配乐需求，正在润色并生成 BGM…', 'Progress: detected a music request, polishing the prompt and generating BGM…'));
+      pushLog(t('editorWorkbench.bgmDetectedProgress'));
       try {
         const out = await withTimeout(
           polishEditorMusicPrompt(userMessage),
           45_000,
-          '配乐提示词润色超时（45s）',
+          t('editorWorkbench.musicPromptPolishTimeout'),
         );
         setBgmFormSync({
           prompt: out.prompt,
@@ -886,10 +881,10 @@ export function EditorWorkbench() {
             sampleCount: 1,
           }),
           160_000,
-          '配乐生成超时（160s）',
+          t('editorWorkbench.musicGenerationTimeout'),
         );
         const item = res.items[0];
-        if (!item) throw new Error('未返回音频');
+        if (!item) throw new Error(t('editorWorkbench.noAudioReturned'));
         const url = mixEditorMusicUrl(item.url);
         setAssets((prev) => ({
           ...prev,
@@ -903,19 +898,16 @@ export function EditorWorkbench() {
         }));
         setProject((p) => setBgmClipOnProject(p, item.id, item.durationSec));
         const providerName = res.provider === 'suno' ? 'Suno' : 'Lyria';
-        pushLog(uiText(
-          `已根据对话自动完成配乐（引擎：${providerName}）；不满意可在左下「配乐生成」微调后再点「生成」。`,
-          `Music was generated automatically from the conversation (engine: ${providerName}). If it is not right yet, fine-tune it in the music panel and generate again.`,
-        ));
+        pushLog(tx('editorWorkbench.autoMusicGenerated', { provider: providerName }));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const hint = isLikelyQuotaOrRateLimitError(msg)
-          ? uiText('（疑似模型限流/配额不足）', ' (possible model rate limit or quota issue)')
+          ? t('editorWorkbench.quotaHint')
           : '';
-        pushLog(uiText(`自动配乐未成功：${msg}${hint}`, `Automatic music generation did not complete: ${msg}${hint}`));
+        pushLog(tx('editorWorkbench.autoMusicFailed', { message: msg, hint }));
       }
     },
-    [pushLog, setAssets, setProject],
+    [pushLog, setAssets, setProject, t, tx],
   );
 
   const handleAgentApply = useCallback(
@@ -930,10 +922,9 @@ export function EditorWorkbench() {
         try {
           route = await routeEditorAgentMessage(userMessage);
         } catch (e) {
-          pushLog(uiText(
-            `错误：意图识别失败：${e instanceof Error ? e.message : String(e)}`,
-            `Error: intent detection failed: ${e instanceof Error ? e.message : String(e)}`,
-          ));
+          pushLog(tx('editorWorkbench.intentDetectionFailed', {
+            message: e instanceof Error ? e.message : String(e),
+          }));
           return;
         }
         if (route.intent === 'chat') {
@@ -943,14 +934,13 @@ export function EditorWorkbench() {
               projectMemory: nextProjectMemory,
               userCommunicationProfile,
             } = await chatEditorAgent(userMessage, projectMemory, replyLocale);
-            pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
+            pushLog(tx('editorWorkbench.assistantReply', { reply }));
             setProjectMemory(nextProjectMemory ?? projectMemory);
             setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
           } catch (e) {
-            pushLog(uiText(
-              `错误：对话失败：${e instanceof Error ? e.message : String(e)}`,
-              `Error: chat failed: ${e instanceof Error ? e.message : String(e)}`,
-            ));
+            pushLog(tx('editorWorkbench.chatFailed', {
+              message: e instanceof Error ? e.message : String(e),
+            }));
           }
           return;
         }
@@ -960,7 +950,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog(uiText('请先勾选左侧素材，或先在时间轴上加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
+          pushLog(t('editorWorkbench.selectAssetsFirst'));
           return;
         }
 
@@ -1039,11 +1029,15 @@ export function EditorWorkbench() {
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
 
-        pushLog(`Agent：${summary}`);
+        pushLog(tx('editorWorkbench.agentSummary', { summary }));
         if (llmUsage?.totals) {
-          const t = llmUsage.totals;
+          const totals = llmUsage.totals;
           pushLog(
-            `Token 合计：prompt ${t.prompt_tokens ?? '—'} · completion ${t.completion_tokens ?? '—'} · total ${t.total_tokens ?? '—'}`,
+            tx('editorWorkbench.tokenUsage', {
+              prompt: totals.prompt_tokens ?? '—',
+              completion: totals.completion_tokens ?? '—',
+              total: totals.total_tokens ?? '—',
+            }),
           );
         }
         agentOk = true;
@@ -1149,10 +1143,9 @@ export function EditorWorkbench() {
           try {
             route = await routeEditorAgentMessage(trimmedMessage);
           } catch (error) {
-            pushLog(uiText(
-              `错误：意图识别失败：${error instanceof Error ? error.message : String(error)}`,
-              `Error: intent detection failed: ${error instanceof Error ? error.message : String(error)}`,
-            ));
+            pushLog(tx('editorWorkbench.intentDetectionFailed', {
+              message: error instanceof Error ? error.message : String(error),
+            }));
             return;
           }
 
@@ -1163,14 +1156,13 @@ export function EditorWorkbench() {
                 projectMemory: nextProjectMemory,
                 userCommunicationProfile,
               } = await chatEditorAgent(trimmedMessage, projectMemory, replyLocale);
-              pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
+              pushLog(tx('editorWorkbench.assistantReply', { reply }));
               setProjectMemory(nextProjectMemory ?? projectMemory);
               setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
             } catch (error) {
-              pushLog(uiText(
-                `错误：对话失败：${error instanceof Error ? error.message : String(error)}`,
-                `Error: chat failed: ${error instanceof Error ? error.message : String(error)}`,
-              ));
+              pushLog(tx('editorWorkbench.chatFailed', {
+                message: error instanceof Error ? error.message : String(error),
+              }));
             }
             return;
           }
@@ -1181,7 +1173,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog(uiText('请先勾选左侧素材，或先在时间轴中加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
+          pushLog(t('editorWorkbench.selectAssetsFirst'));
           return;
         }
 
@@ -1275,11 +1267,15 @@ export function EditorWorkbench() {
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
 
-        pushLog(`Agent：${summary}`);
+        pushLog(tx('editorWorkbench.agentSummary', { summary }));
         if (llmUsage?.totals) {
           const totals = llmUsage.totals;
           pushLog(
-            `Token 合计：prompt ${totals.prompt_tokens ?? '—'} / completion ${totals.completion_tokens ?? '—'} / total ${totals.total_tokens ?? '—'}`,
+            tx('editorWorkbench.tokenUsage', {
+              prompt: totals.prompt_tokens ?? '—',
+              completion: totals.completion_tokens ?? '—',
+              total: totals.total_tokens ?? '—',
+            }),
           );
         }
         agentOk = true;
@@ -1316,49 +1312,49 @@ export function EditorWorkbench() {
   const handleRememberDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
+        toast.warning(t('editorWorkbench.saveProjectBeforeMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'remember', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText(`系统：已记住偏好 - ${text}`, `System: remembered preference - ${text}`));
+      pushLog(tx('editorWorkbench.rememberedPreference', { text }));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t, tx],
   );
 
   const handleAvoidDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
+        toast.warning(t('editorWorkbench.saveProjectBeforeMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'avoid', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText(`系统：已记为避免 - ${text}`, `System: marked to avoid - ${text}`));
+      pushLog(tx('editorWorkbench.rememberedAvoid', { text }));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t, tx],
   );
 
   const handleDeleteProjectMemoryItem = useCallback(
     async (bucket: EditorProjectMemoryBucket, target: { id?: string; value?: string }) => {
       if (!projectId) {
-        toast.warning(uiText('当前项目还没有可编辑的记忆记录', 'There is no editable project memory yet'));
+        toast.warning(t('editorWorkbench.noEditableMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await deleteEditorProjectMemoryItem(projectId, bucket, target);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText('系统：已移除一条项目记忆', 'System: removed one project memory item'));
+      pushLog(t('editorWorkbench.memoryRemoved'));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t],
   );
 
   const handleWeakenUserProfileDimension = useCallback(
     async (dimension: EditorUserProfileDimensionKey) => {
       const { userCommunicationProfile } = await weakenEditorUserProfileDimension(dimension);
       setAgentUserCommunicationProfile(userCommunicationProfile);
-      pushLog(uiText(`系统：已将 ${dimension} 降为更弱的提示`, `System: weakened ${dimension} into a lighter hint`));
+      pushLog(tx('editorWorkbench.profileWeakened', { dimension }));
     },
-    [pushLog, uiLocale],
+    [pushLog, tx],
   );
 
   const handleAddToTimeline = useCallback(
@@ -1369,14 +1365,17 @@ export function EditorWorkbench() {
         sourceLen = await probeVideoDuration(asset.url);
       } catch {
         probeFailed = true;
-        pushLog('⚠️ 无法读取视频时长，使用默认 10s 片段（可能是跨域或浏览器不兼容）。');
-        toast.warning(`${asset.originalName}：视频时长读取失败，暂用 10s 占位，加入后请手动调整入出点。`);
+        pushLog(t('editorWorkbench.durationProbeFallback'));
+        toast.warning(tx('editorWorkbench.durationProbeFallbackToast', { name: asset.originalName }));
       }
       const rawLen = sourceLen;
       sourceLen = Math.min(Math.max(sourceLen, 0.5), 300);
       if (!probeFailed && rawLen > 300) {
-        pushLog(`⚠️ 视频 ${rawLen.toFixed(1)}s 超过单片 300s 上限，已截断为 300s。`);
-        toast.warning(`${asset.originalName} 原始 ${rawLen.toFixed(0)}s 超过 300s 上限，时间轴上仅取前 300s。`);
+        pushLog(tx('editorWorkbench.durationCappedLog', { seconds: rawLen.toFixed(1) }));
+        toast.warning(tx('editorWorkbench.durationCappedToast', {
+          name: asset.originalName,
+          seconds: rawLen.toFixed(0),
+        }));
       }
       setAssets((prev) => ({
         ...prev,
@@ -1389,9 +1388,12 @@ export function EditorWorkbench() {
         },
       }));
       setProject((p) => snapVideoClipsSequential(appendVideoClipToProject(p, asset.id, sourceLen)));
-      pushLog(`已将「${asset.originalName}」追加到 V1（约 ${sourceLen.toFixed(1)}s）。`);
+      pushLog(tx('editorWorkbench.appendedToTimeline', {
+        name: asset.originalName,
+        seconds: sourceLen.toFixed(1),
+      }));
     },
-    [setAssets, setProject, pushLog],
+    [pushLog, setAssets, setProject, t, tx],
   );
 
   // 读取 History 页面「导入到时间轴」存入的 pending import
@@ -1407,7 +1409,7 @@ export function EditorWorkbench() {
       const timer = setTimeout(async () => {
         const asset: EditorAssetDto = { id: assetId, url, kind: 'video', originalName, durationSec: 10 };
         await handleAddToTimeline(asset);
-        toast.success(`已导入「${originalName}」到时间轴`);
+        toast.success(tx('editorWorkbench.importedToTimeline', { name: originalName }));
       }, 800);
       return () => clearTimeout(timer);
     } catch {
@@ -1480,8 +1482,8 @@ export function EditorWorkbench() {
       return snapVideoClipsSequential({ ...next, durationSec: computeDurationSec(next) });
     });
     setCurrentTime(0);
-    pushLog('已加载示例视频片段（12s）到视频轨。');
-  }, [setAssets, setProject, setCurrentTime, pushLog]);
+    pushLog(t('editorWorkbench.demoLoaded'));
+  }, [pushLog, setAssets, setProject, setCurrentTime, t]);
 
   /** 暂停：必须 pause，否则解码器会继续跑；并同步源时间 */
   useEffect(() => {
@@ -1606,67 +1608,78 @@ export function EditorWorkbench() {
   const clipSummaryLine = useMemo(() => {
     if (!selectedVideoClip) return '';
     const name = resolveAssetName(selectedVideoClip.assetId);
-    const shot = selectedVideoClip.shotIndex != null ? `镜${selectedVideoClip.shotIndex} · ` : '';
-    return `${shot}${name} · 源 ${formatTimelineTime(selectedVideoClip.sourceStart)}→${formatTimelineTime(selectedVideoClip.sourceEnd)} · 成片 ${formatTimelineTime(selectedVideoClip.timelineStart)} 起`;
-  }, [selectedVideoClip, resolveAssetName]);
+    const values = {
+      shotIndex: selectedVideoClip.shotIndex ?? '',
+      name,
+      sourceStart: formatTimelineTime(selectedVideoClip.sourceStart),
+      sourceEnd: formatTimelineTime(selectedVideoClip.sourceEnd),
+      timelineStart: formatTimelineTime(selectedVideoClip.timelineStart),
+    };
+    return selectedVideoClip.shotIndex != null
+      ? tx('editorWorkbench.clipSummaryWithShot', values)
+      : tx('editorWorkbench.clipSummaryWithoutShot', values);
+  }, [selectedVideoClip, resolveAssetName, tx]);
 
   const handleClipSplit = useCallback(() => {
     if (!selectedVideoClipId) return;
     const r = splitVideoClipAtPlayhead(project, selectedVideoClipId, currentTime);
     if (!r) {
-      pushLog('拆分失败：将播放头移到片段内部，且两侧至少保留约 0.12s。');
+      pushLog(t('editorWorkbench.clipSplitFailed'));
       return;
     }
     applyTimelineProject(r.project);
     setSelectedVideoClipId(r.newClipIdRight);
-    pushLog('已在播放头处拆分。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipSplitDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipTrimHead = useCallback(() => {
     if (!selectedVideoClipId) return;
     const next = trimVideoClipHeadToPlayhead(project, selectedVideoClipId, currentTime);
     if (!next) {
-      pushLog('掐头失败：播放头需在片段内，且剩余段长需足够。');
+      pushLog(t('editorWorkbench.clipTrimHeadFailed'));
       return;
     }
     applyTimelineProject(next);
-    pushLog('已掐头：丢弃播放头之前的画面。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipTrimHeadDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipTrimTail = useCallback(() => {
     if (!selectedVideoClipId) return;
     const next = trimVideoClipTailToPlayhead(project, selectedVideoClipId, currentTime);
     if (!next) {
-      pushLog('去尾失败：播放头需在片段内，且剩余段长需足够。');
+      pushLog(t('editorWorkbench.clipTrimTailFailed'));
       return;
     }
     applyTimelineProject(next);
-    pushLog('已去尾：丢弃播放头之后的画面。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipTrimTailDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipDelete = useCallback(() => {
     if (!selectedVideoClipId) return;
     handleDeleteClip('v1', selectedVideoClipId);
-    pushLog('已删除片段。');
-  }, [selectedVideoClipId, handleDeleteClip, pushLog]);
+    pushLog(t('editorWorkbench.clipDeleted'));
+  }, [handleDeleteClip, pushLog, selectedVideoClipId, t]);
 
   const handleSetSourceRange = useCallback(
     (start: number, end: number) => {
       if (!selectedVideoClipId) return;
       const next = updateVideoClipSourceRange(project, selectedVideoClipId, { sourceStart: start, sourceEnd: end });
       applyTimelineProject(next);
-      pushLog(`已设置入出点 ${start.toFixed(2)}s → ${end.toFixed(2)}s`);
+      pushLog(tx('editorWorkbench.sourceRangeSet', {
+        start: start.toFixed(2),
+        end: end.toFixed(2),
+      }));
     },
-    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, selectedVideoClipId, tx],
   );
 
   const handleSetSpeed = useCallback(
     (speed: number) => {
       if (!selectedVideoClipId) return;
       applyTimelineProject(setVideoClipSpeed(project, selectedVideoClipId, speed));
-      pushLog(`播放速度已设为 ${speed}x`);
+      pushLog(tx('editorWorkbench.speedSet', { speed }));
     },
-    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, selectedVideoClipId, tx],
   );
 
   const handleSetVolume = useCallback(
@@ -1701,17 +1714,17 @@ export function EditorWorkbench() {
     (text: string, startSec: number, endSec: number) => {
       const id = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       applyTimelineProject(upsertSubtitleCue(project, { id, startSec, endSec, text }));
-      pushLog(uiText('已添加字幕。', 'Subtitle added.'));
+      pushLog(t('editorWorkbench.subtitleAdded'));
     },
-    [project, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, t],
   );
 
   const handleRemoveSubtitle = useCallback(
     (cueId: string) => {
       applyTimelineProject(removeSubtitleCue(project, cueId));
-      pushLog(uiText('已删除字幕。', 'Subtitle removed.'));
+      pushLog(t('editorWorkbench.subtitleRemoved'));
     },
-    [project, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, t],
   );
 
   // ──────────────── 文字轨 handlers ────────────────
@@ -1726,20 +1739,30 @@ export function EditorWorkbench() {
   }, [project, applyTimelineProject, selectedTextClipId]);
 
   const handleAddIntro = useCallback(() => {
-    const p = addIntroTextClip(project, uiText('片头标题', 'Title card'), uiText('副标题文字', 'Subtitle'), 'intro-minimal');
+    const p = addIntroTextClip(
+      project,
+      t('editorWorkbench.introTitleDefault'),
+      t('editorWorkbench.introSubtitleDefault'),
+      'intro-minimal',
+    );
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[0].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, project, t]);
 
   const handleAddOutro = useCallback(() => {
-    const p = addOutroTextClip(project, uiText('关注我们', 'Follow us'), uiText('获取更多精彩内容', 'See more highlights'), 'outro-follow');
+    const p = addOutroTextClip(
+      project,
+      t('editorWorkbench.outroTitleDefault'),
+      t('editorWorkbench.outroSubtitleDefault'),
+      'outro-follow',
+    );
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[clips.length - 1].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, project, t]);
 
   const handleAddSubtitleText = useCallback(() => {
     const id = `text_${Date.now()}`;
@@ -1747,13 +1770,13 @@ export function EditorWorkbench() {
       id,
       timelineStart: currentTime,
       timelineEnd: Math.min(currentTime + 2, project.durationSec),
-      text: uiText('字幕文字', 'Subtitle text'),
+      text: t('editorWorkbench.subtitleTextDefault'),
       presetId: 'sub-bottom',
     };
     applyTimelineProject(upsertTextClip(project, clip));
     setSelectedTextClipId(id);
     setShowTextPanel(true);
-  }, [project, currentTime, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, currentTime, project, t]);
 
   const activeTextClips = useMemo(
     () => getActiveTextClips(project, currentTime),
@@ -1816,9 +1839,12 @@ export function EditorWorkbench() {
     }
   }, []);
 
-    const handleCaptureCover = useCallback(() => {
+  const handleCaptureCover = useCallback(() => {
     const video = document.querySelector<HTMLVideoElement>('video');
-    if (!video) { toast.info(uiText('暂无视频可截取', 'No video is available to capture yet.')); return; }
+    if (!video) {
+      toast.info(t('editorWorkbench.noVideoToCapture'));
+      return;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth || 1080;
     canvas.height = video.videoHeight || 1920;
@@ -1833,9 +1859,9 @@ export function EditorWorkbench() {
       a.download = `cover_${Date.now()}.jpg`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(uiText('封面已截取，请检查下载文件', 'Cover captured. Check the downloaded file.'));
+      toast.success(t('editorWorkbench.coverCaptured'));
     }, 'image/jpeg', 0.92);
-  }, []);
+  }, [t]);
 
   return (
     <>
@@ -2004,7 +2030,7 @@ export function EditorWorkbench() {
             onAbort={() => {
               if (agentAbortRef.current) {
                 agentAbortRef.current.abort();
-                pushLog(uiText('已取消 Agent 任务', 'Agent task cancelled.'));
+                pushLog(t('editorWorkbench.agentTaskCancelled'));
               }
             }}
             jobProgress={agentJobProgress}
@@ -2140,9 +2166,6 @@ export function EditorWorkbench() {
             <button
               type="button"
               onClick={() => {
-                const dateStamp = '';
-                const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-                void defaultName;
                 openNewProjectNamingModal();
               }}
               className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
@@ -2224,9 +2247,6 @@ export function EditorWorkbench() {
           });
         }}
         onNew={() => {
-          const dateStamp = '';
-          const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-          void defaultName;
           openNewProjectNamingModal();
           setShowProjectManager(false);
         }}
@@ -2263,7 +2283,7 @@ export function EditorWorkbench() {
           const negativePrompt = 'vocals, lyrics';
           setBgmFormSync({ prompt, negativePrompt, key });
           setBgmAutoGenerateRequest({ prompt, negativePrompt, key });
-          pushLog(uiText('🎵 已根据导入分镜触发一键智能配乐…', '🎵 Triggered smart music generation from the imported storyboard…'));
+          pushLog(t('editorWorkbench.importedStoryboardMusicTriggered'));
         }}
         onPreview={() => {
           if (!isPlaying) togglePlay();
@@ -2366,7 +2386,7 @@ function probeVideoDuration(url: string): Promise<number> {
       v.load();
       resolve(Number.isFinite(d) && d > 0 ? d : 10);
     };
-    v.onerror = () => reject(new Error('无法读取元数据'));
+    v.onerror = () => reject(new Error('Failed to read media metadata'));
     v.src = url;
   });
 }

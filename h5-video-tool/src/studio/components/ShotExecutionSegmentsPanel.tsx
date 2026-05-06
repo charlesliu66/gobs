@@ -1,5 +1,5 @@
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage } from '../../i18n/locale.ts';
 import type { BatchJobDto } from '../../api/batchJobs';
 import type { ProductionExecutionSegment, ProductionShot } from '../productionTypes';
 import {
@@ -33,8 +33,8 @@ export function ShotExecutionSegmentsPanel({
   shotJobStatusMap?: ExecutionSegmentJobStatusMap;
   shotBusyMap?: Record<string, 'frame' | 'video'>;
 }) {
-  const { t, uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) => formatMessage(t(path), values);
   if (!segments.length) return null;
 
   const runtimeSegments = segments.map((segment) => resolveExecutionSegmentRuntimeState(shot, segment, {
@@ -45,9 +45,9 @@ export function ShotExecutionSegmentsPanel({
   }));
 
   const modeLabel = (segment: ProductionExecutionSegment) => {
-    if (segment.mode === 'merged_short') return uiText('短镜合并', 'Merged short');
-    if (segment.mode === 'split_long') return uiText('长镜拆分', 'Split long');
-    return uiText('直接执行', 'Direct');
+    if (segment.mode === 'merged_short') return t('productionWizard.executionSegments.modeMergedShort');
+    if (segment.mode === 'split_long') return t('productionWizard.executionSegments.modeSplitLong');
+    return t('productionWizard.executionSegments.modeDirect');
   };
 
   const statusClass = (status: string) => {
@@ -64,13 +64,10 @@ export function ShotExecutionSegmentsPanel({
     <section className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
       <div className="mb-3">
         <div className="text-xs font-semibold text-[var(--color-text)]">
-          {uiText('执行分段', 'Execution segments')}
+          {t('productionWizard.executionSegments.title')}
         </div>
         <div className="text-[10px] text-[var(--color-text-muted)]">
-          {uiText(
-            '保留原始分镜作为主视图，下面展示实际提交给 Dreamina 的执行分段。',
-            'Original shots stay primary; these are the executable Dreamina segments underneath.',
-          )}
+          {t('productionWizard.executionSegments.description')}
         </div>
       </div>
 
@@ -91,9 +88,13 @@ export function ShotExecutionSegmentsPanel({
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-muted)]">
                     <span>{modeLabel(segment)}</span>
                     <span>•</span>
-                    <span>{uiText(`时长 ${segment.durationSec}s`, `${segment.durationSec}s`)}</span>
+                    <span>{tx('productionWizard.executionSegments.duration', { seconds: segment.durationSec })}</span>
                     <span>•</span>
-                    <span>{uiText(`来源 ${segment.sourceShotIndexes.map((index) => `#${index}`).join(', ')}`, `Sources ${segment.sourceShotIndexes.map((index) => `#${index}`).join(', ')}`)}</span>
+                    <span>
+                      {tx('productionWizard.executionSegments.sourceShots', {
+                        sources: segment.sourceShotIndexes.map((index) => `#${index}`).join(', '),
+                      })}
+                    </span>
                   </div>
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(runtime.userStatus)}`}>
@@ -110,20 +111,22 @@ export function ShotExecutionSegmentsPanel({
               <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
                 {runtime.platformQueuePosition != null && (
                   <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-sky-200">
-                    {uiText(`平台队列 #${runtime.platformQueuePosition}`, `Platform #${runtime.platformQueuePosition}`)}
+                    {tx('productionWizard.executionSegments.platformQueue', {
+                      position: runtime.platformQueuePosition,
+                    })}
                   </span>
                 )}
                 {runtime.dreaminaQueuePosition != null && (
                   <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-sky-200">
-                    {uiText(
-                      `即梦队列 #${runtime.dreaminaQueuePosition}${runtime.dreaminaQueueSize ? `/${runtime.dreaminaQueueSize}` : ''}`,
-                      `Dreamina #${runtime.dreaminaQueuePosition}${runtime.dreaminaQueueSize ? `/${runtime.dreaminaQueueSize}` : ''}`,
-                    )}
+                    {tx('productionWizard.executionSegments.dreaminaQueue', {
+                      position: runtime.dreaminaQueuePosition,
+                      suffix: runtime.dreaminaQueueSize ? `/${runtime.dreaminaQueueSize}` : '',
+                    })}
                   </span>
                 )}
                 {runtime.pendingSubmitId && (
                   <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-violet-200">
-                    {uiText('已记录 submit', 'Submit tracked')}
+                    {t('productionWizard.executionSegments.submitTracked')}
                   </span>
                 )}
                 {videoSrc && (
@@ -133,7 +136,7 @@ export function ShotExecutionSegmentsPanel({
                     rel="noreferrer"
                     className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-1 text-green-200 hover:bg-green-500/15"
                   >
-                    {uiText('打开结果', 'Open result')}
+                    {t('productionWizard.executionSegments.openResult')}
                   </a>
                 )}
               </div>

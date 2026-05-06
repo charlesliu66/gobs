@@ -1,11 +1,12 @@
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage } from '../../i18n/locale.ts';
 import { hasProductionShotPreviewMedia, type ProductionShot, type SceneSheet } from '../productionTypes';
 import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
 import { resolveFriendlyVideoProgress } from '../storyboardQueueState';
 
 type ShotStatus = 'idle' | 'awaiting_submit' | 'pending' | 'queuing' | 'processing' | 'failed' | 'cancelled' | 'done';
+type LocalizePair = (zh: string, en: string) => string;
 
 function resolveShotStatus(
   shot: ProductionShot,
@@ -48,7 +49,8 @@ function resolveShotStatus(
 
 function friendlyStatusMeta(
   status: ShotStatus,
-  uiText: <T,>(zh: T, en: T) => T,
+  localizePair: LocalizePair,
+  t: (path: string) => string,
   activeJob?: BatchJobDto,
   snapshot?: QueueSnapshotDto,
 ): { label: string; className: string } {
@@ -57,33 +59,33 @@ function friendlyStatusMeta(
     switch (friendly.stage) {
       case 'queued':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
         };
       case 'starting':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
         };
       case 'generating':
       case 'done':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
         };
       case 'finishing':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-lime-500/40 bg-lime-500/15 text-lime-200',
         };
       case 'failed':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-rose-500/40 bg-rose-500/15 text-rose-200',
         };
       case 'cancelled':
         return {
-          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          label: localizePair(friendly.shortLabelZh, friendly.shortLabelEn),
           className: 'border-slate-500/40 bg-slate-500/15 text-slate-200',
         };
       default:
@@ -94,22 +96,22 @@ function friendlyStatusMeta(
   switch (status) {
     case 'done':
       return {
-        label: uiText('已完成', 'Done'),
+        label: t('productionWizard.storyboardShotStrip.done'),
         className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
       };
     case 'failed':
       return {
-        label: uiText('生成失败', 'Failed'),
+        label: t('productionWizard.storyboardShotStrip.failed'),
         className: 'border-rose-500/40 bg-rose-500/15 text-rose-200',
       };
     case 'cancelled':
       return {
-        label: uiText('已停止', 'Stopped'),
+        label: t('productionWizard.storyboardShotStrip.stopped'),
         className: 'border-slate-500/40 bg-slate-500/15 text-slate-200',
       };
     default:
       return {
-        label: uiText('未开始', 'Idle'),
+        label: t('productionWizard.storyboardShotStrip.idle'),
         className: 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]',
       };
   }
@@ -146,8 +148,9 @@ export function StepStoryboardShotStrip({
   onSelectShot: (idx: number) => void;
   onCancelShotJob?: (job: BatchJobDto) => void;
 }) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t, uiLocale } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) => formatMessage(t(path), values);
+  const localizePair: LocalizePair = (zh, en) => (uiLocale === 'en' ? en : zh);
   const maxConcurrent = snapshot.maxConcurrent ?? 3;
   const activeJobMap = shotActiveJobMap ?? {};
   const statusMap = shotJobStatusMap ?? {};
@@ -157,17 +160,18 @@ export function StepStoryboardShotStrip({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-xs font-semibold text-[var(--color-text)]">
-            {uiText('分镜状态条', 'Storyboard strip')}
+            {t('productionWizard.storyboardShotStrip.title')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)]">
-            {uiText(
-              `当前有 ${snapshot.totalActive} 条视频正在生成，${snapshot.totalWaiting} 条在排队，最多同时处理 ${maxConcurrent} 条。`,
-              `${snapshot.totalActive} videos are generating, ${snapshot.totalWaiting} are waiting, and the system handles up to ${maxConcurrent} at once.`,
-            )}
+            {tx('productionWizard.storyboardShotStrip.summary', {
+              active: snapshot.totalActive,
+              waiting: snapshot.totalWaiting,
+              maxConcurrent,
+            })}
           </div>
         </div>
         <div className="text-[10px] text-[var(--color-text-muted)]">
-          {uiText(`共 ${shots.length} 镜`, `${shots.length} shots`)}
+          {tx('productionWizard.storyboardShotStrip.shotCount', { count: shots.length })}
         </div>
       </div>
 
@@ -176,10 +180,10 @@ export function StepStoryboardShotStrip({
           const shotKey = String(shot.shotIndex);
           const sceneName = scSheets.find((sheet) => sheet.sceneRef === shot.sceneRef)?.name
             || shot.sceneRef
-            || uiText('未命名场景', 'Untitled scene');
+            || t('productionWizard.storyboardShotStrip.untitledScene');
           const activeJob = activeJobMap[shotKey];
           const status = resolveShotStatus(shot, shotBusyMap, activeJobMap, statusMap);
-          const statusMeta = friendlyStatusMeta(status, uiText, activeJob, snapshot);
+          const statusMeta = friendlyStatusMeta(status, localizePair, t, activeJob, snapshot);
           const queueInfo = shotJobQueueInfoMap?.[shotKey];
           const selected = index === selectedShotIdx;
 
@@ -200,7 +204,7 @@ export function StepStoryboardShotStrip({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-xs font-semibold text-[var(--color-text)]">
-                      {uiText(`第 ${shot.shotIndex} 镜`, `Shot ${shot.shotIndex}`)}
+                      {tx('productionWizard.storyboardShotStrip.shotTitle', { shotIndex: shot.shotIndex })}
                     </div>
                     <div className="mt-1 line-clamp-1 text-[11px] text-[var(--color-text-muted)]">
                       {sceneName}
@@ -212,16 +216,20 @@ export function StepStoryboardShotStrip({
                 </div>
 
                 <div className="mt-3 space-y-1 text-[10px] text-[var(--color-text-muted)]">
-                  <div>{uiText(`时长 ${Math.round(shot.durationSec || 0)}s`, `${Math.round(shot.durationSec || 0)}s`)}</div>
+                  <div>{tx('productionWizard.storyboardShotStrip.duration', { seconds: Math.round(shot.durationSec || 0) })}</div>
                   {queueInfo?.globalQueuePos != null && (
-                    <div>{uiText(`当前排第 ${queueInfo.globalQueuePos + 1} 位`, `Queue position ${queueInfo.globalQueuePos + 1}`)}</div>
+                    <div>
+                      {tx('productionWizard.storyboardShotStrip.globalQueuePosition', {
+                        position: queueInfo.globalQueuePos + 1,
+                      })}
+                    </div>
                   )}
                   {queueInfo?.queue_idx != null && (
                     <div>
-                      {uiText(
-                        `已进入生成队列，当前排第 ${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? ` / ${queueInfo.queue_length}` : ''} 位`,
-                        `In render queue, position ${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? ` / ${queueInfo.queue_length}` : ''}`,
-                      )}
+                      {tx('productionWizard.storyboardShotStrip.renderQueuePosition', {
+                        position: queueInfo.queue_idx + 1,
+                        suffix: queueInfo.queue_length != null ? ` / ${queueInfo.queue_length}` : '',
+                      })}
                     </div>
                   )}
                   {shot.lastVideoError?.reason && status === 'failed' && (
@@ -238,10 +246,10 @@ export function StepStoryboardShotStrip({
                   className="mt-3 w-full rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {cancellingJobId === activeJob.id
-                    ? uiText('处理中...', 'Working...')
+                    ? t('productionWizard.storyboardShotStrip.working')
                     : activeJob.status === 'processing'
-                      ? uiText('停止本次任务', 'Stop this task')
-                      : uiText('取消本次任务', 'Cancel this task')}
+                      ? t('productionWizard.storyboardShotStrip.stopTask')
+                      : t('productionWizard.storyboardShotStrip.cancelTask')}
                 </button>
               )}
             </div>

@@ -1,6 +1,5 @@
 import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
 import { getShotUserStatus, type ShotProviderStatus } from '../shotUserStatus';
 import { resolveFriendlyVideoProgress } from '../storyboardQueueState';
 
@@ -60,8 +59,8 @@ export function StepStoryboardGenerateActions({
   onCheckVideoProgress?: () => void;
   onCancelActiveJob?: () => void;
 }) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { t, uiLocale } = useLocale();
+  const localizePair = (zh: string, en: string) => (uiLocale === 'en' ? en : zh);
   const isSubmitting = shotMediaBusy === 'video';
   const hasActiveJob = !!activeJob;
   const userStatus = getShotUserStatus({
@@ -78,30 +77,18 @@ export function StepStoryboardGenerateActions({
 
   const videoButtonHint = (() => {
     if (isSubmitting) {
-      return uiText(
-        '正在提交当前分镜。成功后，这里会继续显示排队位置和最新进度。',
-        'Submitting this shot now. Once it succeeds, this card will keep showing queue position and progress.',
-      );
+      return t('productionWizard.storyboardGenerate.submissionInProgressHint');
     }
     if (friendlyProgress) {
-      return uiText(friendlyProgress.detailZh, friendlyProgress.detailEn);
+      return localizePair(friendlyProgress.detailZh, friendlyProgress.detailEn);
     }
     if (!hasVideo && pendingVideoSubmitId) {
-      return uiText(
-        '系统已经记住这次提交。即使你离开当前页面，也会继续跟进并自动回写结果。',
-        'This submission is already recorded. Even if you leave the page, the system will keep following it and sync the result back automatically.',
-      );
+      return t('productionWizard.storyboardGenerate.submissionTrackedHint');
     }
     if (hasVideo) {
-      return uiText(
-        '重新生成会新增一个视频版本，已有版本仍然可以保留和切换。',
-        'Regenerating creates another video version while keeping the existing versions available.',
-      );
+      return t('productionWizard.storyboardGenerate.regenerateHint');
     }
-    return uiText(
-      '提交当前分镜后，系统会自动排队并开始生成，不需要你一直停留在这个页面。',
-      'After you submit this shot, the system will queue it and start generation automatically. You do not need to stay on this page.',
-    );
+    return t('productionWizard.storyboardGenerate.firstGenerateHint');
   })();
 
   const primaryButtonClass = (() => {
@@ -121,11 +108,11 @@ export function StepStoryboardGenerateActions({
   })();
 
   function videoButtonLabel() {
-    if (isSubmitting) return uiText('入队中...', 'Queueing...');
-    if (friendlyProgress) return uiText(friendlyProgress.shortLabelZh, friendlyProgress.shortLabelEn);
-    if (!hasVideo && pendingVideoSubmitId) return uiText('等待结果中', 'Waiting for result');
-    if (hasVideo) return uiText('重新生成分镜视频', 'Regenerate storyboard video');
-    return uiText('生成分镜视频', 'Generate storyboard video');
+    if (isSubmitting) return t('productionWizard.storyboardGenerate.queueing');
+    if (friendlyProgress) return localizePair(friendlyProgress.shortLabelZh, friendlyProgress.shortLabelEn);
+    if (!hasVideo && pendingVideoSubmitId) return t('productionWizard.storyboardGenerate.waitingResult');
+    if (hasVideo) return t('productionWizard.storyboardGenerate.regenerateStoryboardVideo');
+    return t('productionWizard.storyboardGenerate.generateStoryboardVideo');
   }
 
   const canCancel = !!activeJob && (
@@ -136,35 +123,29 @@ export function StepStoryboardGenerateActions({
   );
 
   const cancelLabel = activeJob?.status === 'processing'
-    ? uiText('停止本次任务', 'Stop this task')
-    : uiText('取消排队', 'Cancel queue');
+    ? t('productionWizard.storyboardGenerate.stopTask')
+    : t('productionWizard.storyboardGenerate.cancelQueue');
 
   const statusBanner = (() => {
     if (isSubmitting) {
       return {
         className: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-        title: uiText('正在加入系统队列', 'Joining the system queue'),
-        detail: uiText(
-          '系统正在创建这条分镜任务。成功后会继续显示排队位置、开始时间和完成提醒。',
-          'The system is creating this shot task now. Once accepted, it will keep showing the queue position, start timing, and completion reminder.',
-        ),
+        title: t('productionWizard.storyboardGenerate.joiningSystemQueue'),
+        detail: t('productionWizard.storyboardGenerate.systemQueueTaskCreating'),
       };
     }
     if (friendlyProgress) {
       return {
         className: bannerClassForStage(friendlyProgress.stage),
-        title: uiText(friendlyProgress.titleZh, friendlyProgress.titleEn),
-        detail: uiText(friendlyProgress.detailZh, friendlyProgress.detailEn),
+        title: localizePair(friendlyProgress.titleZh, friendlyProgress.titleEn),
+        detail: localizePair(friendlyProgress.detailZh, friendlyProgress.detailEn),
       };
     }
     if (!hasVideo && pendingVideoSubmitId) {
       return {
         className: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-        title: uiText('系统仍在跟进', 'Still being tracked'),
-        detail: uiText(
-          '这条提交已经被系统记录。即使你离开当前页面，结果出来后也会自动回写并提醒。',
-          'This submission is already recorded. Even if you leave the page, the result will sync back automatically with a reminder.',
-        ),
+        title: t('productionWizard.storyboardGenerate.stillTracked'),
+        detail: t('productionWizard.storyboardGenerate.stillTrackedDetail'),
       };
     }
     if (dreaminaAsync) {
@@ -179,15 +160,15 @@ export function StepStoryboardGenerateActions({
         <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold text-amber-100">
-              {uiText('当前分镜主操作', 'Primary shot action')}
+              {t('productionWizard.storyboardGenerate.primaryShotAction')}
             </div>
             <div className="text-[10px] text-[var(--color-text-muted)]">
-              {uiText('先选中分镜，再生成或查看它的最新进度。', 'Select a shot, then generate it or check its latest progress.')}
+              {t('productionWizard.storyboardGenerate.primaryShotActionHint')}
             </div>
           </div>
           {!hasVideo && !hasPendingBackend && (
             <span className="rounded-full border border-amber-400/35 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-200">
-              {uiText('推荐下一步', 'Recommended')}
+              {t('productionWizard.storyboardGenerate.recommendedNext')}
             </span>
           )}
         </div>
@@ -214,8 +195,8 @@ export function StepStoryboardGenerateActions({
                 className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {shotMediaBusy === 'frame'
-                  ? uiText('首帧生成中...', 'Generating first frame...')
-                  : uiText('生成首帧', 'Generate first frame')}
+                  ? t('productionWizard.storyboardGenerate.generatingFirstFrame')
+                  : t('productionWizard.storyboardGenerate.generateFirstFrame')}
               </button>
             )}
             {canCancel && onCancelActiveJob && (
@@ -229,7 +210,7 @@ export function StepStoryboardGenerateActions({
                     : 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50'
                 }
               >
-                {cancelBusy ? uiText('处理中...', 'Working...') : cancelLabel}
+                {cancelBusy ? t('productionWizard.storyboardGenerate.working') : cancelLabel}
               </button>
             )}
             {!hasActiveJob && hasPendingBackend && shotMediaBusy !== 'video' && onCheckVideoProgress && (
@@ -239,7 +220,7 @@ export function StepStoryboardGenerateActions({
                 onClick={onCheckVideoProgress}
                 className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
               >
-                {checkingProgress ? uiText('检查中...', 'Checking...') : uiText('刷新最新进度', 'Refresh progress')}
+                {checkingProgress ? t('productionWizard.storyboardGenerate.checking') : t('productionWizard.storyboardGenerate.refreshLatestProgress')}
               </button>
             )}
           </div>
@@ -247,10 +228,7 @@ export function StepStoryboardGenerateActions({
       </div>
       {needsImageToVideoStill && (
         <p className="mt-2 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[11px] leading-relaxed text-cyan-100">
-          {uiText(
-            '图生视频需要当前分镜先有首帧。请展开高级工具生成首帧，或切换为文生视频。',
-            'Image-to-video needs a first frame for this shot. Open Advanced tools to generate one, or switch back to text-to-video.',
-          )}
+          {t('productionWizard.storyboardGenerate.imageToVideoNeedsStill')}
         </p>
       )}
       {statusBanner && (

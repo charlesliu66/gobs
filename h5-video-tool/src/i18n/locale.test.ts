@@ -103,10 +103,20 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'editorWorkbench.projectNameRequired'), 'Enter a project name first.');
   assert.equal(getMessage('en', 'editorWorkbench.namingModalTitle'), 'Create a new editing project');
   assert.equal(getMessage('en', 'editorWorkbench.onboardingTitle'), 'Welcome to the editing workbench');
+  assert.equal(getMessage('en', 'editorWorkbench.projectOpenFailed'), 'Failed to load the editing project');
+  assert.equal(getMessage('en', 'editorWorkbench.coverCaptured'), 'Cover captured. Check the downloaded file.');
+  assert.equal(getMessage('en', 'editorWorkbench.importedStoryboardMusicTriggered'), '🎵 Triggered smart music generation from the imported storyboard…');
   assert.equal(getMessage('en', 'common.collapse'), 'Collapse');
   assert.equal(getMessage('en', 'agentMemoryPanel.title'), 'Agent memory');
   assert.equal(getMessage('en', 'productionWizard.input.title'), 'Concept & Synopsis');
   assert.equal(getMessage('en', 'productionWizard.storyArc.generateCharacterAndSceneDesign'), 'Generate character and scene design');
+  assert.equal(
+    getMessage('en', 'productionWizard.designActions.assetReadinessHint'),
+    'Characters, scenes, and key props flow into later storyboard shots and the final edit. Confirm portraits, scene images, and prop images before continuing.',
+  );
+  assert.equal(getMessage('en', 'productionWizard.exportWorkspace.reviewAndEditLabel'), 'Review & edit');
+  assert.equal(getMessage('en', 'productionWizard.storyboardPreview.noVideoYet'), 'No video yet. Use “Generate storyboard video” on the left.');
+  assert.equal(getMessage('en', 'productionWizard.storyboardShotStrip.title'), 'Storyboard strip');
   assert.notEqual(getMessage('zh-CN', 'productionWizard.status.platformQueueing'), 'productionWizard.status.platformQueueing');
   assert.equal(getMessage('en', 'quickfilm.startGeneration'), 'Start Generating');
   assert.equal(getMessage('en', 'quickfilm.processingTitle'), 'QuickFilm Is Writing');
@@ -172,6 +182,18 @@ test('formatMessage interpolates named variables', () => {
       count: 2,
     }),
     'Project memories 2',
+  );
+  assert.equal(
+    formatMessage(getMessage('en', 'editorWorkbench.autoMusicGenerated'), {
+      provider: 'Suno',
+    }),
+    'Music was generated automatically from the conversation (engine: Suno). If it is not right yet, fine-tune it in the music panel and generate again.',
+  );
+  assert.equal(
+    formatMessage(getMessage('en', 'productionWizard.storyboardMainHeader.shotTitle'), {
+      shotIndex: 6,
+    }),
+    'Shot 6',
   );
 });
 
