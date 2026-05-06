@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-02-multi-agent-dev-loop",
+  "timestamp": "2026-05-01T23:33:18Z",
+  "checks": {
+    "backend_build": { "status": "fail", "error": "npm run build failed" },
+    "frontend_build": { "status": "fail", "error": "npm run build failed" },
+    "typescript": { "status": "fail", "errors": ["scripts/eval.sh: line 75: npx: command not found"] },
+    "api_health": { "status": "skip", "code": 0 },
+    "smoke_tests": []
+  },
+  "verdict": "P0_FAIL"
+}

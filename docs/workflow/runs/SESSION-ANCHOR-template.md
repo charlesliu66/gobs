@@ -1,41 +1,41 @@
-# SESSION-ANCHOR — <run-id>
+# SESSION-ANCHOR - <run-id>
 
-> **使用前：将 `<run-id>` 替换为本 run 的目录名，格式 `YYYY-MM-DD-<feature-name>`（与 RUN_TEMPLATE.md 一致）。**
-> 每轮对话开始时 AI 必须先读这个文件，然后只读"允许读取"列表中的文件。
+> Replace `<run-id>` with the folder name, for example `2026-05-02-multi-agent-dev-loop`.
+> This file is the first run-specific document every agent should read.
 
-## 本轮目标（一句话）
+## Run Summary
+- Run ID: <run-id>
+- Goal: [Copy the one-sentence goal from planner-spec.md]
+- Owner: [owner name]
+- Branch or commit context: [branch@commit]
+- Last updated: [ISO-8601 timestamp]
 
-[从 `planner-spec.md` 的 `## Goal` 字段复制粘贴，保持原文不改写]
+## Acceptance Criteria Snapshot
+- AC-01: [summary]
+- AC-02: [summary]
 
-## 验收标准 ID
+## Editable Files (Builder Ownership)
+- [Exact file or directory path]
 
-- AC-1: [描述]
-- AC-2: [描述]
-- AC-3: [描述]
+## Read-Only References
+- docs/TASK-INDEX.md
+- docs/workflow/runs/<run-id>/planner-spec.md
 
-## 本轮禁区（绝对不能改）
+## Additional Forbidden Paths
+- [Optional extra forbidden path for this run]
 
-- [文件或目录]
-- [文件或目录]
+## Out of Scope
+- [Explicit non-goal]
 
-## 允许读取的文件（按需展开，其他不看）
+## Progress Checklist
+- [ ] Planner approved
+- [ ] Challenger approved
+- [ ] Builder self-test recorded
+- [ ] Verifier P0/P1 count is zero
+- [ ] Release decision written
 
-```
-docs/workflow/runs/<run-id>/planner-spec.md
-h5-video-tool-api/src/routes/[相关路由].ts
-h5-video-tool/src/[相关组件].tsx
-```
-
-## 当前进度
-
-- [ ] AC-1: 未开始
-- [ ] AC-2: 未开始
-- [ ] AC-3: 未开始
-
----
-
-> **使用说明**：
-> 1. Planner 创建 run 文件夹后立即填写本文件
-> 2. Builder 每轮开始时先读本文件，更新"当前进度"
-> 3. Verifier 在验证前读本文件，确认 AC 覆盖完整
-> 4. Integrator 在写 release-decision 前检查所有 AC 是否已勾选
+## Escalation Rules
+- Escalate if a forbidden file must change.
+- Escalate if a new env var is required.
+- Escalate if acceptance criteria need to expand.
+- Escalate before prod release approval.

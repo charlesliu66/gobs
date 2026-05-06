@@ -1,0 +1,6 @@
+interface:
+  display_name: "GOBS Multi-Agent Dev Loop"
+  short_description: "Guarded 4+1 workflow for GOBS tasks"
+  default_prompt: "Use $gobs-multi-agent-dev-loop to run this GOBS task through the repo's guarded 4+1 workflow."
+policy:
+  allow_implicit_invocation: true

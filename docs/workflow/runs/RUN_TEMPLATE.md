@@ -1,37 +1,35 @@
 # Run Template
 
-每次 run 至少包含：
-
-- planner-spec.md
-- challenger-review.md
-- builder-report.md
-- verifier-report.md
-- release-decision.md
-# Run Template
-
-Create a new folder per feature:
+Create one folder per feature:
 
 - `docs/workflow/runs/YYYY-MM-DD-<feature-name>/`
 
-Inside it, create:
+Fast path:
 
-1. `planner-spec.md`
-2. `challenger-review.md`
-3. `builder-report.md`
-4. `verifier-report.md`
-5. `release-decision.md`
+```bash
+python scripts/init_workflow_run.py \
+  --slug <feature-name> \
+  --goal "<one sentence goal>"
+```
+
+Required files inside every run:
+
+1. `SESSION-ANCHOR.md`
+2. `planner-spec.md`
+3. `challenger-review.md`
+4. `builder-report.md`
+5. `verifier-report.md`
+6. `release-decision.md`
 
 Optional:
 
+- `eval-result.json`
 - `defect-list.md`
 - `test-evidence/`
 
-Use contracts under `docs/workflow/contracts/` to keep outputs structured.
+Rules:
 
-## SESSION-ANCHOR（必备，新增）
-
-每个 run 目录还需要包含：
-
-- `SESSION-ANCHOR.md` — 从 `SESSION-ANCHOR-template.md` 复制并填写
-
-此文件是 AI 每轮开始时的第一个读取目标，用于防止目标漂移和无关文件占据 context。
+- `SESSION-ANCHOR.md` is mandatory and should be finalized before Builder starts.
+- `planner-spec.md` must exist before any implementation work.
+- `challenger-review.md` must clear blockers before Builder starts.
+- `builder-report.md`, `verifier-report.md`, and `release-decision.md` are living artifacts and should be updated in-place during the run.

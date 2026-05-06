@@ -2,6 +2,23 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.133 - 2026-05-06
+**Portable slash-invokable packaging for the repo multi-agent workflow skill**
+**Internal / Dev Workflow:**
+- Packaged `gobs-multi-agent-dev-loop` as a repo-local skill with valid frontmatter, `agents/openai.yaml`, and explicit `$gobs-multi-agent-dev-loop` invocation metadata.
+- Added `references/invocation.md` and `references/workflow-map.md` so the skill has a clear structure and portable repo-relative guidance after `git clone` or `git pull` on another computer.
+- Removed machine-specific absolute path assumptions from the skill body and related references, keeping cross-computer use repo-relative.
+- Revalidated the packaged skill after the slash/invocation packaging update.
+
+## v0.132 - 2026-05-02
+**Repo-local multi-agent self-loop workflow guardrails**
+**Internal / Dev Workflow:**
+- Added repo-private skill `gobs-multi-agent-dev-loop` for lower-touch multi-agent delivery.
+- Added `scripts/init_workflow_run.py` to create a full 4+1 run folder with `SESSION-ANCHOR.md`.
+- Added `scripts/workflow_guard.py` plus `scripts/workflow_common.py` to enforce forbidden-file boundaries, editable scope ownership, stage artifact readiness, and `PRODUCT.md` updates before verify/release.
+- Added unit tests for workflow bootstrap and guard behavior, plus root npm shortcuts `workflow:init` and `workflow:guard`.
+- Refreshed workflow docs, contracts, prompts, and templates so the loop is repo-local and repeatable.
+
 ## v0.131 - 2026-04-24
 **Legacy path fallbacks for dual-env shared-data layout**
 **Backend / Compatibility:**
