@@ -82,7 +82,7 @@ export function StepExportStoryboardOverview({
     shotJobStatusMap,
   );
   const statusSummary = summarizeExportStoryboardStatus(statusItems);
-  const totalPlatformQueue = (queueSnapshot?.totalActive ?? 0) + (queueSnapshot?.totalWaiting ?? 0);
+  const totalPlatformQueue = queueSnapshot?.totalWaiting ?? 0;
   const leadingQueuedShot = statusItems.find((item) => item.platformQueuePosition != null);
 
   const handleOpenInEditor = async () => {
@@ -289,8 +289,8 @@ export function StepExportStoryboardOverview({
                 )
               : status?.dreaminaQueuePosition
                 ? uiText(
-                    `即梦队列 #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
-                    `Dreamina queue #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
+                    `Ark 队列 #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
+                    `Ark queue #${status.dreaminaQueuePosition}${status.dreaminaQueueSize ? `/${status.dreaminaQueueSize}` : ''}`,
                   )
                 : status?.userStatus === 'generating'
                   ? uiText('后端正在持续跟进，完成后会回到这条分镜历史', 'Backend is tracking it; the result returns to this shot history')

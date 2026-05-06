@@ -154,6 +154,7 @@ export function StepStoryboardWorkspace({
   const { selectedShotIdx, setSelectedShotIdx, setLightboxSrc, patchShot, setStep } = useProductionContext();
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const maxConcurrent = queueSnapshot.maxConcurrent ?? 3;
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const shotActionRef = useRef<HTMLDivElement | null>(null);
   const currentShotNumber = shots.length > 0 ? selectedShotIdx + 1 : 0;
@@ -219,19 +220,19 @@ export function StepStoryboardWorkspace({
         className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
         title: uiText('平台空闲', 'Platform idle'),
         detail: uiText(
-          `当前没有任务占用即梦配额，平均 ${avgSec} 秒/个。`,
-          `No Dreamina jobs are using capacity right now. Average pace is about ${avgSec} sec/job.`,
+          `当前没有任务占用 Ark 槽位。平台支持最多 ${maxConcurrent} 并发，最近平均 ${avgSec} 秒/个。`,
+          `No jobs are using Ark slots right now. The platform supports up to ${maxConcurrent} concurrent jobs, with a recent average of ${avgSec} sec/job.`,
         ),
       };
     }
     if (queueSnapshot.totalWaiting >= 4) {
-      const etaMin = Math.max(1, Math.round((queueSnapshot.totalWaiting * avgSec) / 60));
+      const etaMin = Math.max(1, Math.round((queueSnapshot.totalWaiting * avgSec) / Math.max(1, maxConcurrent) / 60));
       return {
         className: 'border-red-500/30 bg-red-500/10 text-red-200',
         title: uiText('平台繁忙', 'Platform busy'),
         detail: uiText(
-          `队列 ${queueSnapshot.totalWaiting} 个，活跃 ${queueSnapshot.totalActive} 个，预计需要等待约 ${etaMin} 分钟。`,
-          `${queueSnapshot.totalWaiting} queued, ${queueSnapshot.totalActive} active. Estimated wait is about ${etaMin} minutes.`,
+          `平台排队 ${queueSnapshot.totalWaiting} 个，Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，预计约 ${etaMin} 分钟后轮到新任务。`,
+          `${queueSnapshot.totalWaiting} jobs are waiting and ${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy. A newly queued job should start in about ${etaMin} minutes.`,
         ),
       };
     }
@@ -239,8 +240,8 @@ export function StepStoryboardWorkspace({
       className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
       title: uiText('平台使用中', 'Platform in use'),
       detail: uiText(
-        `生成 ${queueSnapshot.totalActive} 个，排队 ${queueSnapshot.totalWaiting} 个，平均 ${avgSec} 秒/个。`,
-        `${queueSnapshot.totalActive} rendering, ${queueSnapshot.totalWaiting} queued. Average pace is about ${avgSec} sec/job.`,
+        `Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，平台排队 ${queueSnapshot.totalWaiting} 个，最近平均 ${avgSec} 秒/个。`,
+        `${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy, ${queueSnapshot.totalWaiting} jobs are in the platform queue, and the recent average pace is ${avgSec} sec/job.`,
       ),
     };
   })();
@@ -248,20 +249,26 @@ export function StepStoryboardWorkspace({
   const selectedShotSummary = (() => {
     if (selectedShotJob?.status === 'awaiting_submit' && typeof selectedShotJob.globalQueuePos === 'number') {
       return uiText(
-        `当前选中分镜排在平台第 ${selectedShotJob.globalQueuePos + 1} 位，系统会自动继续排队，轮到后自动开始生成。`,
-        `The selected shot is currently #${selectedShotJob.globalQueuePos + 1} in the platform queue. The system will keep advancing it automatically until rendering starts.`,
+        `当前选中分镜排在平台第 ${selectedShotJob.globalQueuePos + 1} 位，轮到后会自动占用 Ark 槽位并开始生成。`,
+        `The selected shot is currently #${selectedShotJob.globalQueuePos + 1} in the platform queue. It will automatically take an Ark slot and begin rendering when its turn arrives.`,
       );
     }
-    if (selectedShotJob?.status === 'pending' || selectedShotJob?.status === 'queuing') {
+    if (selectedShotJob?.status === 'pending') {
       return uiText(
-        '当前选中分镜已经排到平台提交阶段，正在等待即梦受理或排队。',
-        'The selected shot has already cleared the platform queue and is waiting for Dreamina to accept or queue it.',
+        '当前选中分镜已经提交到 Ark，正在等待 Ark 受理。',
+        'The selected shot has already been submitted to Ark and is waiting for Ark acceptance.',
+      );
+    }
+    if (selectedShotJob?.status === 'queuing') {
+      return uiText(
+        '当前选中分镜已经被 Ark 接收，正在 Ark 队列中等待渲染。',
+        'The selected shot has been accepted by Ark and is waiting in the Ark queue.',
       );
     }
     if (selectedShotJob?.status === 'processing') {
       return uiText(
-        '当前选中分镜已经轮到你，正在生成中。',
-        'The selected shot has reached the front and is rendering now.',
+        '当前选中分镜已经进入 Ark 渲染阶段，完成后会自动回写。',
+        'The selected shot is already rendering in Ark and will sync back automatically when complete.',
       );
     }
     return null;
@@ -332,7 +339,7 @@ export function StepStoryboardWorkspace({
             >
               {bulkCancelling
                 ? uiText('取消中...', 'Cancelling...')
-                : uiText(`取消本项目排队（${projectQueuedCount}）`, `Cancel queued jobs for this project (${projectQueuedCount})`)}
+                : uiText(`停止本项目任务（${projectQueuedCount}）`, `Stop project jobs (${projectQueuedCount})`)}
             </button>
           )}
           {onSyncBatchJobs && (
@@ -341,12 +348,12 @@ export function StepStoryboardWorkspace({
               onClick={onSyncBatchJobs}
               disabled={syncingBatchJobs}
               title={uiText(
-                '立即拉取所有即梦任务最新状态，并兜底恢复丢失的 submitId。',
-                'Fetch the latest Dreamina job states now and try to recover any missing submitId values.',
+                '立即拉取所有 Ark 任务最新状态，并兜底恢复丢失的 submitId。',
+                'Fetch the latest Ark job states now and try to recover any missing submitId values.',
               )}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步即梦状态', 'Sync Dreamina status')}
+              {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步 Ark 状态', 'Sync Ark status')}
             </button>
           )}
         </div>

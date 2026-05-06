@@ -14,6 +14,7 @@ import {
   computeSnapshotFromJobs,
   deriveQueuePositionPatches,
   isActiveStatus,
+  resolveBatchQueueMaxConcurrent,
 } from './queueSnapshot.js';
 import {
   appendJobId,
@@ -62,6 +63,7 @@ export interface BatchJob {
   status: BatchJobStatus;
   createdAt: string;
   updatedAt: string;
+  submittedAt?: string;
   lastPolledAt?: string;
   videoUrl?: string;
   videoFilePath?: string;
@@ -95,6 +97,8 @@ export interface QueueSnapshot {
   totalActive: number;
   totalWaiting: number;
   avgSecPerJob: number;
+  maxConcurrent: number;
+  availableSlots: number;
 }
 
 export interface BatchJobPromptCandidate {
@@ -231,6 +235,7 @@ async function requestScheduleTick(): Promise<void> {
               status: 'pending',
               submitId: payload.submitId,
               taskId: payload.taskId,
+              submittedAt: new Date().toISOString(),
               submitParams: undefined,
               failReason: undefined,
               errorCode: undefined,
@@ -468,6 +473,7 @@ async function submitNextQuickfilmShot(completedJob: BatchJob): Promise<void> {
       status: 'pending',
       submitId,
       taskId: taskId || `dreamina-${submitId}`,
+      submittedAt: new Date().toISOString(),
       submitParams: undefined,
       failReason: undefined,
       errorCode: undefined,
@@ -576,8 +582,23 @@ async function pollSingleJob(job: BatchJob): Promise<BatchJob | null> {
     console.warn(`[batch-jobs] transient poll error for ${job.id}: ${result.transientError}`);
   }
   if (!(await shouldAcceptPollResult(job.id))) return null;
+  const providerStatus = result.providerStatus?.trim().toLowerCase();
+  const queueStatus = result.queueInfo?.queue_status?.trim().toLowerCase();
+  const nextStatus: BatchJobStatus = (
+    providerStatus === 'running'
+    || queueStatus === 'generate'
+    || result.genStatus === 'generate'
+  )
+    ? 'processing'
+    : providerStatus === 'queued'
+      ? 'queuing'
+      : job.status === 'processing'
+        ? 'processing'
+        : job.status === 'queuing'
+          ? 'queuing'
+          : 'pending';
   const updated = await applyJobPatch(job.id, {
-    status: result.genStatus === 'generate' ? 'processing' : 'queuing',
+    status: nextStatus,
     queueInfo: result.queueInfo,
     lastPolledAt: new Date().toISOString(),
     providerStatus: result.providerStatus,
@@ -625,7 +646,7 @@ async function pollPendingJobs(): Promise<void> {
   }
 
   const toPoll = active.filter((job) => shouldPollJob(job));
-  const concurrency = 3;
+  const concurrency = Math.max(1, resolveBatchQueueMaxConcurrent());
   for (let index = 0; index < toPoll.length; index += concurrency) {
     const batch = toPoll.slice(index, index + concurrency);
     await Promise.all(

@@ -13,9 +13,9 @@ const STREAM_RETRY_MAX_MS = 10000;
 
 const STATUS_COLOR: Record<BatchJobDto['status'], string> = {
   awaiting_submit: 'text-slate-400',
-  pending: 'text-[var(--color-text-muted)]',
+  pending: 'text-sky-300',
   queuing: 'text-amber-400',
-  processing: 'text-blue-400',
+  processing: 'text-emerald-400',
   done: 'text-green-400',
   failed: 'text-red-400',
   cancelled: 'text-[var(--color-text-muted)]',
@@ -180,6 +180,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
 
   const done = jobs.filter((job) => job.status === 'done').length;
   const total = jobs.length;
+  const terminalCount = jobs.filter((job) => job.status === 'done' || job.status === 'failed' || job.status === 'cancelled').length;
   const awaitingCount = jobs.filter((job) => job.status === 'awaiting_submit').length;
   const queuingCount = jobs.filter((job) => job.status === 'queuing' || job.status === 'pending').length;
   const processingCount = jobs.filter((job) => job.status === 'processing').length;
@@ -211,7 +212,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
       <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-hover)]">
         <div
           className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
-          style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+          style={{ width: `${total > 0 ? (terminalCount / total) * 100 : 0}%` }}
         />
       </div>
 
@@ -250,6 +251,11 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                 <span className={`text-[11px] font-medium ${STATUS_COLOR[job.status]}`}>
                   {getStatusLabel(job.status)}
                 </span>
+                {job.status === 'awaiting_submit' && job.globalQueuePos != null && (
+                  <span className="text-[10px] text-violet-300">
+                    {text('batchJobs.platformQueuePosition', { position: job.globalQueuePos + 1 })}
+                  </span>
+                )}
                 {(job.status === 'queuing' || job.status === 'pending') && job.queueInfo?.queue_idx != null && (
                   <span className="text-[10px] text-yellow-400">
                     {text('batchJobs.queuePosition', { position: job.queueInfo.queue_idx + 1 })}
@@ -293,13 +299,17 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                         {t('batchJobs.downloadVideo')}
                       </a>
                     )}
-                    {(job.status === 'pending' || job.status === 'queuing' || job.status === 'awaiting_submit') && (
+                    {(job.status === 'pending' || job.status === 'queuing' || job.status === 'awaiting_submit' || job.status === 'processing') && (
                       <button
                         onClick={() => void handleCancel(job.id)}
                         disabled={cancellingId === job.id}
                         className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-red-400/30 hover:text-red-400 disabled:opacity-50"
                       >
-                        {cancellingId === job.id ? t('batchJobs.cancelling') : t('batchJobs.cancel')}
+                        {cancellingId === job.id
+                          ? t('batchJobs.cancelling')
+                          : job.status === 'processing'
+                            ? t('batchJobs.stopTracking')
+                            : t('batchJobs.cancel')}
                       </button>
                     )}
                     <span className="ml-auto self-center text-[9px] text-[var(--color-text-muted)]">

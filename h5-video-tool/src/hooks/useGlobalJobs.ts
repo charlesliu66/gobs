@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getBatchJobs, type BatchJobDto, type QueueSnapshotDto } from '../api/batchJobs';
+import { useLocale } from '../i18n/LocaleContext.tsx';
+import { sendBrowserNotification } from '../utils/notification';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 const STREAM_RETRY_BASE_MS = 1500;
@@ -21,7 +23,24 @@ const DEFAULT_SNAPSHOT: QueueSnapshotDto = {
   totalActive: 0,
   totalWaiting: 0,
   avgSecPerJob: 120,
+  maxConcurrent: 3,
+  availableSlots: 3,
 };
+
+const TERMINAL_JOB_STATUSES = new Set<BatchJobDto['status']>(['done', 'failed', 'cancelled']);
+
+function resolveLocalizedReason(uiLocale: 'zh-CN' | 'en', job: BatchJobDto): string {
+  if (uiLocale === 'en') {
+    return job.displayMessageEn?.trim()
+      || job.displayMessageZh?.trim()
+      || job.failReason?.trim()
+      || 'Unknown';
+  }
+  return job.displayMessageZh?.trim()
+    || job.displayMessageEn?.trim()
+    || job.failReason?.trim()
+    || '未知原因';
+}
 
 const GlobalJobsContext = createContext<GlobalJobsState>({
   jobs: [],
@@ -39,10 +58,13 @@ export const useGlobalJobs = () => useContext(GlobalJobsContext);
 export { GlobalJobsContext };
 
 export function useGlobalJobsProvider(): GlobalJobsState {
+  const { uiLocale } = useLocale();
   const [jobMap, setJobMap] = useState<Map<string, BatchJobDto>>(new Map());
   const [snapshot, setSnapshot] = useState<QueueSnapshotDto>(DEFAULT_SNAPSHOT);
   const [panelOpen, setPanelOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const seededTerminalKeysRef = useRef(false);
+  const announcedTerminalKeysRef = useRef<Set<string>>(new Set());
 
   const upsertJobs = useCallback((incomingJobs: BatchJobDto[]) => {
     if (incomingJobs.length === 0) return;
@@ -121,11 +143,63 @@ export function useGlobalJobsProvider(): GlobalJobsState {
     };
   }, [refreshJobs, upsertJobs]);
 
+  const allJobs = useMemo(() => (
+    Array.from(jobMap.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  ), [jobMap]);
+
   const jobs = useMemo(() => (
     Array.from(jobMap.values())
       .filter((job) => !dismissed.has(job.id))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   ), [jobMap, dismissed]);
+
+  useEffect(() => {
+    const currentTerminalKeys = new Set(
+      allJobs
+        .filter((job) => TERMINAL_JOB_STATUSES.has(job.status))
+        .map((job) => `${job.id}:${job.status}:${job.updatedAt}`),
+    );
+
+    if (!seededTerminalKeysRef.current) {
+      announcedTerminalKeysRef.current = currentTerminalKeys;
+      seededTerminalKeysRef.current = true;
+      return;
+    }
+
+    for (const job of allJobs) {
+      if (!TERMINAL_JOB_STATUSES.has(job.status)) continue;
+      const key = `${job.id}:${job.status}:${job.updatedAt}`;
+      if (announcedTerminalKeysRef.current.has(key)) continue;
+      announcedTerminalKeysRef.current.add(key);
+
+      if (job.status === 'done') {
+        const title = uiLocale === 'en' ? 'Storyboard Video Ready' : '分镜视频已完成';
+        const body = uiLocale === 'en'
+          ? `Shot ${job.shotIndex} finished and returned to this project.`
+          : `第 ${job.shotIndex} 镜已完成，结果已回写到当前项目。`;
+        sendBrowserNotification(title, body);
+        continue;
+      }
+
+      if (job.status === 'cancelled') {
+        const title = uiLocale === 'en' ? 'Storyboard Tracking Stopped' : '分镜任务已停止跟进';
+        const reason = resolveLocalizedReason(uiLocale, job);
+        const body = uiLocale === 'en'
+          ? `Shot ${job.shotIndex}: ${reason}`
+          : `第 ${job.shotIndex} 镜：${reason}`;
+        sendBrowserNotification(title, body);
+        continue;
+      }
+
+      const title = uiLocale === 'en' ? 'Storyboard Video Failed' : '分镜视频生成失败';
+      const reason = resolveLocalizedReason(uiLocale, job);
+      const body = uiLocale === 'en'
+        ? `Shot ${job.shotIndex}: ${reason}`
+        : `第 ${job.shotIndex} 镜：${reason}`;
+      sendBrowserNotification(title, body);
+    }
+  }, [allJobs, uiLocale]);
 
   const activeCount = useMemo(
     () => jobs.filter((job) => !['done', 'failed', 'cancelled'].includes(job.status)).length,

@@ -1,13 +1,24 @@
 import type { BatchJob, BatchJobStatus, QueueSnapshot } from './batchJobsQueue.js';
+import { getArkSeedanceMaxConcurrent, isArkSeedanceEnabled } from './arkSeedanceVideo.js';
 
 const DEFAULT_AVG_SEC_PER_JOB = 120;
 const DONE_SAMPLE_SIZE = 20;
+
+function getDreaminaMaxConcurrentFallback(): number {
+  const raw = Number.parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '1', 10);
+  return Number.isFinite(raw) && raw >= 1 ? raw : 1;
+}
+
+export function resolveBatchQueueMaxConcurrent(): number {
+  return isArkSeedanceEnabled() ? getArkSeedanceMaxConcurrent() : getDreaminaMaxConcurrentFallback();
+}
 
 export function isActiveStatus(status: BatchJobStatus): boolean {
   return status === 'pending' || status === 'queuing' || status === 'processing';
 }
 
 export function computeSnapshotFromJobs(jobs: BatchJob[]): QueueSnapshot {
+  const maxConcurrent = resolveBatchQueueMaxConcurrent();
   const totalActive = jobs.filter((job) => isActiveStatus(job.status)).length;
   const totalWaiting = jobs.filter((job) => job.status === 'awaiting_submit').length;
   const doneRecent = jobs
@@ -20,14 +31,21 @@ export function computeSnapshotFromJobs(jobs: BatchJob[]): QueueSnapshot {
         1,
         Math.round(
           doneRecent.reduce((sum, job) => {
-            const ageMs = new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime();
+            const startedAt = job.submittedAt ?? job.createdAt;
+            const ageMs = new Date(job.updatedAt).getTime() - new Date(startedAt).getTime();
             return sum + Math.max(0, ageMs);
           }, 0) / doneRecent.length / 1000,
         ),
       )
     : DEFAULT_AVG_SEC_PER_JOB;
 
-  return { totalActive, totalWaiting, avgSecPerJob };
+  return {
+    totalActive,
+    totalWaiting,
+    avgSecPerJob,
+    maxConcurrent,
+    availableSlots: Math.max(0, maxConcurrent - totalActive),
+  };
 }
 
 export function deriveQueuePositionPatches(
@@ -42,8 +60,12 @@ export function deriveQueuePositionPatches(
   for (let index = 0; index < waiting.length; index += 1) {
     const job = waiting[index];
     if (!job) continue;
-    const globalQueuePos = snapshot.totalActive + index;
-    const etaSec = Math.max(0, globalQueuePos * snapshot.avgSecPerJob);
+    const globalQueuePos = index;
+    const startsAhead = Math.max(0, index - snapshot.availableSlots + 1);
+    const etaSec = Math.max(
+      0,
+      Math.ceil((startsAhead * snapshot.avgSecPerJob) / Math.max(1, snapshot.maxConcurrent)),
+    );
     patches.set(job.id, { globalQueuePos, etaSec });
   }
 

@@ -1,6 +1,7 @@
 const DEFAULT_ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
 const DEFAULT_ARK_MODEL = 'doubao-seedance-2-0-260128';
 const DEFAULT_ARK_FAST_MODEL = 'doubao-seedance-2-0-fast-260128';
+const DEFAULT_ARK_MAX_CONCURRENT = 3;
 
 export type ArkSeedanceErrorCode =
   | 'ARK_AUTH_INVALID'
@@ -105,6 +106,11 @@ export function resolveArkApiKey(): string {
     throw new Error('ARK_API_KEY is not configured');
   }
   return raw;
+}
+
+export function getArkSeedanceMaxConcurrent(): number {
+  const raw = Number.parseInt(process.env.ARK_SEEDANCE_MAX_CONCURRENT ?? `${DEFAULT_ARK_MAX_CONCURRENT}`, 10);
+  return Number.isFinite(raw) && raw >= 1 ? raw : DEFAULT_ARK_MAX_CONCURRENT;
 }
 
 export function resolveArkProviderModel(params: {

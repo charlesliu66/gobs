@@ -31,12 +31,14 @@ test('resolveStoryboardQueueSnapshot falls back to local queued jobs when stream
     totalActive: 0,
     totalWaiting: 1,
     avgSecPerJob: 120,
+    maxConcurrent: 3,
+    availableSlots: 3,
   });
 });
 
 test('resolveStoryboardQueueSnapshot keeps the stream snapshot once it has real platform data', () => {
   const result = resolveStoryboardQueueSnapshot(
-    { totalActive: 2, totalWaiting: 3, avgSecPerJob: 95 },
+    { totalActive: 2, totalWaiting: 3, avgSecPerJob: 95, maxConcurrent: 3, availableSlots: 1 },
     [
       {
         id: 'bj_waiting',
@@ -59,6 +61,8 @@ test('resolveStoryboardQueueSnapshot keeps the stream snapshot once it has real 
     totalActive: 2,
     totalWaiting: 3,
     avgSecPerJob: 95,
+    maxConcurrent: 3,
+    availableSlots: 1,
   });
 });
 

@@ -1,55 +1,76 @@
-# Planner Spec — Ark Seedance API switch + localized H5 video errors
+# Planner Spec - Ark Seedance API switch + localized H5 video errors + concurrency-3 UX
 
-**Date**: 2026-05-06
-**Author**: Codex
-**Audience**: Builder / Verifier
+**Date**: 2026-05-06  
+**Author**: Codex  
+**Audience**: Challenger / Builder / Verifier
 
 ## Background
 
-The project currently depends on a local Dreamina CLI path for storyboard video generation. The user no longer has a usable CLI membership and instead has Volcengine Ark API access with the available model names:
+The project has already switched storyboard video generation from Dreamina CLI to Volcengine Ark Seedance. Production validation on 2026-05-06 showed that the provider integration now works, but the queue/scheduler UX still reflects an older single-lane Dreamina mental model.
 
-- `Doubao-Seedance-2.0`
-- `Doubao-Seedance-2.0-fast`
+The user's Ark personal API documentation states that the provider supports three concurrent jobs. We need to align backend scheduling, ETA estimation, and H5 status wording with that concurrency model so users can tell:
 
-The replacement must preserve existing H5 generation UX, queueing, and project writeback behavior.
+- whether their shot is still waiting for an Ark slot
+- whether it has already been submitted to Ark
+- whether Ark is actively rendering it
+- when it finishes, even if the user is not staring at the same panel
 
 ## Acceptance Criteria
 
-### AC1 — Submission compatibility
+### AC1 - Ark-aware scheduler behavior
 
-Calls that currently invoke `submitDreaminaVideo` or `submitDreaminaMultimodalVideo` should create Ark video-generation tasks successfully without requiring Dreamina CLI login or wrapper scripts.
+When Ark mode is enabled, the scheduler should treat the provider as having three concurrent execution slots. Jobs beyond those slots must remain in `awaiting_submit` until a slot is available.
 
-### AC2 — Polling compatibility
+### AC2 - Clear provider state mapping
 
-Current batch job polling should continue to work against Ark provider task IDs and should still drive:
+The backend should map Ark polling states into user-visible job states consistently enough that H5 can distinguish:
 
-- queue status updates
-- processing state
-- success writeback
-- failed/cancelled writeback
+- platform queue waiting
+- provider accepted / provider queueing
+- provider rendering
+- terminal success / failure / cancelled
 
-### AC3 — Localized H5 failure visibility
+### AC3 - Concurrency-aware ETA
 
-When the provider rejects a request for reasons such as copyright/IP restrictions, content policy, invalid inputs, or provider-side failure, GOBS H5 should display a readable user-facing message in the active locale.
+Platform queue ETA should be estimated using concurrency = 3 instead of a single serial lane. Waiting jobs should not appear to be blocked behind every currently active job one-by-one.
 
-### AC4 — Safe cancellation semantics
+### AC4 - H5 queue wording
 
-- queued provider tasks: remote delete/cancel when supported
-- running provider tasks: local abandon/stop-tracking wording only
+H5 surfaces should stop implying a Dreamina-only queue and should use Ark-appropriate language in both Chinese and English where practical.
 
-### AC5 — Backward compatibility
+### AC5 - Completion reminders
 
-Existing consumers that read `failReason` or `lastVideoError.reason` must keep working even if they do not yet understand new structured fields.
+When a storyboard video job finishes:
+
+- success: in-app toast plus browser notification when permission is granted
+- failed/cancelled terminal transitions: in-app toast
+
+Reminder logic must avoid duplicate firing on SSE reconnect or job list refresh.
+
+### AC6 - Backward compatibility
+
+Existing consumers that read `failReason`, `lastVideoError.reason`, `pendingVideoSubmitId`, and current job statuses must keep working even if they do not yet understand new structured queue metadata.
 
 ## Risks
 
-- Ark delete API cannot stop already running tasks.
-- Provider multimedia reference rules may differ from current CLI assumptions.
-- Old data shapes in persisted projects/jobs require optional-field compatibility.
+- Ark delete API still cannot stop already running tasks.
+- SSE reconnects can replay updates, so reminder logic must be idempotent.
+- Some legacy UI files still contain provider-specific wording and mixed encoding history.
+- Persisted job/project shapes require optional-field compatibility.
 
-## Verification matrix
+## Recommended Implementation Shape
 
-1. Backend adapter tests for request mapping, polling normalization, and error classification.
-2. Frontend display test for locale-sensitive failure-message choice.
-3. Backend `npx tsc --noEmit`.
-4. Frontend `npm run build`.
+1. Keep `awaiting_submit` as the platform waiting state.
+2. Use an Ark-aware max concurrent value of 3 in the scheduler when Ark mode is enabled.
+3. Refine active job state mapping so Ark `queued` stays queued/submitted while Ark `running` maps to processing/rendering.
+4. Extend queue snapshot DTOs with concurrency metadata needed by the frontend.
+5. Centralize completion reminder dedupe in the global jobs stream layer rather than scattering it across multiple pages.
+
+## Verification Matrix
+
+1. Backend tests for scheduler / queue snapshot behavior under concurrency = 3.
+2. Backend tests for Ark state mapping to `awaiting_submit` / `pending|queuing` / `processing`.
+3. Frontend tests or deterministic checks for localized status wording and reminder dedupe.
+4. Backend `npm run build`.
+5. Frontend `npm run build`.
+6. Staging smoke plus one real end-to-end Ark queue probe before prod.

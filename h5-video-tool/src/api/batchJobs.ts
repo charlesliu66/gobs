@@ -17,6 +17,7 @@ export interface BatchJobDto {
   unifiedStatus?: UnifiedJobStatus;
   createdAt: string;
   updatedAt: string;
+  submittedAt?: string;
   videoUrl?: string;
   failReason?: string;
   errorCode?: string;
@@ -40,6 +41,8 @@ export interface QueueSnapshotDto {
   totalActive: number;
   totalWaiting: number;
   avgSecPerJob: number;
+  maxConcurrent?: number;
+  availableSlots?: number;
 }
 
 export interface CancelResultDto {

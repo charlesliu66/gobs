@@ -4,7 +4,7 @@ import { pickUiText } from '../../i18n/uiText.ts';
 import { hasProductionShotPreviewMedia, type ProductionShot, type SceneSheet } from '../productionTypes';
 import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
 
-type ShotStatus = 'idle' | 'awaiting_submit' | 'queuing' | 'processing' | 'failed' | 'cancelled' | 'done';
+type ShotStatus = 'idle' | 'awaiting_submit' | 'pending' | 'queuing' | 'processing' | 'failed' | 'cancelled' | 'done';
 
 function resolveShotStatus(
   shot: ProductionShot,
@@ -14,19 +14,23 @@ function resolveShotStatus(
 ): ShotStatus {
   const shotKey = String(shot.shotIndex);
   if (shotBusyMap[shotKey] === 'video') return 'processing';
+
   const activeJob = shotActiveJobMap[shotKey];
   if (activeJob) {
     if (activeJob.status === 'awaiting_submit') return 'awaiting_submit';
-    if (activeJob.status === 'pending' || activeJob.status === 'queuing') return 'queuing';
+    if (activeJob.status === 'pending') return 'pending';
+    if (activeJob.status === 'queuing') return 'queuing';
     if (activeJob.status === 'processing') return 'processing';
     if (activeJob.status === 'failed') return 'failed';
     if (activeJob.status === 'cancelled') return 'cancelled';
     if (activeJob.status === 'done') return 'done';
   }
+
   const mapped = shotJobStatusMap[shotKey];
-  if (mapped === 'pending' || mapped === 'queuing') return 'queuing';
   if (
     mapped === 'awaiting_submit'
+    || mapped === 'pending'
+    || mapped === 'queuing'
     || mapped === 'processing'
     || mapped === 'failed'
     || mapped === 'cancelled'
@@ -34,6 +38,7 @@ function resolveShotStatus(
   ) {
     return mapped;
   }
+
   if (hasProductionShotPreviewMedia(shot)) return 'done';
   if (shot.lastVideoError?.cancelled) return 'cancelled';
   if (shot.lastVideoError?.reason) return 'failed';
@@ -52,27 +57,32 @@ function resolveStatusMeta(
       };
     case 'processing':
       return {
-        label: uiText('生成中', 'Rendering'),
-        className: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
+        label: uiText('Ark 生成中', 'Rendering in Ark'),
+        className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
       };
     case 'queuing':
       return {
-        label: uiText('平台排队', 'Queued'),
+        label: uiText('Ark 队列中', 'Queued in Ark'),
         className: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
+      };
+    case 'pending':
+      return {
+        label: uiText('已提交到 Ark', 'Submitted to Ark'),
+        className: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
       };
     case 'awaiting_submit':
       return {
-        label: uiText('等待提交', 'Waiting'),
+        label: uiText('平台排队中', 'In platform queue'),
         className: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
       };
     case 'failed':
       return {
-        label: uiText('失败', 'Failed'),
+        label: uiText('生成失败', 'Failed'),
         className: 'border-rose-500/40 bg-rose-500/15 text-rose-200',
       };
     case 'cancelled':
       return {
-        label: uiText('已取消', 'Cancelled'),
+        label: uiText('已停止跟进', 'Tracking stopped'),
         className: 'border-slate-500/40 bg-slate-500/15 text-slate-200',
       };
     default:
@@ -116,6 +126,7 @@ export function StepStoryboardShotStrip({
 }) {
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const maxConcurrent = snapshot.maxConcurrent ?? 3;
   const activeJobMap = shotActiveJobMap ?? {};
   const statusMap = shotJobStatusMap ?? {};
 
@@ -128,8 +139,8 @@ export function StepStoryboardShotStrip({
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)]">
             {uiText(
-              `平台活跃 ${snapshot.totalActive} / 排队 ${snapshot.totalWaiting}，点击镜头可快速定位。`,
-              `${snapshot.totalActive} active / ${snapshot.totalWaiting} waiting. Click a shot to jump there.`,
+              `平台排队 ${snapshot.totalWaiting} 个，Ark 占用 ${snapshot.totalActive}/${maxConcurrent} 个槽位。`,
+              `${snapshot.totalWaiting} in platform queue, ${snapshot.totalActive}/${maxConcurrent} Ark slots busy.`,
             )}
           </div>
         </div>
@@ -141,7 +152,9 @@ export function StepStoryboardShotStrip({
       <div className="flex gap-3 overflow-x-auto pb-1">
         {shots.map((shot, index) => {
           const shotKey = String(shot.shotIndex);
-          const sceneName = scSheets.find((sheet) => sheet.sceneRef === shot.sceneRef)?.name || shot.sceneRef || uiText('未命名场景', 'Untitled scene');
+          const sceneName = scSheets.find((sheet) => sheet.sceneRef === shot.sceneRef)?.name
+            || shot.sceneRef
+            || uiText('未命名场景', 'Untitled scene');
           const activeJob = activeJobMap[shotKey];
           const status = resolveShotStatus(shot, shotBusyMap, activeJobMap, statusMap);
           const statusMeta = resolveStatusMeta(status, uiText);
@@ -151,7 +164,7 @@ export function StepStoryboardShotStrip({
           return (
             <div
               key={`${shot.shotIndex}-${index}`}
-              className={`min-w-[220px] max-w-[220px] rounded-xl border p-3 transition-colors ${
+              className={`min-w-[228px] max-w-[228px] rounded-xl border p-3 transition-colors ${
                 selected
                   ? 'border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)]'
                   : 'border-[var(--color-border)] bg-[var(--color-surface)]'
@@ -179,10 +192,15 @@ export function StepStoryboardShotStrip({
                 <div className="mt-3 space-y-1 text-[10px] text-[var(--color-text-muted)]">
                   <div>{uiText(`时长 ${Math.round(shot.durationSec || 0)}s`, `${Math.round(shot.durationSec || 0)}s`)}</div>
                   {queueInfo?.globalQueuePos != null && (
-                    <div>{uiText(`平台队列 #${queueInfo.globalQueuePos + 1}`, `Platform #${queueInfo.globalQueuePos + 1}`)}</div>
+                    <div>{uiText(`平台队列 #${queueInfo.globalQueuePos + 1}`, `Platform queue #${queueInfo.globalQueuePos + 1}`)}</div>
                   )}
                   {queueInfo?.queue_idx != null && (
-                    <div>{uiText(`即梦队列 #${queueInfo.queue_idx + 1}`, `Dreamina #${queueInfo.queue_idx + 1}`)}</div>
+                    <div>
+                      {uiText(
+                        `Ark 队列 #${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? `/${queueInfo.queue_length}` : ''}`,
+                        `Ark queue #${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? `/${queueInfo.queue_length}` : ''}`,
+                      )}
+                    </div>
                   )}
                   {shot.lastVideoError?.reason && status === 'failed' && (
                     <div className="line-clamp-2 text-rose-200">{shot.lastVideoError.reason}</div>
@@ -198,8 +216,10 @@ export function StepStoryboardShotStrip({
                   className="mt-3 w-full rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {cancellingJobId === activeJob.id
-                    ? uiText('取消中...', 'Cancelling...')
-                    : uiText('取消当前任务', 'Cancel job')}
+                    ? uiText('处理中...', 'Working...')
+                    : activeJob.status === 'processing'
+                      ? uiText('停止本次跟进', 'Stop tracking')
+                      : uiText('取消当前任务', 'Cancel job')}
                 </button>
               )}
             </div>

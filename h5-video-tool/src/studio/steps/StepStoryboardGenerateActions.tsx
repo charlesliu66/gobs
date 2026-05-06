@@ -65,59 +65,66 @@ export function StepStoryboardGenerateActions({
   const hasPendingBackend = userStatus.status !== 'not_started' && userStatus.status !== 'completed';
   const videoButtonDisabled = isSubmitting || hasActiveJob;
   const platformQueuePosition = typeof activeJob?.globalQueuePos === 'number' ? activeJob.globalQueuePos + 1 : null;
-  const dreaminaQueuePosition = typeof activeJob?.queueInfo?.queue_idx === 'number' ? activeJob.queueInfo.queue_idx + 1 : null;
-  const dreaminaQueueSize = typeof activeJob?.queueInfo?.queue_length === 'number' ? activeJob.queueInfo.queue_length : null;
+  const arkQueuePosition = typeof activeJob?.queueInfo?.queue_idx === 'number' ? activeJob.queueInfo.queue_idx + 1 : null;
+  const arkQueueSize = typeof activeJob?.queueInfo?.queue_length === 'number' ? activeJob.queueInfo.queue_length : null;
   const needsImageToVideoStill = shotVideoDreaminaModel === 'dreamina-image2video' && !hasStill;
+
   const videoButtonHint = (() => {
     if (isSubmitting) {
       return uiText(
-        '正在提交当前分镜，入队成功后会显示平台排队位次。',
-        'Submitting this shot now. The platform queue position will appear once queued.',
+        '正在提交当前分镜。入队成功后，这里会先显示平台排队，再显示 Ark 状态。',
+        'Submitting this shot now. This panel will first show platform queue, then Ark status.',
       );
     }
     if (activeJob?.status === 'awaiting_submit') {
       return platformQueuePosition != null
         ? uiText(
-            `当前排在平台第 ${platformQueuePosition} 位；轮到后会自动开始生成并回写到本分镜。`,
-            `Currently #${platformQueuePosition} in the shared queue. Rendering starts automatically and returns to this shot.`,
+            `当前排在平台队列第 ${platformQueuePosition} 位，预计 ${formatEta(activeJob.etaSec, uiLocale)} 后轮到你。`,
+            `Currently #${platformQueuePosition} in the platform queue. Estimated start: ${formatEta(activeJob.etaSec, uiLocale)}.`,
           )
         : uiText(
-            '当前正在平台统一队列中等待，系统会持续推进。',
-            'This shot is waiting in the shared platform queue and will keep advancing.',
+            '当前正在平台队列中，平台会最多同时向 Ark 提交 3 条视频任务。',
+            'This shot is in the platform queue. The platform can submit up to 3 Ark video jobs in parallel.',
           );
     }
-    if (activeJob?.status === 'pending' || activeJob?.status === 'queuing') {
-      return dreaminaQueuePosition != null
+    if (activeJob?.status === 'pending') {
+      return uiText(
+        '平台已经拿到 Ark task id，正在等待 Ark 正式受理。',
+        'The platform already received an Ark task id and is waiting for Ark acceptance.',
+      );
+    }
+    if (activeJob?.status === 'queuing') {
+      return arkQueuePosition != null
         ? uiText(
-            `已进入即梦队列第 ${dreaminaQueuePosition}${dreaminaQueueSize ? `/${dreaminaQueueSize}` : ''} 位，完成后自动回到当前项目。`,
-            `Now in Dreamina queue #${dreaminaQueuePosition}${dreaminaQueueSize ? `/${dreaminaQueueSize}` : ''}; the result returns to this project automatically.`,
+            `Ark 已接收，当前在 Ark 队列第 ${arkQueuePosition}${arkQueueSize ? `/${arkQueueSize}` : ''} 位。`,
+            `Accepted by Ark and currently #${arkQueuePosition}${arkQueueSize ? `/${arkQueueSize}` : ''} in the Ark queue.`,
           )
         : uiText(
-            '已提交到即梦队列，后端会继续跟进结果。',
-            'Submitted to Dreamina. Backend tracking will continue.',
+            'Ark 已接收该任务，正在 Ark 队列中等待渲染。',
+            'Ark accepted this task and it is waiting in the Ark queue.',
           );
     }
     if (activeJob?.status === 'processing') {
       return uiText(
-        '已经轮到当前分镜，正在生成中，请保持在本项目查看回写结果。',
-        'This shot is rendering now. Stay in this project to see the returned result.',
+        'Ark 正在生成当前分镜。你可以离开页面，完成后会自动回写并提醒。',
+        'Ark is rendering this shot. You can leave the page; the result will sync back automatically with a reminder.',
       );
     }
     if (!hasVideo && pendingVideoSubmitId) {
       return uiText(
-        '已有提交记录，点击手动检查可主动拉取最新进度。',
-        'A submission is already recorded. Use Check progress to fetch the latest status.',
+        '已有提交记录。若页面状态没有刷新，可以手动检查一次最新进度。',
+        'A submission is already recorded. If the page looks stale, you can manually fetch the latest progress.',
       );
     }
     if (hasVideo) {
       return uiText(
-        '重新生成会为当前分镜增加新视频版本，历史版本仍可在右侧选择。',
-        'Regenerating creates a new video version for this shot; existing versions remain selectable.',
+        '重新生成会为当前分镜增加一个新视频版本，历史版本仍可在右侧切换。',
+        'Regenerating creates a new video version for this shot while keeping existing versions selectable.',
       );
     }
     return uiText(
-      '提交当前分镜到平台队列，入队后这里会显示你排在第几位。',
-      'Submit this shot to the platform queue. Your queue position will appear here after it joins.',
+      '提交当前分镜到平台队列。平台会按最多 3 并发依次把任务送入 Ark。',
+      'Submit this shot to the platform queue. The platform will feed jobs into Ark with up to 3 concurrent slots.',
     );
   })();
 
@@ -138,14 +145,13 @@ export function StepStoryboardGenerateActions({
     if (isSubmitting) return uiText('入队中...', 'Queueing...');
     if (activeJob?.status === 'awaiting_submit') {
       return platformQueuePosition != null
-        ? uiText(`平台排队第 ${platformQueuePosition} 位`, `Platform queue #${platformQueuePosition}`)
-        : uiText('平台排队中', 'Queued on platform');
+        ? uiText(`平台排队 #${platformQueuePosition}`, `Platform queue #${platformQueuePosition}`)
+        : uiText('平台排队中', 'In platform queue');
     }
-    if (activeJob?.status === 'pending' || activeJob?.status === 'queuing') {
-      return uiText('已提交生成队列', 'Submitted for render');
-    }
-    if (activeJob?.status === 'processing') return uiText('轮到你了，生成中', 'Rendering now');
-    if (!hasVideo && pendingVideoSubmitId) return uiText('后台跟进中', 'Backend tracking');
+    if (activeJob?.status === 'pending') return uiText('已提交到 Ark', 'Submitted to Ark');
+    if (activeJob?.status === 'queuing') return uiText('Ark 队列中', 'Queued in Ark');
+    if (activeJob?.status === 'processing') return uiText('Ark 生成中', 'Rendering in Ark');
+    if (!hasVideo && pendingVideoSubmitId) return uiText('后台跟进中', 'Background tracking');
     if (hasVideo) return uiText('重新生成分镜视频', 'Regenerate storyboard video');
     return uiText('生成分镜视频', 'Generate storyboard video');
   }
@@ -158,7 +164,7 @@ export function StepStoryboardGenerateActions({
   );
 
   const cancelLabel = activeJob?.status === 'processing'
-    ? uiText('放弃本次生成', 'Stop this render')
+    ? uiText('停止本次跟进', 'Stop tracking')
     : uiText('取消排队', 'Cancel queue');
 
   const statusBanner = (() => {
@@ -167,8 +173,8 @@ export function StepStoryboardGenerateActions({
         className: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
         title: uiText('正在加入平台队列', 'Joining the platform queue'),
         detail: uiText(
-          '系统正在把当前分镜加入平台统一调度队列。入队成功后，这里会显示你当前排在平台第几位。',
-          'This shot is being added to the shared platform queue. Once queued, this panel will show the exact platform position.',
+          '系统正在创建这条分镜任务。成功后会先显示平台排队位次，再显示 Ark 的受理和渲染状态。',
+          'The system is creating this shot job. Once accepted, you will first see the platform queue position, then Ark acceptance and rendering states.',
         ),
       };
     }
@@ -177,47 +183,56 @@ export function StepStoryboardGenerateActions({
         className: 'border-violet-500/30 bg-violet-500/10 text-violet-100',
         title: platformQueuePosition != null
           ? uiText(`平台排队第 ${platformQueuePosition} 位`, `Platform queue #${platformQueuePosition}`)
-          : uiText('平台排队中', 'Queued on platform'),
+          : uiText('平台排队中', 'In platform queue'),
         detail: uiText(
-          `任务已进入平台统一调度队列，系统会自动继续排队。预计 ${formatEta(activeJob.etaSec, uiLocale)} 后轮到你，开始后会自动生成并回到当前项目的这个分镜历史里。`,
-          `This shot is in the shared platform queue and will keep advancing automatically. Estimated start: ${formatEta(activeJob.etaSec, uiLocale)}. Once it is your turn, rendering starts automatically and the finished video returns to this shot history.`,
+          `平台会最多同时向 Ark 提交 3 条视频任务。预计 ${formatEta(activeJob.etaSec, uiLocale)} 后轮到你。`,
+          `The platform can submit up to 3 Ark video jobs in parallel. Estimated start: ${formatEta(activeJob.etaSec, uiLocale)}.`,
         ),
       };
     }
-    if (activeJob?.status === 'pending' || activeJob?.status === 'queuing') {
-      const queueDetail = dreaminaQueuePosition != null
-        ? (
-            dreaminaQueueSize != null
-              ? uiText(`当前已进入即梦队列第 ${dreaminaQueuePosition}/${dreaminaQueueSize} 位。`, `The job is now in Dreamina queue #${dreaminaQueuePosition}/${dreaminaQueueSize}.`)
-              : uiText(`当前已进入即梦队列第 ${dreaminaQueuePosition} 位。`, `The job is now in Dreamina queue #${dreaminaQueuePosition}.`)
-          )
-        : uiText('当前已提交到即梦，正在等待受理或排队。', 'The job has been submitted to Dreamina and is waiting to be accepted or queued.');
+    if (activeJob?.status === 'pending') {
       return {
         className: 'border-sky-500/30 bg-sky-500/10 text-sky-100',
-        title: uiText('平台已排到你，等待生成', 'Platform finished, waiting to render'),
+        title: uiText('已提交到 Ark', 'Submitted to Ark'),
         detail: uiText(
-          `${queueDetail} 后端会持续跟进，完成后自动回到当前项目的这个分镜历史里。`,
-          `${queueDetail} Backend tracking will continue, and the finished video will return to this shot history automatically.`,
+          '平台已经拿到 Ark task id，正在等待 Ark 受理并进入 Ark 队列。',
+          'The platform already received the Ark task id and is waiting for Ark to accept the job into its queue.',
+        ),
+      };
+    }
+    if (activeJob?.status === 'queuing') {
+      const queueDetail = arkQueuePosition != null
+        ? uiText(
+            `当前在 Ark 队列第 ${arkQueuePosition}${arkQueueSize ? `/${arkQueueSize}` : ''} 位。`,
+            `Currently #${arkQueuePosition}${arkQueueSize ? `/${arkQueueSize}` : ''} in the Ark queue.`,
+          )
+        : uiText('Ark 已接收，当前在 Ark 队列中等待。', 'Ark accepted the job and it is now waiting in the Ark queue.');
+      return {
+        className: 'border-sky-500/30 bg-sky-500/10 text-sky-100',
+        title: uiText('Ark 队列中', 'Queued in Ark'),
+        detail: uiText(
+          `${queueDetail} 后端会持续跟进，完成后自动回写到这个分镜。`,
+          `${queueDetail} Backend tracking will continue, and the result will sync back to this shot automatically.`,
         ),
       };
     }
     if (activeJob?.status === 'processing') {
       return {
         className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
-        title: uiText('已经轮到你，正在生成', 'It is your turn now'),
+        title: uiText('Ark 正在生成', 'Rendering in Ark'),
         detail: uiText(
-          '即梦正在生成当前分镜，后端会继续轮询并自动回写结果。现在取消会停止继续跟进，但通常无法追回已消耗积分。',
-          'Dreamina is rendering this shot now. Backend polling continues and writes the result back automatically. Cancelling now stops follow-up tracking, but consumed credits usually cannot be recovered.',
+          '视频已经进入 Ark 渲染阶段。现在停止只会停止本地跟进，通常无法追回已消耗额度。',
+          'The video is already rendering in Ark. Stopping now only stops local tracking, and consumed credits usually cannot be recovered.',
         ),
       };
     }
     if (!hasVideo && pendingVideoSubmitId) {
       return {
         className: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-        title: uiText('已提交，后台仍在跟进', 'Submitted, backend still tracking'),
+        title: uiText('后台仍在跟进', 'Background tracking continues'),
         detail: uiText(
-          '系统已经记录这条分镜的提交信息，即使页面暂时没刷新，后端也会继续检查并在完成后自动回写到当前分镜历史里。',
-          'The submission is already recorded for this shot. Even if the page looks stale for a moment, backend polling will continue and write the finished video back to this shot history automatically.',
+          '系统已经记录这条提交。即使你离开页面，后端也会继续检查并在完成后自动回写。',
+          'The submission is already recorded. Even if you leave the page, backend polling continues and writes the result back automatically when ready.',
         ),
       };
     }
@@ -283,7 +298,7 @@ export function StepStoryboardGenerateActions({
                     : 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50'
                 }
               >
-                {cancelBusy ? uiText('取消中...', 'Cancelling...') : cancelLabel}
+                {cancelBusy ? uiText('处理中...', 'Working...') : cancelLabel}
               </button>
             )}
             {!hasActiveJob && hasPendingBackend && shotMediaBusy !== 'video' && onCheckVideoProgress && (
@@ -302,7 +317,7 @@ export function StepStoryboardGenerateActions({
       {needsImageToVideoStill && (
         <p className="mt-2 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[11px] leading-relaxed text-cyan-100">
           {uiText(
-            '图生视频需要当前分镜先有首帧。请展开高级工具生成首帧，或切换为文本生成视频。',
+            '图生视频需要当前分镜先有首帧。请展开高级工具生成首帧，或切换为文生视频。',
             'Image-to-video needs a first frame for this shot. Open Advanced tools to generate one, or switch back to text-to-video.',
           )}
         </p>

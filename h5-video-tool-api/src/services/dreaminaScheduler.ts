@@ -2,7 +2,7 @@ import {
   submitDreaminaMultimodalVideo,
   submitDreaminaVideo,
 } from './dreaminaVideo.js';
-import { isActiveStatus } from './queueSnapshot.js';
+import { isActiveStatus, resolveBatchQueueMaxConcurrent } from './queueSnapshot.js';
 import type { BatchJob, BatchJobSubmitParams } from './batchJobsQueue.js';
 
 export interface SchedulerOps {
@@ -18,8 +18,7 @@ export interface SchedulerOps {
 }
 
 function getMaxConcurrent(): number {
-  const raw = Number.parseInt(process.env.DREAMINA_MAX_CONCURRENT ?? '1', 10);
-  return Number.isFinite(raw) && raw >= 1 ? raw : 1;
+  return resolveBatchQueueMaxConcurrent();
 }
 
 function is1310Error(message: string): boolean {
@@ -94,6 +93,7 @@ export async function scheduleTick(ops: SchedulerOps): Promise<boolean> {
         await ops.markRetry(fresh.id, attempts);
       }
       changed = true;
+      return changed;
     }
   }
 }

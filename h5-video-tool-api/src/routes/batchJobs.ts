@@ -17,6 +17,7 @@ import {
 } from '../services/batchJobsQueue.js';
 import { fromBatchJobStatus } from '../domain/job-status.js';
 import { resolveMediaRequestUsername } from '../utils/fileAccessToken.js';
+import { computeSnapshotFromJobs } from '../services/queueSnapshot.js';
 
 const router = Router();
 
@@ -204,8 +205,7 @@ router.delete('/project/:projectId', async (req, res) => {
 
   const jobs = (await getJobsByProject(projectId)).filter((job) =>
     job.username === username
-    && job.status !== 'processing'
-    && (job.status === 'awaiting_submit' || job.status === 'pending' || job.status === 'queuing')
+    && (job.status === 'awaiting_submit' || job.status === 'pending' || job.status === 'queuing' || job.status === 'processing')
     && (
       !shotIndexes
       || (job.sourceShotIndexes ?? [job.primaryShotIndex ?? job.shotIndex]).some((index) => shotIndexes.has(index))
@@ -354,11 +354,7 @@ router.get('/stream', async (req, res) => {
 
   const currentJobs = await getAllJobs();
   currentJobs.forEach(sendJob);
-  sendSnapshot({
-    totalActive: currentJobs.filter((job) => ['pending', 'queuing', 'processing'].includes(job.status)).length,
-    totalWaiting: currentJobs.filter((job) => job.status === 'awaiting_submit').length,
-    avgSecPerJob: computeAvgSecPerJob(currentJobs),
-  });
+  sendSnapshot(computeSnapshotFromJobs(currentJobs));
 
   req.on('close', () => {
     batchJobEvents.off('update', sendJob);
@@ -396,22 +392,5 @@ router.get('/video/:id', async (req, res) => {
   res.setHeader('Content-Disposition', `inline; filename="${id}.mp4"`);
   fs.createReadStream(filePath).pipe(res);
 });
-
-function computeAvgSecPerJob(jobs: BatchJob[]): number {
-  const doneRecent = jobs
-    .filter((job) => job.status === 'done')
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 20);
-  if (doneRecent.length === 0) return 120;
-  return Math.max(
-    1,
-    Math.round(
-      doneRecent.reduce((sum, job) => {
-        const ageMs = new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime();
-        return sum + Math.max(0, ageMs);
-      }, 0) / doneRecent.length / 1000,
-    ),
-  );
-}
 
 export default router;

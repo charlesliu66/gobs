@@ -41,6 +41,10 @@ export function resolveStoryboardQueueSnapshot(
       totalActive,
       totalWaiting,
       avgSecPerJob: snapshot.avgSecPerJob || 120,
+      maxConcurrent: snapshot.maxConcurrent || 3,
+      availableSlots: typeof snapshot.availableSlots === 'number'
+        ? snapshot.availableSlots
+        : Math.max(0, (snapshot.maxConcurrent || 3) - totalActive),
     },
   };
 }

@@ -1,48 +1,50 @@
 # Builder Report
 
-Run: `2026-05-06-ark-seedance-api-switch`
+## Scope
 
-## Delivered
+- Run id: `2026-05-06-ark-seedance-api-switch`
+- Builder goal: align Ark personal API concurrency with a `3`-slot scheduler and refresh the H5 queue UX so users can tell whether a shot is still in the platform queue, already submitted to Ark, waiting in Ark, or actively rendering.
 
-- Added Ark Seedance adapter in `h5-video-tool-api/src/services/arkSeedanceVideo.ts` for:
-  - provider model resolution
-  - Dreamina-compatible payload mapping
-  - task create/get/delete
-  - bilingual error normalization
-  - result download to data URL
-- Wired `h5-video-tool-api/src/services/dreaminaVideo.ts` to use Ark when `ARK_API_KEY` is present while keeping existing Dreamina-compatible entrypoints and task IDs.
-- Updated `h5-video-tool-api/src/services/batchJobsQueue.ts` to persist Ark provider status and structured error fields through polling, cancellation, and project write-back.
-- Extended backend/frontend job status models and DTOs to carry:
-  - `errorCode`
-  - `displayMessageZh`
-  - `displayMessageEn`
-  - `providerMessage`
-  - `providerStatus`
-- Extended `h5-video-tool/src/studio/productionTypes.ts` so storyboard/project state can retain localized provider error metadata.
-- Added targeted regression tests:
-  - `h5-video-tool-api/tests/arkSeedanceVideo.test.ts`
-  - `h5-video-tool/tests/storyboardVideoErrorDisplay.test.ts`
+## Implemented
 
-## Acceptance Mapping
+- Backend queue math now uses Ark-aware concurrency with a single source of truth:
+  - `h5-video-tool-api/src/services/arkSeedanceVideo.ts`
+  - `h5-video-tool-api/src/services/queueSnapshot.ts`
+  - `h5-video-tool-api/src/services/dreaminaScheduler.ts`
+  - `h5-video-tool-api/src/services/batchJobsQueue.ts`
+  - `h5-video-tool-api/src/routes/batchJobs.ts`
+- Queue snapshots now expose `maxConcurrent` and `availableSlots`, and waiting ETA is derived from submitted service time plus `3`-lane capacity instead of old single-lane age math.
+- Batch-job polling now preserves the Ark phase split:
+  - `awaiting_submit` = local platform queue
+  - `pending` = submitted to Ark, waiting for provider acceptance
+  - `queuing` = accepted by Ark, waiting in Ark queue
+  - `processing` = Ark running/rendering
+- Project-level cancellation now allows `processing` jobs to transition into local “stop tracking” semantics instead of pretending the provider always cancelled remotely.
+- Frontend queue DTO/state now carries the richer snapshot and uses it across:
+  - `h5-video-tool/src/components/GlobalJobsPanel.tsx`
+  - `h5-video-tool/src/components/BatchJobsBoard.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardPreviewPanel.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx`
+  - `h5-video-tool/src/studio/steps/StepExportStoryboardOverview.tsx`
+  - `h5-video-tool/src/hooks/useGlobalJobs.ts`
+  - `h5-video-tool/src/i18n/messages.ts`
+- Browser reminders are now emitted from the SSE global-jobs layer so completed / failed / stopped jobs can still notify after the user leaves the current shot view.
 
-- AC: Replace Dreamina CLI submission/polling with official Ark Seedance API.
-  - Met by `arkSeedanceVideo.ts` plus Ark branches in `dreaminaVideo.ts`.
-- AC: Preserve current Dreamina-compatible frontend model names and queue flow.
-  - Met by keeping Dreamina service function signatures and `dreamina-*` task IDs unchanged.
-- AC: Show provider failures in a user-readable zh/en form.
-  - Met by Ark error normalization plus propagation through task poll and batch job DTOs.
-- AC: Adjust cancel semantics for running jobs to local abandon/stop-tracking instead of guaranteed remote termination.
-  - Met by queue cancellation notes and remote delete only being attempted for submitted queued jobs.
+## Self-check Evidence
 
-## Verification
-
-- `node --import tsx --test tests/arkSeedanceVideo.test.ts` in `h5-video-tool-api`
-- `..\h5-video-tool-api\node_modules\.bin\tsx.cmd --test tests/storyboardVideoErrorDisplay.test.ts` in `h5-video-tool`
-- `npm run build` in `h5-video-tool-api`
-- `npm run build` in `h5-video-tool`
+- Backend tests:
+  - `node --import tsx --test tests/queueSnapshot.test.ts tests/arkSeedanceVideo.test.ts`
+  - `node --import tsx --test tests/quickfilmBatchJobs.test.ts`
+- Frontend tests:
+  - `..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests/storyboardQueueState.test.ts tests/shotUserStatus.test.ts`
+  - `..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests/storyboardVideoErrorDisplay.test.ts tests/productionExportStoryboardStatus.test.ts`
+- Builds:
+  - `h5-video-tool-api: npm run build`
+  - `h5-video-tool: npm run build`
 
 ## Notes
 
-- `h5-video-tool-api/src/services/dreaminaVideo.ts` was updated narrowly because this task explicitly requires replacing the Dreamina provider path.
-- Some large legacy UI files in the repo use non-UTF-8 encoding, so the current implementation prioritizes provider-side bilingual error propagation first. The main queue/project flow now carries zh/en error metadata end-to-end.
-- Follow-up on 2026-05-06: fixed the Ark provider model mapping from display names to real callable model IDs (`doubao-seedance-2-0-260128` / `doubao-seedance-2-0-fast-260128`) after production validation showed submissions were failing before provider acceptance.
+- `ProductionWizard.tsx` still contains a legacy mount-time notification permission request because the file currently has an invalid UTF-8 byte sequence that blocks `apply_patch` from editing it safely. The new browser reminder path is already centralized in `useGlobalJobs.ts`, so functional completion reminders are still in place.
+- `PRODUCT.md` has the same invalid UTF-8 issue and could not be updated through `apply_patch` in this pass. The release note content is captured in this run report and should be mirrored into product docs once the file is normalized.
