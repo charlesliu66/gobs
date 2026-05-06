@@ -11,6 +11,7 @@ import './index.css';
 
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const CampaignCreative = lazy(() => import('./pages/CampaignCreative').then(m => ({ default: m.CampaignCreative })));
 const Studio = lazy(() => import('./pages/Studio').then(m => ({ default: m.Studio })));
 const ProductionWizard = lazy(() => import('./pages/ProductionWizard').then(m => ({ default: m.ProductionWizard })));
 const ProjectList = lazy(() => import('./pages/ProjectList').then(m => ({ default: m.ProjectList })));
@@ -64,6 +65,7 @@ function App() {
               <Route element={<RequireAuth />}>
                 <Route element={<Layout />}>
                   <Route path="/" element={<Home />} />
+                  <Route path="/campaign-creative" element={<CampaignCreative />} />
                   <Route path="/studio" element={<Studio />} />
                   <Route path="/studio/production" element={<ProductionWizard />} />
                   <Route path="/projects" element={<ProjectList />} />

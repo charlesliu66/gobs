@@ -54,6 +54,14 @@ function QuickFilmIcon() {
   );
 }
 
+function CampaignCreativeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l2.7 5.48L21 9.36l-4.5 4.38 1.06 6.2L12 17.25 6.44 19.94l1.06-6.2L3 9.36l6.3-.88L12 3z" />
+    </svg>
+  );
+}
+
 function StudioIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -151,6 +159,7 @@ const NAV_GROUPS: { labelKey: string; items: NavItemDef[] }[] = [
   {
     labelKey: 'layout.navCreate',
     items: [
+      { to: '/campaign-creative', labelKey: 'layout.campaignCreative', icon: CampaignCreativeIcon, highlight: true },
       { to: '/quickfilm', labelKey: 'layout.quickfilm', icon: QuickFilmIcon },
       { to: '/studio/production', labelKey: 'layout.production', icon: ProductionIcon },
       { to: '/studio', labelKey: 'layout.studio', icon: StudioIcon, end: true },

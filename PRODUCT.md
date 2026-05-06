@@ -2004,3 +2004,11 @@ Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jo
 
 
 
+
+---
+
+## v0.135 - 2026-05-06 (Campaign Creative Addendum)
+- Added a dedicated /campaign-creative entry path from homepage and top navigation.
+- Added a brief-first campaign workflow with Brand Content and TikTok UA modes.
+- Added a strategy-card artifact and a brief-to-Editor handoff path.
+- Added region and forbiddenClaims to the shared brief contract used by Editor Agent.

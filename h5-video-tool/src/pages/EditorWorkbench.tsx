@@ -64,6 +64,10 @@ import {
   type EditorCreativeStrategy,
 } from '../api/editorCreative';
 import {
+  normalizeEditorCreativeBriefForRequest,
+  type EditorCreativeBrief,
+} from '../editor/utils/editorCreativeBrief';
+import {
   deleteEditorProjectMemoryItem,
   fetchEditorAgentMemory,
   rememberEditorProjectFeedback,
@@ -92,6 +96,83 @@ import { pickUiText } from '../i18n/uiText.ts';
 const MIN_EDIT_SEC = 0.12;
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const CAMPAIGN_HANDOFF_STORAGE_KEYS = [
+  'campaign_creative_editor_handoff',
+  'campaignCreativeEditorHandoff',
+  'editor_campaign_creative_handoff',
+] as const;
+
+interface CampaignCreativeEditorHandoff {
+  brief: EditorCreativeBrief;
+  strategy?: EditorCreativeStrategy;
+  source: 'campaign-creative';
+  createdAt: number;
+}
+
+function cleanHandoffText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const objective = cleanHandoffText(raw.objective);
+  const recommendedHook = cleanHandoffText(raw.recommendedHook);
+  const cta = cleanHandoffText(raw.cta);
+  const rationale = cleanHandoffText(raw.rationale);
+  const primarySellingPoint = cleanHandoffText(raw.primarySellingPoint);
+  const audience = cleanHandoffText(raw.audience);
+  const mode = raw.mode === 'tiktok_ua' ? 'tiktok_ua' : 'tiktok_content';
+  const hookOptions = Array.isArray(raw.hookOptions)
+    ? raw.hookOptions
+        .map((item) => cleanHandoffText(item))
+        .filter((item): item is string => Boolean(item))
+    : [];
+
+  if (!objective || !recommendedHook || !cta || !rationale) return undefined;
+
+  return {
+    platform: 'tiktok',
+    mode,
+    objective,
+    audience,
+    primarySellingPoint,
+    hookOptions: hookOptions.length > 0 ? hookOptions : [recommendedHook],
+    recommendedHook,
+    cta,
+    rationale,
+  };
+}
+
+function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEditorHandoff | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const brief =
+    normalizeEditorCreativeBriefForRequest(
+      raw.brief as Parameters<typeof normalizeEditorCreativeBriefForRequest>[0],
+    ) ??
+    normalizeEditorCreativeBriefForRequest(
+      raw.creativeBrief as Parameters<typeof normalizeEditorCreativeBriefForRequest>[0],
+    );
+  if (!brief) return null;
+
+  const source = cleanHandoffText(raw.source) === 'campaign-creative'
+    ? 'campaign-creative'
+    : 'campaign-creative';
+  const createdAt =
+    typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
+      ? raw.createdAt
+      : Date.now();
+
+  return {
+    brief,
+    strategy: normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy),
+    source,
+    createdAt,
+  };
+}
 
 function mixEditorMusicUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -229,6 +310,8 @@ export function EditorWorkbench() {
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
   const [agentDeliverable, setAgentDeliverable] = useState<string | null>(null);
   const [agentCreativeStrategy, setAgentCreativeStrategy] = useState<EditorCreativeStrategy | null>(null);
+  const [campaignCreativeHandoff, setCampaignCreativeHandoff] = useState<CampaignCreativeEditorHandoff | null>(null);
+  const [campaignCreativeHandoffConsumed, setCampaignCreativeHandoffConsumed] = useState(false);
   /** Agent 自动配乐成功后同步到左下「配乐生成」文案 */
   const [bgmFormSync, setBgmFormSync] = useState<{
     prompt: string;
@@ -405,7 +488,62 @@ export function EditorWorkbench() {
     setAgentCreativeStrategy(null);
     setAgentJobProgress(null);
     setAgentUserCommunicationProfile(null);
+    setCampaignCreativeHandoffConsumed(false);
   }, [projectId]);
+
+  useEffect(() => {
+    if (campaignCreativeHandoff) return;
+    const candidates: unknown[] = [];
+
+    try {
+      for (const key of CAMPAIGN_HANDOFF_STORAGE_KEYS) {
+        const raw = sessionStorage.getItem(key);
+        if (!raw) continue;
+        sessionStorage.removeItem(key);
+        try {
+          candidates.push(JSON.parse(raw));
+        } catch {
+          // Ignore malformed handoff payloads and fall back to the editor's existing flow.
+        }
+      }
+    } catch {
+      // Ignore storage access failures and keep the editor usable.
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    for (const key of ['campaignCreativeHandoff', 'creativeHandoff', 'handoff']) {
+      const raw = params.get(key);
+      if (!raw) continue;
+      try {
+        candidates.push(JSON.parse(raw));
+      } catch {
+        try {
+          candidates.push(JSON.parse(decodeURIComponent(raw)));
+        } catch {
+          // Ignore malformed query handoff payloads.
+        }
+      }
+    }
+
+    const historyState = window.history.state as { usr?: unknown } | null;
+    if (historyState?.usr) {
+      candidates.push(historyState.usr);
+    }
+
+    for (const candidate of candidates) {
+      const normalized = normalizeCampaignCreativeHandoff(candidate);
+      if (!normalized) continue;
+      setCampaignCreativeHandoff(normalized);
+      setCampaignCreativeHandoffConsumed(false);
+      setAgentCreativeStrategy(normalized.strategy ?? null);
+      pushLog(pickUiText(
+        uiLocale,
+        '已接收 Campaign Creative handoff，上下文会优先用于首次 Agent 执行。',
+        'Campaign Creative handoff received. The first agent run will prioritize this context.',
+      ));
+      return;
+    }
+  }, [campaignCreativeHandoff, pushLog, uiLocale]);
 
   useEffect(() => {
     if (!requiresProjectNaming || hasPersistedProject) return;
@@ -785,13 +923,27 @@ export function EditorWorkbench() {
   const handleCreativeAgentApply = useCallback(
     async ({ userMessage, creativeBrief }: AgentPanelApplyRequest) => {
       const trimmedMessage = userMessage?.trim() ?? '';
-      const replyLocale = resolveEditorReplyLocale(creativeBrief, [trimmedMessage]);
-      const shouldForceEdit = Boolean(creativeBrief);
+      const activeCreativeBrief =
+        creativeBrief ??
+        (!campaignCreativeHandoffConsumed ? campaignCreativeHandoff?.brief : undefined);
+      const shouldUseHandoffStrategy = Boolean(
+        !campaignCreativeHandoffConsumed &&
+        campaignCreativeHandoff?.strategy &&
+        (
+          !creativeBrief ||
+          JSON.stringify(creativeBrief) === JSON.stringify(campaignCreativeHandoff?.brief)
+        ),
+      );
+      const activeCreativeStrategy = shouldUseHandoffStrategy
+        ? campaignCreativeHandoff?.strategy
+        : undefined;
+      const replyLocale = resolveEditorReplyLocale(activeCreativeBrief, [trimmedMessage]);
+      const shouldForceEdit = Boolean(activeCreativeBrief);
       let agentOk = false;
 
       setAgentBusy(true);
       setAgentDeliverable(null);
-      setAgentCreativeStrategy(null);
+      setAgentCreativeStrategy(activeCreativeStrategy ?? null);
       setAgentJobProgress(null);
 
       try {
@@ -896,9 +1048,10 @@ export function EditorWorkbench() {
             assets: assetPayload,
             currentProject: project,
             projectMemory,
-            creativeBrief,
+            creativeBrief: activeCreativeBrief,
+            creativeStrategy: activeCreativeStrategy,
             replyLocale,
-          },
+          } as Parameters<typeof applyEditorAgentCreativeStream>[0],
           (progress) => setAgentJobProgress(progress),
           ctrl.signal,
         );
@@ -912,7 +1065,8 @@ export function EditorWorkbench() {
         mergeAssetsForTimelineClips(syncedProject, libraryItems, setAssets);
         setCurrentTime(0);
         setIsPlaying(false);
-        setAgentCreativeStrategy(creativeStrategy ?? null);
+        setAgentCreativeStrategy(creativeStrategy ?? activeCreativeStrategy ?? null);
+        setCampaignCreativeHandoffConsumed(true);
 
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
@@ -939,6 +1093,8 @@ export function EditorWorkbench() {
       selectedAssetIds,
       project,
       projectMemory,
+      campaignCreativeHandoff,
+      campaignCreativeHandoffConsumed,
       aspectRatio,
       assets,
       libraryItems,
@@ -1653,6 +1809,7 @@ export function EditorWorkbench() {
             deliverableMarkdown={agentDeliverable}
             chatHistory={agentChatHistory}
             creativeStrategy={agentCreativeStrategy}
+            initialCreativeBrief={campaignCreativeHandoff?.brief ?? null}
           />
         }
         timelinePanel={

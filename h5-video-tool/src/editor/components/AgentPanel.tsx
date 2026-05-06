@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EditorAgentJobProgress } from '../../api/editor';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
@@ -67,6 +67,7 @@ interface AgentPanelProps {
   chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   onAbort?: () => void;
   creativeStrategy?: EditorCreativeStrategy | null;
+  initialCreativeBrief?: EditorCreativeBrief | null;
 }
 
 function modeLabel(mode: EditorCreativeMode, uiLocale: 'zh-CN' | 'en'): string {
@@ -93,6 +94,7 @@ export function AgentPanel({
   chatHistory,
   onAbort,
   creativeStrategy,
+  initialCreativeBrief,
 }: AgentPanelProps) {
   const { uiLocale } = useLocale();
   const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
@@ -105,6 +107,20 @@ export function AgentPanel({
   const [sellingPoints, setSellingPoints] = useState('');
   const [cta, setCta] = useState('');
   const [referenceStyle, setReferenceStyle] = useState('');
+  const [region, setRegion] = useState('');
+  const [forbiddenClaims, setForbiddenClaims] = useState('');
+
+  useEffect(() => {
+    if (!initialCreativeBrief) return;
+    setMode(initialCreativeBrief.mode);
+    setObjective(initialCreativeBrief.objective ?? '');
+    setAudience(initialCreativeBrief.audience ?? '');
+    setSellingPoints(initialCreativeBrief.sellingPoints.join('\n'));
+    setCta(initialCreativeBrief.cta ?? '');
+    setReferenceStyle(initialCreativeBrief.referenceStyle ?? '');
+    setRegion(initialCreativeBrief.region ?? '');
+    setForbiddenClaims((initialCreativeBrief.forbiddenClaims ?? []).join('\n'));
+  }, [initialCreativeBrief]);
 
   const briefPreview = useMemo(
     () =>
@@ -115,8 +131,10 @@ export function AgentPanel({
         sellingPoints,
         cta,
         referenceStyle,
+        region,
+        forbiddenClaims,
       }),
-    [mode, objective, audience, sellingPoints, cta, referenceStyle],
+    [mode, objective, audience, sellingPoints, cta, referenceStyle, region, forbiddenClaims],
   );
 
   const send = async () => {
@@ -247,6 +265,26 @@ export function AgentPanel({
                   placeholder="参考风格，例如 fast hook + character reveal"
                   disabled={busy}
                   className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  value={region}
+                  onChange={(event) => setRegion(event.target.value)}
+                  placeholder={uiText('地区，例如 SEA / US / TH', 'Region, for example SEA / US / TH')}
+                  disabled={busy}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                />
+                <textarea
+                  value={forbiddenClaims}
+                  onChange={(event) => setForbiddenClaims(event.target.value)}
+                  rows={2}
+                  disabled={busy}
+                  placeholder={uiText(
+                    '风险禁区，每行一个，例如：不能承诺稳赚\n不能暗示官方背书',
+                    'Forbidden claims, one per line, for example:\nNo guaranteed rewards\nNo implied official endorsement',
+                  )}
+                  className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 />
               </div>
             </div>

@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-06-campaign-creative-agent-phase0-phase1",
+  "timestamp": "2026-05-06T06:43:49Z",
+  "checks": {
+    "backend_build": { "status": "pass", "error": "" },
+    "frontend_build": { "status": "pass", "error": "" },
+    "typescript": { "status": "pass", "errors": [] },
+    "api_health": { "status": "pass", "code": 200 },
+    "smoke_tests": []
+  },
+  "verdict": "PASS"
+}

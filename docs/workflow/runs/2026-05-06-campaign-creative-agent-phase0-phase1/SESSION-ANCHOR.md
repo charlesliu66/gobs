@@ -1,4 +1,4 @@
-# Session Anchor: Campaign Creative Agent Phase 0 + Phase 1
+# SESSION-ANCHOR - 2026-05-06-campaign-creative-agent-phase0-phase1
 
 > Run ID: `2026-05-06-campaign-creative-agent-phase0-phase1`
 > Date: 2026-05-06
@@ -6,11 +6,90 @@
 > - `docs/plans/2026-05-01-campaign-creative-agent-implementation-plan.md`
 > - `docs/plans/2026-04-22-tiktok-game-creative-agent-design.md`
 
+## Run Summary
+
+- Run ID: `2026-05-06-campaign-creative-agent-phase0-phase1`
+- Goal: 把 GOBS 第一阶段收口成更明确的 `Campaign Creative Agent`，打通 `首页 / 导航 -> Campaign Creative -> brief -> strategy -> Editor handoff` 最小主链路。
+- Owner: Codex
+- Branch or commit context: `codex/campaign-creative-phase0-phase1@afe0d47+`
+- Last updated: `2026-05-06T00:00:00+08:00`
+
+## Acceptance Criteria Snapshot
+
+- AC-01: 首页和导航完成 `Campaign Creative` 主心智收口，且原 `Studio / Editor / Distribute` 入口不回归。
+- AC-02: `/campaign-creative` 页面可独立完成 brief 输入、strategy 生成，并支持 `Brand Content / TikTok UA` 模式切换。
+- AC-03: brief / strategy 可稳定 handoff 到 `Editor`，首次 Agent 执行优先使用 handoff 上下文。
+- AC-04: `region / forbiddenClaims` 前后端类型、prompt、handoff 链路保持一致。
+
+## Editable Files (Builder Ownership)
+
+- h5-video-tool/src/pages/Home.tsx
+- h5-video-tool/src/components/Layout.tsx
+- h5-video-tool/src/App.tsx
+- h5-video-tool/src/pages/CampaignCreative.tsx
+- h5-video-tool/src/components/campaign/
+- h5-video-tool/src/editor/components/AgentPanel.tsx
+- h5-video-tool/src/pages/EditorWorkbench.tsx
+- h5-video-tool/src/editor/utils/editorCreativeBrief.ts
+- h5-video-tool/src/i18n/messages.ts
+- h5-video-tool-api/src/routes/editorAgent.ts
+- h5-video-tool-api/src/services/editorCreativeBrief.ts
+- h5-video-tool-api/src/services/editorAgentService.ts
+- PRODUCT.md
+- CHANGELOG.md
+
+## Read-Only References
+
+- docs/TASK-INDEX.md
+- docs/workflow/runs/2026-05-06-campaign-creative-agent-phase0-phase1/planner-spec.md
+- docs/plans/2026-05-01-campaign-creative-agent-implementation-plan.md
+- docs/plans/2026-04-22-tiktok-game-creative-agent-design.md
+
+## Additional Forbidden Paths
+
+- h5-video-tool-api/src/services/dreaminaVideo.ts
+- h5-video-tool-api/src/services/klingVideo.ts
+- h5-video-tool-api/src/services/veoPython.ts
+- h5-video-tool-api/src/services/studioPipeline.ts
+- .env
+
+## Out of Scope
+
+- 不做真实 3-5 条 timeline variants 批量生成
+- 不做 variant comparison board
+- 不做 publish feedback / CTR / CVR / CPI 回流
+- 不做长期 brief persistence
+- 不做分发 orchestration 扩展
+- 不改底层 video / image provider service
+
+## Progress Checklist
+
+- [x] Planner approved
+- [x] Challenger approved
+- [x] Builder self-test recorded
+- [x] Verifier P0/P1 count is zero
+- [x] Release decision written
+
+## Escalation Rules
+
+- Escalate if a forbidden file must change.
+- Escalate if a new env var is required.
+- Escalate if acceptance criteria need to expand.
+- Escalate before prod release approval.
+
 ## Goal
 
 把 GOBS 第一阶段收口成一个更明确的“游戏营销创意生产系统 / Campaign Creative Agent”，只完成一条最小可交付主链路：
 
 `首页 / 导航 -> Campaign Creative -> 填 brief -> 出 strategy card -> 进入 Editor`
+
+## North Star
+
+> `Campaign Creative Agent` 必须从 campaign brief 出发，稳定产出创意素材或变体，并把它们送入分发。
+
+本 run 虽然只做到 `brief -> strategy -> editor handoff`，还没有进入真正分发，但所有设计决策都要服从这条最终产品形态。
+
+如果某个改动只是让局部编辑体验更顺手，却没有让系统更接近 `brief -> asset/variant production -> distribution`，就不应被视为本方向的核心进展。
 
 本 run 结束时，市场同学应当可以：
 
@@ -112,28 +191,7 @@
 
 ## Primary File Scope
 
-前端主范围：
-
-- `h5-video-tool/src/pages/Home.tsx`
-- `h5-video-tool/src/components/Layout.tsx`
-- `h5-video-tool/src/App.tsx`
-- `h5-video-tool/src/pages/CampaignCreative.tsx`（new）
-- `h5-video-tool/src/components/campaign/*`（new）
-- `h5-video-tool/src/editor/components/AgentPanel.tsx`
-- `h5-video-tool/src/pages/EditorWorkbench.tsx`
-- `h5-video-tool/src/editor/utils/editorCreativeBrief.ts`
-- `h5-video-tool/src/i18n/messages.ts`
-
-后端主范围：
-
-- `h5-video-tool-api/src/routes/editorAgent.ts`
-- `h5-video-tool-api/src/services/editorCreativeBrief.ts`
-- `h5-video-tool-api/src/services/editorAgentService.ts`
-
-文档范围：
-
-- `PRODUCT.md`
-- `CHANGELOG.md`
+同 `Editable Files (Builder Ownership)`，本 run Builder 不应越出以上路径修改代码。
 
 ## Acceptance Commands
 

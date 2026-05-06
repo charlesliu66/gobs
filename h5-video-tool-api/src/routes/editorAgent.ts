@@ -14,6 +14,7 @@ import {
 import {
   buildDefaultCreativeUserMessage,
   normalizeEditorCreativeBrief,
+  normalizeEditorCreativeStrategy,
 } from '../services/editorCreativeBrief.js';
 import {
   collectStringSamples,
@@ -123,8 +124,14 @@ function buildInstructionMemoryPromotion(
     if (creativeBrief.referenceStyle) {
       preferenceSignals?.push({ key: 'reference_style', value: creativeBrief.referenceStyle });
     }
+    if (creativeBrief.region) {
+      stableFacts?.push({ key: 'region', value: creativeBrief.region });
+    }
     creativeBrief.sellingPoints.slice(0, 3).forEach((value, index) => {
       stableFacts?.push({ key: `selling_point_${index + 1}`, value });
+    });
+    creativeBrief.forbiddenClaims?.slice(0, 5).forEach((value, index) => {
+      negativePreferenceSignals?.push({ key: `forbidden_claim_${index + 1}`, value });
     });
   }
 
@@ -321,6 +328,7 @@ interface ApplyBody {
   currentProject?: TimelineProject;
   projectMemory?: unknown;
   creativeBrief?: unknown;
+  creativeStrategy?: unknown;
   visionFocus?: unknown;
   replyLocale?: string;
 }
@@ -330,6 +338,7 @@ function buildEditorApplyInput(
   replyLocale: ReplyLocale,
 ): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
   const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
+  const creativeStrategy = normalizeEditorCreativeStrategy(body.creativeStrategy);
   const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
   const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, replyLocale) : '');
 
@@ -400,6 +409,7 @@ function buildEditorApplyInput(
       currentProject: body.currentProject,
       projectMemory: body.projectMemory,
       creativeBrief,
+      creativeStrategy,
       visionFocus,
       replyLocale,
     },

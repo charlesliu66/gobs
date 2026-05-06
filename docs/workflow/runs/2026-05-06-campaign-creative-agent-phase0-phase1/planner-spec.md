@@ -1,5 +1,22 @@
 # Planner Spec: Campaign Creative Agent Phase 0 + Phase 1
 
+## North Star
+
+> `Campaign Creative Agent` 必须从 campaign brief 出发，稳定产出创意素材或变体，并把它们送入分发。
+
+本 run 是这条最终主链路的第一段，只解决：
+
+- `campaign brief` 作为起点
+- `strategy` 作为中间创意对象
+- `editor handoff` 作为后续素材生产接力入口
+
+它暂时还不覆盖真正的 `creative asset / variant production` 与 `distribution`，但所有实现都必须朝这个最终形态靠拢，而不是回退成“更好用的视频编辑工具”。
+
+Planner 在本 run 中应使用这条 North Star 过滤 scope：
+
+- 能增强 `brief -> strategy -> downstream production/distribution` 链路的改动，属于主方向。
+- 只能改善局部编辑操作、但不能增强这条链路的改动，属于次级优化，不应挤占主目标范围。
+
 ## Background
 
 当前 GOBS 已具备素材、制片、分镜、剪辑、分发的能力骨架，也已经在 `Editor` 内部拥有一版 `TikTok creative brief` 的前身能力。但当前问题不是“能力不够”，而是主入口与主心智不对：

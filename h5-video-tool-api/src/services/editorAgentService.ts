@@ -59,6 +59,7 @@ export interface EditorAgentApplyInput {
   currentProject: TimelineProject;
   projectMemory?: unknown;
   creativeBrief?: EditorCreativeBrief;
+  creativeStrategy?: EditorCreativeStrategy;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
   replyLocale: ReplyLocale;
@@ -789,7 +790,7 @@ export async function runEditorAgentApply(
   const usageSink = (stage: string, usage: CompassChatUsage | undefined) => {
     usageRecords.push({ stage, usage });
   };
-  const creativeStrategy = buildCreativeStrategy(input.creativeBrief, replyLocale);
+  const creativeStrategy = input.creativeStrategy ?? buildCreativeStrategy(input.creativeBrief, replyLocale);
 
   let effectiveUserMessage = input.userMessage;
   const combatLike = isCombatLikeIntent(effectiveUserMessage);

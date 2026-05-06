@@ -8,6 +8,8 @@ export interface EditorCreativeBrief {
   sellingPoints: string[];
   cta?: string;
   referenceStyle?: string;
+  region?: string;
+  forbiddenClaims?: string[];
 }
 
 export interface EditorCreativeStrategy {
@@ -43,6 +45,21 @@ function normalizeSellingPoints(value: unknown): string[] {
   return [];
 }
 
+function normalizeBriefStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => cleanText(item))
+      .filter((item): item is string => Boolean(item));
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n|,|;|，|；/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export function normalizeEditorCreativeBriefForRequest(input: {
   mode?: EditorCreativeMode;
   objective?: string;
@@ -50,12 +67,16 @@ export function normalizeEditorCreativeBriefForRequest(input: {
   sellingPoints?: string[] | string;
   cta?: string;
   referenceStyle?: string;
+  region?: string;
+  forbiddenClaims?: string[] | string;
 }): EditorCreativeBrief | undefined {
   const sellingPoints = normalizeSellingPoints(input.sellingPoints);
   const objective = cleanText(input.objective);
   const audience = cleanText(input.audience);
   const cta = cleanText(input.cta);
   const referenceStyle = cleanText(input.referenceStyle);
+  const region = cleanText(input.region);
+  const forbiddenClaims = normalizeBriefStringList(input.forbiddenClaims);
   const mode = input.mode === 'tiktok_ua' ? 'tiktok_ua' : 'tiktok_content';
 
   const hasContent = Boolean(
@@ -63,6 +84,8 @@ export function normalizeEditorCreativeBriefForRequest(input: {
     audience ||
     cta ||
     referenceStyle ||
+    region ||
+    forbiddenClaims.length > 0 ||
     sellingPoints.length > 0,
   );
 
@@ -76,5 +99,7 @@ export function normalizeEditorCreativeBriefForRequest(input: {
     sellingPoints,
     cta,
     referenceStyle,
+    region,
+    forbiddenClaims,
   };
 }
