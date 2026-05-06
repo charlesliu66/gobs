@@ -56,3 +56,56 @@ export interface TaskDetail {
 export async function fetchTaskDetail(taskId: string): Promise<TaskDetail> {
   return apiGet<TaskDetail>(`/api/geelark/task/${encodeURIComponent(taskId)}`);
 }
+
+export interface TaskHistoryItem {
+  id?: string;
+  taskId?: string;
+  planName?: string;
+  plan_name?: string;
+  taskType?: number;
+  serialName?: string;
+  serial_name?: string;
+  scheduleAt?: number;
+  schedule_at?: number;
+  createdAt?: number;
+  created_at?: number;
+  createTime?: number;
+  create_time?: number;
+  status?: number;
+  taskStatus?: number;
+  task_status?: number;
+  statusText?: string;
+  status_text?: string;
+  failDesc?: string;
+  fail_desc?: string;
+  shareLink?: string;
+  shareUrl?: string;
+  share_url?: string;
+  postUrl?: string;
+  post_url?: string;
+  videoUrl?: string;
+  url?: string;
+  resultImages?: string[];
+  result_images?: string[];
+  images?: string[];
+}
+
+export interface TaskHistoryResponse {
+  items: TaskHistoryItem[];
+}
+
+export interface FetchTaskHistoryOptions {
+  size?: number;
+}
+
+export function buildTaskHistoryQuery(options?: FetchTaskHistoryOptions): string {
+  const size = options?.size;
+  if (!size) return '';
+  const q = new URLSearchParams();
+  q.set('size', String(Math.min(Math.max(size, 1), 100)));
+  return `?${q.toString()}`;
+}
+
+export async function fetchTaskHistory(options?: FetchTaskHistoryOptions): Promise<TaskHistoryResponse> {
+  return apiGet<TaskHistoryResponse>(`/api/geelark/tasks${buildTaskHistoryQuery(options)}`);
+}

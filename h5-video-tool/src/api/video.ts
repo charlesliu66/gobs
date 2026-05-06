@@ -272,14 +272,30 @@ export interface OutputRecentVideosResponse {
   hiddenCount?: number;
 }
 
-export async function getOutputRecentVideos(opts?: {
+export type DistributionAssetSource = 'create-flow' | 'history' | 'server-output';
+
+export interface DistributionAssetCandidate {
+  id: string;
+  source: DistributionAssetSource;
+  title: string;
+  createdAt: number;
+  previewUrl?: string;
+  videoPath?: string;
+  videoUrl?: string;
+  taskId?: string;
+  prompt?: string;
+  sourceLabel?: string;
+  subtitle?: string;
+}
+
+export function buildOutputRecentVideosQuery(opts?: {
   limit?: number;
   dreaminaOnly?: boolean;
   q?: string;
   source?: 'all' | 'dreamina' | 'other';
   days?: 'all' | '1' | '7' | '30';
   view?: 'visible' | 'hidden';
-}): Promise<OutputRecentVideosResponse> {
+}): string {
   const q = new URLSearchParams();
   if (opts?.limit) q.set('limit', String(opts.limit));
   if (opts?.dreaminaOnly) q.set('dreaminaOnly', '1');
@@ -288,7 +304,37 @@ export async function getOutputRecentVideos(opts?: {
   if (opts?.days && opts.days !== 'all') q.set('days', opts.days);
   if (opts?.view && opts.view !== 'visible') q.set('view', opts.view);
   const qs = q.toString();
-  return apiGet<OutputRecentVideosResponse>(`/api/video/output-recent${qs ? `?${qs}` : ''}`);
+  return qs ? `?${qs}` : '';
+}
+
+export function buildOutputRecentVideoFileUrl(path: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL || '';
+  return `${base}/api/video/file?path=${encodeURIComponent(path)}`;
+}
+
+export function buildOutputRecentVideoCandidate(item: OutputRecentVideoItem): DistributionAssetCandidate {
+  return {
+    id: `server-output:${item.path}`,
+    source: 'server-output',
+    title: item.promptSummary?.trim() || item.path.split('/').pop() || item.path,
+    createdAt: item.mtimeMs,
+    previewUrl: buildOutputRecentVideoFileUrl(item.path),
+    videoPath: item.path,
+    prompt: item.promptSummary?.trim() || undefined,
+    sourceLabel: item.source === 'dreamina' ? 'Dreamina output' : 'Server output',
+    subtitle: item.path,
+  };
+}
+
+export async function getOutputRecentVideos(opts?: {
+  limit?: number;
+  dreaminaOnly?: boolean;
+  q?: string;
+  source?: 'all' | 'dreamina' | 'other';
+  days?: 'all' | '1' | '7' | '30';
+  view?: 'visible' | 'hidden';
+}): Promise<OutputRecentVideosResponse> {
+  return apiGet<OutputRecentVideosResponse>(`/api/video/output-recent${buildOutputRecentVideosQuery(opts)}`);
 }
 
 export interface OutputDreaminaSyncResponse {

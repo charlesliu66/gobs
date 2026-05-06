@@ -215,6 +215,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
+- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片三路选资产，显式勾选账号、按平台维护文案草稿、发布前检查与近期发布历史。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
@@ -242,6 +243,14 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.139 - 2026-05-06
+**Marketer-first video distribution workspace foundations**
+
+- **[frontend] `TabDistribute` now runs as an asset-first publishing workspace instead of a create-flow-only continuation** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/components/distribute/*`, `h5-video-tool/src/utils/videoHistory.ts`, `h5-video-tool/src/api/video.ts`): users can pick from current flow, local gallery, or server outputs, keep a selected asset across refresh-safe helpers, and review a real asset preview before publish.
+- **[frontend] account selection is now explicit and platform copy is managed as visible draft cards** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/api/geelark.ts`, `h5-video-tool/src/i18n/messages.ts`): the page no longer auto-selects the first account, shows campaign framing inputs plus `markAI` / `needShareLink`, and lets operators switch between default and platform-specific drafts.
+- **[api] persistent publish history and campaign-aware caption context are now wired end-to-end without new env vars** (`h5-video-tool-api/src/routes/geelark.ts`, `h5-video-tool-api/src/routes/prompt.ts`, `h5-video-tool-api/src/services/promptPolish.ts`, `h5-video-tool-api/tests/geelarkTaskHistoryShape.test.ts`, `h5-video-tool-api/tests/promptCaptionCampaignContext.test.ts`): `/api/geelark/tasks` returns normalized `history` alongside compatible `items`, and `/api/prompt/generate-caption` accepts optional `campaignContext` fields for objective, audience, CTA, market, tone, and banned phrases.
+- **[docs] captured the P2 scheduling follow-up as a design spike instead of shipping runtime scheduling prematurely** (`docs/plans/2026-05-06-video-distribution-marketer-ux-design.md`, `docs/plans/2026-05-06-video-distribution-marketer-ux-implementation-plan.md`, `docs/plans/2026-05-06-video-distribution-scheduling-design-spike.md`): this run stays within the approved P0/P1 runtime slice while preserving the next-stage roadmap.
 
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
@@ -2008,7 +2017,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.138)*
+*Last updated: 2026-05-06 (v0.139)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

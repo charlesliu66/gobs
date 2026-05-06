@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import {
+  type CaptionCampaignContext,
   polishPrompt,
   generateCaptionForPost,
   translateCaptionForPost,
@@ -12,6 +13,85 @@ import {
 import { getTemplates, getShortDramaPresets } from '../config/prompt-templates/index.js';
 
 export const promptRouter = Router();
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readCampaignPhraseList(...values: unknown[]): string[] {
+  const phrases: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      const phrase = readTrimmedString(item);
+      if (!phrase || seen.has(phrase)) continue;
+      seen.add(phrase);
+      phrases.push(phrase);
+    }
+  }
+  return phrases;
+}
+
+export function normalizeCaptionCampaignContextInput(body: Record<string, unknown>): CaptionCampaignContext | undefined {
+  const nested =
+    asRecord(body.campaignContext) ??
+    asRecord(body.campaign) ??
+    asRecord(body.campaignFraming) ??
+    {};
+
+  const normalized: CaptionCampaignContext = {
+    objective:
+      readTrimmedString(nested.objective) ??
+      readTrimmedString(nested.campaignObjective) ??
+      readTrimmedString(body.objective) ??
+      readTrimmedString(body.campaignObjective),
+    targetAudience:
+      readTrimmedString(nested.targetAudience) ??
+      readTrimmedString(nested.audience) ??
+      readTrimmedString(body.targetAudience) ??
+      readTrimmedString(body.audience),
+    callToAction:
+      readTrimmedString(nested.callToAction) ??
+      readTrimmedString(nested.cta) ??
+      readTrimmedString(body.callToAction) ??
+      readTrimmedString(body.cta),
+    targetMarket:
+      readTrimmedString(nested.targetMarket) ??
+      readTrimmedString(nested.market) ??
+      readTrimmedString(body.targetMarket) ??
+      readTrimmedString(body.market),
+    complianceNotes:
+      readTrimmedString(nested.complianceNotes) ??
+      readTrimmedString(nested.noGoNotes) ??
+      readTrimmedString(body.complianceNotes) ??
+      readTrimmedString(body.noGoNotes),
+  };
+
+  const bannedPhrases = readCampaignPhraseList(
+    nested.bannedPhrases,
+    nested.avoidPhrases,
+    body.bannedPhrases,
+    body.avoidPhrases,
+  );
+  if (bannedPhrases.length > 0) {
+    normalized.bannedPhrases = bannedPhrases;
+  }
+
+  return normalized.objective ||
+    normalized.targetAudience ||
+    normalized.callToAction ||
+    normalized.targetMarket ||
+    normalized.complianceNotes ||
+    normalized.bannedPhrases?.length
+    ? normalized
+    : undefined;
+}
 
 /**
  * GET /api/prompt/templates
@@ -163,6 +243,7 @@ promptRouter.post('/generate-caption', async (req: Request, res: Response) => {
       videoPath: typeof videoPath === 'string' ? videoPath.trim() || undefined : undefined,
       videoUrl: typeof videoUrl === 'string' ? videoUrl.trim() || undefined : undefined,
       accountContext: Array.isArray(accountContext) ? accountContext : undefined,
+      campaignContext: normalizeCaptionCampaignContextInput(req.body as Record<string, unknown>),
       requestUsername: req.user?.username ?? undefined,
     });
     res.json(result);
