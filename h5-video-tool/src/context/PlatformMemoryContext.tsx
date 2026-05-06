@@ -1,4 +1,11 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createKnowledgeSource,
+  importKnowledgeTemplate,
+  listCampaignKnowledgePacks,
+  type CampaignKnowledgePack,
+  type CampaignKnowledgePackType,
+} from '../api/campaignKnowledge';
 
 export type PlatformDecision = '接受' | '拒绝' | '人工修改';
 export type PlatformOutcome = '强正反馈' | '轻正反馈' | '负反馈' | '风险规避';
@@ -89,6 +96,13 @@ type PlatformMemoryContextValue = {
   agentBudgets: AgentBudget[];
   heartbeatLogs: HeartbeatLog[];
   triggerHeartbeat: () => void;
+  knowledgePacks: CampaignKnowledgePack[];
+  knowledgeLoading: boolean;
+  knowledgeError: string | null;
+  knowledgeGameSupported: boolean;
+  refreshKnowledgePacks: () => Promise<void>;
+  importFastpublishKnowledge: () => Promise<void>;
+  addKnowledgeSource: (input: { title: string; content: string; packType: CampaignKnowledgePackType }) => Promise<void>;
 };
 
 const PlatformMemoryContext = createContext<PlatformMemoryContextValue | null>(null);
@@ -221,9 +235,14 @@ const initialHeartbeats: HeartbeatLog[] = [
 ];
 
 const initialUploadedFiles = ['世界观设定.pdf', '版本卖点整理.docx', '近30天素材表现.xlsx'];
+const stableKnowledgeGameIds = new Set(initialGames.map((game) => game.id));
 
 function nowLabel() {
   return new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+export function isStableKnowledgeGameId(gameId: string): boolean {
+  return stableKnowledgeGameIds.has(gameId);
 }
 
 export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
@@ -234,6 +253,11 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
   const [feedbackLogs, setFeedbackLogs] = useState<PlatformFeedbackLog[]>([]);
   const [agentBudgets, setAgentBudgets] = useState<AgentBudget[]>(initialBudgets);
   const [heartbeatLogs, setHeartbeatLogs] = useState<HeartbeatLog[]>(initialHeartbeats);
+  const [knowledgePacks, setKnowledgePacks] = useState<CampaignKnowledgePack[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
+
+  const knowledgeGameSupported = isStableKnowledgeGameId(selectedGameId);
 
   const addGame = (payload: { name: string; genre: string; stage: PlatformGame['stage'] }) => {
     const name = payload.name.trim();
@@ -341,10 +365,74 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
+  const refreshKnowledgePacks = async () => {
+    if (!knowledgeGameSupported) {
+      setKnowledgePacks([]);
+      setKnowledgeError(null);
+      return;
+    }
+    setKnowledgeLoading(true);
+    setKnowledgeError(null);
+    try {
+      const result = await listCampaignKnowledgePacks(selectedGameId);
+      setKnowledgePacks(result.packs);
+    } catch (error) {
+      setKnowledgeError(error instanceof Error ? error.message : '加载知识包失败');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  };
+
+  const importFastpublishKnowledge = async () => {
+    if (!knowledgeGameSupported) return;
+    setKnowledgeLoading(true);
+    setKnowledgeError(null);
+    try {
+      const result = await importKnowledgeTemplate(selectedGameId);
+      setKnowledgePacks(result.packs);
+    } catch (error) {
+      setKnowledgeError(error instanceof Error ? error.message : '导入知识包失败');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  };
+
+  const addKnowledgeSource = async (input: { title: string; content: string; packType: CampaignKnowledgePackType }) => {
+    if (!knowledgeGameSupported) return;
+    setKnowledgeLoading(true);
+    setKnowledgeError(null);
+    try {
+      const result = await createKnowledgeSource(selectedGameId, input);
+      setKnowledgePacks(result.packs);
+    } catch (error) {
+      setKnowledgeError(error instanceof Error ? error.message : '新增知识源失败');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshKnowledgePacks();
+  }, [selectedGameId]);
+
   const value = useMemo<PlatformMemoryContextValue>(() => ({
     games, selectedGameId, setSelectedGameId, addGame, uploadedFiles, addUploadedFile,
     strategies, feedbackLogs, runLearningCycle, agentBudgets, heartbeatLogs, triggerHeartbeat,
-  }), [games, selectedGameId, uploadedFiles, strategies, feedbackLogs, agentBudgets, heartbeatLogs]);
+    knowledgePacks, knowledgeLoading, knowledgeError, knowledgeGameSupported,
+    refreshKnowledgePacks, importFastpublishKnowledge, addKnowledgeSource,
+  }), [
+    games,
+    selectedGameId,
+    uploadedFiles,
+    strategies,
+    feedbackLogs,
+    agentBudgets,
+    heartbeatLogs,
+    knowledgePacks,
+    knowledgeLoading,
+    knowledgeError,
+    knowledgeGameSupported,
+  ]);
 
   return <PlatformMemoryContext.Provider value={value}>{children}</PlatformMemoryContext.Provider>;
 }

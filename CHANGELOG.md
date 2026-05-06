@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.139 - 2026-05-06
+**Campaign Knowledge Brain foundation**
+**Campaign / Knowledge Brain:**
+- Added resolver-managed campaign knowledge storage plus new list, template import, source creation, and derive-context APIs so GOBS can persist reusable creative knowledge per game instead of relying on mock-only state.
+- Added a first `fastpublish`-inspired template pack set covering tone, compliance, visual style, market fundamentals, persona, live ops, and selling-point playbooks, together with structured context derivation for downstream Campaign Creative and Editor use.
+- Reworked the Platform Framework Knowledge Brain block to load real persisted knowledge packs, expose a one-click recommended import action, and clearly gate persistence to stable seeded game ids for this foundation slice.
+**Tests:**
+- Added targeted backend tests for knowledge storage/import/derivation and frontend tests for Knowledge Brain API wiring/rendering, then revalidated with backend typecheck plus frontend/backend production builds.
+
 ## v0.137 - 2026-05-06
 **Production Wizard shot success-state reconciliation**
 **Advanced Production / Storyboard:**

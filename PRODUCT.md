@@ -243,6 +243,21 @@
 
 ## 浜屻€丆hangelog
 
+### v0.139 - 2026-05-06
+**Campaign Knowledge Brain foundation**
+
+- **[campaign knowledge] Added resolver-managed local knowledge pack storage and route surface** (h5-video-tool-api/src/infra/storage/resolver.ts, h5-video-tool-api/src/services/campaignKnowledgeStore.ts, h5-video-tool-api/src/routes/campaignKnowledge.ts, h5-video-tool-api/src/index.ts): GOBS now has a dedicated campaign knowledge root plus list/import/source/derive APIs for game-scoped knowledge packs.
+- **[knowledge import] Added the first fastpublish-inspired default knowledge bundle and structured derivation contract** (h5-video-tool-api/src/services/campaignKnowledgeImport.ts, h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts): the backend can seed tone/compliance/visual-style/market/persona/live-ops/selling-point packs and reduce selected packs into prompt-safe fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, and `hookCandidates`.
+- **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
+- **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
+
+### v0.140 - 2026-05-06
+**English localization hardening for language presets, editor API errors, and export overview**
+
+- **[language presets] UI/content language switching now supports explicit preset combinations instead of forcing both layers to move together** (`h5-video-tool/src/i18n/locale.ts`, `h5-video-tool/src/i18n/LocaleContext.tsx`, `h5-video-tool/src/components/LocalePresetSwitcher.tsx`, `h5-video-tool/src/i18n/locale.test.ts`): added `中文界面 + 中文内容` / `English UI + 中文内容` / `English UI + English Content` presets and covered the mapping logic with tests.
+- **[editor i18n] Login and editor-side direct fetch flows now pass locale headers and return localized fallback errors** (`h5-video-tool/src/api/auth.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool/src/i18n/messages.ts`): upload, timeout, stream parsing, session expiry, and editing-task failures now reuse shared i18n error keys instead of hardcoded Chinese strings.
+- **[production wizard] Storyboard export overview now uses message keys and locale-aware date formatting end to end** (`h5-video-tool/src/studio/steps/StepExportStoryboardOverview.tsx`): removed page-level `pickUiText` branching, localized the editor handoff flow, and replaced hardcoded `zh-CN` date/time formatting with shared locale utilities.
+
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
 
@@ -2008,7 +2023,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.138)*
+*Last updated: 2026-05-06 (v0.140)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

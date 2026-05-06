@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlatformMemory, type PlatformGame } from '../context/PlatformMemoryContext';
+import { CampaignKnowledgePackCard } from '../components/campaign/CampaignKnowledgePackCard';
 
 const channelMetrics = [
   { channel: 'TikTok 官号', views: '128.4万', completion: '23.8%', cpm: 'US$3.7', status: '正常偏优' },
@@ -70,7 +71,20 @@ function SectionTitle({ title, desc, action }: { title: string; desc?: string; a
 }
 
 export function PlatformFramework() {
-  const { games, selectedGameId, setSelectedGameId, addGame, uploadedFiles, addUploadedFile, strategies, feedbackLogs } = usePlatformMemory();
+  const {
+    games,
+    selectedGameId,
+    setSelectedGameId,
+    addGame,
+    uploadedFiles,
+    strategies,
+    feedbackLogs,
+    knowledgePacks,
+    knowledgeLoading,
+    knowledgeError,
+    knowledgeGameSupported,
+    importFastpublishKnowledge,
+  } = usePlatformMemory();
 
   const [newGameName, setNewGameName] = useState('');
   const [newGameGenre, setNewGameGenre] = useState('SLG');
@@ -144,7 +158,7 @@ export function PlatformFramework() {
           { title: '游戏数', value: `${games.length}`, sub: '支持多游戏切换' },
           { title: '学习事件', value: `${feedbackLogs.length}`, sub: `正向 ${positiveCount} · 风控 ${riskCount}` },
           { title: '策略数', value: `${strategies.length}`, sub: '权重随反馈变化' },
-          { title: '已上传资料', value: `${uploadedFiles.length}`, sub: '上传后自动生成大脑' },
+          { title: '知识包', value: `${knowledgePacks.length}`, sub: knowledgeGameSupported ? '当前游戏已持久化的 Knowledge Packs' : '当前游戏暂不支持持久化大脑' },
         ].map((item) => (
           <div key={item.title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
             <div className="text-sm text-[var(--color-text-muted)]">{item.title}</div>
@@ -247,41 +261,63 @@ export function PlatformFramework() {
       {/* Upload + Brain */}
       <section id="knowledge-brain" className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
-          <SectionTitle title="上传资料 → 自动生成游戏大脑" desc="先做一个资料沉淀入口，让用户把能给的文件一次丢进来。" action={<span className="rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">Step 2</span>} />
+          <SectionTitle title="Knowledge Brain（第一批真实接入）" desc="这轮先打通推荐知识包导入与持久化，手工资料上传放到下一阶段。" action={<span className="rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">Step 2</span>} />
           <div className="mt-6 rounded-3xl border border-dashed border-[var(--color-primary)]/40 bg-[var(--color-primary)]/6 p-6 text-center">
-            <div className="text-base font-semibold text-[var(--color-text)]">拖拽资料到这里，或者点击上传</div>
-            <div className="mt-2 text-sm text-[var(--color-text-muted)]">支持 PRD、世界观、角色设定、投放复盘、历史素材、竞品观察、活动方案等。</div>
-            <button type="button" onClick={() => addUploadedFile()} className="mt-5 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/12 px-4 py-3 text-sm font-medium text-[var(--color-primary)] transition hover:bg-[var(--color-primary)]/18">
-              模拟上传一份资料
+            <div className="text-base font-semibold text-[var(--color-text)]">
+              {knowledgeGameSupported ? '为当前游戏导入第一批 fastpublish 风格知识包' : '当前选中的新建游戏暂不支持持久化 Knowledge Brain'}
+            </div>
+            <div className="mt-2 text-sm text-[var(--color-text-muted)]">
+              {knowledgeGameSupported
+                ? '先把品牌语气、合规、市场、人群、卖点 playbook 导进来，后面再接手工资料与 GitHub 源导入。'
+                : '本轮只支持内置稳定游戏 ID 的知识包持久化。新增游戏入口先继续作为 demo 流程展示，避免刷新后丢失知识上下文。'}
+            </div>
+            <button type="button" disabled={!knowledgeGameSupported || knowledgeLoading} onClick={() => void importFastpublishKnowledge()} className="mt-5 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/12 px-4 py-3 text-sm font-medium text-[var(--color-primary)] transition hover:bg-[var(--color-primary)]/18 disabled:cursor-not-allowed disabled:opacity-50">
+              {knowledgeLoading ? '导入中...' : '导入推荐知识包'}
             </button>
           </div>
-          <div className="mt-6 space-y-3">
-            {uploadedFiles.map((file, index) => (
-              <div key={`${file}-${index}`} className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-                <div>
-                  <div className="text-sm font-medium text-[var(--color-text)]">{file}</div>
-                  <div className="mt-1 text-xs text-[var(--color-text-subtle)]">已入库，可用于摘要 / 标签 / 知识提取</div>
-                </div>
-                <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs text-emerald-400">已接收</span>
+          {knowledgeError ? (
+            <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              {knowledgeError}
+            </div>
+          ) : null}
+          {!knowledgeGameSupported ? (
+            <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
+              当前仍可查看这页其它框架内容，但 Knowledge Brain 的真实持久化只对默认内置游戏开放。
+            </div>
+          ) : uploadedFiles.length > 0 ? (
+            <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+              <div className="text-sm font-medium text-[var(--color-text)]">现阶段说明</div>
+              <div className="mt-1 text-xs leading-6 text-[var(--color-text-subtle)]">
+                页面其它区块仍保留历史 mock 资料提示；Knowledge Brain 区块本身已经改为 API 持久化数据源。
               </div>
-            ))}
-          </div>
+            </div>
+          ) : null}
         </div>
         <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
-          <SectionTitle title="自动生成的大脑结构" desc="这个区块是关键：先把知识库分层展示出来。" />
+          <SectionTitle title="当前游戏的知识包" desc="这里不再展示假结构，而是直接展示当前游戏已落库的 packs。" />
           <div className="mt-6 space-y-4">
-            {brainBlocks.map((block, index) => (
-              <div key={block.title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)]/12 text-sm font-semibold text-[var(--color-primary)]">{index + 1}</div>
-                    <div className="text-base font-semibold text-[var(--color-text)]">{block.title}</div>
-                  </div>
-                  <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)]">{block.status}</span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[var(--color-text-muted)]">{block.desc}</p>
+            {knowledgeLoading ? (
+              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-sm text-[var(--color-text-muted)]">
+                正在加载当前游戏的 Knowledge Brain...
               </div>
-            ))}
+            ) : knowledgePacks.length > 0 ? (
+              knowledgePacks.map((pack) => (
+                <CampaignKnowledgePackCard key={pack.packId} pack={pack} />
+              ))
+            ) : (
+              brainBlocks.map((block, index) => (
+                <div key={block.title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)]/12 text-sm font-semibold text-[var(--color-primary)]">{index + 1}</div>
+                      <div className="text-base font-semibold text-[var(--color-text)]">{block.title}</div>
+                    </div>
+                    <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)]">等待导入</span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--color-text-muted)]">{block.desc}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
