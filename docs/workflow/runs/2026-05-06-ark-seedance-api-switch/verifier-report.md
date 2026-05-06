@@ -1,0 +1,44 @@
+# Verifier Report
+
+## Verdict
+
+- Status: `GO`
+- Run id: `2026-05-06-ark-seedance-api-switch`
+- Verified commit: `4eaa722`
+
+## Coverage
+
+- Backend unit / integration checks
+  - `node --import tsx --test tests/queueSnapshot.test.ts tests/arkSeedanceVideo.test.ts`
+  - `node --import tsx --test tests/quickfilmBatchJobs.test.ts`
+- Frontend state / status checks
+  - `..\h5-video-tool-api\node_modules\.bin\tsx.cmd --test tests/storyboardQueueState.test.ts tests/shotUserStatus.test.ts`
+  - `..\h5-video-tool-api\node_modules\.bin\tsx.cmd --test tests/storyboardVideoErrorDisplay.test.ts tests/productionExportStoryboardStatus.test.ts`
+- Build verification
+  - `h5-video-tool-api: npm run build`
+  - `h5-video-tool: npm run build`
+- Workflow evaluation
+  - `bash scripts/eval.sh 2026-05-06-ark-seedance-api-switch`
+- Staging smoke
+  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env staging -Depth quick -ExpectedCommit 4eaa722`
+- Prod smoke
+  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env prod -Depth quick -ExpectedCommit 4eaa722`
+
+## Results
+
+- Queue scheduling now respects `3` Ark concurrency slots on both scheduler admission and ETA calculation.
+- Queue status copy now distinguishes:
+  - platform queue
+  - submitted to Ark
+  - queued in Ark
+  - rendering in Ark
+  - tracking stopped
+- Global jobs UI now exposes capacity context through `maxConcurrent` and `availableSlots`.
+- Completion reminders are emitted from the global jobs SSE layer so done / failed / cancelled jobs can notify outside the active shot view.
+- Staging smoke passed with version `staging @ 4eaa722`.
+- Prod smoke passed with version `prod @ 4eaa722`.
+
+## Residual Risks
+
+- `ProductionWizard.tsx` still requests browser notification permission on mount because the file contains legacy encoding damage that blocked safe `apply_patch` editing in this run.
+- `eval.sh` reported `P1_WARN` only because local API health was not exercised from a running local server during the scripted eval; staging and prod smoke both passed afterward.
