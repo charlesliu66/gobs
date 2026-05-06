@@ -19,6 +19,18 @@ export interface EditorCreativeBrief {
   forbiddenClaims?: string[];
 }
 
+export interface EditorCreativeKnowledgeContext {
+  selectedPackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
+  visualCues: string[];
+  rationaleNotes: string[];
+}
+
 export interface EditorCreativeStrategy {
   strategyId?: string;
   briefId?: string;
@@ -37,6 +49,14 @@ export interface EditorCreativeStrategy {
   tone?: string;
   assetNeeds: string[];
   riskNotes: string[];
+  knowledgePackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
 }
 
 export interface EditorCreativeVariant {
@@ -74,6 +94,10 @@ function cleanText(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function uniqueStrings(items: string[]): string[] {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+}
+
 function normalizeStringList(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -93,6 +117,143 @@ function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis
   return value === 'hook_focus' || value === 'selling_point_focus' || value === 'cta_focus'
     ? value
     : undefined;
+}
+
+export function normalizeEditorCreativeKnowledgeContext(input: unknown): EditorCreativeKnowledgeContext | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const selectedPackIds = uniqueStrings(
+    normalizeStringList(raw.selectedPackIds ?? raw.knowledgePackIds),
+  );
+  const marketTruth = uniqueStrings(normalizeStringList(raw.marketTruth));
+  const audienceTension = uniqueStrings(normalizeStringList(raw.audienceTension));
+  const toneRules = uniqueStrings(normalizeStringList(raw.toneRules));
+  const forbiddenClaims = uniqueStrings(normalizeStringList(raw.forbiddenClaims));
+  const approvedAngles = uniqueStrings(normalizeStringList(raw.approvedAngles));
+  const hookCandidates = uniqueStrings(normalizeStringList(raw.hookCandidates));
+  const visualCues = uniqueStrings(normalizeStringList(raw.visualCues));
+  const rationaleNotes = uniqueStrings(normalizeStringList(raw.rationaleNotes));
+
+  const hasContent = Boolean(
+    selectedPackIds.length > 0 ||
+    marketTruth.length > 0 ||
+    audienceTension.length > 0 ||
+    toneRules.length > 0 ||
+    forbiddenClaims.length > 0 ||
+    approvedAngles.length > 0 ||
+    hookCandidates.length > 0 ||
+    visualCues.length > 0 ||
+    rationaleNotes.length > 0,
+  );
+  if (!hasContent) {
+    return undefined;
+  }
+
+  return {
+    selectedPackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    approvedAngles,
+    hookCandidates,
+    visualCues,
+    rationaleNotes,
+  };
+}
+
+export function buildEditorCreativeKnowledgeContextFromStrategy(
+  strategy?: EditorCreativeStrategy | null,
+): EditorCreativeKnowledgeContext | undefined {
+  if (!strategy) return undefined;
+  return normalizeEditorCreativeKnowledgeContext({
+    selectedPackIds: strategy.knowledgePackIds,
+    marketTruth: strategy.marketTruth,
+    audienceTension: strategy.audienceTension,
+    toneRules: strategy.toneRules,
+    forbiddenClaims: strategy.forbiddenClaims,
+    approvedAngles: strategy.approvedAngles,
+    hookCandidates: strategy.hookCandidates,
+    visualCues: strategy.visualCues,
+  });
+}
+
+export function resolveEditorCreativeKnowledgeState(input: {
+  brief?: EditorCreativeBrief;
+  strategy?: EditorCreativeStrategy;
+  knowledgeContext?: EditorCreativeKnowledgeContext;
+  knowledgePackIds?: string[];
+  replyLocale?: ReplyLocale;
+}): {
+  creativeStrategy?: EditorCreativeStrategy;
+  knowledgeContext?: EditorCreativeKnowledgeContext;
+  knowledgePackIds: string[];
+} {
+  const replyLocale = input.replyLocale ?? 'zh-CN';
+  const inputKnowledgePackIds = uniqueStrings(input.knowledgePackIds ?? []);
+  const baseStrategy = input.strategy ?? buildCreativeStrategy(input.brief, replyLocale);
+  const baseKnowledgeContext =
+    input.knowledgeContext ?? buildEditorCreativeKnowledgeContextFromStrategy(input.strategy);
+  const resolvedKnowledgePackIds =
+    baseKnowledgeContext?.selectedPackIds.length
+      ? baseKnowledgeContext.selectedPackIds
+      : inputKnowledgePackIds.length > 0
+        ? inputKnowledgePackIds
+        : (baseStrategy?.knowledgePackIds ?? []);
+  const creativeStrategy = baseStrategy
+    ? {
+        ...baseStrategy,
+        knowledgePackIds: resolvedKnowledgePackIds,
+        marketTruth:
+          baseStrategy.marketTruth.length > 0
+            ? baseStrategy.marketTruth
+            : (baseKnowledgeContext?.marketTruth ?? []),
+        audienceTension:
+          baseStrategy.audienceTension.length > 0
+            ? baseStrategy.audienceTension
+            : (baseKnowledgeContext?.audienceTension ?? []),
+        toneRules:
+          baseStrategy.toneRules.length > 0
+            ? baseStrategy.toneRules
+            : (baseKnowledgeContext?.toneRules ?? []),
+        forbiddenClaims:
+          baseStrategy.forbiddenClaims.length > 0
+            ? baseStrategy.forbiddenClaims
+            : (baseKnowledgeContext?.forbiddenClaims ?? []),
+        visualCues:
+          baseStrategy.visualCues.length > 0
+            ? baseStrategy.visualCues
+            : (baseKnowledgeContext?.visualCues ?? []),
+        approvedAngles:
+          baseStrategy.approvedAngles.length > 0
+            ? baseStrategy.approvedAngles
+            : (baseKnowledgeContext?.approvedAngles ?? []),
+        hookCandidates:
+          baseStrategy.hookCandidates.length > 0
+            ? baseStrategy.hookCandidates
+            : (baseKnowledgeContext?.hookCandidates ?? []),
+      }
+    : undefined;
+  const knowledgeContext = normalizeEditorCreativeKnowledgeContext({
+    selectedPackIds: creativeStrategy?.knowledgePackIds ?? resolvedKnowledgePackIds,
+    marketTruth: creativeStrategy?.marketTruth ?? baseKnowledgeContext?.marketTruth,
+    audienceTension: creativeStrategy?.audienceTension ?? baseKnowledgeContext?.audienceTension,
+    toneRules: creativeStrategy?.toneRules ?? baseKnowledgeContext?.toneRules,
+    forbiddenClaims: creativeStrategy?.forbiddenClaims ?? baseKnowledgeContext?.forbiddenClaims,
+    approvedAngles: creativeStrategy?.approvedAngles ?? baseKnowledgeContext?.approvedAngles,
+    hookCandidates: creativeStrategy?.hookCandidates ?? baseKnowledgeContext?.hookCandidates,
+    visualCues: creativeStrategy?.visualCues ?? baseKnowledgeContext?.visualCues,
+    rationaleNotes: baseKnowledgeContext?.rationaleNotes ?? [],
+  });
+
+  return {
+    creativeStrategy,
+    knowledgeContext,
+    knowledgePackIds:
+      creativeStrategy?.knowledgePackIds
+      ?? knowledgeContext?.selectedPackIds
+      ?? inputKnowledgePackIds,
+  };
 }
 
 function fallbackId(prefix: 'brief' | 'strategy'): string {
@@ -170,6 +331,14 @@ export function normalizeEditorCreativeStrategy(input: unknown): EditorCreativeS
   const ctaType = cleanText(raw.ctaType) as EditorCreativeCtaType | undefined;
   const assetNeeds = normalizeStringList(raw.assetNeeds);
   const riskNotes = normalizeStringList(raw.riskNotes);
+  const knowledgePackIds = uniqueStrings(normalizeStringList(raw.knowledgePackIds));
+  const marketTruth = uniqueStrings(normalizeStringList(raw.marketTruth));
+  const audienceTension = uniqueStrings(normalizeStringList(raw.audienceTension));
+  const toneRules = uniqueStrings(normalizeStringList(raw.toneRules));
+  const forbiddenClaims = uniqueStrings(normalizeStringList(raw.forbiddenClaims));
+  const visualCues = uniqueStrings(normalizeStringList(raw.visualCues));
+  const approvedAngles = uniqueStrings(normalizeStringList(raw.approvedAngles));
+  const hookCandidates = uniqueStrings(normalizeStringList(raw.hookCandidates));
   const modeRaw = cleanText(raw.mode);
 
   if (!objective || !recommendedHook || !cta || !rationale) {
@@ -199,6 +368,14 @@ export function normalizeEditorCreativeStrategy(input: unknown): EditorCreativeS
     tone,
     assetNeeds,
     riskNotes,
+    knowledgePackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    visualCues,
+    approvedAngles,
+    hookCandidates,
   };
 }
 
@@ -547,15 +724,32 @@ export function buildCreativeStrategy(
     tone,
     assetNeeds,
     riskNotes,
+    knowledgePackIds: [],
+    marketTruth: [],
+    audienceTension: [],
+    toneRules: [],
+    forbiddenClaims: [],
+    visualCues: [],
+    approvedAngles: [],
+    hookCandidates: [],
   };
+}
+
+function resolveEffectiveKnowledgeContext(
+  knowledgeContext: EditorCreativeKnowledgeContext | undefined,
+  strategy?: EditorCreativeStrategy,
+): EditorCreativeKnowledgeContext | undefined {
+  return knowledgeContext ?? buildEditorCreativeKnowledgeContextFromStrategy(strategy);
 }
 
 export function buildCreativeBriefPromptBlock(
   brief?: EditorCreativeBrief,
   strategy?: EditorCreativeStrategy,
+  knowledgeContext?: EditorCreativeKnowledgeContext,
   replyLocale: ReplyLocale = 'zh-CN',
 ): string {
   if (!brief || !strategy) return '';
+  const effectiveKnowledgeContext = resolveEffectiveKnowledgeContext(knowledgeContext, strategy);
 
   const lines: string[] = [
     replyLocale === 'en' ? '## TikTok Campaign Brief' : '## TikTok 投放/内容 Brief',
@@ -614,6 +808,43 @@ export function buildCreativeBriefPromptBlock(
     lines.push(`- ${replyLocale === 'en' ? 'Risk notes' : '风险约束'}: ${strategy.riskNotes.join(' / ')}`);
   }
   lines.push(`- ${replyLocale === 'en' ? 'Rationale' : '策略理由'}: ${strategy.rationale}`);
+  if (effectiveKnowledgeContext) {
+    lines.push('');
+    lines.push(replyLocale === 'en' ? '## Applied Knowledge' : '## 已应用知识');
+    if (effectiveKnowledgeContext.selectedPackIds.length > 0) {
+      lines.push(`- ${
+        replyLocale === 'en' ? 'Knowledge packs' : '知识包'
+      }: ${
+        replyLocale === 'en'
+          ? `${effectiveKnowledgeContext.selectedPackIds.length} selected`
+          : `已选择 ${effectiveKnowledgeContext.selectedPackIds.length} 个`
+      }`);
+    }
+    if (effectiveKnowledgeContext.marketTruth.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Market truth' : '市场事实'}: ${effectiveKnowledgeContext.marketTruth.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.audienceTension.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Audience tension' : '人群张力'}: ${effectiveKnowledgeContext.audienceTension.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.toneRules.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Tone rules' : '语气规则'}: ${effectiveKnowledgeContext.toneRules.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.visualCues.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Visual cues' : '视觉线索'}: ${effectiveKnowledgeContext.visualCues.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.approvedAngles.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Approved angles' : '可用角度'}: ${effectiveKnowledgeContext.approvedAngles.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.hookCandidates.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Hook candidates' : 'Hook 备选'}: ${effectiveKnowledgeContext.hookCandidates.slice(0, 4).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.forbiddenClaims.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Forbidden claims' : '避免表达'}: ${effectiveKnowledgeContext.forbiddenClaims.slice(0, 5).join(' / ')}`);
+    }
+    if (effectiveKnowledgeContext.rationaleNotes.length > 0) {
+      lines.push(`- ${replyLocale === 'en' ? 'Knowledge rationale' : '知识依据'}: ${effectiveKnowledgeContext.rationaleNotes.slice(0, 3).join(' / ')}`);
+    }
+  }
   lines.push(
     brief.mode === 'tiktok_ua'
       ? localizedText(

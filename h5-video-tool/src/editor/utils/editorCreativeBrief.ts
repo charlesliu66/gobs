@@ -16,6 +16,18 @@ export interface EditorCreativeBrief {
   forbiddenClaims?: string[];
 }
 
+export interface EditorCreativeKnowledgeContext {
+  selectedPackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
+  visualCues: string[];
+  rationaleNotes: string[];
+}
+
 export interface EditorCreativeStrategy {
   strategyId?: string;
   briefId?: string;
@@ -34,6 +46,14 @@ export interface EditorCreativeStrategy {
   tone?: string;
   assetNeeds: string[];
   riskNotes: string[];
+  knowledgePackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
 }
 
 export interface EditorCreativeVariant {
@@ -71,6 +91,10 @@ function cleanText(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function uniqueStrings(items: string[]): string[] {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+}
+
 function normalizeStringList(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -90,6 +114,74 @@ function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis
   return value === 'hook_focus' || value === 'selling_point_focus' || value === 'cta_focus'
     ? value
     : undefined;
+}
+
+export function normalizeEditorCreativeKnowledgeContextForRequest(input: {
+  selectedPackIds?: string[] | string;
+  knowledgePackIds?: string[] | string;
+  marketTruth?: string[] | string;
+  audienceTension?: string[] | string;
+  toneRules?: string[] | string;
+  forbiddenClaims?: string[] | string;
+  approvedAngles?: string[] | string;
+  hookCandidates?: string[] | string;
+  visualCues?: string[] | string;
+  rationaleNotes?: string[] | string;
+} | undefined): EditorCreativeKnowledgeContext | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+
+  const selectedPackIds = uniqueStrings(
+    normalizeStringList(input.selectedPackIds ?? input.knowledgePackIds),
+  );
+  const marketTruth = uniqueStrings(normalizeStringList(input.marketTruth));
+  const audienceTension = uniqueStrings(normalizeStringList(input.audienceTension));
+  const toneRules = uniqueStrings(normalizeStringList(input.toneRules));
+  const forbiddenClaims = uniqueStrings(normalizeStringList(input.forbiddenClaims));
+  const approvedAngles = uniqueStrings(normalizeStringList(input.approvedAngles));
+  const hookCandidates = uniqueStrings(normalizeStringList(input.hookCandidates));
+  const visualCues = uniqueStrings(normalizeStringList(input.visualCues));
+  const rationaleNotes = uniqueStrings(normalizeStringList(input.rationaleNotes));
+
+  const hasContent = Boolean(
+    selectedPackIds.length > 0 ||
+    marketTruth.length > 0 ||
+    audienceTension.length > 0 ||
+    toneRules.length > 0 ||
+    forbiddenClaims.length > 0 ||
+    approvedAngles.length > 0 ||
+    hookCandidates.length > 0 ||
+    visualCues.length > 0 ||
+    rationaleNotes.length > 0
+  );
+  if (!hasContent) return undefined;
+
+  return {
+    selectedPackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    approvedAngles,
+    hookCandidates,
+    visualCues,
+    rationaleNotes,
+  };
+}
+
+export function buildEditorCreativeKnowledgeContextFromStrategy(
+  strategy?: EditorCreativeStrategy | null,
+): EditorCreativeKnowledgeContext | undefined {
+  if (!strategy) return undefined;
+  return normalizeEditorCreativeKnowledgeContextForRequest({
+    selectedPackIds: strategy.knowledgePackIds,
+    marketTruth: strategy.marketTruth,
+    audienceTension: strategy.audienceTension,
+    toneRules: strategy.toneRules,
+    forbiddenClaims: strategy.forbiddenClaims,
+    approvedAngles: strategy.approvedAngles,
+    hookCandidates: strategy.hookCandidates,
+    visualCues: strategy.visualCues,
+  });
 }
 
 export function normalizeEditorCreativeBriefForRequest(input: {

@@ -138,6 +138,7 @@
 
 - 鍦ㄣ€孉gent銆嶉潰鏉胯緭鍏ヨ嚜鐒惰瑷€鎸囦护锛?甯垜鎶婄 2 娈电Щ鍒扮 1 娈靛墠"锛?
 - Agent 瑙ｆ瀽鎰忓浘骞舵搷浣滄椂闂磋酱
+- Campaign Creative handoff can now preserve applied knowledge packs and structured knowledge context all the way into the Editor strategy card, first apply prompt, and project memory buckets.
 - **鏅鸿兘鍓緫鑳藉姏锛坴0.31+锛夛細**
   - 琛屼负缁嗗寲鍒嗙被锛氫簩绾ц涓轰綋绯伙紙primary + secondary + intensity + isTurningPoint锛?
   - 鍙欎簨缁撴瀯鎺掔墖锛氫笁濂楁ā鏉匡紙缁忓吀楂樺厜 / 瑙掕壊鏁呬簨 / 鑺傚娣峰壀锛夛紝鑷姩閫夋嫨
@@ -251,6 +252,13 @@
 - **[campaign creative] Added a Knowledge Brain selector inside /campaign-creative** (h5-video-tool/src/pages/CampaignCreative.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgeSelector.tsx): users can now see the current game's reusable packs, select which ones should inform the strategy, and refresh the pack list without leaving the page.
 - **[campaign strategy] Strategy generation now consumes derived knowledge context** (h5-video-tool/src/components/campaign/strategy.ts, h5-video-tool/src/components/campaign/model.ts, h5-video-tool/src/components/campaign/CampaignStrategyCard.tsx, h5-video-tool/src/i18n/messages.ts): strategy cards now surface market truth, audience tension, tone rules, forbidden claims, visual cues, approved angles, and knowledge-driven hooks while still falling back cleanly when no pack is selected.
 - **[tests] Added targeted Campaign Creative knowledge regression coverage** (h5-video-tool/tests/campaignStrategyKnowledge.test.ts, h5-video-tool/tests/campaignVariantPack.test.ts): protects derived-context merge behavior and knowledge-aware variant differentiation before the next Editor integration slice.
+### v0.144 - 2026-05-06
+**Campaign Creative -> Editor knowledge handoff**
+
+- **[campaign creative -> editor] Applied knowledge context now survives the handoff into EditorWorkbench** (`h5-video-tool/src/pages/CampaignCreative.tsx`, `h5-video-tool/src/pages/EditorWorkbench.tsx`, `h5-video-tool/src/components/campaign/model.ts`, `h5-video-tool/src/editor/utils/editorCreativeBrief.ts`): the launch-to-editor payload now carries `knowledgePackIds` plus structured market truth, audience tension, tone rules, visual cues, approved angles, hook candidates, and forbidden claims.
+- **[editor agent] Editor apply/apply-stream now consume knowledge-aware payloads end to end** (`h5-video-tool-api/src/routes/editorAgent.ts`, `h5-video-tool-api/src/services/editorCreativeBrief.ts`, `h5-video-tool-api/src/services/editorCreativeVariantContext.ts`, `h5-video-tool-api/src/services/editorAgentService.ts`): brief-only fallback strategy generation, prompt assembly, and project-memory promotion now all stay aligned with the campaign knowledge layer.
+- **[editor UI/tests] The editor strategy card now shows applied knowledge and the seam is covered by targeted tests** (`h5-video-tool/src/editor/components/AgentPanel.tsx`, `h5-video-tool/tests/editorKnowledgeHandoff.test.tsx`, `h5-video-tool-api/tests/editorCreativeBrief.test.ts`, `h5-video-tool-api/tests/editorMemoryCompression.test.ts`): operators can confirm what the first cut is honoring, and legacy brief-only payloads remain compatible.
+
 ### v0.143 - 2026-05-06
 **English localization sweep for editor progress and workbench shell surfaces**
 
@@ -273,9 +281,6 @@
 - **[language presets] UI/content language switching now supports explicit preset combinations instead of forcing both layers to move together** (`h5-video-tool/src/i18n/locale.ts`, `h5-video-tool/src/i18n/LocaleContext.tsx`, `h5-video-tool/src/components/LocalePresetSwitcher.tsx`, `h5-video-tool/src/i18n/locale.test.ts`): added `中文界面 + 中文内容` / `English UI + 中文内容` / `English UI + English Content` presets and covered the mapping logic with tests.
 - **[editor i18n] Login and editor-side direct fetch flows now pass locale headers and return localized fallback errors** (`h5-video-tool/src/api/auth.ts`, `h5-video-tool/src/api/editor.ts`, `h5-video-tool/src/i18n/messages.ts`): upload, timeout, stream parsing, session expiry, and editing-task failures now reuse shared i18n error keys instead of hardcoded Chinese strings.
 - **[production wizard] Storyboard export overview now uses message keys and locale-aware date formatting end to end** (`h5-video-tool/src/studio/steps/StepExportStoryboardOverview.tsx`): removed page-level `pickUiText` branching, localized the editor handoff flow, and replaced hardcoded `zh-CN` date/time formatting with shared locale utilities.
-
-=======
->>>>>>> d0058e0 (feat: harden english i18n shell surfaces)
 ### v0.139 - 2026-05-06
 **Campaign Knowledge Brain foundation**
 
@@ -284,7 +289,6 @@
 - **[platform framework] Knowledge Brain is now API-backed instead of mock-only** (h5-video-tool/src/api/campaignKnowledge.ts, h5-video-tool/src/context/PlatformMemoryContext.tsx, h5-video-tool/src/pages/PlatformFramework.tsx, h5-video-tool/src/components/campaign/CampaignKnowledgePackCard.tsx): users can import recommended packs for stable seeded games and immediately see persisted knowledge cards on the platform page, while ad-hoc games stay clearly marked as non-persistent in this run.
 - **[tests] Added targeted Knowledge Brain foundation coverage** (h5-video-tool-api/tests/campaignKnowledgeStore.test.ts, h5-video-tool-api/tests/campaignKnowledgeImport.test.ts, h5-video-tool-api/tests/campaignKnowledgeDerivation.test.ts, h5-video-tool/tests/campaignKnowledgeApi.test.ts, h5-video-tool/tests/platformKnowledgeBrain.test.tsx): protects storage determinism, safe-id validation, context derivation, API path wiring, and pack-card rendering.
 
-<<<<<<< HEAD
 ### v0.138 - 2026-05-06
 **Video progress wording and ETA clarity polish**
 
@@ -2050,7 +2054,9 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.143)*
+*Last updated: 2026-05-06 (v0.144)*
+
+Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
 

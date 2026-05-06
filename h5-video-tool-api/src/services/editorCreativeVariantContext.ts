@@ -2,6 +2,7 @@ import {
   buildCreativeBriefPromptBlock,
   buildDefaultCreativeUserMessage,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
   type EditorCreativeStrategy,
   type EditorCreativeVariant,
   type EditorCreativeVariantPack,
@@ -13,9 +14,10 @@ export function buildCreativeBriefPromptBlockWithVariant(
   strategy?: EditorCreativeStrategy,
   selectedVariant?: EditorCreativeVariant,
   variantPack?: EditorCreativeVariantPack,
+  knowledgeContext?: EditorCreativeKnowledgeContext,
   replyLocale: ReplyLocale = 'zh-CN',
 ): string {
-  const base = buildCreativeBriefPromptBlock(brief, strategy, replyLocale);
+  const base = buildCreativeBriefPromptBlock(brief, strategy, knowledgeContext, replyLocale);
   if (!base || !selectedVariant) {
     return base;
   }

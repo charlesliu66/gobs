@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildEditorCreativeKnowledgeContextFromStrategy,
+  normalizeEditorCreativeKnowledgeContextForRequest,
   normalizeEditorCreativeBriefForRequest,
   normalizeEditorCreativeVariantForRequest,
   normalizeEditorCreativeVariantPackForRequest,
@@ -116,4 +118,59 @@ test('normalizeEditorCreativeVariantPackForRequest keeps only valid variants', (
 test('normalizeEditorCreativeVariant helpers return undefined for missing payloads', () => {
   assert.equal(normalizeEditorCreativeVariantForRequest(undefined), undefined);
   assert.equal(normalizeEditorCreativeVariantPackForRequest(undefined), undefined);
+});
+
+test('normalizeEditorCreativeKnowledgeContextForRequest trims and dedupes knowledge fields', () => {
+  const knowledgeContext = normalizeEditorCreativeKnowledgeContextForRequest({
+    selectedPackIds: ' pack_a , pack_b , pack_a ',
+    marketTruth: [' high competition ', 'high competition', 'reward windows matter'],
+    toneRules: ' fast pacing \n keep the CTA visible ',
+    forbiddenClaims: ' no guaranteed SSR ; no fake scarcity ',
+  });
+
+  assert.deepEqual(knowledgeContext, {
+    selectedPackIds: ['pack_a', 'pack_b'],
+    marketTruth: ['high competition', 'reward windows matter'],
+    audienceTension: [],
+    toneRules: ['fast pacing', 'keep the CTA visible'],
+    forbiddenClaims: ['no guaranteed SSR', 'no fake scarcity'],
+    approvedAngles: [],
+    hookCandidates: [],
+    visualCues: [],
+    rationaleNotes: [],
+  });
+});
+
+test('buildEditorCreativeKnowledgeContextFromStrategy reconstructs applied strategy knowledge', () => {
+  const knowledgeContext = buildEditorCreativeKnowledgeContextFromStrategy({
+    platform: 'tiktok',
+    mode: 'tiktok_ua',
+    objective: 'drive installs',
+    hookOptions: ['Open on the reward reveal'],
+    recommendedHook: 'Open on the reward reveal',
+    cta: 'Download now',
+    rationale: 'Lead with the clearest payoff.',
+    assetNeeds: ['Reward splash'],
+    riskNotes: ['Avoid fake urgency'],
+    knowledgePackIds: ['pack_a'],
+    marketTruth: ['Reward windows drive conversion spikes'],
+    audienceTension: ['Players want proof before they click'],
+    toneRules: ['Fast-paced and payoff-first'],
+    forbiddenClaims: ['No guaranteed SSR'],
+    visualCues: ['Reward splash frame'],
+    approvedAngles: ['Show the live-ops timing advantage'],
+    hookCandidates: ['Start with the reward reveal'],
+  });
+
+  assert.deepEqual(knowledgeContext, {
+    selectedPackIds: ['pack_a'],
+    marketTruth: ['Reward windows drive conversion spikes'],
+    audienceTension: ['Players want proof before they click'],
+    toneRules: ['Fast-paced and payoff-first'],
+    forbiddenClaims: ['No guaranteed SSR'],
+    approvedAngles: ['Show the live-ops timing advantage'],
+    hookCandidates: ['Start with the reward reveal'],
+    visualCues: ['Reward splash frame'],
+    rationaleNotes: [],
+  });
 });

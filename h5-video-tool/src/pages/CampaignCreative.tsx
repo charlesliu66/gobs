@@ -13,6 +13,7 @@ import { CampaignStrategyTuningPanel } from '../components/campaign/CampaignStra
 import type {
   CampaignCreativeBrief,
   CampaignCreativeFormState,
+  CampaignCreativeHandoffPayload,
   CampaignCreativeMode,
   CampaignCreativeStrategy,
   CampaignCreativeStrategyTuning,
@@ -53,6 +54,42 @@ function sameStringList(left: string[], right: string[]): boolean {
   }
 
   return left.every((value, index) => value === right[index]);
+}
+
+function buildAppliedKnowledgeContext(
+  strategy: CampaignCreativeStrategy,
+  knowledgeContext: DerivedCampaignKnowledgeContext | null,
+): DerivedCampaignKnowledgeContext | undefined {
+  const selectedPackIds =
+    strategy.knowledgePackIds.length > 0
+      ? strategy.knowledgePackIds
+      : (knowledgeContext?.selectedPackIds ?? []);
+  const hasKnowledge = Boolean(
+    selectedPackIds.length > 0 ||
+    strategy.marketTruth.length > 0 ||
+    strategy.audienceTension.length > 0 ||
+    strategy.toneRules.length > 0 ||
+    strategy.forbiddenClaims.length > 0 ||
+    strategy.approvedAngles.length > 0 ||
+    strategy.hookCandidates.length > 0 ||
+    strategy.visualCues.length > 0 ||
+    (knowledgeContext?.rationaleNotes.length ?? 0) > 0,
+  );
+  if (!hasKnowledge) {
+    return undefined;
+  }
+
+  return {
+    selectedPackIds,
+    marketTruth: strategy.marketTruth,
+    audienceTension: strategy.audienceTension,
+    toneRules: strategy.toneRules,
+    forbiddenClaims: strategy.forbiddenClaims,
+    approvedAngles: strategy.approvedAngles,
+    hookCandidates: strategy.hookCandidates,
+    visualCues: strategy.visualCues,
+    rationaleNotes: knowledgeContext?.rationaleNotes ?? [],
+  };
 }
 
 export function CampaignCreative() {
@@ -239,7 +276,8 @@ export function CampaignCreative() {
     const selectedVariant =
       variantPack?.variants.find((variant) => variant.variantId === selectedVariantId) ??
       variantPack?.variants[0];
-    const payload = JSON.stringify({
+    const appliedKnowledgeContext = buildAppliedKnowledgeContext(strategy, knowledgeContext);
+    const payload: CampaignCreativeHandoffPayload = {
       brief,
       strategy,
       variantPack: variantPack
@@ -249,11 +287,14 @@ export function CampaignCreative() {
           }
         : undefined,
       selectedVariant,
+      knowledgePackIds: appliedKnowledgeContext?.selectedPackIds ?? strategy.knowledgePackIds,
+      knowledgeContext: appliedKnowledgeContext,
       source: 'campaign-creative',
       createdAt: Date.now(),
-    });
+    };
+    const serializedPayload = JSON.stringify(payload);
     CAMPAIGN_CREATIVE_HANDOFF_STORAGE_KEYS.forEach((key) => {
-      sessionStorage.setItem(key, payload);
+      sessionStorage.setItem(key, serializedPayload);
     });
     navigate('/editor', { state: { fromCampaignCreative: true } });
   };

@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildInstructionMemoryPromotion } from '../src/routes/editorAgent.ts';
 import {
   buildAgentMemoryContextBlock,
   compactConversationWindow,
   mergeUserCommunicationProfile,
 } from '../src/services/editorMemoryCompression.ts';
+import { promoteProjectMemory } from '../src/services/editorAgentMemoryStore.ts';
 import {
   normalizeEditorProjectMemory,
   normalizeEditorUserCommunicationProfile,
@@ -132,4 +134,36 @@ test('mergeUserCommunicationProfile downgrades low-confidence profile items into
   assert.equal(merged.strongDirectives.some((item) => item.includes('act_then_report')), true);
   assert.equal(merged.strongDirectives.some((item) => item.includes('brief_direct')), false);
   assert.equal(merged.weakHints.some((item) => item.includes('brief_direct')), true);
+});
+
+test('knowledge context promotion lands in stable facts, preferences, and avoid buckets', () => {
+  const promotion = buildInstructionMemoryPromotion(
+    'Keep the pace fast.',
+    {
+      platform: 'tiktok',
+      mode: 'tiktok_ua',
+      sellingPoints: ['launch rewards'],
+      forbiddenClaims: [],
+    },
+    {
+      selectedPackIds: ['pack_a'],
+      marketTruth: ['Reward windows drive conversion spikes'],
+      audienceTension: ['Players need proof before they click'],
+      toneRules: ['Keep the payoff visible in the first 2 seconds'],
+      forbiddenClaims: ['No guaranteed SSR'],
+      approvedAngles: [],
+      hookCandidates: [],
+      visualCues: ['Reward splash frame'],
+      rationaleNotes: [],
+    },
+  );
+
+  const memory = promoteProjectMemory(normalizeEditorProjectMemory({}), promotion);
+  const block = buildAgentMemoryContextBlock({ projectMemory: memory });
+
+  assert.match(block, /knowledge_market_truth_1=Reward windows drive conversion spikes/);
+  assert.match(block, /knowledge_audience_tension_1=Players need proof before they click/);
+  assert.match(block, /knowledge_tone_rule_1=Keep the payoff visible in the first 2 seconds/);
+  assert.match(block, /knowledge_visual_cue_1=Reward splash frame/);
+  assert.match(block, /knowledge_forbidden_claim_1=No guaranteed SSR/);
 });

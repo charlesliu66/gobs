@@ -7,8 +7,10 @@ import type {
 import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import type { AspectRatioPreset, TimelineProject } from '../editor/types/timeline';
 import {
+  buildEditorCreativeKnowledgeContextFromStrategy,
   normalizeEditorCreativeBriefForRequest,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
   type EditorCreativeVariant,
@@ -39,6 +41,8 @@ export interface ApplyEditorCreativeAgentBody {
   creativeStrategy?: EditorCreativeStrategy;
   creativeVariant?: EditorCreativeVariant;
   creativeVariantPack?: EditorCreativeVariantPack;
+  knowledgePackIds?: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
   visionFocus?: EditorVisionFocus;
   replyLocale?: 'zh-CN' | 'en';
 }
@@ -48,8 +52,10 @@ export interface ApplyEditorCreativeAgentResponse extends ApplyEditorAgentRespon
 }
 
 export {
+  buildEditorCreativeKnowledgeContextFromStrategy,
   normalizeEditorCreativeBriefForRequest,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
   type EditorCreativeVariant,

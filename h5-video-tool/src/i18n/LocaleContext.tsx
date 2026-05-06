@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import { getMessage } from './messages.ts';
 import {
@@ -10,6 +10,8 @@ import {
   type ContentLocale,
   type UiLocale,
 } from './locale.ts';
+
+void React;
 
 type LocaleContextValue = {
   uiLocale: UiLocale;

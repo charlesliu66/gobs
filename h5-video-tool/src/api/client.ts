@@ -7,7 +7,7 @@ import {
   readStoredUiLocale,
 } from '../i18n/locale.ts';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const BASE_URL = import.meta.env?.VITE_API_BASE_URL || '';
 const POST_LOGIN_REDIRECT_KEY = 'gobs_post_login_redirect';
 
 function getAuthHeaders(): Record<string, string> {

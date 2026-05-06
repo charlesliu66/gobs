@@ -1,3 +1,5 @@
+import type { DerivedCampaignKnowledgeContext } from '../../api/campaignKnowledge.ts';
+
 export type CampaignCreativeMode = 'tiktok_content' | 'tiktok_ua';
 export type CampaignCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
 export type CampaignCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
@@ -84,6 +86,8 @@ export interface CampaignCreativeHandoffPayload {
   strategy: CampaignCreativeStrategy;
   variantPack?: CampaignCreativeVariantPack;
   selectedVariant?: CampaignCreativeVariant;
+  knowledgePackIds?: string[];
+  knowledgeContext?: DerivedCampaignKnowledgeContext;
   source: 'campaign-creative';
   createdAt: number;
 }

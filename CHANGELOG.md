@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.144 - 2026-05-06
+**Campaign Creative -> Editor knowledge handoff**
+**Editor / Knowledge Context / Memory:**
+- Campaign Creative handoff now preserves applied `knowledgePackIds` plus structured knowledge context so EditorWorkbench can restore the same market truth, audience tension, tone rules, visual cues, approved angles, hook candidates, and forbidden claims that were approved on the strategy page.
+- Editor apply and apply-stream now normalize that knowledge-aware payload end to end, including brief-only fallback strategy generation, prompt assembly, and memory promotion into stable facts, preference signals, and avoid signals.
+- The editor strategy card now shows an applied-knowledge summary so operators can confirm which knowledge packs and constraints the first cut is honoring, while legacy brief-only handoff payloads remain compatible.
+**Tests:**
+- Added targeted frontend/backend seam tests for knowledge-context normalization, strategy fallback reconstruction, strategy-card rendering, and memory promotion, then revalidated backend typecheck plus frontend/backend production builds.
+
 ## v0.142 - 2026-05-06
 **Campaign Creative knowledge consumption**
 **Frontend / Campaign Creative:**

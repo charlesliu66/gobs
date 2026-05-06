@@ -66,10 +66,13 @@ import {
   type EditorCreativeVariantPack,
 } from '../api/editorCreative';
 import {
+  buildEditorCreativeKnowledgeContextFromStrategy,
   normalizeEditorCreativeBriefForRequest,
+  normalizeEditorCreativeKnowledgeContextForRequest,
   normalizeEditorCreativeVariantForRequest,
   normalizeEditorCreativeVariantPackForRequest,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
 } from '../editor/utils/editorCreativeBrief';
 import {
   deleteEditorProjectMemoryItem,
@@ -113,6 +116,8 @@ interface CampaignCreativeEditorHandoff {
   strategy?: EditorCreativeStrategy;
   variantPack?: EditorCreativeVariantPack;
   selectedVariant?: EditorCreativeVariant;
+  knowledgePackIds?: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
   source: 'campaign-creative';
   createdAt: number;
 }
@@ -175,6 +180,14 @@ function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | unde
   const hookOptions = normalizeHandoffStringList(raw.hookOptions);
   const assetNeeds = normalizeHandoffStringList(raw.assetNeeds);
   const riskNotes = normalizeHandoffStringList(raw.riskNotes);
+  const knowledgePackIds = normalizeHandoffStringList(raw.knowledgePackIds);
+  const marketTruth = normalizeHandoffStringList(raw.marketTruth);
+  const audienceTension = normalizeHandoffStringList(raw.audienceTension);
+  const toneRules = normalizeHandoffStringList(raw.toneRules);
+  const forbiddenClaims = normalizeHandoffStringList(raw.forbiddenClaims);
+  const visualCues = normalizeHandoffStringList(raw.visualCues);
+  const approvedAngles = normalizeHandoffStringList(raw.approvedAngles);
+  const hookCandidates = normalizeHandoffStringList(raw.hookCandidates);
 
   if (!objective || !recommendedHook || !cta || !rationale) return undefined;
 
@@ -196,7 +209,43 @@ function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | unde
     tone,
     assetNeeds,
     riskNotes,
+    knowledgePackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    visualCues,
+    approvedAngles,
+    hookCandidates,
   };
+}
+
+function normalizeHandoffKnowledgeContext(
+  input: unknown,
+  strategy?: EditorCreativeStrategy,
+  knowledgePackIds: string[] = [],
+): EditorCreativeKnowledgeContext | undefined {
+  const payloadContext = input && typeof input === 'object'
+    ? normalizeEditorCreativeKnowledgeContextForRequest({
+        ...(input as Record<string, unknown>),
+        selectedPackIds:
+          ((input as Record<string, unknown>).selectedPackIds as string[] | string | undefined) ?? knowledgePackIds,
+      })
+    : undefined;
+  if (payloadContext) {
+    return payloadContext;
+  }
+
+  const strategyContext = buildEditorCreativeKnowledgeContextFromStrategy(
+    strategy
+      ? {
+          ...strategy,
+          knowledgePackIds:
+            knowledgePackIds.length > 0 ? knowledgePackIds : strategy.knowledgePackIds,
+        }
+      : null,
+  );
+  return strategyContext;
 }
 
 function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEditorHandoff | null {
@@ -218,6 +267,44 @@ function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEdito
     typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
       ? raw.createdAt
       : Date.now();
+  const strategy = normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy);
+  const knowledgePackIds = normalizeHandoffStringList(raw.knowledgePackIds);
+  const knowledgeContext = normalizeHandoffKnowledgeContext(
+    raw.knowledgeContext ?? raw.campaignKnowledgeContext,
+    strategy,
+    knowledgePackIds,
+  );
+  const effectiveKnowledgePackIds =
+    knowledgeContext?.selectedPackIds && knowledgeContext.selectedPackIds.length > 0
+      ? knowledgeContext.selectedPackIds
+      : knowledgePackIds.length > 0
+        ? knowledgePackIds
+        : (strategy?.knowledgePackIds ?? []);
+  const nextStrategy = strategy
+    ? {
+        ...strategy,
+        knowledgePackIds: effectiveKnowledgePackIds,
+        marketTruth: strategy.marketTruth.length > 0 ? strategy.marketTruth : (knowledgeContext?.marketTruth ?? []),
+        audienceTension:
+          strategy.audienceTension.length > 0
+            ? strategy.audienceTension
+            : (knowledgeContext?.audienceTension ?? []),
+        toneRules: strategy.toneRules.length > 0 ? strategy.toneRules : (knowledgeContext?.toneRules ?? []),
+        forbiddenClaims:
+          strategy.forbiddenClaims.length > 0
+            ? strategy.forbiddenClaims
+            : (knowledgeContext?.forbiddenClaims ?? []),
+        visualCues: strategy.visualCues.length > 0 ? strategy.visualCues : (knowledgeContext?.visualCues ?? []),
+        approvedAngles:
+          strategy.approvedAngles.length > 0
+            ? strategy.approvedAngles
+            : (knowledgeContext?.approvedAngles ?? []),
+        hookCandidates:
+          strategy.hookCandidates.length > 0
+            ? strategy.hookCandidates
+            : (knowledgeContext?.hookCandidates ?? []),
+      }
+    : strategy;
 
   const variantPack = normalizeEditorCreativeVariantPackForRequest(
     (raw.variantPack ?? raw.creativeVariantPack) as Parameters<typeof normalizeEditorCreativeVariantPackForRequest>[0],
@@ -230,9 +317,11 @@ function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEdito
 
   return {
     brief,
-    strategy: normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy),
+    strategy: nextStrategy,
     variantPack,
     selectedVariant,
+    knowledgePackIds: effectiveKnowledgePackIds,
+    knowledgeContext,
     source,
     createdAt,
   };
@@ -1004,6 +1093,27 @@ export function EditorWorkbench() {
       const activeCreativeStrategy = shouldUseHandoffStrategy
         ? campaignCreativeHandoff?.strategy
         : undefined;
+      const shouldUseHandoffKnowledge = Boolean(
+        campaignCreativeHandoff?.knowledgeContext &&
+        (
+          !creativeBrief ||
+          isSameCreativeBrief(creativeBrief, campaignCreativeHandoff?.brief)
+        ),
+      );
+      const strategyKnowledgeContext = buildEditorCreativeKnowledgeContextFromStrategy(
+        activeCreativeStrategy ?? campaignCreativeHandoff?.strategy ?? null,
+      );
+      const activeKnowledgeContext = shouldUseHandoffKnowledge
+        ? campaignCreativeHandoff?.knowledgeContext ?? strategyKnowledgeContext
+        : strategyKnowledgeContext;
+      const activeKnowledgePackIds =
+        activeKnowledgeContext?.selectedPackIds.length
+          ? activeKnowledgeContext.selectedPackIds
+          : (
+            activeCreativeStrategy?.knowledgePackIds ??
+            campaignCreativeHandoff?.knowledgePackIds ??
+            []
+          );
       const shouldUseHandoffVariant = Boolean(
         !campaignCreativeHandoffConsumed &&
         campaignCreativeHandoff?.selectedVariant &&
@@ -1021,7 +1131,7 @@ export function EditorWorkbench() {
       const shouldConsumeCampaignHandoff = Boolean(
         !campaignCreativeHandoffConsumed &&
         campaignCreativeHandoff?.brief &&
-        ((shouldUseHandoffStrategy || shouldUseHandoffVariant) || !creativeBrief),
+        ((shouldUseHandoffStrategy || shouldUseHandoffVariant || shouldUseHandoffKnowledge) || !creativeBrief),
       );
       const replyLocale = resolveEditorReplyLocale(activeCreativeBrief, [trimmedMessage]);
       const shouldForceEdit = Boolean(activeCreativeBrief);
@@ -1139,6 +1249,8 @@ export function EditorWorkbench() {
             creativeStrategy: activeCreativeStrategy,
             creativeVariant: activeCreativeVariant,
             creativeVariantPack: activeCreativeVariantPack,
+            knowledgePackIds: activeKnowledgePackIds,
+            knowledgeContext: activeKnowledgeContext,
             replyLocale,
           } as Parameters<typeof applyEditorAgentCreativeStream>[0],
           (progress) => setAgentJobProgress(progress),
