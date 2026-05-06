@@ -61,8 +61,8 @@
 - [x] Planner approved
 - [x] Challenger approved
 - [x] Builder self-test recorded
-- [ ] Verifier P0/P1 count is zero
-- [ ] Release decision written
+- [x] Verifier P0/P1 count is zero
+- [x] Release decision written
 
 ## Escalation Rules
 - Escalate if a forbidden file must change.

@@ -4,7 +4,7 @@
 
 - Status: `GO`
 - Run id: `2026-05-06-ark-seedance-api-switch`
-- Verified commit: `4eaa722`
+- Verified commit: `930a441`
 
 ## Coverage
 
@@ -20,13 +20,14 @@
 - Workflow evaluation
   - `bash scripts/eval.sh 2026-05-06-ark-seedance-api-switch`
 - Staging smoke
-  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env staging -Depth quick -ExpectedCommit 4eaa722`
+  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env staging -Depth quick -ExpectedCommit 930a441`
 - Prod smoke
-  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env prod -Depth quick -ExpectedCommit 4eaa722`
+  - `powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env prod -Depth quick -ExpectedCommit 930a441`
 
 ## Results
 
 - Queue scheduling now respects `3` Ark concurrency slots on both scheduler admission and ETA calculation.
+- Successful storyboard jobs now persist real submit-to-video elapsed time, and queue snapshots expose the rolling average from the latest `10` successful videos.
 - Queue status copy now distinguishes:
   - platform queue
   - submitted to Ark
@@ -34,9 +35,10 @@
   - rendering in Ark
   - tracking stopped
 - Global jobs UI now exposes capacity context through `maxConcurrent` and `availableSlots`.
+- The storyboard platform summary now shows the recent-success sec/job baseline and falls back transparently when no successful history exists yet.
 - Completion reminders are emitted from the global jobs SSE layer so done / failed / cancelled jobs can notify outside the active shot view.
-- Staging smoke passed with version `staging @ 4eaa722`.
-- Prod smoke passed with version `prod @ 4eaa722`.
+- Staging smoke passed with version `staging @ 930a441`.
+- Prod smoke passed with version `prod @ 930a441`.
 
 ## Residual Risks
 
