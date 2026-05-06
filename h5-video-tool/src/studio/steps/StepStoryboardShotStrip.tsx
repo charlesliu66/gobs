@@ -3,6 +3,7 @@ import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { pickUiText } from '../../i18n/uiText.ts';
 import { hasProductionShotPreviewMedia, type ProductionShot, type SceneSheet } from '../productionTypes';
 import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
+import { resolveFriendlyVideoProgress } from '../storyboardQueueState';
 
 type ShotStatus = 'idle' | 'awaiting_submit' | 'pending' | 'queuing' | 'processing' | 'failed' | 'cancelled' | 'done';
 
@@ -45,35 +46,56 @@ function resolveShotStatus(
   return 'idle';
 }
 
-function resolveStatusMeta(
+function friendlyStatusMeta(
   status: ShotStatus,
   uiText: <T,>(zh: T, en: T) => T,
+  activeJob?: BatchJobDto,
+  snapshot?: QueueSnapshotDto,
 ): { label: string; className: string } {
+  if (activeJob) {
+    const friendly = resolveFriendlyVideoProgress({ job: activeJob, snapshot });
+    switch (friendly.stage) {
+      case 'queued':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
+        };
+      case 'starting':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
+        };
+      case 'generating':
+      case 'done':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+        };
+      case 'finishing':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-lime-500/40 bg-lime-500/15 text-lime-200',
+        };
+      case 'failed':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-rose-500/40 bg-rose-500/15 text-rose-200',
+        };
+      case 'cancelled':
+        return {
+          label: uiText(friendly.shortLabelZh, friendly.shortLabelEn),
+          className: 'border-slate-500/40 bg-slate-500/15 text-slate-200',
+        };
+      default:
+        break;
+    }
+  }
+
   switch (status) {
     case 'done':
       return {
         label: uiText('已完成', 'Done'),
         className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
-      };
-    case 'processing':
-      return {
-        label: uiText('Ark 生成中', 'Rendering in Ark'),
-        className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
-      };
-    case 'queuing':
-      return {
-        label: uiText('Ark 队列中', 'Queued in Ark'),
-        className: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
-      };
-    case 'pending':
-      return {
-        label: uiText('已提交到 Ark', 'Submitted to Ark'),
-        className: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
-      };
-    case 'awaiting_submit':
-      return {
-        label: uiText('平台排队中', 'In platform queue'),
-        className: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
       };
     case 'failed':
       return {
@@ -82,7 +104,7 @@ function resolveStatusMeta(
       };
     case 'cancelled':
       return {
-        label: uiText('已停止跟进', 'Tracking stopped'),
+        label: uiText('已停止', 'Stopped'),
         className: 'border-slate-500/40 bg-slate-500/15 text-slate-200',
       };
     default:
@@ -139,8 +161,8 @@ export function StepStoryboardShotStrip({
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)]">
             {uiText(
-              `平台排队 ${snapshot.totalWaiting} 个，Ark 占用 ${snapshot.totalActive}/${maxConcurrent} 个槽位。`,
-              `${snapshot.totalWaiting} in platform queue, ${snapshot.totalActive}/${maxConcurrent} Ark slots busy.`,
+              `当前有 ${snapshot.totalActive} 条视频正在生成，${snapshot.totalWaiting} 条在排队，最多同时处理 ${maxConcurrent} 条。`,
+              `${snapshot.totalActive} videos are generating, ${snapshot.totalWaiting} are waiting, and the system handles up to ${maxConcurrent} at once.`,
             )}
           </div>
         </div>
@@ -157,7 +179,7 @@ export function StepStoryboardShotStrip({
             || uiText('未命名场景', 'Untitled scene');
           const activeJob = activeJobMap[shotKey];
           const status = resolveShotStatus(shot, shotBusyMap, activeJobMap, statusMap);
-          const statusMeta = resolveStatusMeta(status, uiText);
+          const statusMeta = friendlyStatusMeta(status, uiText, activeJob, snapshot);
           const queueInfo = shotJobQueueInfoMap?.[shotKey];
           const selected = index === selectedShotIdx;
 
@@ -192,13 +214,13 @@ export function StepStoryboardShotStrip({
                 <div className="mt-3 space-y-1 text-[10px] text-[var(--color-text-muted)]">
                   <div>{uiText(`时长 ${Math.round(shot.durationSec || 0)}s`, `${Math.round(shot.durationSec || 0)}s`)}</div>
                   {queueInfo?.globalQueuePos != null && (
-                    <div>{uiText(`平台队列 #${queueInfo.globalQueuePos + 1}`, `Platform queue #${queueInfo.globalQueuePos + 1}`)}</div>
+                    <div>{uiText(`当前排第 ${queueInfo.globalQueuePos + 1} 位`, `Queue position ${queueInfo.globalQueuePos + 1}`)}</div>
                   )}
                   {queueInfo?.queue_idx != null && (
                     <div>
                       {uiText(
-                        `Ark 队列 #${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? `/${queueInfo.queue_length}` : ''}`,
-                        `Ark queue #${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? `/${queueInfo.queue_length}` : ''}`,
+                        `已进入生成队列，当前排第 ${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? ` / ${queueInfo.queue_length}` : ''} 位`,
+                        `In render queue, position ${queueInfo.queue_idx + 1}${queueInfo.queue_length != null ? ` / ${queueInfo.queue_length}` : ''}`,
                       )}
                     </div>
                   )}
@@ -218,8 +240,8 @@ export function StepStoryboardShotStrip({
                   {cancellingJobId === activeJob.id
                     ? uiText('处理中...', 'Working...')
                     : activeJob.status === 'processing'
-                      ? uiText('停止本次跟进', 'Stop tracking')
-                      : uiText('取消当前任务', 'Cancel job')}
+                      ? uiText('停止本次任务', 'Stop this task')
+                      : uiText('取消本次任务', 'Cancel this task')}
                 </button>
               )}
             </div>

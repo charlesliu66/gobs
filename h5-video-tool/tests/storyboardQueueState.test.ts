@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  formatFriendlyEta,
   resolveEnqueueJobState,
+  resolveFriendlyVideoProgress,
   resolveStoryboardQueueSnapshot,
 } from '../src/studio/storyboardQueueState.ts';
 
@@ -102,4 +104,67 @@ test('resolveEnqueueJobState preserves successful queued states', () => {
     resolveEnqueueJobState({ status: 'processing' }),
     { kind: 'processing', isError: false, message: null },
   );
+});
+
+test('formatFriendlyEta uses user-friendly time wording', () => {
+  assert.equal(formatFriendlyEta(25, 'zh-CN'), '不到 1 分钟');
+  assert.equal(formatFriendlyEta(25, 'en'), 'less than 1 min');
+  assert.equal(formatFriendlyEta(180, 'zh-CN'), '约 3 分钟');
+});
+
+test('resolveFriendlyVideoProgress describes platform queue in business wording', () => {
+  const result = resolveFriendlyVideoProgress({
+    job: {
+      status: 'awaiting_submit',
+      globalQueuePos: 2,
+      etaSec: 180,
+      createdAt: '2026-05-06T00:00:00.000Z',
+    },
+    snapshot: {
+      avgSecPerJob: 120,
+      recentSuccessAvgSec: 96,
+      recentSuccessSampleCount: 10,
+    },
+    nowMs: new Date('2026-05-06T00:00:30.000Z').getTime(),
+  });
+
+  assert.equal(result.stage, 'queued');
+  assert.equal(result.shortLabelZh, '排队中');
+  assert.match(result.detailZh, /前面还有 2 条/);
+  assert.match(result.detailZh, /约 3 分钟后开始/);
+});
+
+test('resolveFriendlyVideoProgress describes active rendering with remaining time and finishing state', () => {
+  const generating = resolveFriendlyVideoProgress({
+    job: {
+      status: 'processing',
+      createdAt: '2026-05-06T00:00:00.000Z',
+      submittedAt: '2026-05-06T00:00:00.000Z',
+    },
+    snapshot: {
+      avgSecPerJob: 120,
+      recentSuccessAvgSec: 120,
+      recentSuccessSampleCount: 10,
+    },
+    nowMs: new Date('2026-05-06T00:00:40.000Z').getTime(),
+  });
+  assert.equal(generating.stage, 'generating');
+  assert.equal(generating.shortLabelZh, '正在生成');
+  assert.match(generating.detailZh, /通常还需/);
+
+  const finishing = resolveFriendlyVideoProgress({
+    job: {
+      status: 'processing',
+      createdAt: '2026-05-06T00:00:00.000Z',
+      submittedAt: '2026-05-06T00:00:00.000Z',
+    },
+    snapshot: {
+      avgSecPerJob: 120,
+      recentSuccessAvgSec: 120,
+      recentSuccessSampleCount: 10,
+    },
+    nowMs: new Date('2026-05-06T00:01:45.000Z').getTime(),
+  });
+  assert.equal(finishing.stage, 'finishing');
+  assert.equal(finishing.shortLabelZh, '即将完成');
 });

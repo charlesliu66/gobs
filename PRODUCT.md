@@ -243,6 +243,13 @@
 
 ## 浜屻€丆hangelog
 
+### v0.138 - 2026-05-06
+**Video progress wording and ETA clarity polish**
+
+- **[production wizard] Main video action card, preview panel, and shot strip now use a single user-friendly progress language set** (h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx, h5-video-tool/src/studio/steps/StepStoryboardPreviewPanel.tsx, h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx, h5-video-tool/src/studio/storyboardQueueState.ts): users now see “排队中 / 即将开始 / 正在生成 / 即将完成 / 已完成” instead of provider-centric wording.
+- **[video progress] Queue and generation details now explain what is happening in business language and show friendlier time expectations** (h5-video-tool/src/studio/storyboardQueueState.ts, h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx): waiting and active tasks now surface clearer estimated start / finish guidance based on recent successful video timing.
+- **[global jobs] Global progress panel and batch job board now hide provider jargon from primary UI** (h5-video-tool/src/components/GlobalJobsPanel.tsx, h5-video-tool/src/components/BatchJobsBoard.tsx): removed technical terms like provider queue / tracking from the main user-facing labels and replaced them with easier-to-understand wording for operations and marketing teammates.
+
 ### v0.137 - 2026-05-06
 **Production Wizard shot success-state reconciliation**
 
@@ -2001,7 +2008,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.137)*
+*Last updated: 2026-05-06 (v0.138)*
 
 
 Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.

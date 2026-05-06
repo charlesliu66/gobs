@@ -28,6 +28,7 @@ import { getSegmentsForShot } from '../executionSegments';
 import { resolveShotAggregateStatus } from '../executionSegmentStatus';
 import type { ShotActiveJobMap, ShotStatusMap } from '../exportStoryboardStatus';
 import { getStoredExecutionSegmentsForShots } from '../productionWizardStorage';
+import { resolveFriendlyVideoProgress } from '../storyboardQueueState';
 
 type StorySceneCoverage = { hit: number; total: number; missingLabels: string[] } | null;
 type MultimodalRefPack = {
@@ -231,8 +232,8 @@ export function StepStoryboardWorkspace({
         className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
         title: uiText('平台空闲', 'Platform idle'),
         detail: uiText(
-          `当前没有任务占用 Ark 槽位。平台支持最多 ${maxConcurrent} 并发，${recentAvgLabel}。`,
-          `No jobs are using Ark slots right now. The platform supports up to ${maxConcurrent} concurrent jobs, and ${recentAvgLabel.toLowerCase()}.`,
+          `当前没有视频在生成。系统最多同时处理 ${maxConcurrent} 条视频，${recentAvgLabel}。`,
+          `No videos are generating right now. The system can handle up to ${maxConcurrent} videos at once, and ${recentAvgLabel.toLowerCase()}.`,
         ),
       };
     }
@@ -242,47 +243,28 @@ export function StepStoryboardWorkspace({
         className: 'border-red-500/30 bg-red-500/10 text-red-200',
         title: uiText('平台繁忙', 'Platform busy'),
         detail: uiText(
-          `平台排队 ${queueSnapshot.totalWaiting} 个，Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，${recentAvgLabel}，预计约 ${etaMin} 分钟后轮到新任务。`,
-          `${queueSnapshot.totalWaiting} jobs are waiting and ${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy. ${recentAvgLabel} and a newly queued job should start in about ${etaMin} minutes.`,
+          `当前有 ${queueSnapshot.totalActive} 条视频正在生成，${queueSnapshot.totalWaiting} 条在排队。${recentAvgLabel}，新任务预计约 ${etaMin} 分钟后开始。`,
+          `${queueSnapshot.totalActive} videos are generating and ${queueSnapshot.totalWaiting} are waiting. ${recentAvgLabel} and a newly queued video should start in about ${etaMin} minutes.`,
         ),
       };
     }
     return {
       className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
-      title: uiText('平台使用中', 'Platform in use'),
+      title: uiText('平台处理中', 'Videos are processing'),
       detail: uiText(
-        `Ark 占用 ${queueSnapshot.totalActive}/${maxConcurrent} 个槽位，平台排队 ${queueSnapshot.totalWaiting} 个，${recentAvgLabel}。`,
-        `${queueSnapshot.totalActive}/${maxConcurrent} Ark slots are busy, ${queueSnapshot.totalWaiting} jobs are in the platform queue, and ${recentAvgLabel.toLowerCase()}.`,
+        `当前有 ${queueSnapshot.totalActive} 条视频正在生成，${queueSnapshot.totalWaiting} 条在排队，${recentAvgLabel}。`,
+        `${queueSnapshot.totalActive} videos are generating, ${queueSnapshot.totalWaiting} are waiting, and ${recentAvgLabel.toLowerCase()}.`,
       ),
     };
   })();
 
   const selectedShotSummary = (() => {
-    if (selectedShotJob?.status === 'awaiting_submit' && typeof selectedShotJob.globalQueuePos === 'number') {
-      return uiText(
-        `当前选中分镜排在平台第 ${selectedShotJob.globalQueuePos + 1} 位，轮到后会自动占用 Ark 槽位并开始生成。`,
-        `The selected shot is currently #${selectedShotJob.globalQueuePos + 1} in the platform queue. It will automatically take an Ark slot and begin rendering when its turn arrives.`,
-      );
-    }
-    if (selectedShotJob?.status === 'pending') {
-      return uiText(
-        '当前选中分镜已经提交到 Ark，正在等待 Ark 受理。',
-        'The selected shot has already been submitted to Ark and is waiting for Ark acceptance.',
-      );
-    }
-    if (selectedShotJob?.status === 'queuing') {
-      return uiText(
-        '当前选中分镜已经被 Ark 接收，正在 Ark 队列中等待渲染。',
-        'The selected shot has been accepted by Ark and is waiting in the Ark queue.',
-      );
-    }
-    if (selectedShotJob?.status === 'processing') {
-      return uiText(
-        '当前选中分镜已经进入 Ark 渲染阶段，完成后会自动回写。',
-        'The selected shot is already rendering in Ark and will sync back automatically when complete.',
-      );
-    }
-    return null;
+    if (!selectedShotJob) return null;
+    const progress = resolveFriendlyVideoProgress({
+      job: selectedShotJob,
+      snapshot: queueSnapshot,
+    });
+    return uiText(progress.detailZh, progress.detailEn);
   })();
 
   const shotStateSummary = chSheets
@@ -359,12 +341,12 @@ export function StepStoryboardWorkspace({
               onClick={onSyncBatchJobs}
               disabled={syncingBatchJobs}
               title={uiText(
-                '立即拉取所有 Ark 任务最新状态，并兜底恢复丢失的 submitId。',
-                'Fetch the latest Ark job states now and try to recover any missing submitId values.',
+                '立即刷新所有视频任务的最新进度。',
+                'Refresh the latest progress for all video tasks now.',
               )}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('同步 Ark 状态', 'Sync Ark status')}
+              {syncingBatchJobs ? uiText('同步中...', 'Syncing...') : uiText('刷新视频进度', 'Refresh progress')}
             </button>
           )}
         </div>
@@ -510,6 +492,7 @@ export function StepStoryboardWorkspace({
                 hasProductionDesign={hasProductionDesign}
                 hasVideo={hasProductionShotPreviewMedia(shot)}
                 activeJob={selectedShotJob}
+                queueSnapshot={queueSnapshot}
                 cancelBusy={cancelBusy}
                 pendingVideoSubmitId={shot.pendingVideoSubmitId}
                 checkingProgress={checkingProgress}
@@ -617,6 +600,7 @@ export function StepStoryboardWorkspace({
           shotMediaBusy={shotMediaBusy}
           dreaminaAsync={dreaminaAsync}
           activeJob={selectedShotJob}
+          queueSnapshot={queueSnapshot}
           shotPreviewPlaySrc={shotPreviewPlaySrc}
           shotVideoVersions={shotVideoVersions}
           selectedShotVideoVersion={selectedShotVideoVersion}

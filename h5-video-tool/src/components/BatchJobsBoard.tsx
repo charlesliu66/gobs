@@ -5,6 +5,7 @@ import { cancelBatchByProject, cancelBatchJob } from '../api/batchJobs';
 import { appendFileAccessToken } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { formatDateTime } from '../i18n/locale.ts';
+import { resolveFriendlyVideoProgress } from '../studio/storyboardQueueState';
 import { absoluteApiUrl } from '../utils/absoluteApiUrl';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -33,6 +34,10 @@ function resolveProtectedVideoUrl(videoUrl?: string): string {
 
 export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps) {
   const { t, uiLocale } = useLocale();
+  const uiText = useCallback(
+    <T,>(zh: T, en: T) => (uiLocale === 'en' ? en : zh),
+    [uiLocale],
+  );
   const text = useCallback(
     (path: string, vars?: Record<string, string | number>) =>
       Object.entries(vars ?? {}).reduce(
@@ -46,24 +51,24 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
     (status: BatchJobDto['status']) => {
       switch (status) {
         case 'awaiting_submit':
-          return t('batchJobs.statusAwaitingSubmit');
+          return uiText('排队中', 'Queued');
         case 'pending':
-          return t('batchJobs.statusPending');
+          return uiText('即将开始', 'Starting soon');
         case 'queuing':
-          return t('batchJobs.statusQueuing');
+          return uiText('即将开始', 'Starting soon');
         case 'processing':
-          return t('batchJobs.statusProcessing');
+          return uiText('正在生成', 'Generating');
         case 'done':
-          return t('batchJobs.statusDone');
+          return uiText('已完成', 'Done');
         case 'failed':
-          return t('batchJobs.statusFailed');
+          return uiText('生成失败', 'Failed');
         case 'cancelled':
-          return t('batchJobs.statusCancelled');
+          return uiText('已停止', 'Stopped');
         default:
           return status;
       }
     },
-    [t],
+    [uiText],
   );
 
   const [jobs, setJobs] = useState<BatchJobDto[]>([]);
@@ -218,9 +223,9 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
 
       <div className="flex gap-3 border-b border-[var(--color-border)] px-3 py-2 text-[10px] text-[var(--color-text-muted)]">
         <span>{t('batchJobs.total')} {total}</span>
-        {awaitingCount > 0 && <span className="text-slate-400">{t('batchJobs.awaiting')} {awaitingCount}</span>}
-        {queuingCount > 0 && <span className="text-yellow-400">{t('batchJobs.queued')} {queuingCount}</span>}
-        {processingCount > 0 && <span className="text-blue-400">{t('batchJobs.processing')} {processingCount}</span>}
+        {awaitingCount > 0 && <span className="text-slate-400">{uiText('排队中', 'Queued')} {awaitingCount}</span>}
+        {queuingCount > 0 && <span className="text-yellow-400">{uiText('即将开始', 'Starting soon')} {queuingCount}</span>}
+        {processingCount > 0 && <span className="text-blue-400">{uiText('正在生成', 'Generating')} {processingCount}</span>}
         {done > 0 && <span className="text-green-400">{t('batchJobs.done')} {done}</span>}
         {failedCount > 0 && <span className="text-red-400">{t('batchJobs.failed')} {failedCount}</span>}
       </div>
@@ -228,6 +233,7 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
       <div className="flex flex-col gap-2">
         {jobs.map((job) => {
           const protectedVideoUrl = resolveProtectedVideoUrl(job.videoUrl);
+          const friendly = resolveFriendlyVideoProgress({ job });
           return (
             <div
               key={job.id}
@@ -253,12 +259,12 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                 </span>
                 {job.status === 'awaiting_submit' && job.globalQueuePos != null && (
                   <span className="text-[10px] text-violet-300">
-                    {text('batchJobs.platformQueuePosition', { position: job.globalQueuePos + 1 })}
+                    {uiText(`当前排第 ${job.globalQueuePos + 1} 位`, `Queue position ${job.globalQueuePos + 1}`)}
                   </span>
                 )}
                 {(job.status === 'queuing' || job.status === 'pending') && job.queueInfo?.queue_idx != null && (
                   <span className="text-[10px] text-yellow-400">
-                    {text('batchJobs.queuePosition', { position: job.queueInfo.queue_idx + 1 })}
+                    {uiText(`生成队列第 ${job.queueInfo.queue_idx + 1} 位`, `Render queue ${job.queueInfo.queue_idx + 1}`)}
                     {job.queueInfo.queue_length != null ? `/${job.queueInfo.queue_length}` : ''}
                   </span>
                 )}
@@ -267,6 +273,11 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
 
               {expandedId === job.id && (
                 <div className="space-y-2.5 border-t border-[var(--color-border)] px-3 py-3">
+                  {!['done', 'failed', 'cancelled'].includes(job.status) && (
+                    <p className="rounded-lg bg-[var(--color-surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--color-text-muted)]">
+                      {uiText(friendly.detailZh, friendly.detailEn)}
+                    </p>
+                  )}
                   {job.status === 'failed' && job.failReason && (
                     <p className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">{job.failReason}</p>
                   )}
@@ -308,8 +319,8 @@ export function BatchJobsBoard({ projectId, onImportVideo }: BatchJobsBoardProps
                         {cancellingId === job.id
                           ? t('batchJobs.cancelling')
                           : job.status === 'processing'
-                            ? t('batchJobs.stopTracking')
-                            : t('batchJobs.cancel')}
+                            ? uiText('停止本次任务', 'Stop this task')
+                            : uiText('取消排队', 'Cancel queue')}
                       </button>
                     )}
                     <span className="ml-auto self-center text-[9px] text-[var(--color-text-muted)]">

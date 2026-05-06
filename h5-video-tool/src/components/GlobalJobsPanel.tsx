@@ -2,15 +2,12 @@ import { useMemo } from 'react';
 import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { pickUiText } from '../i18n/uiText.ts';
+import { resolveFriendlyVideoProgress } from '../studio/storyboardQueueState';
 
-const STATUS_CONFIG: Record<string, { zh: string; en: string; color: string; dot: string; animate?: boolean }> = {
-  awaiting_submit: { zh: '平台排队中', en: 'In platform queue', color: 'text-violet-200', dot: 'bg-violet-400', animate: true },
-  pending: { zh: '已提交到 Ark', en: 'Submitted to Ark', color: 'text-sky-200', dot: 'bg-sky-400', animate: true },
-  queuing: { zh: 'Ark 队列中', en: 'Queued in Ark', color: 'text-amber-200', dot: 'bg-amber-400', animate: true },
-  processing: { zh: 'Ark 生成中', en: 'Rendering in Ark', color: 'text-emerald-200', dot: 'bg-emerald-400', animate: true },
+const TERMINAL_STATUS_CONFIG: Record<string, { zh: string; en: string; color: string; dot: string }> = {
   done: { zh: '已完成', en: 'Completed', color: 'text-emerald-300', dot: 'bg-emerald-400' },
   failed: { zh: '生成失败', en: 'Failed', color: 'text-rose-300', dot: 'bg-rose-400' },
-  cancelled: { zh: '已停止跟进', en: 'Tracking stopped', color: 'text-slate-300', dot: 'bg-slate-400' },
+  cancelled: { zh: '已停止', en: 'Stopped', color: 'text-slate-300', dot: 'bg-slate-400' },
 };
 
 function relativeTime(iso: string, uiLocale: 'zh-CN' | 'en'): string {
@@ -35,19 +32,35 @@ function sourceLabel(source: string | undefined, uiLocale: 'zh-CN' | 'en'): stri
 }
 
 function StatusDot({
-  status,
+  color,
+  animate,
 }: {
-  status: string;
+  color: string;
+  animate?: boolean;
 }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
   return (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
-      {cfg.animate && (
-        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${cfg.dot} opacity-50`} />
+      {animate && (
+        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${color} opacity-50`} />
       )}
-      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${cfg.dot}`} />
+      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${color}`} />
     </span>
   );
+}
+
+function stageVisual(stage: string): { color: string; dot: string; animate?: boolean } {
+  switch (stage) {
+    case 'queued':
+      return { color: 'text-violet-200', dot: 'bg-violet-400', animate: true };
+    case 'starting':
+      return { color: 'text-sky-200', dot: 'bg-sky-400', animate: true };
+    case 'generating':
+      return { color: 'text-emerald-200', dot: 'bg-emerald-400', animate: true };
+    case 'finishing':
+      return { color: 'text-lime-200', dot: 'bg-lime-400', animate: true };
+    default:
+      return { color: 'text-slate-300', dot: 'bg-slate-400' };
+  }
 }
 
 export function GlobalJobsPanel() {
@@ -82,7 +95,7 @@ export function GlobalJobsPanel() {
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
               <span className="text-sm font-semibold text-[var(--color-text)]">
-                {uiText('生成队列', 'Generation queue')}
+                {uiText('视频进度', 'Video progress')}
               </span>
               {activeCount > 0 && (
                 <span className="rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -94,7 +107,7 @@ export function GlobalJobsPanel() {
               type="button"
               onClick={togglePanel}
               className="rounded-lg p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
-              aria-label={uiText('关闭队列面板', 'Close queue panel')}
+              aria-label={uiText('关闭进度面板', 'Close progress panel')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -104,24 +117,22 @@ export function GlobalJobsPanel() {
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
             <div className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-violet-100">
-              <div className="opacity-70">{uiText('平台排队', 'Platform queue')}</div>
+              <div className="opacity-70">{uiText('排队中', 'Queued')}</div>
               <div className="mt-1 text-base font-semibold">{snapshot.totalWaiting}</div>
             </div>
-            <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-sky-100">
-              <div className="opacity-70">{uiText('Ark 并发', 'Ark slots')}</div>
-              <div className="mt-1 text-base font-semibold">
-                {snapshot.totalActive}/{snapshot.maxConcurrent}
-              </div>
-            </div>
             <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-emerald-100">
-              <div className="opacity-70">{uiText('空闲槽位', 'Free slots')}</div>
+              <div className="opacity-70">{uiText('正在生成', 'Generating')}</div>
+              <div className="mt-1 text-base font-semibold">{snapshot.totalActive}</div>
+            </div>
+            <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-sky-100">
+              <div className="opacity-70">{uiText('可立即开始', 'Can start now')}</div>
               <div className="mt-1 text-base font-semibold">{snapshot.availableSlots}</div>
             </div>
           </div>
           <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
             {uiText(
-              '平台最多同时向 Ark 提交 3 条视频任务。你不需要停留在当前页面，完成后会自动回写并提醒。',
-              'The platform can submit up to 3 Ark video jobs in parallel. You can leave the page; finished results will sync back automatically with a reminder.',
+              `系统最多同时处理 ${snapshot.maxConcurrent} 条视频。你可以离开当前页面，完成后会自动回写并提醒。`,
+              `The system can handle up to ${snapshot.maxConcurrent} videos at once. You can leave this page and come back when the reminder arrives.`,
             )}
           </p>
         </div>
@@ -130,10 +141,10 @@ export function GlobalJobsPanel() {
           {jobs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-[var(--color-text-muted)]">
-                {uiText('暂无生成任务', 'No generation jobs yet')}
+                {uiText('暂时还没有视频任务', 'No video jobs yet')}
               </p>
               <p className="mt-1 text-[11px] text-[var(--color-text-muted)]/70">
-                {uiText('发起视频生成后，这里会显示平台排队、Ark 状态和完成结果。', 'Once you start generating, this panel will show platform queue, Ark status, and completion results.')}
+                {uiText('开始生成后，这里会持续显示排队、生成和完成结果。', 'Once you start generating, this panel will keep showing queue, progress, and finished results.')}
               </p>
             </div>
           ) : (
@@ -144,15 +155,16 @@ export function GlobalJobsPanel() {
                     {uiText('进行中', 'Active')}
                   </div>
                   {activeJobs.map((job) => {
-                    const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.pending;
+                    const friendly = resolveFriendlyVideoProgress({ job, snapshot });
+                    const visual = stageVisual(friendly.stage);
                     return (
                       <div key={job.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3">
                         <div className="flex items-start gap-2.5">
-                          <StatusDot status={job.status} />
+                          <StatusDot color={visual.dot} animate={visual.animate} />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`text-[11px] font-semibold ${cfg.color}`}>
-                                {uiText(cfg.zh, cfg.en)}
+                              <span className={`text-[11px] font-semibold ${visual.color}`}>
+                                {uiText(friendly.shortLabelZh, friendly.shortLabelEn)}
                               </span>
                               <span className="rounded border border-[var(--color-border)] px-1 py-px text-[9px] text-[var(--color-text-muted)]">
                                 {sourceLabel(job.source, uiLocale)}
@@ -162,26 +174,8 @@ export function GlobalJobsPanel() {
                               {job.shotDescription || uiText(`镜头 ${job.shotIndex}`, `Shot ${job.shotIndex}`)}
                             </p>
                             <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
-                              {job.status === 'awaiting_submit' && typeof job.globalQueuePos === 'number'
-                                ? uiText(`平台队列 #${job.globalQueuePos + 1}`, `Platform queue #${job.globalQueuePos + 1}`)
-                                : job.status === 'pending'
-                                  ? uiText('已拿到 Ark task id，等待 Ark 受理。', 'Ark task id received, waiting for Ark acceptance.')
-                                  : job.status === 'queuing'
-                                    ? uiText(
-                                        job.queueInfo?.queue_idx != null
-                                          ? `Ark 队列 #${job.queueInfo.queue_idx + 1}`
-                                          : 'Ark 已接收，正在队列中。',
-                                        job.queueInfo?.queue_idx != null
-                                          ? `Ark queue #${job.queueInfo.queue_idx + 1}`
-                                          : 'Accepted by Ark and waiting in queue.',
-                                      )
-                                    : uiText('Ark 正在渲染当前视频。', 'Ark is rendering this video.')}
+                              {uiText(friendly.detailZh, friendly.detailEn)}
                             </p>
-                            {typeof job.etaSec === 'number' && job.status === 'awaiting_submit' && (
-                              <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
-                                {uiText(`预计开始：约 ${Math.max(0, Math.round(job.etaSec / 60)) || 1} 分钟内`, `Estimated start: about ${Math.max(0, Math.round(job.etaSec / 60)) || 1} min`)}
-                              </p>
-                            )}
                             <p className="mt-1 text-[10px] text-[var(--color-text-muted)]/80">
                               {relativeTime(job.updatedAt || job.createdAt, uiLocale)}
                             </p>
@@ -199,11 +193,13 @@ export function GlobalJobsPanel() {
                     {uiText('最近结果', 'Recent results')}
                   </div>
                   {recentDone.map((job) => {
-                    const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.done;
-                    const reason = job.displayMessageZh || job.displayMessageEn || job.failReason;
+                    const cfg = TERMINAL_STATUS_CONFIG[job.status] ?? TERMINAL_STATUS_CONFIG.done;
+                    const reason = uiLocale === 'en'
+                      ? job.displayMessageEn || job.displayMessageZh || job.failReason
+                      : job.displayMessageZh || job.displayMessageEn || job.failReason;
                     return (
                       <div key={job.id} className="group flex items-start gap-2.5 rounded-xl border border-transparent px-3 py-2 hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]">
-                        <StatusDot status={job.status} />
+                        <StatusDot color={cfg.dot} />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className={`text-[11px] font-medium ${cfg.color}`}>
@@ -261,8 +257,8 @@ export function GlobalJobsTrigger() {
             ? 'border-[var(--color-primary)]/50 bg-[var(--color-surface-elevated)] text-[var(--color-text)] hover:border-[var(--color-primary)]'
             : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/30 hover:text-[var(--color-text)]'
       }`}
-      aria-label={uiText('生成队列', 'Generation queue')}
-      title={uiText('生成队列', 'Generation queue')}
+      aria-label={uiText('视频进度', 'Video progress')}
+      title={uiText('视频进度', 'Video progress')}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -276,7 +272,7 @@ export function GlobalJobsTrigger() {
           </span>
         </>
       ) : (
-        <span>{uiText('队列', 'Queue')}</span>
+        <span>{uiText('进度', 'Progress')}</span>
       )}
     </button>
   );

@@ -4,7 +4,7 @@
 
 - Status: `GO`
 - Run id: `2026-05-06-ark-seedance-api-switch`
-- Verified commit: `930a441`
+- Verified workspace: current release candidate after the user-friendly queue wording polish
 
 ## Coverage
 
@@ -28,6 +28,12 @@
 
 - Queue scheduling now respects `3` Ark concurrency slots on both scheduler admission and ETA calculation.
 - Successful storyboard jobs now persist real submit-to-video elapsed time, and queue snapshots expose the rolling average from the latest `10` successful videos.
+- Main user-facing queue surfaces now reuse the same friendly wording model instead of provider-centric labels:
+  - `排队中 / Queued`
+  - `即将开始 / Starting soon`
+  - `正在生成 / Generating`
+  - `即将完成 / Finishing soon`
+  - `已完成 / Done`
 - Queue status copy now distinguishes:
   - platform queue
   - submitted to Ark

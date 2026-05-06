@@ -32,6 +32,18 @@
   - `h5-video-tool/src/hooks/useGlobalJobs.ts`
   - `h5-video-tool/src/i18n/messages.ts`
 - Browser reminders are now emitted from the SSE global-jobs layer so completed / failed / stopped jobs can still notify after the user leaves the current shot view.
+- User-facing progress wording is now unified around one business-friendly stage model:
+  - `排队中 / Queued`
+  - `即将开始 / Starting soon`
+  - `正在生成 / Generating`
+  - `即将完成 / Finishing soon`
+  - `已完成 / Done`
+- The primary queue surfaces now reuse the same friendly progress resolver so operations and marketing teammates no longer need provider-specific vocabulary:
+  - `h5-video-tool/src/studio/steps/StepStoryboardGenerateActions.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardPreviewPanel.tsx`
+  - `h5-video-tool/src/studio/steps/StepStoryboardShotStrip.tsx`
+  - `h5-video-tool/src/components/GlobalJobsPanel.tsx`
+  - `h5-video-tool/src/components/BatchJobsBoard.tsx`
 - The storyboard platform summary card now prefers the recent-success average label:
   - when enough history exists, it shows the latest successful sample count plus average sec/job
   - when no success history exists yet, it honestly falls back to an estimate instead of presenting a fake “recent average”
@@ -44,6 +56,7 @@
 - Frontend tests:
   - `..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests/storyboardQueueState.test.ts tests/shotUserStatus.test.ts`
   - `..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests/storyboardVideoErrorDisplay.test.ts tests/productionExportStoryboardStatus.test.ts`
+  - `..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests/storyboardQueueState.test.ts tests/storyboardVideoErrorDisplay.test.ts`
 - Builds:
   - `h5-video-tool-api: npm run build`
   - `h5-video-tool: npm run build`
@@ -51,4 +64,4 @@
 ## Notes
 
 - `ProductionWizard.tsx` still contains a legacy mount-time notification permission request because the file currently has an invalid UTF-8 byte sequence that blocks `apply_patch` from editing it safely. The new browser reminder path is already centralized in `useGlobalJobs.ts`, so functional completion reminders are still in place.
-- `PRODUCT.md` has the same invalid UTF-8 issue and could not be updated through `apply_patch` in this pass. The release note content is captured in this run report and should be mirrored into product docs once the file is normalized.
+- `PRODUCT.md` is now updated with the v0.138 queue-progress wording changelog entry.

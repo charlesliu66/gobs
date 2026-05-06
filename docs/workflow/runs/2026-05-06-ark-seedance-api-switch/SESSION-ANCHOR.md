@@ -2,10 +2,10 @@
 
 ## Run Summary
 - Run ID: `2026-05-06-ark-seedance-api-switch`
-- Goal: Align Ark video scheduling and H5 queue UX with Ark personal API concurrency = 3 while preserving the existing storyboard generation flow.
+- Goal: Align Ark video scheduling and H5 queue UX with Ark personal API concurrency = 3, preserve the existing storyboard generation flow, and present progress states in user-friendly wording.
 - Owner: Codex
 - Branch or commit context: `main@afe0d47`
-- Last updated: `2026-05-06T05:00:00+08:00`
+- Last updated: `2026-05-06T17:20:00+08:00`
 
 ## Acceptance Criteria Snapshot
 - AC-01: Ark mode uses provider concurrency `3` consistently for local admission, queue ETA, and active-slot accounting.
@@ -38,6 +38,7 @@
 - h5-video-tool/src/studio/steps/StepStoryboardWorkspace.tsx
 - h5-video-tool/src/i18n/messages.ts
 - h5-video-tool/tests/storyboardQueueState.test.ts
+- PRODUCT.md
 
 ## Read-Only References
 - `docs/TASK-INDEX.md`
