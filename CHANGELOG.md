@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.150 - 2026-05-07
+**Advanced Studio phase-1 nav demotion and review-queue emphasis**
+**Campaign / Home / Navigation:**
+- Moved `/projects` out of the primary `Mission Control` nav group and into `Advanced Studio`, so project-level review work no longer reads like a default campaign entry point.
+- Strengthened the Home review queue as the clearer follow-on action with a dedicated `Review Pending Decisions` CTA, while keeping `Campaign Creative` as the primary recommended path.
+- Softened the homepage’s Advanced Studio copy so the professional workspace reads as optional follow-on tooling instead of the next expected click.
+**Tests:**
+- Added locale assertions for the new home/layout review and advanced-entry wording, reran the targeted locale regression suite, rebuilt the frontend bundle, and captured `eval.sh` evidence for the run.
+
 ## v0.149 - 2026-05-07
 **Advanced Studio phase-0 marketer-first entry demotion**
 **Campaign / Studio / Copy Hierarchy:**

@@ -336,7 +336,7 @@ const ZH_CN: MessageTree = {
     assets: '素材库',
     distribute: '分发中心',
     matrix: '风控工作台',
-    projects: 'Campaign 任务',
+    projects: '高级项目',
     history: '运行历史',
     settings: '设置',
     usageMonitor: 'Key 调用监控',
@@ -352,7 +352,7 @@ const ZH_CN: MessageTree = {
       title: '给定 brief，让系统继续推进 campaign',
       subtitle: '默认工作台优先服务市场和运营：先输入 campaign brief，再由系统组织知识、创意计划、素材变体和分发准备，你只处理少数需要确认的决策。',
       primaryCta: 'Create Campaign',
-      secondaryCta: '打开 Advanced Studio',
+      secondaryCta: '需要时再进 Advanced Studio',
     },
     quickIdeas: {
       title: '示例 Campaign Brief',
@@ -378,13 +378,14 @@ const ZH_CN: MessageTree = {
       },
       production: {
         title: 'Advanced Studio',
-        desc: '需要更完整的分镜、角色、场景与精细编辑控制时，再进入专业工作台。',
-        action: '打开高级入口',
+        desc: '只有当 campaign 需要更深的制片复核、项目级管理或精细编辑时，再进入这个专业工作台。',
+        action: '按需进入高级入口',
       },
     },
     reviewQueue: {
       title: 'Needs Your Review',
       body: '短期内只有少数高风险、低置信或带合规边界的决策会被抬到你面前，默认不再把所有调参都变成手工步骤。',
+      cta: '处理待决事项',
       items: {
         guardrails: 'Claim 或 region guardrails 需要人工确认',
         variant: '确认第一批要进入发布队列的变体',
@@ -1782,7 +1783,7 @@ const EN: MessageTree = {
     assets: 'Asset Library',
     distribute: 'Distribution Queue',
     matrix: 'Risk Console',
-    projects: 'Campaign Runs',
+    projects: 'Advanced Projects',
     history: 'Run History',
     settings: 'Settings',
     usageMonitor: 'Key Usage Monitor',
@@ -1798,7 +1799,7 @@ const EN: MessageTree = {
       title: 'Give the system a brief, then let it keep the campaign moving',
       subtitle: 'The default workspace now serves marketers and operators first: start with a campaign brief, then let the system organize knowledge, creative planning, asset variants, and distribution prep while you only handle the few decisions that need review.',
       primaryCta: 'Create Campaign',
-      secondaryCta: 'Open Advanced Studio',
+      secondaryCta: 'Advanced Studio If Needed',
     },
     quickIdeas: {
       title: 'Sample Campaign Briefs',
@@ -1824,13 +1825,14 @@ const EN: MessageTree = {
       },
       production: {
         title: 'Advanced Studio',
-        desc: 'Use the professional workspace when you need deeper storyboard, production, or editing control.',
-        action: 'Open The Studio',
+        desc: 'Open the professional workspace only when the campaign needs deeper production review, project-level management, or fine-tuning.',
+        action: 'Open Optional Studio',
       },
     },
     reviewQueue: {
       title: 'Needs Your Review',
       body: 'Only the high-risk, low-confidence, or compliance-sensitive decisions should surface here. The default flow should not ask you to manually steer every setting.',
+      cta: 'Review Pending Decisions',
       items: {
         guardrails: 'Claim or region guardrails still need a human check',
         variant: 'Choose the first variant that should move into the publish queue',

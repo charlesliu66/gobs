@@ -2068,11 +2068,13 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-07 (v0.149)*
+*Last updated: 2026-05-07 (v0.150)*
 
 Latest update 2026-05-07: Synced the campaign mission-control, fastpublish knowledge-integration, and workflow-template docs into the latest mainline planning baseline.
 
 Latest update 2026-05-07: Reframed advanced follow-on entry points as `Advanced Studio`, `Fine-Tune In Editor`, and `Review Before Publish` so marketers stay on the Mission Control path by default.
+
+Latest update 2026-05-07: Moved `/projects` behind the `Advanced Studio` boundary and promoted `Review Pending Decisions` as the clearer default follow-on action on Home.
 
 Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 
@@ -2104,6 +2106,12 @@ Latest update 2026-05-06: Advanced Production and Editor mainline English intera
 - Updated the advanced project workspace copy to emphasize review-before-publish and advanced follow-on editing without changing project routing, storage, or click behavior.
 - Added an EditorWorkbench guidance banner that explains when to fine-tune inside the editor while keeping the existing advanced controls and handoff behavior intact.
 - Added targeted locale regression coverage for the normalized `Open In Advanced Studio`, `Review Before Publish`, and `Fine-Tune In Editor` labels.
+
+## v0.150 - 2026-05-07 (Advanced Studio Phase 1 Addendum)
+- Moved `/projects` out of the primary `Mission Control` nav group and into the `Advanced Studio` group so project-level review work is no longer framed as a default campaign entry point.
+- Updated Home so pending review now has a dedicated CTA and the advanced-workspace copy more clearly reads as optional follow-on tooling.
+- Kept all routes and project/editor behavior intact while tightening the marketer-first IA through nav grouping and copy only.
+- Added targeted locale regression coverage for the new `Advanced Studio If Needed`, `Review Pending Decisions`, `Advanced Projects`, and related home-layout wording.
 
 ## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
 - Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.

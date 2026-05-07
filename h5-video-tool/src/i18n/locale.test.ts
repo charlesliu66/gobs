@@ -102,8 +102,12 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'syncProductionModal.title'), 'Sync production updates');
   assert.equal(getMessage('en', 'home.hero.badge'), 'Campaign Mission Control');
   assert.equal(getMessage('en', 'home.hero.primaryCta'), 'Create Campaign');
+  assert.equal(getMessage('en', 'home.hero.secondaryCta'), 'Advanced Studio If Needed');
+  assert.equal(getMessage('en', 'home.paths.production.action'), 'Open Optional Studio');
   assert.equal(getMessage('en', 'home.reviewQueue.title'), 'Needs Your Review');
+  assert.equal(getMessage('en', 'home.reviewQueue.cta'), 'Review Pending Decisions');
   assert.equal(getMessage('en', 'layout.studio'), 'Advanced Studio');
+  assert.equal(getMessage('en', 'layout.projects'), 'Advanced Projects');
   assert.equal(getMessage('en', 'campaignCreative.strategy.launchEditor'), 'Open In Advanced Studio');
   assert.equal(getMessage('en', 'projectListPage.reviewBeforePublish'), 'Review Before Publish');
   assert.equal(getMessage('en', 'editorWorkbench.fineTuneInEditor'), 'Fine-Tune In Editor');

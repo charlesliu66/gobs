@@ -161,7 +161,6 @@ const NAV_GROUPS: { labelKey: string; items: NavItemDef[] }[] = [
     items: [
       { to: '/campaign-creative', labelKey: 'layout.campaignCreative', icon: CampaignCreativeIcon, highlight: true },
       { to: '/distribute', labelKey: 'layout.distribute', icon: DistributeIcon },
-      { to: '/projects', labelKey: 'layout.projects', icon: ProjectsIcon },
       { to: '/history', labelKey: 'layout.history', icon: HistoryIcon },
     ],
   },
@@ -176,6 +175,7 @@ const NAV_GROUPS: { labelKey: string; items: NavItemDef[] }[] = [
     labelKey: 'layout.navDistribution',
     items: [
       { to: '/studio', labelKey: 'layout.studio', icon: StudioIcon, end: true },
+      { to: '/projects', labelKey: 'layout.projects', icon: ProjectsIcon },
       { to: '/studio/production', labelKey: 'layout.production', icon: ProductionIcon },
       { to: '/editor', labelKey: 'layout.editor', icon: EditorIcon },
       { to: '/quickfilm', labelKey: 'layout.quickfilm', icon: QuickFilmIcon },

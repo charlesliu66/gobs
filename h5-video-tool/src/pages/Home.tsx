@@ -181,9 +181,9 @@ export function Home() {
             <button
               type="button"
               onClick={() => navigate('/campaign-creative')}
-              className="mt-5 rounded-full border border-[var(--color-primary)]/35 bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-primary)] transition-all hover:border-[var(--color-primary)]/55 hover:bg-[var(--color-primary)]/10"
+              className="btn-primary mt-5 w-fit"
             >
-              {t('home.paths.campaignCreative.action')}
+              {t('home.reviewQueue.cta')}
             </button>
           </div>
 
