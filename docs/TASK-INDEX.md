@@ -1,78 +1,42 @@
 # GOBS / QAS Task Index
 
-> 最后更新：2026-04-21
-> 用途：作为当前项目的总入口，帮助快速找到“现在该看什么、当前 run 是什么、哪些文档最重要”。
+> 最后更新：2026-05-07
+> 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
 
 ---
 
 ## 当前状态
 
-- 线上 H5 当前已部署到 `main@a1c7e4b`
-- 最近一次已完成的稳定性优化 run：
-  - [2026-04-21-h5-stability-polish](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/workflow/runs/2026-04-21-h5-stability-polish/SESSION-ANCHOR.md>)
+- 最新已发布主线：`main@1ee752c`，线上已接入真实 `Gold and Glory` canonical fastpublish brain。
+- 当前产品北极星：`Campaign Creative Agent` 必须从 campaign brief 出发，产出创意素材或变体，并把它们送入分发。
+- 当前默认受众：市场和运营同学；专业剪辑、制片和深度调参能力保留在 `Advanced Studio`，不再定义默认体验。
 - 当前最值得继续推进的方向：
-  1. `ProductionWizard` 多状态源收口
-  2. 后端 `route -> service -> repository` 分层收口
-  3. 前端 API / 鉴权基础设施统一
+  1. `Campaign Creative -> Distribution Handoff MVP`：把选中的 campaign variant / asset / CTA / knowledge context 送入待发布包。
+  2. `Human Feedback Loop Phase 0`：先记住人工判断，不假装短期已有投放效果监控。
+  3. `Gold and Glory Brain Refresh Workflow`：让后续 fastpublishing 更新能被稳定 diff、刷新和记录版本。
 
 ---
 
 ## 必读文档
 
 ### 1. 项目运行规则
-- [AGENTS.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/AGENTS.md>)
-  - 项目级总规则，面向 Codex / Cursor / OpenClaw
-- [CLAUDE.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/CLAUDE.md>)
-  - Claude / Cursor 侧运行约定，和 `AGENTS.md` 大体一致
-- [docs/CODEX-CLI-PROJECT-GUIDE.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/CODEX-CLI-PROJECT-GUIDE.md>)
-  - `AGENTS.md` 的长文完整版，适合复杂任务和新同学快速补全上下文
-- [.claude/memory/feedback.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/.claude/memory/feedback.md>)
-  - 历史事故、行为规则、踩坑教训
 
-### 2. 产品与现状
-- [PRODUCT.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/PRODUCT.md>)
-  - 功能总览与 changelog 权威来源
-- [2026-04-21-qas-current-state-assessment.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/reviews/2026-04-21-qas-current-state-assessment.md>)
-  - 对当前仓库状态和线上 H5 的评估总结
+- [AGENTS.md](../AGENTS.md)：项目级强制规则、发布 SOP、禁区文件和 4+1 工作流。
+- [.claude/memory/feedback.md](../.claude/memory/feedback.md)：历史事故、行为规则和自检清单。
+- [docs/CODEX-CLI-PROJECT-GUIDE.md](CODEX-CLI-PROJECT-GUIDE.md)：长版项目指南，适合复杂任务补齐上下文。
 
-### 3. workflow runs
-- [2026-04-21-h5-stability-polish](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/workflow/runs/2026-04-21-h5-stability-polish/SESSION-ANCHOR.md>)
-  - 最近一次已落地的稳定性优化 run
-- [2026-04-20-dreamina-scheduler-cancel](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/workflow/runs/2026-04-20-dreamina-scheduler-cancel/SESSION-ANCHOR.md>)
-  - 即梦调度器 / 取消排队的重要历史 run，带 handoff 说明
+### 2. 产品与版本现状
 
-### 4. 当前活跃方案
-- [docs/plans/README.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/README.md>)
-  - `plans/` 目录入口，先看这里再决定读哪份设计稿
-- [docs/i18n-中英文切换设计方案-v2.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/i18n-中英文切换设计方案-v2.md>)
-  - 当前 i18n 主设计稿，解释 `uiLocale / contentLocale` 的分层思路
-- [2026-04-21-i18n-phase0-phase1-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-i18n-phase0-phase1-implementation-plan.md>)
-  - i18n 第一阶段可执行计划
-- [2026-04-21-distribute-caption-auth-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-distribute-caption-auth-design.md>)
-  - 分发文案鉴权设计
-- [2026-04-21-distribute-caption-auth.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-distribute-caption-auth.md>)
-  - 分发文案鉴权实施计划
+- [PRODUCT.md](../PRODUCT.md)：功能总览和产品侧 changelog。
+- [CHANGELOG.md](../CHANGELOG.md)：近期 release history，后续版本流水优先写这里。
+- [docs/plans/README.md](plans/README.md)：跨 run 设计稿和实施计划入口。
 
----
+### 3. 当前主线方案
 
-## 文档分工建议
-
-为了避免同一套内容在多个文档里越写越散，建议这样理解：
-
-- `AGENTS.md`
-  - 只放“必须遵守的项目级规则”和最小入口
-- `CLAUDE.md`
-  - 与 `AGENTS.md` 保持近似，但主要服务 Claude / Cursor 生态
-- `docs/CODEX-CLI-PROJECT-GUIDE.md`
-  - 放完整长文说明，不追求短
-- `docs/TASK-INDEX.md`
-  - 放“当前入口”和“现在最重要的文档地图”
-- `docs/plans/*.md`
-  - 放跨 run 仍会持续复用的设计稿和实施计划
-- `docs/reviews/*.md`
-  - 放阶段性评估，不承担规则职责
-- `docs/workflow/runs/*`
-  - 放单次任务的规格、实施、验证、发布结论
+- [2026-05-06-campaign-creative-agent-next-phase-design.md](plans/2026-05-06-campaign-creative-agent-next-phase-design.md)：Campaign Creative Agent 的受众、形态和长期主链路。
+- [2026-05-06-campaign-mission-control-phase0-implementation-plan.md](plans/2026-05-06-campaign-mission-control-phase0-implementation-plan.md)：Mission Control Phase 0 的产品骨架。
+- [2026-05-06-gobs-fastpublish-knowledge-integration-design.md](plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md)：fastpublish 知识如何进入 GOBS。
+- [2026-05-07-gold-and-glory-canonical-brain-sync-design.md](plans/2026-05-07-gold-and-glory-canonical-brain-sync-design.md)：真实 Gold and Glory Brain 的 source whitelist、checksum 和刷新边界。
 
 ---
 
@@ -80,15 +44,23 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-04-21-h5-stability-polish` | 修复批量任务鉴权、SSE 重连、编辑器回跳、真实版本展示 | 已完成 |
-| `2026-04-20-dreamina-scheduler-cancel` | 即梦全平台 FIFO 调度与取消排队方案 | 重要历史 run / 需继续整理 |
+| `2026-05-07-gold-and-glory-canonical-brain-sync` | 把真实 fastpublishing 内容导入持久化 Gold and Glory Brain | 已发布到 staging/prod |
+| `2026-05-07-gold-and-glory-single-brain-phase0` | 收掉多项目 demo 心智，默认只服务 Gold and Glory | 已完成 |
+| `2026-05-07-campaign-mission-control-phase0` | 把默认体验改成面向市场/运营的 Campaign Mission Control | 已完成 |
+| `2026-05-07-campaign-advanced-studio-phase1` | 下沉 Advanced Studio，不让专业工具抢默认主链路 | 已完成 |
+| `2026-05-07-docs-mainline-sync` | 同步 campaign / knowledge / workflow 模板文档 | 已完成 |
 
 ---
 
-## 旧任务归档
+## 暂停或不作为当前主线
 
-更早的 TASK-01 ~ TASK-06 和 4 月中旬的优化事项，已经进入历史归档阶段，不再适合作为当前任务入口。若需要回溯，可查看：
+- `production-english-reference-ux` 属于 Advanced Studio 英文体验清理，不是当前 Campaign Creative Agent 主链路；未完成的 TODO run 已从 active runs 清理，后续如确有需要应重新开 scoped run。
+- 4 月下旬的稳定性、i18n、Production Wizard 收口任务仍可回溯，但不再作为当前默认任务入口。
 
-- `docs/workflow/runs/`
-- `PRODUCT.md`
-- `docs/reviews/`
+---
+
+## 文档维护约定
+
+- 每次产品方向发生变化后，优先同步本文件，避免任务入口继续指向旧主线。
+- 长期设计放 `docs/plans/`，单次执行证据放 `docs/workflow/runs/<run-id>/`。
+- 代码或线上行为变更必须同步 `PRODUCT.md` 和 `CHANGELOG.md`；纯文档治理也应在近期 changelog 中留痕。

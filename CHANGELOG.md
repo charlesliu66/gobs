@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.153 - 2026-05-07
+**Documentation hygiene and active-run cleanup**
+**Docs / Workflow:**
+- Refreshed `docs/TASK-INDEX.md` so the active project entry point reflects the current Gold and Glory Campaign Creative Agent mainline instead of the old April stability backlog.
+- Removed duplicate trailing release-note fragments from `PRODUCT.md` and `CHANGELOG.md`, keeping recent history canonical and easier to scan.
+- Cleared the unfinished template-only `production-english-reference-ux` workflow run from active runs; it remains a future Advanced Studio idea, not current product-mainline work.
+
 ## v0.152 - 2026-05-07
 **Gold and Glory canonical fastpublish brain**
 **Campaign Knowledge / Fastpublish Brain:**
@@ -304,47 +311,3 @@ eedShareLink.
 - 鏂板鏈湴鍙戝竷鐘舵€佸垏鎹㈣剼鏈€?
 - 鏂板姣忓彴鍙戝竷鐢佃剳鐨勬湰鍦伴厤缃牱鏉裤€?
 - 鏂板鍗曚汉澶氱數鑴戝彂甯?Runbook銆?
-
-
-## v0.135 - 2026-05-06
-**Campaign Creative entry and brief-to-editor handoff**
-**Frontend / Campaign Creative:**
-- Added a dedicated /campaign-creative route plus homepage and navigation repositioning so Campaign Creative becomes the recommended first-touch path.
-- Added a brief-first campaign page with Brand Content and TikTok UA mode switching, structured brief inputs, and a strategy-card artifact.
-- Added strategy handoff into Editor, including region and forbiddenClaims, so the first agent run can start from campaign context instead of timeline-first setup.
-**Backend / Editor Agent:**
-- Extended the editor creative brief and strategy normalization chain to carry region, forbiddenClaims, and handoff strategy payloads through /api/editor/agent/apply.
-- Updated Editor fallback behavior so malformed or missing handoff state safely falls back to the legacy editor workflow instead of breaking the page.
-
-## v0.136 - 2026-05-06
-**Strategy Productization**
-**Frontend / Campaign Creative:**
-- Added stable briefId and strategyId generation and expanded the strategy object with targetAudience, sellingPointFocus, ctaType, assetNeeds, and riskNotes.
-- Upgraded the Strategy Card and Editor summary panel to display richer creative-planning fields.
-- Fixed Campaign Creative handoff storage-key compatibility and switched first-run strategy reuse away from brittle JSON.stringify equality.
-**Backend / Editor Agent:**
-- Expanded creative brief and strategy normalization so richer strategy fields survive request parsing, prompt building, and localized response payloads.
-- Updated default creative user-message and prompt-block generation to consume richer strategy context instead of only minimal brief fields.
-**Verification:**
-- Added and updated editorCreativeBrief regression tests for the richer strategy contract and locale-aware prompt behavior.
-
-## v0.137 - 2026-05-06
-**Strategy Tuning**
-**Frontend / Campaign Creative:**
-- Added a lightweight tuning panel so users can switch hook direction, selling-point focus, and CTA type after generating a strategy.
-- Reworked local strategy generation to preserve strategyId while recomputing hook options, angle, tone, rationale, and CTA framing from the tuned state.
-- Extended Strategy Card and Editor-side strategy summary to surface hook direction and tuned CTA type more clearly.
-**Backend / Editor Agent:**
-- Added hookApproach to the shared creative strategy contract and preserved it through normalization, localization, Editor handoff, and prompt building.
-- Updated default creative user messages and prompt blocks so tuned hook direction appears in agent-facing context.
-**Verification:**
-- Added editorCreativeBrief regression coverage for default hookApproach generation and tuned-strategy prompt composition.
-
-## v0.138 - 2026-05-06 (Variant Pack MVP Addendum)
-- Added a `Variant Pack` layer on `/campaign-creative` that expands one brief plus one strategy into exactly three structured variants before editing.
-- Added stable `variantPackId` and `variantId` contracts plus per-variant hook, opening beat, selling-point focus, CTA, editing direction, asset suggestion, and difference summary fields.
-- Upgraded Campaign Creative handoff so Editor receives the selected variant alongside the shared brief and strategy, and the first creative-agent apply can reuse that variant context.
-- Added targeted regression coverage for variant-pack generation and variant handoff normalization on both the frontend and backend.
-- Follow-up fix: preserved explicit brief CTA wording inside generated variants and made variant normalizers tolerant of legacy handoff payloads without variant fields.
-
-

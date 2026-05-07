@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.152)*
+*Last updated: 2026-05-07 (v0.153)*
 
-**Latest update - v0.152**
-- Added the first real `Gold and Glory` canonical brain seed derived from curated fastpublishing knowledge.
-- The backend can now import `gold-and-glory-canonical` into persistent Campaign Knowledge sources and packs with source paths and checksums.
-- The frontend import flow now targets the Gold and Glory canonical brain instead of the generic `fastpublish-core` demo template.
+**Latest update - v0.153**
+- Refreshed `docs/TASK-INDEX.md` so the active entry point now reflects the Gold and Glory Campaign Creative Agent mainline.
+- Removed stale duplicate release notes from `PRODUCT.md` and `CHANGELOG.md`.
+- Cleared the unfinished Advanced Studio English-reference TODO run from the active workflow area.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -253,6 +253,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.153 - 2026-05-07
+**Documentation hygiene and active-run cleanup**
+
+- **[task index] Refreshed the current task entry point** (`docs/TASK-INDEX.md`): the index now points at the Gold and Glory canonical brain, Campaign Creative Agent north star, and the recommended next mainline of distribution handoff, human feedback, and brain refresh.
+- **[release notes] Removed duplicate trailing changelog fragments** (`PRODUCT.md`, `CHANGELOG.md`): stale appended `v0.150` and repeated `v0.135-v0.138` blocks no longer compete with the canonical recent history.
+- **[workflow runs] Cleared an unfinished Advanced Studio TODO run** (`docs/workflow/runs/2026-05-07-production-english-reference-ux/`): the incomplete template-only run is no longer presented as active mainline work.
 
 ### v0.152 - 2026-05-07
 **Gold and Glory canonical fastpublish brain**
@@ -2087,82 +2094,4 @@ ole="presentation"
 - 鍒濈増鍓緫宸ヤ綔鍙帮紙鏃堕棿杞淬€佹枃瀛楃増寮忋€丅GM銆丄gent锛?
 - 鍗虫ⅵ CLI 闆嗘垚銆並ling API 闆嗘垚
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
-
----
-
-*Last updated: 2026-05-07 (v0.150)*
-
-Latest update 2026-05-07: Synced the campaign mission-control, fastpublish knowledge-integration, and workflow-template docs into the latest mainline planning baseline.
-
-Latest update 2026-05-07: Reframed advanced follow-on entry points as `Advanced Studio`, `Fine-Tune In Editor`, and `Review Before Publish` so marketers stay on the Mission Control path by default.
-
-Latest update 2026-05-07: Moved `/projects` behind the `Advanced Studio` boundary and promoted `Review Pending Decisions` as the clearer default follow-on action on Home.
-
-Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
-
-Latest update 2026-05-06: Ark Seedance API now replaces the Dreamina CLI path for GOBS video generation.
-
-Latest update 2026-05-06: Fixed Ark Seedance provider model IDs so production jobs submit to the actual callable Ark video models.
-
-Latest update 2026-05-06: Advanced Production and Editor mainline English interactions now stay localized across design/storyboard/export helpers, editor agent feedback, and storyboard-to-editor handoff prompts.
-
-
-
-
----
-
-## v0.147 - 2026-05-07 (Planning and Workflow Docs Sync Addendum)
-- Added the fastpublish knowledge-integration design and implementation plans to the repo's main planning index so the shipped Knowledge Brain foundation and editor handoff work have a stable upstream reference.
-- Updated the campaign mission-control phase-0 implementation plan so it explicitly depends on the landed knowledge-aware creative flow instead of the older brief-only assumption.
-- Added a reusable `planner-spec-template.md` and upgraded the run templates with a shared Campaign Creative Agent north-star guardrail.
-- Cleaned the plans index to point at active workspace documents instead of stale machine-specific paths.
-
-## v0.148 - 2026-05-07 (Campaign Mission Control Phase 0 Addendum)
-- Added mission-control-friendly campaign contracts to the Campaign Creative -> Editor seam so a marketer-first shell can pass `campaignProfile`, `campaignPlan`, and optional human feedback records without inventing a second schema.
-- Reframed the default homepage and global navigation around `Campaign Mission Control`, kept `/campaign-creative` as the primary path, and relabeled deeper editor-style routes as `Advanced Studio`.
-- Reworked the Campaign Creative page so brief, applied knowledge, system plan, and pending review decisions appear before local strategy tuning controls.
-- Added targeted regression coverage for mission-control brief normalization, locale copy, and knowledge-aware planning helpers while preserving the shipped strategy, variant-pack, and editor handoff flow.
-
-## v0.149 - 2026-05-07 (Advanced Studio Phase 0 Addendum)
-- Reframed the strategy-card editor launch as a secondary advanced action so the default Campaign Creative path still centers on brief, knowledge, and system plan review before deeper production work.
-- Updated the advanced project workspace copy to emphasize review-before-publish and advanced follow-on editing without changing project routing, storage, or click behavior.
-- Added an EditorWorkbench guidance banner that explains when to fine-tune inside the editor while keeping the existing advanced controls and handoff behavior intact.
-- Added targeted locale regression coverage for the normalized `Open In Advanced Studio`, `Review Before Publish`, and `Fine-Tune In Editor` labels.
-
-## v0.150 - 2026-05-07 (Advanced Studio Phase 1 Addendum)
-- Moved `/projects` out of the primary `Mission Control` nav group and into the `Advanced Studio` group so project-level review work is no longer framed as a default campaign entry point.
-- Updated Home so pending review now has a dedicated CTA and the advanced-workspace copy more clearly reads as optional follow-on tooling.
-- Kept all routes and project/editor behavior intact while tightening the marketer-first IA through nav grouping and copy only.
-- Added targeted locale regression coverage for the new `Advanced Studio If Needed`, `Review Pending Decisions`, `Advanced Projects`, and related home-layout wording.
-
-## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
-- Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.
-- Upgraded local strategy generation and the Strategy Card to consume derived knowledge context, surfacing market truth, audience tension, tone rules, forbidden claims, visual cues, approved angles, and knowledge-driven hooks.
-- Reused the same knowledge-aware strategy state when building the Variant Pack, keeping regenerated variants aligned with the selected knowledge context.
-- Added targeted regression coverage for derived-context merge behavior and knowledge-aware variant differentiation on the frontend.
-## v0.135 - 2026-05-06 (Campaign Creative Addendum)
-- Added a dedicated /campaign-creative entry path from homepage and top navigation.
-- Added a brief-first campaign workflow with Brand Content and TikTok UA modes.
-- Added a strategy-card artifact and a brief-to-Editor handoff path.
-- Added region and forbiddenClaims to the shared brief contract used by Editor Agent.
-
-## v0.136 - 2026-05-06 (Strategy Productization Addendum)
-- Added briefId and strategyId so Campaign Creative strategy objects can be traced across page, Editor handoff, and agent prompt paths.
-- Expanded the shared strategy contract with targetAudience, sellingPointFocus, ctaType, assetNeeds, and riskNotes.
-- Upgraded the Campaign Strategy Card and Editor-side strategy summary to surface richer creative-planning context.
-- Fixed Campaign Creative handoff storage-key compatibility and replaced brittle JSON string equality with brief-aware matching.
-
-## v0.137 - 2026-05-06 (Strategy Tuning Addendum)
-- Added a lightweight strategy tuning layer on `/campaign-creative` so users can adjust hook direction, selling-point focus, and CTA type without rewriting the brief.
-- Reworked local strategy generation so tuned strategy objects keep stable IDs while recomputing hook options, angle, tone, rationale, and CTA framing.
-- Extended Editor handoff and creative prompt payloads to preserve `hookApproach`, making the tuned strategy visible in the Editor-side summary and agent context.
-- Added regression coverage for default hook-approach generation and tuned strategy prompt composition.
-
-## v0.138 - 2026-05-06 (Variant Pack MVP Addendum)
-- Added a `Variant Pack` layer on `/campaign-creative` that expands one brief plus one strategy into exactly three structured variants before editing.
-- Added stable `variantPackId` and `variantId` contracts plus per-variant hook, opening beat, selling-point focus, CTA, editing direction, asset suggestion, and difference summary fields.
-- Upgraded Campaign Creative handoff so Editor receives the selected variant alongside the shared brief and strategy, and the first creative-agent apply can reuse that variant context.
-- Added targeted regression coverage for variant-pack generation and variant handoff normalization on both the frontend and backend.
-- Preserved explicit brief CTA wording inside generated variants and hardened variant normalization so legacy handoff payloads without variant fields still restore safely.
-
 
