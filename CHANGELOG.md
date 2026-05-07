@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.155 - 2026-05-07
+**Campaign Mission Control mission-first autopilot**
+**Campaign Creative / Gold and Glory Brain:**
+- Added `POST /api/campaign-creative/mission-brief` so the backend automatically routes ready Gold and Glory knowledge packs, derives context, generates a structured brief with Compass, and falls back deterministically when LLM generation is unavailable.
+- Rebuilt `/campaign-creative` around a mission composer and generated brief review, removing marketer-facing knowledge-pack selection and full blank-brief entry from the default path.
+- Preserved the existing System Plan, Variant Pack, and Advanced Studio handoff contracts after brief confirmation, with targeted tests for backend generation, frontend API wiring, and default selector removal.
+
 ## v0.154 - 2026-05-07
 **Advanced Production English reference UX**
 **Advanced Studio / Production Wizard:**
