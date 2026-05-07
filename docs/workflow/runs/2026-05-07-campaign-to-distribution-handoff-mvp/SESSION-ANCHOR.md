@@ -4,14 +4,17 @@
 - Run ID: 2026-05-07-campaign-to-distribution-handoff-mvp
 - Goal: Create the product and Gate 1 plan for the marketer-first Campaign Creative to Distribution handoff MVP.
 - Owner: codex
-- Branch or commit context: codex/campaign-to-distribution-handoff-mvp@640b2e0
-- Last updated: 2026-05-07T08:21:16Z
+- Branch context: codex/campaign-to-distribution-handoff-mvp
+- Gate 1 planning baseline: 44cfca8
+- Last updated: 2026-05-07T16:34:27+08:00
 
 ## Acceptance Criteria Snapshot
-- AC-01: Campaign Creative can create a distribution-package draft from a selected variant while preserving CTA, copy, assets, and applied knowledge context.
-- AC-02: Distribution can load the pending package, prefill publish-facing fields, and still require explicit account/publish confirmation.
-- AC-03: Existing Campaign Creative -> Editor handoff remains compatible and available as an advanced fine-tune path.
-- AC-04: MVP stays honest: no fake analytics, no automatic publishing, no broad EditorWorkbench refactor.
+- AC-01: Campaign Creative can create a distribution-package draft from a selected variant while preserving CTA, copy, assets, asset readiness, and applied knowledge context.
+- AC-02: Backend package APIs enforce current-user ownership on create/list/read/update.
+- AC-03: Distribution loads the pending package through a package-to-draft adapter and still requires explicit account/publish confirmation.
+- AC-04: Asset readiness is separate from review status; `needs_asset` is not a review state.
+- AC-05: Existing Campaign Creative -> Editor handoff remains compatible and available as an advanced fine-tune path.
+- AC-06: MVP stays honest: no fake analytics, no automatic publishing, no broad EditorWorkbench refactor.
 
 ## Editable Files (Builder Ownership)
 - docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md
@@ -22,6 +25,7 @@
 - h5-video-tool/src/components/campaign/DistributionPackagePanel.tsx
 - h5-video-tool/src/components/campaign/model.ts
 - h5-video-tool/src/components/distribution/PendingDistributionPackages.tsx
+- h5-video-tool/src/components/distribution/packageToDistributeDraft.ts
 - h5-video-tool/src/api/campaignDistribution.ts
 - h5-video-tool/src/api/client.ts
 - h5-video-tool/src/pages/CampaignCreative.tsx

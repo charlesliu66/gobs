@@ -30,7 +30,7 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
 ### In Scope
 
 - Create a distribution package data contract that can be derived from Campaign Creative selected variant and knowledge context.
-- Add backend package persistence/read/update seams for pending campaign distribution packages.
+- Add backend package persistence/read/update seams for pending campaign distribution packages, filtered by current authenticated user.
 - Add a Campaign Creative UI action that creates a pending package from the selected/recommended variant.
 - Add a Distribution UI entry that can load pending packages and prefill asset/copy/CTA/platform hints.
 - Keep account selection and final publish confirmation explicit.
@@ -56,6 +56,8 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
 - Responsibilities:
   - Define `CampaignDistributionPackage`.
   - Normalize selected variant + asset references + knowledge context into a stable package payload.
+  - Include server-owned `ownerId`, `createdBy`, and `updatedBy` fields; these are populated from the authenticated user, not trusted from the client body.
+  - Split `review.status` from `assetReadiness.state`; `needs_asset` belongs only to asset readiness.
   - Keep brief-only / missing-asset fallback honest.
 - Likely frontend files:
   - `h5-video-tool/src/components/campaign/distributionPackage.ts`
@@ -67,6 +69,7 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
 
 - Responsibilities:
   - Create, list, read, and update pending distribution packages.
+  - Enforce current-user ownership on list/read/update; packages owned by other users must not be returned or mutated.
   - Persist package status without touching video-generation services.
   - Provide compatibility-safe validation and defaulting.
 - Proposed endpoints:
@@ -100,9 +103,11 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
   - Open a selected package and prefill publish-facing fields.
   - Preserve explicit account selection and publish confirmation.
   - Block direct publish when package has no ready asset.
+  - Use a `package -> distribute draft adapter` instead of scattering package-field mapping across `TabDistribute`.
 - Likely files:
   - `h5-video-tool/src/pages/TabDistribute.tsx`
   - `h5-video-tool/src/components/distribution/PendingDistributionPackages.tsx`
+  - `h5-video-tool/src/components/distribution/packageToDistributeDraft.ts`
   - `h5-video-tool/tests/distributionPackageIntake.test.tsx`
 
 ### 4.5 Documentation and Release Evidence
@@ -126,12 +131,18 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
   - Reuse the landed knowledge-context field names: `marketTruth`, `audienceTension`, `toneRules`, `forbiddenClaims`, `visualCues`, `approvedAngles`, `hookCandidates`.
   - Store V1 packages as lightweight server-side records using existing local persistence patterns; do not introduce database migration.
   - Treat Editor as an advanced path; do not route the default marketer flow through `EditorWorkbench`.
+  - Define package-level asset readiness as `publishable | needs_asset | generating | failed`; do not add `needs_asset` to review status.
 - Data flow:
   1. Campaign Creative has brief, strategy, selected variant, selected knowledge packs, and derived knowledge context.
   2. User creates a distribution package.
   3. Backend persists a package with `draft` or `needs_review` state.
   4. UI navigates or links to Distribution with the package id.
-  5. Distribution loads package, prefills copy/CTA/platform hints/asset reference, and asks user to choose accounts explicitly.
+  5. Distribution loads package, runs the package-to-draft adapter, prefills copy/CTA/platform hints/asset reference, and asks user to choose accounts explicitly.
+- Package-to-draft adapter mapping:
+  - Asset priority: `assetReadiness.publishableAsset.path` > `assetReadiness.publishableAsset.url` > first `assets[]` item with `status='ready'` and server-resolvable identity.
+  - Copy priority: `copy.caption` + `copy.hashtags` become the initial platform copy draft; no generated platform card may silently override them.
+  - Campaign context: `variant.angle`, `variant.hook`, `variant.cta`, `publishIntent.platforms`, `publishIntent.markets`, and `knowledgeContext` become distribution `campaignContext`.
+  - Safety fallback: if `assetReadiness.state !== 'publishable'`, prefill copy/CTA/context only and keep publish disabled.
 - API or interface changes:
   - New campaign distribution package endpoints.
   - New frontend API wrapper for package calls.
@@ -149,6 +160,8 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
 | Editor regression | Broad edits in `EditorWorkbench` affect timeline/export/apply behavior | Breaks advanced users | Only touch shared handoff helper if strictly necessary; no timeline/export changes | Builder |
 | Knowledge schema drift | New package invents duplicate knowledge fields | Future writeback becomes brittle | Reuse existing knowledge-context names and tests | Builder |
 | Publish safety regression | Package prefill accidentally publishes or auto-selects accounts | Real account risk | Account selection remains explicit; publish disabled without user confirmation | Builder |
+| Cross-user leakage | Package list/read/update does not filter by current user | Exposes campaign strategy, asset paths, and knowledge context | Populate owner from auth context and test user isolation | Builder |
+| Asset readiness ambiguity | Builder treats any URL/path as publishable | Broken publish payloads or accidental publish with local/transient assets | Centralize `assetReadiness` and adapter priority rules | Builder |
 | Fake dashboard temptation | Home/dashboard work begins before data exists | Misleading product surface | Dashboard is out of scope until packages generate real pending states | Planner |
 | Persistence over-design | V1 package storage becomes a database migration project | Scope blow-up | Use lightweight repository/facade only | Builder |
 
@@ -156,21 +169,25 @@ This run is in scope only if it shortens the marketer path from `Campaign Creati
 
 | ID | Requirement | Validation Method | Done Definition |
 |---|---|---|---|
-| AC-01 | Campaign Creative can create a package from the selected/recommended variant | Frontend integration test + manual check | Clicking the new action calls the package API with variant, CTA, copy, asset references, risk notes, and knowledge context |
-| AC-02 | Backend persists and returns package records safely | Backend unit/seam tests | Create/list/read/update tests pass for ready-asset, missing-asset, and partial-knowledge payloads |
-| AC-03 | Distribution can intake a package | Frontend integration test + manual check | Opening Distribution with package id or package selection prefills asset/copy/CTA/platform hints |
-| AC-04 | Publish remains explicit and safe | Frontend regression test | No accounts are auto-selected because of package intake; direct publish is blocked if no ready asset exists |
-| AC-05 | Existing Editor handoff remains compatible | Existing editor handoff tests + targeted regression | `Open/Fine-tune in Editor` still carries knowledge-aware brief payload |
-| AC-06 | The MVP stays within product truth | Docs review + UI test | No fake analytics, no fake publish performance, no hidden unfinished Platform modules exposed |
-| AC-07 | Documentation and release evidence stay complete | Workflow guard + file review | Design doc, run docs, `PRODUCT.md`, and `CHANGELOG.md` are updated before release |
+| AC-01 | Campaign Creative can create a package from the selected/recommended variant | Frontend integration test + manual check | Clicking the new action calls the package API with variant, CTA, copy, asset references, risk notes, knowledge context, and asset readiness |
+| AC-02 | Backend persists and returns package records safely | Backend unit/seam tests | Create/list/read/update tests pass for ready-asset, missing-asset, partial-knowledge payloads, and malformed payload rejection |
+| AC-03 | Package ownership is enforced | Backend auth/ownership seam tests | `ownerId/createdBy` are populated from the authenticated user, and user B cannot list/read/update user A's package |
+| AC-04 | Distribution can intake a package through an adapter | Frontend integration test + adapter unit test | Opening Distribution with package id or package selection runs package-to-draft mapping and prefills asset/copy/CTA/platform hints/campaignContext |
+| AC-05 | Publish remains explicit and safe | Frontend regression test | No accounts are auto-selected because of package intake; direct publish is blocked unless `assetReadiness.state === 'publishable'` |
+| AC-06 | Asset readiness is not review status | Backend/frontend unit tests | `needs_asset` appears only under `assetReadiness.state`; `review.status` remains limited to `draft/needs_review/approved/ready_to_distribute/rejected` |
+| AC-07 | Existing Editor handoff remains compatible | Existing editor handoff tests + targeted regression | `Open/Fine-tune in Editor` still carries knowledge-aware brief payload |
+| AC-08 | The MVP stays within product truth | Docs review + UI test | No fake analytics, no fake publish performance, no hidden unfinished Platform modules exposed |
+| AC-09 | Documentation and release evidence stay complete | Workflow guard + file review | Design doc, run docs, `PRODUCT.md`, and `CHANGELOG.md` are updated before release |
 
 ## 8) Test Matrix
 
 | Category | Cases |
 |---|---|
 | Happy path | Campaign Creative selected variant with ready asset creates package; Distribution opens package and prefills fields. |
-| Edge cases | No selected variant uses system-recommended variant; no ready asset creates draft/needs_asset state without publish CTA. |
+| Edge cases | No selected variant uses system-recommended variant; no ready asset creates `review.status='draft'` plus `assetReadiness.state='needs_asset'` without publish CTA. |
 | Knowledge path | Selected knowledge packs and structured context survive package creation and readback. |
+| Ownership path | User A's package is invisible and immutable to user B. |
+| Adapter path | Package-to-draft adapter maps publishable path/url, copy, CTA, platforms, markets, and knowledge context deterministically. |
 | Error path | Package API validation rejects malformed payloads; frontend shows recoverable error. |
 | Publish safety | Package intake does not auto-select accounts and does not bypass final publish confirmation. |
 | Regression | Existing Campaign Creative strategy/variant flow and Editor knowledge handoff tests still pass. |

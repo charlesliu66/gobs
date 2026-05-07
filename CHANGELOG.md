@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.156 - 2026-05-07
+**Campaign distribution handoff planning guardrails**
+**Docs / Product Planning:**
+- Tightened the CampaignDistributionPackage design with server-owned `ownerId`, `createdBy`, and `updatedBy` fields, plus current-user filtering requirements for package list/read/update APIs.
+- Added explicit asset readiness rules so `needs_asset` is package asset state, not review status, and publishable packages require a server-resolvable path, verified URL, or backend-resolvable gallery asset.
+- Expanded the planner-spec with a package-to-distribution-draft adapter, ownership tests, asset-readiness tests, and deterministic Distribution intake mapping before Builder starts implementation.
+
 ## v0.155 - 2026-05-07
 **Campaign Creative to Distribution handoff planning**
 **Docs / Product Planning:**

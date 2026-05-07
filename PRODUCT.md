@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.155)*
+*Last updated: 2026-05-07 (v0.156)*
 
-**Latest update - v0.155**
-- Added the Campaign Creative -> Distribution Handoff MVP design as the next active product/technical direction after the OpenClaw code and product evaluations.
-- Bootstrapped run `2026-05-07-campaign-to-distribution-handoff-mvp` with a Gate 1 planner-spec for turning selected campaign variants, CTA, assets, and applied knowledge context into pending distribution packages.
-- Updated task and plan indexes so the next implementation slice prioritizes `Campaign Creative -> Distribution Package -> Distribution` before Dashboard, navigation IA, scheduling, analytics, or Knowledge -> Memory writeback.
+**Latest update - v0.156**
+- Tightened the Campaign Creative -> Distribution Handoff MVP planning with package-level user ownership, current-user API filtering, and explicit `ownerId/createdBy/updatedBy` requirements.
+- Split asset readiness from review status so `needs_asset` is no longer ambiguous, and direct publish requires a server-resolvable path, verified URL, or backend-resolvable gallery asset.
+- Added a package-to-distribution-draft adapter requirement plus ownership, asset-readiness, and deterministic intake tests before Builder starts implementation.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

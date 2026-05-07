@@ -223,6 +223,9 @@ interface CampaignDistributionPackage {
   id: string;
   campaignId?: string;
   gameId: string;
+  ownerId: string;
+  createdBy: string;
+  updatedBy?: string;
   source: {
     type: 'campaign_variant' | 'quick_film' | 'editor' | 'manual';
     sourceId?: string;
@@ -245,6 +248,17 @@ interface CampaignDistributionPackage {
     path?: string;
     status: 'ready' | 'missing' | 'generating' | 'failed';
   }>;
+  assetReadiness: {
+    state: 'publishable' | 'needs_asset' | 'generating' | 'failed';
+    primaryAssetId?: string;
+    publishableAsset?: {
+      type: 'video' | 'image';
+      source: 'server_path' | 'verified_url' | 'gallery_asset';
+      url?: string;
+      path?: string;
+    };
+    reason?: string;
+  };
   copy: {
     headline?: string;
     caption: string;
@@ -277,6 +291,20 @@ interface CampaignDistributionPackage {
   updatedAt: string;
 }
 ```
+
+包级归属规则：
+
+- `ownerId`、`createdBy`、`updatedBy` 由后端根据当前登录用户写入，前端请求体不能作为可信来源。
+- `list/read/update` 必须按当前用户过滤；读取或修改不存在、不属于当前用户的 package 时统一返回 not found/forbidden，不允许全量遍历泄露。
+- 测试必须覆盖“用户 A 创建后，用户 B 无法 list/read/update”的最小鉴权 seam。
+
+资产可发布判定：
+
+- `assetReadiness.state` 是 package 级发布门禁，不能混进 `review.status`。
+- `publishable` 只允许在存在 server-accessible path、已验证 URL，或可被后端解析的 gallery asset 时成立。
+- `caption_only`、本地临时 URL、缺失路径、生成中素材都只能创建 `draft` package，不能进入直接发布。
+- Distribution 预填时优先使用 `assetReadiness.publishableAsset`；如果不存在，只展示文案/CTA/knowledge，并禁用直接 publish CTA。
+- `needs_asset` 是 `assetReadiness.state`，不是 `review.status`。
 
 ### 6.2 CampaignFeedbackSignal
 
@@ -344,12 +372,15 @@ V1 存储：
 
 - 沿用当前轻量本地 JSON/SQLite 风格，不引入新数据库。
 - 允许先使用 repository facade 包裹读写。
+- repository 必须以 `ownerId` 作为 list/read/update 的过滤条件，避免跨用户读取待发布包。
 - 不直接修改底层视频生成服务和禁区文件。
 
 ### 7.3 与分发现有能力的关系
 
 - 本轮不改 GeeLark 发布底层。
-- Distribution 只把 package 转成当前 publish draft 的输入。
+- Distribution 只把 package 转成当前 publish draft 的输入，转换逻辑应集中在 `package -> distribute draft adapter`，不要散落在 `TabDistribute` 页面状态里。
+- adapter 字段优先级：`assetReadiness.publishableAsset.path` > `assetReadiness.publishableAsset.url` > `assets[]` 中首个 ready server asset；不满足时只填文案和 CTA。
+- adapter 应把 `copy.caption`、`copy.hashtags`、`publishIntent.platforms`、`publishIntent.markets` 映射到现有分发草稿和 `campaignContext`，但不得自动选择账号。
 - 账号选择仍需用户显式确认。
 - 如果 package 没有 ready asset，只允许保存 draft，不允许直接 publish。
 
