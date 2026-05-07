@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.156)*
+*Last updated: 2026-05-07 (v0.157)*
 
-**Latest update - v0.156**
-- Tightened the Campaign Creative -> Distribution Handoff MVP planning with package-level user ownership, current-user API filtering, and explicit `ownerId/createdBy/updatedBy` requirements.
-- Split asset readiness from review status so `needs_asset` is no longer ambiguous, and direct publish requires a server-resolvable path, verified URL, or backend-resolvable gallery asset.
-- Added a package-to-distribution-draft adapter requirement plus ownership, asset-readiness, and deterministic intake tests before Builder starts implementation.
+**Latest update - v0.157**
+- Clarified the Campaign Distribution package storage choice: use the existing `assetDb.ts` better-sqlite3 database with a `campaign_distribution_packages` table, indexed owner/status/time columns, and `payload_json`.
+- Added a `TabDistribute` integration budget so Builder falls back to a smaller Pending Packages entry/panel if direct package intake would require broad publish/account rewiring.
+- Added missing-asset next-action guidance and creation-confirmation requirements so draft packages lead operators toward asset-library selection, Quick Film generation, or Editor fine-tuning.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

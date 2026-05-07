@@ -23,6 +23,8 @@
 - Request 2: Add tests before implementation for malformed package payloads, missing assets, and partial knowledge context.
 - Request 3: Keep route naming campaign-specific, for example `/api/campaign-distribution/packages`, so the package seam does not get confused with GeeLark publish tasks.
 - Request 4: If implementation discovers Distribution cannot safely prefill without a broad `TabDistribute` refactor, stop and split an intermediate `distribution-intake-seam` run.
+- Request 5: Use the existing `assetDb.ts` SQLite database for V1 package persistence; avoid localStorage, ad hoc JSON files, or a new database dependency.
+- Request 6: In `needs_asset` state, show explicit next actions rather than a dead-end missing-asset label.
 
 ## 4) Gate 1.5 Verdict
 

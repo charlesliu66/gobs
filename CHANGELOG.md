@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.157 - 2026-05-07
+**Campaign distribution implementation guardrails**
+**Docs / Product Planning:**
+- Clarified that Campaign Distribution packages should use the existing `assetDb.ts` better-sqlite3 database with a `campaign_distribution_packages` table, indexed owner/status/time columns, and `payload_json` for the full package body.
+- Added a `TabDistribute` integration budget: if direct package intake requires broad publish/account rewiring, Builder should split to a smaller Pending Packages entry/panel instead of risking the existing distribution flow.
+- Added `needs_asset` next-action guidance and creation-confirmation requirements so missing-asset packages lead operators toward asset-library selection, Quick Film generation, or Editor fine-tuning instead of a dead-end draft.
+
 ## v0.156 - 2026-05-07
 **Campaign distribution handoff planning guardrails**
 **Docs / Product Planning:**
