@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.160 - 2026-05-07
+**Campaign Creative -> Distribution Handoff MVP Builder**
+**Campaign / Distribution / Package Persistence:**
+- Added backend `Campaign Distribution` package create/list/read/update APIs backed by the existing SQLite asset DB, with server-owned `ownerId/createdBy/updatedBy`, safe review/asset-readiness validation, and ownership seam tests.
+- Added a mission-first `Distribution Package` panel to `/campaign-creative`, so confirmed generated briefs plus selected/recommended variants can be saved as pending packages with routed Gold and Glory knowledge context while keeping `Open In Advanced Studio` as the advanced path.
+- Added `/distribute` pending-package intake through a package-to-draft adapter and `Pending Packages` panel, including `?package=` hydration, prefilled asset/copy/campaign hints, explicit account-safety messaging, and missing-asset next actions for Asset Library or Quick Film.
+- Fixed the login page so isolated worktrees and split-port dev smoke use the same `VITE_API_BASE_URL` as the rest of the app instead of falling back to a mismatched relative auth path.
+**Tests / Build:**
+- Added focused frontend source/adapter tests plus backend seam tests, added a login auth-base regression test, reran backend/frontend typecheck, reran the frontend build, revalidated `workflow_guard --stage build/verify`, and completed local browser smoke for `/campaign-creative` -> `/distribute?package=<id>`.
+
 ## v0.159 - 2026-05-07
 **Campaign distribution handoff mission-first alignment**
 **Docs / Product Planning:**

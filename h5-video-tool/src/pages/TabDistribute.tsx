@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { RunningStatus } from '../components/RunningStatus';
 import { toast } from '../components/Toast';
 import { useCreateFlow } from '../context/CreateFlowContext';
+import {
+  getCampaignDistributionPackage,
+  listCampaignDistributionPackages,
+} from '../api/campaignDistribution.ts';
 import {
   fetchAccounts,
   fetchTaskHistory,
@@ -42,10 +46,16 @@ import {
   type TaskDetailLike,
 } from '../utils/geelarkPublishBatch';
 import { normalizeTaskHistoryItems, type DistributionTaskHistoryItem } from '../components/distribute/distributeSupport.ts';
+import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
+import {
+  buildDistributeDraftFromPackage,
+  type PendingDistributionDraft,
+} from '../components/distribution/packageToDistributeDraft.ts';
+import type { CampaignDistributionPackage } from '../components/campaign/distributionPackage.ts';
 
 type CaptionLanguage = 'DEFAULT' | 'EN' | 'CN' | 'TH' | 'ID';
 type CaptionDraft = { caption: string; hashtags: string };
-type DistributeAssetSource = 'current' | 'local' | 'output';
+type DistributeAssetSource = 'package' | 'current' | 'local' | 'output';
 
 interface DistributeAssetOption {
   id: string;
@@ -67,6 +77,8 @@ const EMPTY_DRAFT: CaptionDraft = { caption: '', hashtags: '' };
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
   const { t, uiLocale, contentLocale } = useLocale();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [accounts, setAccounts] = useState<GeelarkAccount[]>([]);
   const [filterRegion, setFilterRegion] = useState('');
@@ -109,6 +121,17 @@ export function TabDistribute() {
   const [historyDetail, setHistoryDetail] = useState<TaskDetailLike | null>(null);
   const [historyDetailId, setHistoryDetailId] = useState<string | null>(null);
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
+  const [pendingPackages, setPendingPackages] = useState<CampaignDistributionPackage[]>([]);
+  const [pendingPackagesLoading, setPendingPackagesLoading] = useState(false);
+  const [pendingPackagesError, setPendingPackagesError] = useState<string | null>(null);
+  const [activePackageId, setActivePackageId] = useState<string | null>(null);
+  const [pendingPackageDraft, setPendingPackageDraft] = useState<PendingDistributionDraft | null>(null);
+  const [packageAsset, setPackageAsset] = useState<DistributeAssetOption | null>(null);
+
+  const packageQueryId = useMemo(
+    () => new URLSearchParams(location.search).get('package')?.trim() ?? '',
+    [location.search],
+  );
 
   const currentAsset = useMemo(
     () => buildCurrentAssetOption({ videoUrl, videoPath, taskId, prompt }),
@@ -116,8 +139,8 @@ export function TabDistribute() {
   );
 
   const assetOptions = useMemo(
-    () => mergeAssetOptions(currentAsset, localAssets, outputAssets),
-    [currentAsset, localAssets, outputAssets],
+    () => mergeAssetOptions(packageAsset, currentAsset, localAssets, outputAssets),
+    [packageAsset, currentAsset, localAssets, outputAssets],
   );
 
   const selectedAsset = useMemo(
@@ -179,10 +202,14 @@ export function TabDistribute() {
     const ids = new Set(assetOptions.map((item) => item.id));
     setSelectedAssetId((previous) => {
       if (previous && ids.has(previous)) return previous;
+      if (pendingPackageDraft) {
+        if (packageAsset && ids.has(packageAsset.id)) return packageAsset.id;
+        return null;
+      }
       if (currentAsset && ids.has(currentAsset.id)) return currentAsset.id;
       return assetOptions[0]?.id ?? null;
     });
-  }, [assetOptions, currentAsset]);
+  }, [assetOptions, currentAsset, packageAsset, pendingPackageDraft]);
 
   const accountsForPermission = useMemo(() => accounts, [accounts]);
 
@@ -260,6 +287,24 @@ export function TabDistribute() {
     void loadTaskHistory();
   }, [loadTaskHistory]);
 
+  const loadPendingPackages = useCallback(async () => {
+    setPendingPackagesLoading(true);
+    setPendingPackagesError(null);
+    try {
+      const response = await listCampaignDistributionPackages();
+      setPendingPackages(response.items);
+    } catch (cause) {
+      setPendingPackagesError(cause instanceof Error ? cause.message : t('distribute.pendingPackagesLoadFailed'));
+      setPendingPackages([]);
+    } finally {
+      setPendingPackagesLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadPendingPackages();
+  }, [loadPendingPackages]);
+
   const updateDraft = useCallback((draftKey: string, next: Partial<CaptionDraft>) => {
     setPlatformDrafts((previous) => ({
       ...previous,
@@ -269,6 +314,58 @@ export function TabDistribute() {
       },
     }));
   }, []);
+
+  const applyPendingPackage = useCallback((pkg: CampaignDistributionPackage) => {
+    const nextDraft = buildDistributeDraftFromPackage(pkg);
+    const nextDraftKeys = Object.keys(nextDraft.platformDrafts);
+    const nextPackageAsset = buildPackageAssetOption(nextDraft);
+
+    setActivePackageId(pkg.id);
+    setPendingPackageDraft(nextDraft);
+    setPackageAsset(nextPackageAsset);
+    setSelectedAssetId(nextPackageAsset?.id ?? null);
+    setCaptionLang('DEFAULT');
+    setPlatformDrafts(nextDraftKeys.length > 0 ? nextDraft.platformDrafts : { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT });
+    setActiveDraftKey(nextDraftKeys[0] ?? DEFAULT_DRAFT_KEY);
+    setCampaignObjective(nextDraft.formPrefill.campaignObjective);
+    setTargetAudience(nextDraft.formPrefill.targetAudience);
+    setCta(nextDraft.formPrefill.cta);
+    setMarket(nextDraft.formPrefill.market);
+    setBrandTone(nextDraft.formPrefill.brandTone);
+    setSellingPoints(nextDraft.formPrefill.sellingPoints);
+    setAvoidTerms(nextDraft.formPrefill.avoidTerms);
+    setCaptionGenError(null);
+    setPushError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!packageQueryId || activePackageId === packageQueryId) return;
+
+    const matchedPackage = pendingPackages.find((pkg) => pkg.id === packageQueryId);
+    if (matchedPackage) {
+      applyPendingPackage(matchedPackage);
+      return;
+    }
+
+    let cancelled = false;
+    getCampaignDistributionPackage(packageQueryId)
+      .then((pkg) => {
+        if (cancelled) return;
+        setPendingPackages((previous) => (
+          previous.some((current) => current.id === pkg.id) ? previous : [pkg, ...previous]
+        ));
+        applyPendingPackage(pkg);
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          setPendingPackagesError(cause instanceof Error ? cause.message : t('distribute.pendingPackagesLoadFailed'));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePackageId, applyPendingPackage, packageQueryId, pendingPackages, t]);
 
   const handleGenerateCaption = async () => {
     const promptSeed = resolvePromptSeed(selectedAsset, prompt, taskId);
@@ -536,6 +633,45 @@ export function TabDistribute() {
         <h1 className="page-title">{t('distribute.title')}</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t('distribute.subtitle')}</p>
       </div>
+
+      <PendingDistributionPackages
+        packages={pendingPackages}
+        loading={pendingPackagesLoading}
+        errorMessage={pendingPackagesError}
+        activePackageId={activePackageId}
+        activeDraft={pendingPackageDraft}
+        onUsePackage={applyPendingPackage}
+        onOpenAssetLibrary={() => navigate('/asset-library')}
+        onOpenQuickFilm={() => navigate('/quickfilm')}
+        copy={{
+          title: t('distribute.pendingPackagesTitle'),
+          subtitle: t('distribute.pendingPackagesSubtitle'),
+          empty: t('distribute.pendingPackagesEmpty'),
+          loading: t('distribute.pendingPackagesLoading'),
+          error: t('distribute.pendingPackagesLoadFailed'),
+          usePackage: t('distribute.pendingPackagesUse'),
+          active: t('distribute.pendingPackagesActive'),
+          accountHint: t('distribute.pendingPackagesAccountHint'),
+          nextActionsTitle: t('distribute.pendingPackagesNextActionsTitle'),
+          openAssetLibrary: t('distribute.pendingPackagesOpenAssetLibrary'),
+          openQuickFilm: t('distribute.pendingPackagesOpenQuickFilm'),
+          assetState: t('distribute.pendingPackagesAssetState'),
+          reviewStatus: t('distribute.pendingPackagesReviewStatus'),
+          assetStateLabels: {
+            publishable: t('distribute.pendingPackagesAssetStateLabels.publishable'),
+            needsAsset: t('distribute.pendingPackagesAssetStateLabels.needsAsset'),
+            generating: t('distribute.pendingPackagesAssetStateLabels.generating'),
+            failed: t('distribute.pendingPackagesAssetStateLabels.failed'),
+          },
+          reviewStatusLabels: {
+            draft: t('distribute.pendingPackagesReviewStatusLabels.draft'),
+            needsReview: t('distribute.pendingPackagesReviewStatusLabels.needsReview'),
+            approved: t('distribute.pendingPackagesReviewStatusLabels.approved'),
+            readyToDistribute: t('distribute.pendingPackagesReviewStatusLabels.readyToDistribute'),
+            rejected: t('distribute.pendingPackagesReviewStatusLabels.rejected'),
+          },
+        }}
+      />
 
       <section className="mb-6 space-y-4">
         <div>
@@ -1353,11 +1489,12 @@ function buildOutputAssetOptions(items: OutputRecentVideoItem[]): DistributeAsse
 }
 
 function mergeAssetOptions(
+  packageAsset: DistributeAssetOption | null,
   currentAsset: DistributeAssetOption | null,
   localAssets: DistributeAssetOption[],
   outputAssets: DistributeAssetOption[],
 ): DistributeAssetOption[] {
-  const merged = [currentAsset, ...localAssets, ...outputAssets].filter(Boolean) as DistributeAssetOption[];
+  const merged = [packageAsset, currentAsset, ...localAssets, ...outputAssets].filter(Boolean) as DistributeAssetOption[];
   const deduped = new Map<string, DistributeAssetOption>();
   for (const asset of merged) {
     const identity = asset.videoPath?.trim() || asset.taskId || asset.videoUrl || asset.id;
@@ -1441,7 +1578,23 @@ function mergeLatestBatches(batches: Array<LatestPublishBatch | null>, createdAt
 }
 
 function assetSourceLabel(source: DistributeAssetSource, t: (key: string) => string): string {
+  if (source === 'package') return t('distribute.assetPendingPackage');
   if (source === 'current') return t('distribute.assetCurrent');
   if (source === 'local') return t('distribute.assetLocal');
   return t('distribute.assetOutput');
+}
+
+function buildPackageAssetOption(draft: PendingDistributionDraft): DistributeAssetOption | null {
+  if (!draft.selectedAsset) return null;
+  return {
+    id: `package:${draft.packageId}:${draft.selectedAsset.id}`,
+    source: 'package',
+    title: draft.selectedAsset.title,
+    subtitle: draft.title,
+    videoPath: draft.selectedAsset.videoPath,
+    videoUrl: draft.selectedAsset.videoPath
+      ? getVideoFileUrl(draft.selectedAsset.videoPath)
+      : draft.selectedAsset.videoUrl,
+    createdAt: Date.now(),
+  };
 }

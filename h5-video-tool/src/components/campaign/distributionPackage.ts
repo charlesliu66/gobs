@@ -1,0 +1,299 @@
+import type { DerivedCampaignKnowledgeContext } from '../../api/campaignKnowledge.ts';
+import type {
+  CampaignCreativeBrief,
+  CampaignCreativeStrategy,
+  CampaignCreativeVariant,
+  CampaignCreativeVariantPack,
+} from './model.ts';
+
+export type CampaignDistributionPackageReviewStatus =
+  | 'draft'
+  | 'needs_review'
+  | 'approved'
+  | 'ready_to_distribute'
+  | 'rejected';
+
+export type CampaignDistributionPackageAssetStatus = 'ready' | 'missing' | 'generating' | 'failed';
+export type CampaignDistributionPackageAssetType = 'video' | 'image' | 'caption_only';
+export type CampaignDistributionPackageAssetSource = 'server_path' | 'verified_url' | 'gallery_asset';
+export type CampaignDistributionPackageAssetReadinessState =
+  | 'publishable'
+  | 'needs_asset'
+  | 'generating'
+  | 'failed';
+export type CampaignDistributionLanguage = 'zh' | 'en' | 'ms' | 'th' | 'id' | 'vi' | 'unknown';
+export type CampaignDistributionSourceType = 'campaign_variant' | 'quick_film' | 'editor' | 'manual';
+
+export interface CampaignDistributionPackageAsset {
+  assetId?: string;
+  type: CampaignDistributionPackageAssetType;
+  url?: string;
+  path?: string;
+  status: CampaignDistributionPackageAssetStatus;
+}
+
+export interface CampaignDistributionPackageAssetReadiness {
+  state: CampaignDistributionPackageAssetReadinessState;
+  primaryAssetId?: string;
+  publishableAsset?: {
+    type: 'video' | 'image';
+    source: CampaignDistributionPackageAssetSource;
+    url?: string;
+    path?: string;
+  };
+  reason?: string;
+}
+
+export interface CampaignDistributionPackageReview {
+  status: CampaignDistributionPackageReviewStatus;
+  notes?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface CampaignDistributionPackageVariant {
+  id?: string;
+  title?: string;
+  angle: string;
+  hook: string;
+  audience: string;
+  proofPoint?: string;
+  cta: string;
+  riskNotes: string[];
+}
+
+export interface CampaignDistributionPackageCopy {
+  headline?: string;
+  caption: string;
+  hashtags: string[];
+  language: CampaignDistributionLanguage;
+}
+
+export interface CampaignDistributionKnowledgeContext {
+  packIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
+}
+
+export interface CampaignDistributionPackage {
+  id: string;
+  campaignId?: string;
+  gameId: string;
+  ownerId: string;
+  createdBy: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string;
+  source: {
+    type: CampaignDistributionSourceType;
+    sourceId?: string;
+    createdFromRoute?: string;
+  };
+  campaign: {
+    mission?: string;
+    briefId?: string;
+    mode?: CampaignCreativeBrief['mode'];
+    objective?: string;
+    generationSource?: 'llm' | 'fallback';
+    warnings: string[];
+  };
+  variant: CampaignDistributionPackageVariant;
+  assets: CampaignDistributionPackageAsset[];
+  assetReadiness: CampaignDistributionPackageAssetReadiness;
+  copy: CampaignDistributionPackageCopy;
+  publishIntent: {
+    platforms: string[];
+    markets: string[];
+    accountGroupIds?: string[];
+    scheduleHint?: string;
+  };
+  knowledgeContext: CampaignDistributionKnowledgeContext;
+  review: CampaignDistributionPackageReview;
+}
+
+export type CampaignDistributionCreateInput = Omit<
+  CampaignDistributionPackage,
+  'id' | 'ownerId' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt'
+>;
+
+export type CampaignDistributionUpdateInput = Partial<
+  Pick<CampaignDistributionPackage, 'title' | 'copy' | 'publishIntent' | 'assetReadiness' | 'review'>
+>;
+
+export interface BuildCampaignDistributionCreateInputArgs {
+  mission: string;
+  brief: CampaignCreativeBrief;
+  strategy: CampaignCreativeStrategy;
+  variantPack?: CampaignCreativeVariantPack | null;
+  selectedVariantId?: string | null;
+  knowledgeContext?: DerivedCampaignKnowledgeContext | null;
+  routedKnowledgePackIds?: string[];
+  generationSource: 'llm' | 'fallback';
+  warnings: string[];
+  primaryAsset?: {
+    assetId?: string;
+    type: 'video' | 'image';
+    status: CampaignDistributionPackageAssetStatus;
+    path?: string;
+    url?: string;
+    source: CampaignDistributionPackageAssetSource;
+  };
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim() || '').filter(Boolean))];
+}
+
+function inferCopyLanguage(brief: CampaignCreativeBrief): CampaignDistributionLanguage {
+  const region = (brief.region ?? '').trim().toLowerCase();
+  if (/thailand|\bth\b/.test(region)) return 'th';
+  if (/indonesia|\bid\b/.test(region)) return 'id';
+  if (/malaysia|\bms\b/.test(region)) return 'ms';
+  if (/vietnam|\bvi\b/.test(region)) return 'vi';
+  return 'en';
+}
+
+function resolveSelectedVariant(
+  variantPack: CampaignCreativeVariantPack | null | undefined,
+  selectedVariantId: string | null | undefined,
+): CampaignCreativeVariant | null {
+  if (!variantPack) return null;
+  return variantPack.variants.find((variant) => variant.variantId === selectedVariantId)
+    ?? variantPack.variants.find((variant) => variant.variantId === variantPack.selectedVariantId)
+    ?? variantPack.variants[0]
+    ?? null;
+}
+
+function buildKnowledgeContext(
+  strategy: CampaignCreativeStrategy,
+  knowledgeContext: DerivedCampaignKnowledgeContext | null | undefined,
+  routedKnowledgePackIds: string[] | undefined,
+): CampaignDistributionKnowledgeContext {
+  return {
+    packIds: uniqueStrings([
+      ...(routedKnowledgePackIds ?? []),
+      ...(knowledgeContext?.selectedPackIds ?? []),
+      ...strategy.knowledgePackIds,
+    ]),
+    marketTruth: uniqueStrings([
+      ...strategy.marketTruth,
+      ...(knowledgeContext?.marketTruth ?? []),
+    ]),
+    audienceTension: uniqueStrings([
+      ...strategy.audienceTension,
+      ...(knowledgeContext?.audienceTension ?? []),
+    ]),
+    toneRules: uniqueStrings([
+      ...strategy.toneRules,
+      ...(knowledgeContext?.toneRules ?? []),
+    ]),
+    forbiddenClaims: uniqueStrings([
+      ...strategy.forbiddenClaims,
+      ...(knowledgeContext?.forbiddenClaims ?? []),
+    ]),
+    visualCues: uniqueStrings([
+      ...strategy.visualCues,
+      ...(knowledgeContext?.visualCues ?? []),
+    ]),
+    approvedAngles: uniqueStrings([
+      ...strategy.approvedAngles,
+      ...(knowledgeContext?.approvedAngles ?? []),
+    ]),
+    hookCandidates: uniqueStrings([
+      ...strategy.hookCandidates,
+      ...(knowledgeContext?.hookCandidates ?? []),
+    ]),
+  };
+}
+
+export function buildCampaignDistributionCreateInput(
+  args: BuildCampaignDistributionCreateInputArgs,
+): CampaignDistributionCreateInput {
+  const nowIso = new Date().toISOString();
+  const selectedVariant = resolveSelectedVariant(args.variantPack, args.selectedVariantId);
+  const publishableAsset = args.primaryAsset
+    && args.primaryAsset.status === 'ready'
+    && (args.primaryAsset.path?.trim() || args.primaryAsset.url?.trim())
+      ? {
+          type: args.primaryAsset.type,
+          source: args.primaryAsset.source,
+          path: args.primaryAsset.path?.trim() || undefined,
+          url: args.primaryAsset.url?.trim() || undefined,
+        }
+      : undefined;
+  const assets: CampaignDistributionPackageAsset[] = publishableAsset
+    ? [{
+        assetId: args.primaryAsset?.assetId,
+        type: args.primaryAsset?.type ?? 'video',
+        path: publishableAsset.path,
+        url: publishableAsset.url,
+        status: args.primaryAsset?.status ?? 'ready',
+      }]
+    : [{
+        type: 'caption_only',
+        status: 'missing',
+      }];
+
+  const captionParts = uniqueStrings([
+    selectedVariant?.hook,
+    selectedVariant?.openingBeat,
+    selectedVariant?.cta,
+  ]);
+  const knowledge = buildKnowledgeContext(args.strategy, args.knowledgeContext, args.routedKnowledgePackIds);
+
+  return {
+    gameId: 'gold_and_glory',
+    title: selectedVariant?.title?.trim() || args.strategy.angle || args.brief.objective || 'Campaign package',
+    source: {
+      type: 'campaign_variant',
+      sourceId: selectedVariant?.variantId ?? args.strategy.strategyId,
+      createdFromRoute: '/campaign-creative',
+    },
+    campaign: {
+      mission: args.mission.trim() || undefined,
+      briefId: args.brief.briefId,
+      mode: args.brief.mode,
+      objective: args.brief.objective ?? args.strategy.objective,
+      generationSource: args.generationSource,
+      warnings: uniqueStrings(args.warnings),
+    },
+    variant: {
+      id: selectedVariant?.variantId,
+      title: selectedVariant?.title,
+      angle: args.strategy.angle,
+      hook: selectedVariant?.hook ?? args.strategy.recommendedHook,
+      audience: args.strategy.targetAudience ?? args.brief.audience ?? '',
+      proofPoint: args.strategy.sellingPointFocus ?? args.brief.sellingPoints[0],
+      cta: selectedVariant?.cta ?? args.strategy.cta,
+      riskNotes: uniqueStrings(args.strategy.riskNotes),
+    },
+    assets,
+    assetReadiness: {
+      state: publishableAsset ? 'publishable' : 'needs_asset',
+      primaryAssetId: args.primaryAsset?.assetId,
+      publishableAsset,
+      reason: publishableAsset ? undefined : 'Package needs a real render or reusable asset before publishing.',
+    },
+    copy: {
+      headline: selectedVariant?.title ?? args.strategy.angle,
+      caption: captionParts.join(' '),
+      hashtags: [],
+      language: inferCopyLanguage(args.brief),
+    },
+    publishIntent: {
+      platforms: ['tiktok'],
+      markets: uniqueStrings([args.brief.region]),
+    },
+    knowledgeContext: knowledge,
+    review: {
+      status: publishableAsset ? 'needs_review' : 'draft',
+      updatedAt: nowIso,
+    },
+  };
+}

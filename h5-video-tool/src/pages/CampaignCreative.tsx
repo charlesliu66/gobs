@@ -5,13 +5,19 @@ import {
   type CampaignMissionBriefResponse,
   type DerivedCampaignKnowledgeContext,
 } from '../api/campaignCreative.ts';
+import { createCampaignDistributionPackage } from '../api/campaignDistribution.ts';
 import { useLocale } from '../i18n/LocaleContext.tsx';
+import { DistributionPackagePanel } from '../components/campaign/DistributionPackagePanel';
 import { GeneratedBriefReview } from '../components/campaign/GeneratedBriefReview';
 import { MissionComposer } from '../components/campaign/MissionComposer';
 import { CampaignPendingActionsCard } from '../components/campaign/CampaignPendingActionsCard';
 import { CampaignPlanCard } from '../components/campaign/CampaignPlanCard';
 import { CampaignStrategyCard } from '../components/campaign/CampaignStrategyCard';
 import { CampaignStrategyTuningPanel } from '../components/campaign/CampaignStrategyTuningPanel';
+import {
+  buildCampaignDistributionCreateInput,
+  type CampaignDistributionPackage,
+} from '../components/campaign/distributionPackage.ts';
 import type {
   CampaignCreativeBrief,
   CampaignCreativeFormState,
@@ -159,6 +165,9 @@ export function CampaignCreative() {
   const [campaignPlan, setCampaignPlan] = useState<CampaignPlan | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [knowledgeContext, setKnowledgeContext] = useState<DerivedCampaignKnowledgeContext | null>(null);
+  const [distributionPackageLoading, setDistributionPackageLoading] = useState(false);
+  const [distributionPackageError, setDistributionPackageError] = useState<string | null>(null);
+  const [createdDistributionPackage, setCreatedDistributionPackage] = useState<CampaignDistributionPackage | null>(null);
   const feedbackRecords: FeedbackRecord[] = [];
 
   const strategyNotice = missionBriefResult?.warnings[0] ?? null;
@@ -201,6 +210,21 @@ export function CampaignCreative() {
     [t],
   );
 
+  const distributionPackageDraft = useMemo(() => {
+    if (!brief || !strategy) return null;
+    return buildCampaignDistributionCreateInput({
+      mission,
+      brief,
+      strategy,
+      variantPack,
+      selectedVariantId,
+      knowledgeContext,
+      routedKnowledgePackIds: missionBriefResult?.routedKnowledgePackIds,
+      generationSource: missionBriefResult?.generationSource ?? 'fallback',
+      warnings: missionBriefResult?.warnings ?? [],
+    });
+  }, [brief, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
+
   const brainStatus = useMemo(() => {
     if (missionBriefLoading) {
       return {
@@ -227,7 +251,13 @@ export function CampaignCreative() {
     setFormState((prev) => ({ ...prev, ...patch }));
   };
 
+  const resetDistributionPackageState = () => {
+    setDistributionPackageError(null);
+    setCreatedDistributionPackage(null);
+  };
+
   const handleMissionChange = (value: string) => {
+    resetDistributionPackageState();
     setMission(value);
     if (!modeTouched) {
       setFormState((prev) => ({ ...prev, mode: inferMissionMode(value) }));
@@ -235,6 +265,7 @@ export function CampaignCreative() {
   };
 
   const handleModeChange = (mode: CampaignCreativeMode) => {
+    resetDistributionPackageState();
     setModeTouched(true);
     setFormState((prev) => ({ ...prev, mode }));
   };
@@ -243,6 +274,7 @@ export function CampaignCreative() {
     const trimmedMission = mission.trim();
     if (!trimmedMission || missionBriefLoading) return;
 
+    resetDistributionPackageState();
     setMissionBriefLoading(true);
     setMissionBriefError(null);
     try {
@@ -269,6 +301,7 @@ export function CampaignCreative() {
   };
 
   const handleConfirmBrief = () => {
+    resetDistributionPackageState();
     const reviewedBrief = buildBriefFromForm(formState);
     const nextBrief = {
       ...reviewedBrief,
@@ -301,6 +334,7 @@ export function CampaignCreative() {
 
   const handleStrategyTuningChange = (patch: Partial<CampaignCreativeStrategyTuning>) => {
     if (!brief || !strategyTuning) return;
+    resetDistributionPackageState();
     const nextTuning = { ...strategyTuning, ...patch };
     setStrategyTuning(nextTuning);
     setStrategy((current) => {
@@ -331,6 +365,7 @@ export function CampaignCreative() {
 
   const handleStrategyTuningReset = () => {
     if (!brief) return;
+    resetDistributionPackageState();
     const nextTuning = buildDefaultStrategyTuning(brief);
     setStrategyTuning(nextTuning);
     setStrategy((current) => {
@@ -391,8 +426,30 @@ export function CampaignCreative() {
   };
 
   const handleSelectVariant = (variantId: string) => {
+    resetDistributionPackageState();
     setSelectedVariantId(variantId);
     setVariantPack((current) => (current ? { ...current, selectedVariantId: variantId } : current));
+  };
+
+  const handleCreateDistributionPackage = async () => {
+    if (!distributionPackageDraft || distributionPackageLoading) return;
+    setDistributionPackageLoading(true);
+    setDistributionPackageError(null);
+    try {
+      const createdPackage = await createCampaignDistributionPackage(distributionPackageDraft);
+      setCreatedDistributionPackage(createdPackage);
+    } catch (error) {
+      setDistributionPackageError(
+        error instanceof Error ? error.message : t('campaignCreative.distributionPackage.error'),
+      );
+    } finally {
+      setDistributionPackageLoading(false);
+    }
+  };
+
+  const handleOpenDistribution = () => {
+    if (!createdDistributionPackage) return;
+    navigate(`/distribute?package=${encodeURIComponent(createdDistributionPackage.id)}`);
   };
 
   return (
@@ -570,7 +627,65 @@ export function CampaignCreative() {
                     hookFocus: 'Hook 差异',
                     sellingPointFocus: '卖点差异',
                     ctaFocus: 'CTA 差异',
-                  },
+              },
+            }}
+          />
+
+          <DistributionPackagePanel
+            draft={distributionPackageDraft}
+            createdPackage={createdDistributionPackage}
+            isCreating={distributionPackageLoading}
+            errorMessage={distributionPackageError}
+            onCreate={handleCreateDistributionPackage}
+            onContinue={handleOpenDistribution}
+            onOpenAssetLibrary={() => navigate('/asset-library')}
+            onOpenQuickFilm={() => navigate('/quickfilm')}
+            onOpenEditor={handleLaunchEditor}
+            copy={{
+              emptyTitle: t('campaignCreative.distributionPackage.emptyTitle'),
+              emptyBody: t('campaignCreative.distributionPackage.emptyBody'),
+              title: t('campaignCreative.distributionPackage.title'),
+              subtitle: t('campaignCreative.distributionPackage.subtitle'),
+              badge: t('campaignCreative.distributionPackage.badge'),
+              selectedVariant: t('campaignCreative.distributionPackage.selectedVariant'),
+              objective: t('campaignCreative.distributionPackage.objective'),
+              caption: t('campaignCreative.distributionPackage.caption'),
+              platforms: t('campaignCreative.distributionPackage.platforms'),
+              markets: t('campaignCreative.distributionPackage.markets'),
+              assetState: t('campaignCreative.distributionPackage.assetState'),
+              reviewStatus: t('campaignCreative.distributionPackage.reviewStatus'),
+              warnings: t('campaignCreative.distributionPackage.warnings'),
+              packageId: t('campaignCreative.distributionPackage.packageId'),
+              create: t('campaignCreative.distributionPackage.create'),
+              creating: t('campaignCreative.distributionPackage.creating'),
+              continue: t('campaignCreative.distributionPackage.continue'),
+              error: t('campaignCreative.distributionPackage.error'),
+              createdTitle: t('campaignCreative.distributionPackage.createdTitle'),
+              createdReadyBody: t('campaignCreative.distributionPackage.createdReadyBody'),
+              createdNeedsAssetBody: t('campaignCreative.distributionPackage.createdNeedsAssetBody'),
+              nextActionsTitle: t('campaignCreative.distributionPackage.nextActionsTitle'),
+              openAssetLibrary: t('campaignCreative.distributionPackage.openAssetLibrary'),
+              openQuickFilm: t('campaignCreative.distributionPackage.openQuickFilm'),
+              fineTuneEditor: t('campaignCreative.distributionPackage.fineTuneEditor'),
+              knowledge: {
+                title: t('campaignCreative.distributionPackage.knowledge.title'),
+                marketTruth: t('campaignCreative.distributionPackage.knowledge.marketTruth'),
+                toneRules: t('campaignCreative.distributionPackage.knowledge.toneRules'),
+                forbiddenClaims: t('campaignCreative.distributionPackage.knowledge.forbiddenClaims'),
+              },
+              assetStateLabels: {
+                publishable: t('campaignCreative.distributionPackage.assetStateLabels.publishable'),
+                needsAsset: t('campaignCreative.distributionPackage.assetStateLabels.needsAsset'),
+                generating: t('campaignCreative.distributionPackage.assetStateLabels.generating'),
+                failed: t('campaignCreative.distributionPackage.assetStateLabels.failed'),
+              },
+              reviewStatusLabels: {
+                draft: t('campaignCreative.distributionPackage.reviewStatusLabels.draft'),
+                needsReview: t('campaignCreative.distributionPackage.reviewStatusLabels.needsReview'),
+                approved: t('campaignCreative.distributionPackage.reviewStatusLabels.approved'),
+                readyToDistribute: t('campaignCreative.distributionPackage.reviewStatusLabels.readyToDistribute'),
+                rejected: t('campaignCreative.distributionPackage.reviewStatusLabels.rejected'),
+              },
             }}
           />
 

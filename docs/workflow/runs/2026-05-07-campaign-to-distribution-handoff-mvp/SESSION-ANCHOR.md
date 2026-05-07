@@ -26,11 +26,13 @@
 - h5-video-tool/src/components/campaign/distributionPackage.ts
 - h5-video-tool/src/components/campaign/DistributionPackagePanel.tsx
 - h5-video-tool/src/components/campaign/model.ts
+- h5-video-tool/src/components/distribution/
 - h5-video-tool/src/components/distribution/PendingDistributionPackages.tsx
 - h5-video-tool/src/components/distribution/packageToDistributeDraft.ts
 - h5-video-tool/src/api/campaignDistribution.ts
 - h5-video-tool/src/api/client.ts
 - h5-video-tool/src/pages/CampaignCreative.tsx
+- h5-video-tool/src/pages/Login.tsx
 - h5-video-tool/src/pages/TabDistribute.tsx
 - h5-video-tool/src/i18n/messages.ts
 - h5-video-tool/tests/

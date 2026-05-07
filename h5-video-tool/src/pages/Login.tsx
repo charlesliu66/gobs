@@ -5,6 +5,8 @@ import { useLocale } from '../i18n/LocaleContext.tsx';
 import { buildLocaleHeaders } from '../i18n/locale.ts';
 import { LocalePresetSwitcher } from '../components/LocalePresetSwitcher.tsx';
 
+const AUTH_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 function normalizeAppRedirect(target: string | null | undefined): string {
   const value = (target || '').trim();
   if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/api/')) return '/';
@@ -32,7 +34,7 @@ export function Login() {
     setErr(null);
     setBusy(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${AUTH_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

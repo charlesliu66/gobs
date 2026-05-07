@@ -3,12 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.159)*
+*Last updated: 2026-05-07 (v0.160)*
 
-**Latest update - v0.159**
-- Aligned the Campaign Creative -> Distribution Handoff MVP plan with the released mission-first baseline: campaign mission, generated brief review, System Plan / Variant Pack, then Distribution Package.
-- Updated the package target so Distribution receives mission/brief snapshot, generation source, warnings, selected/recommended variant, and backend-routed Gold and Glory knowledge context.
-- Added planning guardrails that forbid bringing Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form back into the default Campaign Creative path.
+**Latest update - v0.160**
+- Implemented the backend `Campaign Distribution` package seam: create/list/read/update APIs now persist package payloads in SQLite with server-owned audit fields and owner filtering.
+- Added a mission-first `Distribution Package` panel to `/campaign-creative`, so a confirmed brief plus selected/recommended variant can become a pending package without forcing the default path through Editor.
+- Added `Pending Packages` intake in `/distribute`, including `?package=` hydration, package-to-draft mapping, missing-asset next actions, and explicit account-selection safety.
+- Aligned the login page with the shared `VITE_API_BASE_URL`, so isolated worktrees and split-port browser smoke authenticate against the same backend as the rest of the mission-first flow.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -261,6 +262,14 @@
 - **[planning baseline] Aligned the distribution handoff MVP with `a94a7f5` mission-first Campaign Creative** (`docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md`, `docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/planner-spec.md`): the next build starts from campaign mission, generated brief review, and Variant Pack instead of old `brief + selected knowledge` assumptions.
 - **[package contract] Added mission/brief snapshot requirements**: pending distribution packages must preserve mission, brief objective/source/warnings, selected or recommended variant, CTA/copy/assets, and backend-routed Gold and Glory knowledge context.
 - **[UX guardrail] Forbid old main-flow configuration surfaces**: the planner now stops implementation if it reintroduces Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form into the default Campaign Creative path.
+
+### v0.160 - 2026-05-07
+**Campaign Creative -> Distribution Handoff MVP Builder**
+
+- **[backend seam] Added `POST/GET/PATCH /api/campaign-distribution/packages`** (`h5-video-tool-api/src/routes/campaignDistribution.ts`, `h5-video-tool-api/src/services/campaignDistributionPackage.ts`, `h5-video-tool-api/tests/campaignDistributionPackage.test.ts`): pending packages now persist in the existing SQLite asset DB with owner-scoped list/read/update behavior, safe status validation, and server-owned audit fields.
+- **[campaign creative] Added `Distribution Package` creation to the mission-first shell** (`h5-video-tool/src/pages/CampaignCreative.tsx`, `h5-video-tool/src/components/campaign/DistributionPackagePanel.tsx`, `h5-video-tool/src/components/campaign/distributionPackage.ts`): the default marketer flow now previews and creates a pending package from mission, generated brief snapshot, selected/recommended variant, CTA/caption, and routed Gold and Glory knowledge context while keeping Editor as a secondary fine-tune path.
+- **[distribution intake] Added package adapter + Pending Packages panel** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/components/distribution/PendingDistributionPackages.tsx`, `h5-video-tool/src/components/distribution/packageToDistributeDraft.ts`): Distribution can now load a package by query or panel selection, prefill asset/copy/campaign fields, keep account selection explicit, and surface Asset Library / Quick Film next actions when `needs_asset` is active.
+- **[tests/build] Added targeted coverage and reran builds** (`h5-video-tool/tests/*distribution*.test.ts`, `h5-video-tool/tests/campaignCreativeEditorHandoffPresence.test.ts`): backend seam tests, adapter tests, source regressions, frontend typecheck/build, backend typecheck, and `workflow_guard --stage build` all pass for this Builder slice.
 
 ### v0.158 - 2026-05-07
 **Campaign Mission Control mission-first autopilot**
