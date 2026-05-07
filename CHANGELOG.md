@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.162 - 2026-05-07
+**Daily review workflow and report archive**
+**Docs / Workflow:**
+- Added `.agents/skills/daily-review/` as a repo-local skill for evidence-based daily work recaps using git history, PRODUCT changelog entries, workflow run docs, and prior daily reports.
+- Added `docs/daily-reports/2026-05-06.md`, summarizing the 2026-05-06 shipped work, bug-fix ratio, repeated issue clusters, verification rigor, and recommended next-day TODOs.
+- Kept this release documentation-only; no runtime Campaign Creative, Distribution handoff, API, or publishing behavior changed.
+
 ## v0.160 - 2026-05-07
 **Campaign Creative -> Distribution Handoff MVP Builder**
 **Campaign / Distribution / Package Persistence:**

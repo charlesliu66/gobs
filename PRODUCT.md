@@ -3,13 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.161)*
+*Last updated: 2026-05-07 (v0.162)*
 
-**Latest update - v0.161**
-- Switched the routed Gold and Glory `Mission Brief` input from raw clipped pack sentences to a short summary digest per section, and tightened the LLM request to single-line JSON plus a lower-variance temperature, so verbose ready-pack sets stay inside a safe prompt budget and no longer drop the default mission-first entry into deterministic fallback just because the model response was truncated.
-- Added a focused backend regression test for the verbose-context case, alongside the existing mission-brief happy-path and fallback coverage.
-- Revalidated the fix against the real 8-pack routed staging and prod contexts before release, including repeated prod-side local replays that stayed on `generationSource: llm` with warnings cleared.
-- Preserved the mission-first main chain and backend-routed brain model: the default Campaign Creative page still consumes routed knowledge context automatically and does not reintroduce marketer-facing pack selection or the old expert brief form.
+**Latest update - v0.162**
+- Added a repo-local `daily-review` skill so daily work recaps can be generated from git history, PRODUCT changelog entries, workflow run docs, and prior daily reports through a consistent agent workflow.
+- Archived the 2026-05-06 daily report under `docs/daily-reports/`, capturing shipped work, bug-fix ratio, repeated-issue patterns, verification discipline, and next-day TODOs for the GOBS/QAS mainline.
+- Kept this release documentation-only: no app runtime behavior, Campaign Creative flow, Distribution handoff contract, or publishing adapter logic changed.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
