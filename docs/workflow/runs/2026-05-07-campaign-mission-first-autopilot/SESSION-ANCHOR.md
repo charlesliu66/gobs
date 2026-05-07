@@ -16,6 +16,7 @@
 ## Editable Files (Builder Ownership)
 - h5-video-tool-api/src/routes
 - h5-video-tool-api/src/services
+- h5-video-tool-api/tests
 - h5-video-tool-api/src/index.ts
 - h5-video-tool/src
 - h5-video-tool/tests
