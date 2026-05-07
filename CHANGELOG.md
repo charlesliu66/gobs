@@ -15,10 +15,10 @@
 ## v0.161 - 2026-05-07
 **Mission-first brief generation stability**
 **Campaign Creative / Gold and Glory Brain:**
-- Replaced the raw clipped routed knowledge digest before `POST /api/campaign-creative/mission-brief` with a short per-section summary digest, keeping the prompt compact enough that large ready-pack sets no longer truncate the JSON reply and force a noisy deterministic fallback in the default Campaign Creative path.
+- Replaced the raw clipped routed knowledge digest before `POST /api/campaign-creative/mission-brief` with a short per-section summary digest, and tightened the LLM request to single-line JSON with a lower-variance temperature, keeping the prompt compact enough that large ready-pack sets no longer truncate the reply and force a noisy deterministic fallback in the default Campaign Creative path.
 - Preserved the backend-routed knowledge model and full returned `knowledgeContext`; only the LLM-facing digest was compacted, so downstream System Plan / Variant Pack / Distribution Package consumers still receive the same routed context fields.
 **Tests / Build:**
-- Added a focused backend regression test for verbose routed context, reran the backend mission-brief suite, and revalidated the fix against the real 8-pack routed staging context before release sync.
+- Added a focused backend regression test for verbose routed context, reran the backend mission-brief suite, and revalidated the fix against the real 8-pack routed staging and prod contexts before release sync.
 
 ## v0.159 - 2026-05-07
 **Campaign distribution handoff mission-first alignment**

@@ -6,9 +6,9 @@
 *Last updated: 2026-05-07 (v0.161)*
 
 **Latest update - v0.161**
-- Switched the routed Gold and Glory `Mission Brief` input from raw clipped pack sentences to a short summary digest per section, so verbose ready-pack sets stay inside a safe prompt budget and no longer drop the default mission-first entry into deterministic fallback just because the model response was truncated.
+- Switched the routed Gold and Glory `Mission Brief` input from raw clipped pack sentences to a short summary digest per section, and tightened the LLM request to single-line JSON plus a lower-variance temperature, so verbose ready-pack sets stay inside a safe prompt budget and no longer drop the default mission-first entry into deterministic fallback just because the model response was truncated.
 - Added a focused backend regression test for the verbose-context case, alongside the existing mission-brief happy-path and fallback coverage.
-- Revalidated the fix against the real 8-pack routed staging context before release, confirming the same mission can return to `generationSource: llm` with warnings cleared.
+- Revalidated the fix against the real 8-pack routed staging and prod contexts before release, including repeated prod-side local replays that stayed on `generationSource: llm` with warnings cleared.
 - Preserved the mission-first main chain and backend-routed brain model: the default Campaign Creative page still consumes routed knowledge context automatically and does not reintroduce marketer-facing pack selection or the old expert brief form.
 
 鐩稿叧娌荤悊鏂囨。锛?

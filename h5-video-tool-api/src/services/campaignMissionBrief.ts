@@ -276,6 +276,7 @@ Return strict JSON only:
   "region": "string",
   "forbiddenClaims": ["string"]
 }
+Return a single-line minified JSON object with no markdown fences or commentary.
 Do not invent unsupported performance claims. Keep sellingPoints to 3-5 items and forbiddenClaims to 0-6 items.`;
 }
 
@@ -333,7 +334,7 @@ export async function generateCampaignMissionBrief(
     const text = await chatCompletion({
       systemPrompt: buildMissionBriefSystemPrompt(uiLocale),
       userText: buildMissionBriefUserText({ mission, mode, knowledgeContext }),
-      temperature: 0.25,
+      temperature: 0,
       maxTokens: 1200,
     });
     const payload = extractJsonObject(text) as LlmBriefPayload;
