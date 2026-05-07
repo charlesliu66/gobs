@@ -27,6 +27,7 @@
 | Frontend build | `npm run build` in `h5-video-tool` | PASS | Vite production build completed; existing mixed import warning remained non-blocking. |
 | Mechanical eval | `C:\Program Files\Git\bin\bash.exe scripts/eval.sh 2026-05-07-campaign-mission-control-phase0` | PASS with WARN | Backend build, frontend build, and TypeScript checks passed; API health warned only because no local API process was running. |
 | Workflow scope guard | `python scripts/workflow_guard.py --run-id 2026-05-07-campaign-mission-control-phase0 --stage build` and `--stage verify` | PASS | Scope and artifact checks both returned `PASS`. |
+| Staging smoke | `smoke_http.ps1 -Env staging -Depth quick -ExpectedCommit 648475b` plus direct route probes for `/campaign-creative` and `/mission-control` | PASS | Root, version, environment marker, expected commit, and mission-control routes all returned HTTP `200`. |
 
 ## 5) Known Risks and Uncertainties
 - Risk:
