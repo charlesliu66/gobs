@@ -1957,7 +1957,7 @@ export function ProductionWizard() {
       for (const segment of relatedSegments) {
         const duplicateJob = projectJobs.find((job) =>
           job.segmentId === segment.id
-          && ['awaiting_submit', 'pending', 'queuing', 'processing', 'done'].includes(job.status),
+          && ['awaiting_submit', 'pending', 'queuing', 'processing'].includes(job.status),
         );
         if (duplicateJob) continue;
 
