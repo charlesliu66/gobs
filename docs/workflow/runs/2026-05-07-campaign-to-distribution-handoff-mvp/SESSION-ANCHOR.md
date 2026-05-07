@@ -5,16 +5,17 @@
 - Goal: Create the product and Gate 1 plan for the marketer-first Campaign Creative to Distribution handoff MVP.
 - Owner: codex
 - Branch context: codex/campaign-to-distribution-handoff-mvp
-- Gate 1 planning baseline: 44cfca8
-- Last updated: 2026-05-07T16:34:27+08:00
+- Gate 1 planning baseline: 51f099e
+- Last updated: 2026-05-07T16:41:36+08:00
 
 ## Acceptance Criteria Snapshot
 - AC-01: Campaign Creative can create a distribution-package draft from a selected variant while preserving CTA, copy, assets, asset readiness, and applied knowledge context.
 - AC-02: Backend package APIs enforce current-user ownership on create/list/read/update.
 - AC-03: Distribution loads the pending package through a package-to-draft adapter and still requires explicit account/publish confirmation.
 - AC-04: Asset readiness is separate from review status; `needs_asset` is not a review state.
-- AC-05: Existing Campaign Creative -> Editor handoff remains compatible and available as an advanced fine-tune path.
-- AC-06: MVP stays honest: no fake analytics, no automatic publishing, no broad EditorWorkbench refactor.
+- AC-05: Missing-asset packages show clear next actions instead of dead-end draft states.
+- AC-06: Existing Campaign Creative -> Editor handoff remains compatible and available as an advanced fine-tune path.
+- AC-07: MVP stays honest: no fake analytics, no automatic publishing, no broad EditorWorkbench refactor.
 
 ## Editable Files (Builder Ownership)
 - docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md
@@ -34,6 +35,7 @@
 - h5-video-tool/tests/
 - h5-video-tool-api/src/routes/campaignDistribution.ts
 - h5-video-tool-api/src/index.ts
+- h5-video-tool-api/src/db/assetDb.ts
 - h5-video-tool-api/src/services/campaignDistributionPackage.ts
 - h5-video-tool-api/tests/
 - PRODUCT.md

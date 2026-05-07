@@ -3,9 +3,9 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.157)*
+*Last updated: 2026-05-07 (v0.158)*
 
-**Latest update - v0.157**
+**Latest update - v0.158**
 - Reworked Campaign Mission Control into a mission-first flow: market/ops users now start with one campaign mission, then review a system-generated brief instead of filling a full expert form.
 - Added backend Gold and Glory Brain routing for `POST /api/campaign-creative/mission-brief`, with Compass LLM generation and deterministic fallback when the model or knowledge context is unavailable.
 - Removed marketer-facing knowledge-pack selection from the default campaign page while preserving the existing System Plan, Variant Pack, and Advanced Studio handoff after brief confirmation.
@@ -255,13 +255,20 @@
 
 ## 浜屻€丆hangelog
 
-### v0.157 - 2026-05-07
+### v0.158 - 2026-05-07
 **Campaign Mission Control mission-first autopilot**
 
 - **[backend mission brief] Added `POST /api/campaign-creative/mission-brief`** (`h5-video-tool-api/src/routes/campaignCreative.ts`, `h5-video-tool-api/src/services/campaignMissionBrief.ts`): the endpoint routes ready Gold and Glory knowledge packs automatically, derives campaign context, asks Compass for a structured brief, and falls back to deterministic brief generation when needed.
 - **[frontend mission flow] Rebuilt `/campaign-creative` around a single mission composer** (`h5-video-tool/src/pages/CampaignCreative.tsx`, `h5-video-tool/src/components/campaign/MissionComposer.tsx`, `h5-video-tool/src/components/campaign/GeneratedBriefReview.tsx`): users no longer select knowledge packs or fill a blank expert brief before the system drafts the campaign direction.
 - **[handoff preservation] Kept the confirmed brief feeding the existing System Plan, Variant Pack, and Advanced Studio handoff path** (`h5-video-tool/src/api/campaignCreative.ts`, campaign strategy helpers): this run simplifies the entry point without changing downstream campaign payload contracts.
 - **[tests] Added targeted backend/frontend coverage** (`h5-video-tool-api/tests/campaignMissionBrief.test.ts`, `h5-video-tool/tests/campaignCreativeApi.test.ts`, `h5-video-tool/tests/campaignMissionFirstPage.test.ts`) for routing, LLM parsing, fallback, endpoint wiring, and selector removal.
+
+### v0.157 - 2026-05-07
+**Campaign distribution implementation guardrails**
+
+- **[storage contract] Clarified Campaign Distribution package storage** (`docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/planner-spec.md`): use the existing `assetDb.ts` better-sqlite3 database with a `campaign_distribution_packages` table, indexed owner/status/time columns, and `payload_json` for the full package body.
+- **[integration budget] Added a `TabDistribute` integration boundary**: if direct package intake requires broad publish/account rewiring, Builder should split to a smaller Pending Packages entry/panel instead of risking the existing distribution flow.
+- **[missing asset action] Added `needs_asset` next-action guidance**: draft packages should lead operators toward asset-library selection, Quick Film generation, or Editor fine-tuning instead of a dead-end draft.
 
 ### v0.156 - 2026-05-07
 **Campaign distribution handoff planning guardrails**

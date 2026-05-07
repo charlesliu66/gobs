@@ -68,7 +68,7 @@ Knowledge Brain
 | EditorWorkbench 过大 | 只拆和 handoff/apply 相关的逻辑，不做大拆 UI | 避免重构吞掉产品价值 |
 | editorCreative API 分散 | 跟 handoff 相关 API 同步收口 | 改边界时顺手理清调用 |
 | 后端 editor/campaign 归档 | 新能力按领域放置，旧 service 暂不大搬迁 | 低风险建立新秩序 |
-| assetDb Repository facade | 放在后端归档阶段做轻量包裹 | 为未来数据库迁移留口，不提前设计大 ORM |
+| assetDb Repository facade | 本轮为 package 存储做轻量 repository facade | 为未来数据库迁移留口，不提前设计大 ORM |
 
 ### 3.2 暂缓吸收
 
@@ -147,7 +147,14 @@ Distribution package
 - 显示本次包会携带的 strategy summary。
 - 显示 applied knowledge packs 和关键约束。
 - 显示分发建议：平台、语言、CTA、风险提示。
+- 创建成功后必须给出明确反馈：toast / inline confirmation / 跳转按钮三选一，不能静默创建。
 - 保留 `Fine-tune in Editor` 作为 secondary action。
+
+`needs_asset` 引导：
+
+- 没有可发布素材时，不只显示“缺素材”，还要给运营明确下一步。
+- V1 至少提供以下入口中的两个：`从素材库选择`、`去 Quick Film 生成视频`、`进入 Editor 精修/补素材`。
+- 如果当前 package 是 caption-only，页面文案必须说明它是“文案/策略草稿”，不是可发布内容。
 
 ### 5.2 Surface B: Preview & Approve
 
@@ -370,8 +377,9 @@ PATCH /api/campaign-distribution/packages/:id
 
 V1 存储：
 
-- 沿用当前轻量本地 JSON/SQLite 风格，不引入新数据库。
-- 允许先使用 repository facade 包裹读写。
+- V1 明确使用现有 `h5-video-tool-api/src/db/assetDb.ts` 的 better-sqlite3 单例，不引入新数据库或新服务依赖。
+- 新增 `campaign_distribution_packages` 表，推荐把完整 package 存为 `payload_json`，并单独索引 `owner_id`、`game_id`、`review_status`、`asset_readiness_state`、`created_at`、`updated_at`。
+- 允许先在 `campaignDistributionPackage` service 内建立 repository facade，避免业务路由直接散落 SQL。
 - repository 必须以 `ownerId` 作为 list/read/update 的过滤条件，避免跨用户读取待发布包。
 - 不直接修改底层视频生成服务和禁区文件。
 
@@ -381,6 +389,7 @@ V1 存储：
 - Distribution 只把 package 转成当前 publish draft 的输入，转换逻辑应集中在 `package -> distribute draft adapter`，不要散落在 `TabDistribute` 页面状态里。
 - adapter 字段优先级：`assetReadiness.publishableAsset.path` > `assetReadiness.publishableAsset.url` > `assets[]` 中首个 ready server asset；不满足时只填文案和 CTA。
 - adapter 应把 `copy.caption`、`copy.hashtags`、`publishIntent.platforms`、`publishIntent.markets` 映射到现有分发草稿和 `campaignContext`，但不得自动选择账号。
+- 如果无缝接入 `TabDistribute` 需要大规模改动，优先降级为独立 `Pending Packages` 入口/面板，让运营先能查看、复制、选择素材，再进入现有分发流。
 - 账号选择仍需用户显式确认。
 - 如果 package 没有 ready asset，只允许保存 draft，不允许直接 publish。
 
@@ -404,6 +413,11 @@ Package 必须保留：
 
 ### Phase 1: Campaign -> Distribution Handoff MVP
 
+时间盒：
+
+- 目标 1 周内可发布。
+- 如果 `TabDistribute` 无缝接入超出预算，先交付独立 `Pending Packages` 入口，避免把分发页改崩。
+
 目标：
 
 - 从 Campaign Creative 创建待发布包。
@@ -416,8 +430,14 @@ Package 必须保留：
 - package 带上 knowledge context、CTA、caption、risk notes。
 - Distribution 打开 package 后能预填核心发布字段。
 - 无 ready asset 时不能误导用户直接发布。
+- `needs_asset` 时必须显示“从素材库选择 / 去 Quick Film 生成 / 进入 Editor 精修”这类下一步动作。
 
 ### Phase 2: Preview & Approve
+
+时间盒：
+
+- 目标 1 周内完成轻量审核层。
+- 如果 Phase 1 的 package preview 已经能覆盖 approve/reject/notes，允许与 Phase 1 合并为嵌入式 preview，不新建独立路由。
 
 目标：
 
