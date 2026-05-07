@@ -8,6 +8,8 @@
 > - `docs/plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md`
 > - `docs/plans/2026-05-06-video-distribution-marketer-ux-design.md`
 > - `docs/plans/2026-05-07-gold-and-glory-canonical-brain-sync-design.md`
+> - `docs/workflow/runs/2026-05-07-campaign-mission-first-autopilot/planner-spec.md`
+> 当前基线：`a94a7f5` 已发布 mission-first Campaign Creative 到 staging/prod；默认主链路已变为 `mission -> generated brief review -> System Plan / Variant Pack`，Gold and Glory Brain 由后端自动路由，不再让用户选择 knowledge packs。
 
 ---
 
@@ -18,8 +20,10 @@ OpenClaw 的代码评估和产品评估都指向同一个问题：GOBS 已经有
 因此下一步不应该以“重构 EditorWorkbench”或“重做首页”为单点目标，而应该围绕主链路做一条可发布的运营闭环：
 
 ```text
-Knowledge Brain
--> Campaign Creative / Mission Control
+Gold and Glory Brain（backend-routed）
+-> Campaign Mission
+-> Generated Brief Review
+-> System Plan / Variant Pack
 -> Preview & Approve
 -> Distribution Package
 -> 发布 / 排期
@@ -29,7 +33,7 @@ Knowledge Brain
 
 第一刀建议落在 `Campaign Creative -> Distribution Handoff MVP`：
 
-> 运营在 Campaign Creative 选中 strategy variant 后，可以直接生成“待发布包”，带着素材、CTA、caption、knowledge context 和风险提示进入分发，而不是每次都被迫进入专业 Editor。
+> 运营输入 campaign mission、确认系统生成的 brief，并选中/接受推荐的 strategy variant 后，可以直接生成“待发布包”，带着素材、CTA、caption、routed knowledge context 和风险提示进入分发，而不是每次都被迫进入专业 Editor。
 
 这既吸收了代码评估里的工程建议，也服务产品最终目标：让 GOBS 从视频工具升级为游戏营销内容运营平台。
 
@@ -51,7 +55,7 @@ Knowledge Brain
 
 ### 2.3 产品承诺
 
-> 给定 campaign brief 和 Gold and Glory knowledge，GOBS 能稳定地产出可审核、可修改、可分发的素材包，并记住运营的人工判断，让下一轮更懂这个 campaign。
+> 给定 campaign mission 和 Gold and Glory knowledge，GOBS 能稳定地产出可审核、可修改、可分发的素材包，并记住运营的人工判断，让下一轮更懂这个 campaign。
 
 ---
 
@@ -83,7 +87,7 @@ Knowledge Brain
 
 ## 4. 目标体验
 
-### 4.1 当前路径
+### 4.1 旧路径（已被 mission-first 改造替代）
 
 ```text
 Campaign brief
@@ -103,9 +107,11 @@ Campaign brief
 ### 4.2 目标路径
 
 ```text
-Campaign brief + selected knowledge
--> Generate strategy variants
--> Pick winning variant
+Campaign mission
+-> Backend-routed Gold and Glory Brief
+-> Confirm / lightly edit generated brief
+-> System Plan + Variant Pack
+-> Pick winning or recommended variant
 -> Create distribution package
 -> Preview / approve lightweight details
 -> Continue in Distribution
@@ -123,6 +129,7 @@ Distribution package
 
 - Editor 从“默认必经”变成“高级精修入口”。
 - 分发从“另一个页面”变成 campaign 结果的自然终点。
+- Knowledge Brain 不再作为用户可选配置出现在主链路；package 只承接后端已经路由好的 Gold and Glory Brain 上下文。
 - Knowledge context 从策略页继续进入待发布包，运营能看到这条素材为什么这么写。
 
 ---
@@ -138,6 +145,7 @@ Distribution package
 
 触发条件：
 
+- 已完成 Generated Brief Review 确认，或系统有可用的 confirmed generated brief snapshot。
 - 已有 selected variant 或系统推荐 variant。
 - 至少有 caption / CTA / asset reference 中的一类可分发内容。
 - 没有真实视频时允许创建 draft package，但 UI 必须明确标注 `needs_asset`。
@@ -145,7 +153,7 @@ Distribution package
 页面反馈：
 
 - 显示本次包会携带的 strategy summary。
-- 显示 applied knowledge packs 和关键约束。
+- 只展示轻量 Brain 状态和关键约束；详细 `routedKnowledgePackIds` 只进入 package/debug/管理信息，不在主链路重新让用户选择。
 - 显示分发建议：平台、语言、CTA、风险提示。
 - 创建成功后必须给出明确反馈：toast / inline confirmation / 跳转按钮三选一，不能静默创建。
 - 保留 `Fine-tune in Editor` 作为 secondary action。
@@ -238,6 +246,14 @@ interface CampaignDistributionPackage {
     sourceId?: string;
     createdFromRoute?: string;
   };
+  campaign: {
+    mission?: string;
+    briefId?: string;
+    mode?: 'tiktok_content' | 'tiktok_ua';
+    objective?: string;
+    generationSource?: 'llm' | 'fallback';
+    warnings?: string[];
+  };
   title: string;
   variant: {
     id?: string;
@@ -313,6 +329,12 @@ interface CampaignDistributionPackage {
 - Distribution 预填时优先使用 `assetReadiness.publishableAsset`；如果不存在，只展示文案/CTA/knowledge，并禁用直接 publish CTA。
 - `needs_asset` 是 `assetReadiness.state`，不是 `review.status`。
 
+Mission-first 包来源规则：
+
+- `campaign` 保存 mission 和 generated brief 的最小快照，避免分发侧只看到孤立 variant。
+- `knowledgeContext.packIds` 的语义是后端路由出来的 applied/routed packs，不是用户在页面手选出来的 packs。
+- 如果 LLM brief generation 走 fallback，package 仍可创建，但必须把 `generationSource='fallback'` 和 warnings 保留下来，供审核层提示。
+
 ### 6.2 CampaignFeedbackSignal
 
 ```ts
@@ -340,7 +362,7 @@ interface CampaignFeedbackSignal {
 
 - `h5-video-tool/src/components/campaign/distributionPackage.ts`
   - 纯类型和转换 helper。
-  - 从 selected variant + knowledge context 生成 draft package payload。
+  - 从 confirmed generated brief + selected/recommended variant + routed knowledge context 生成 draft package payload。
 
 - `h5-video-tool/src/api/campaignDistribution.ts`
   - 包装 package create/list/read/update API。
@@ -397,7 +419,7 @@ V1 存储：
 
 Package 必须保留：
 
-- `knowledgePackIds`
+- `routedKnowledgePackIds` / `knowledgeContext.packIds`（字段名可保持 `packIds`，但语义必须是后端路由结果，不是用户选择结果）
 - structured `knowledgeContext`
 - 由 knowledge 派生出的 risk notes / tone rules / forbidden claims
 
@@ -420,14 +442,14 @@ Package 必须保留：
 
 目标：
 
-- 从 Campaign Creative 创建待发布包。
+- 从确认后的 generated brief / Variant Pack 创建待发布包。
 - Distribution 能读取并编辑待发布包。
 - 保留 Editor 高级入口。
 
 验收：
 
-- 选中 variant 后能生成 package。
-- package 带上 knowledge context、CTA、caption、risk notes。
+- 生成并确认 brief 后，选中或接受推荐 variant 能生成 package。
+- package 带上 mission / brief snapshot、routed knowledge context、CTA、caption、risk notes。
 - Distribution 打开 package 后能预填核心发布字段。
 - 无 ready asset 时不能误导用户直接发布。
 - `needs_asset` 时必须显示“从素材库选择 / 去 Quick Film 生成 / 进入 Editor 精修”这类下一步动作。

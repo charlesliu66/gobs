@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.158)*
+*Last updated: 2026-05-07 (v0.159)*
 
-**Latest update - v0.158**
-- Reworked Campaign Mission Control into a mission-first flow: market/ops users now start with one campaign mission, then review a system-generated brief instead of filling a full expert form.
-- Added backend Gold and Glory Brain routing for `POST /api/campaign-creative/mission-brief`, with Compass LLM generation and deterministic fallback when the model or knowledge context is unavailable.
-- Removed marketer-facing knowledge-pack selection from the default campaign page while preserving the existing System Plan, Variant Pack, and Advanced Studio handoff after brief confirmation.
+**Latest update - v0.159**
+- Aligned the Campaign Creative -> Distribution Handoff MVP plan with the released mission-first baseline: campaign mission, generated brief review, System Plan / Variant Pack, then Distribution Package.
+- Updated the package target so Distribution receives mission/brief snapshot, generation source, warnings, selected/recommended variant, and backend-routed Gold and Glory knowledge context.
+- Added planning guardrails that forbid bringing Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form back into the default Campaign Creative path.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -254,6 +254,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.159 - 2026-05-07
+**Campaign distribution handoff mission-first alignment**
+
+- **[planning baseline] Aligned the distribution handoff MVP with `a94a7f5` mission-first Campaign Creative** (`docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md`, `docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/planner-spec.md`): the next build starts from campaign mission, generated brief review, and Variant Pack instead of old `brief + selected knowledge` assumptions.
+- **[package contract] Added mission/brief snapshot requirements**: pending distribution packages must preserve mission, brief objective/source/warnings, selected or recommended variant, CTA/copy/assets, and backend-routed Gold and Glory knowledge context.
+- **[UX guardrail] Forbid old main-flow configuration surfaces**: the planner now stops implementation if it reintroduces Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form into the default Campaign Creative path.
 
 ### v0.158 - 2026-05-07
 **Campaign Mission Control mission-first autopilot**

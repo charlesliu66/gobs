@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.159 - 2026-05-07
+**Campaign distribution handoff mission-first alignment**
+**Docs / Product Planning:**
+- Aligned the Campaign Creative -> Distribution Handoff MVP design with the released `a94a7f5` mission-first Campaign Creative baseline: mission, generated brief review, System Plan / Variant Pack, then Distribution Package.
+- Updated the package contract and planner-spec so pending distribution packages preserve mission/brief snapshot, generation source, warnings, selected/recommended variant, and backend-routed Gold and Glory knowledge context.
+- Added guardrails that forbid reintroducing marketer-facing Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form into the default Campaign Creative path.
+
 ## v0.158 - 2026-05-07
 **Campaign Mission Control mission-first autopilot**
 **Campaign Creative / Gold and Glory Brain:**

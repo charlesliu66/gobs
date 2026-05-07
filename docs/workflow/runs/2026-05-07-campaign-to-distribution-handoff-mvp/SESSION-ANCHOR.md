@@ -2,20 +2,21 @@
 
 ## Run Summary
 - Run ID: 2026-05-07-campaign-to-distribution-handoff-mvp
-- Goal: Create the product and Gate 1 plan for the marketer-first Campaign Creative to Distribution handoff MVP.
+- Goal: Create the product and Gate 1 plan for the marketer-first mission-first Campaign Creative to Distribution handoff MVP.
 - Owner: codex
-- Branch context: codex/campaign-to-distribution-handoff-mvp
-- Gate 1 planning baseline: 51f099e
-- Last updated: 2026-05-07T16:41:36+08:00
+- Branch context: main after mission-first release; implementation branch may use `codex/campaign-to-distribution-handoff-mvp`
+- Gate 1 planning baseline: a94a7f5
+- Last updated: 2026-05-07T17:25:00+08:00
 
 ## Acceptance Criteria Snapshot
-- AC-01: Campaign Creative can create a distribution-package draft from a selected variant while preserving CTA, copy, assets, asset readiness, and applied knowledge context.
+- AC-01: Campaign Creative can create a distribution-package draft from a confirmed generated brief plus selected/recommended variant while preserving mission/brief snapshot, CTA, copy, assets, asset readiness, and routed knowledge context.
 - AC-02: Backend package APIs enforce current-user ownership on create/list/read/update.
 - AC-03: Distribution loads the pending package through a package-to-draft adapter and still requires explicit account/publish confirmation.
 - AC-04: Asset readiness is separate from review status; `needs_asset` is not a review state.
 - AC-05: Missing-asset packages show clear next actions instead of dead-end draft states.
 - AC-06: Existing Campaign Creative -> Editor handoff remains compatible and available as an advanced fine-tune path.
 - AC-07: MVP stays honest: no fake analytics, no automatic publishing, no broad EditorWorkbench refactor.
+- AC-08: Default Campaign Creative UX remains mission-first and does not reintroduce Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form.
 
 ## Editable Files (Builder Ownership)
 - docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md
@@ -46,9 +47,14 @@
 - docs/plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md
 - docs/plans/2026-05-06-video-distribution-marketer-ux-design.md
 - docs/plans/2026-05-07-gold-and-glory-canonical-brain-sync-design.md
+- h5-video-tool/src/api/campaignCreative.ts
+- h5-video-tool/src/components/campaign/MissionComposer.tsx
+- h5-video-tool/src/components/campaign/GeneratedBriefReview.tsx
 - h5-video-tool/src/api/campaignKnowledge.ts
 - h5-video-tool/src/api/editorCreative.ts
 - h5-video-tool/src/pages/EditorWorkbench.tsx
+- h5-video-tool-api/src/routes/campaignCreative.ts
+- h5-video-tool-api/src/services/campaignMissionBrief.ts
 - h5-video-tool-api/src/routes/campaignKnowledge.ts
 - h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts
 - h5-video-tool-api/src/services/campaignKnowledgeStore.ts
@@ -64,6 +70,7 @@
 - Full EditorWorkbench decomposition, timeline/export refactor, or media engine changes.
 - SQLite to PostgreSQL migration.
 - Exposing unfinished Platform / Learning Lab / Ops Center modules.
+- Reintroducing user-facing Knowledge Brain pack selection, multi-project brain selection, or the old expert brief form in the default Campaign Creative path.
 - Any change to AGENTS.md forbidden video-generation service files.
 
 ## Progress Checklist
@@ -77,4 +84,5 @@
 - Escalate if a change requires touching any AGENTS.md forbidden file.
 - Escalate if a new env var is required and `.env.example` is not yet updated.
 - Escalate if acceptance criteria need to expand beyond this run scope.
+- Escalate if the implementation starts depending on user-selected knowledge packs instead of backend-routed Gold and Glory Brain context.
 - Escalate before any prod release decision.

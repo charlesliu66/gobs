@@ -11,7 +11,7 @@
 - 当前产品北极星：`Campaign Creative Agent` 必须从 campaign brief 出发，产出创意素材或变体，并把它们送入分发。
 - 当前默认受众：市场和运营同学；专业剪辑、制片和深度调参能力保留在 `Advanced Studio`，不再定义默认体验。
 - 当前最值得继续推进的方向：
-  1. `Campaign Creative -> Distribution Handoff MVP`：把选中的 campaign variant / asset / CTA / knowledge context 送入待发布包。
+  1. `Campaign Creative -> Distribution Handoff MVP`：把 mission-first generated brief、选中的 campaign variant / asset / CTA / routed knowledge context 送入待发布包。
   2. `Human Feedback Loop Phase 0`：先记住人工判断，不假装短期已有投放效果监控。
   3. `Gold and Glory Brain Refresh Workflow`：让后续 fastpublishing 更新能被稳定 diff、刷新和记录版本。
 
@@ -45,8 +45,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-07-campaign-to-distribution-handoff-mvp` | 下一步主线：把选中 campaign variant / CTA / knowledge context 送入待发布包并进入分发 | Gate 1 planner-spec 已落地，待 Challenger/Builder |
-| `2026-05-07-campaign-mission-first-autopilot` | Mission-first Campaign Creative：mission 生成 Brief，后端自动路由 Gold and Glory Brain，隐藏主链路 pack 选择 | 已完成本地验证，发布中 |
+| `2026-05-07-campaign-to-distribution-handoff-mvp` | 下一步主线：把 mission-first generated brief、选中 campaign variant / CTA / routed knowledge context 送入待发布包并进入分发 | Gate 1 planner-spec 已按 `a94a7f5` mission-first 基线对齐，待 Challenger/Builder |
+| `2026-05-07-campaign-mission-first-autopilot` | Mission-first Campaign Creative：mission 生成 Brief，后端自动路由 Gold and Glory Brain，隐藏主链路 pack 选择 | 已发布到 staging/prod @ `a94a7f5` |
 | `2026-05-07-gold-and-glory-canonical-brain-sync` | 把真实 fastpublishing 内容导入持久化 Gold and Glory Brain | 已发布到 staging/prod |
 | `2026-05-07-gold-and-glory-single-brain-phase0` | 收掉多项目 demo 心智，默认只服务 Gold and Glory | 已完成 |
 | `2026-05-07-campaign-mission-control-phase0` | 把默认体验改成面向市场/运营的 Campaign Mission Control | 已完成 |
