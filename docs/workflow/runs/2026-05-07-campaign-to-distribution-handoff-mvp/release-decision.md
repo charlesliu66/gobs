@@ -5,43 +5,45 @@
 - BuilderReport: `docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/builder-report.md`
 - VerifierReport: `docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/verifier-report.md`
 - Additional evidence:
-  - `python scripts/deploy_all.py --target staging` deployed `c2fc133` and passed version consistency checks for staging.
-  - `smoke_http.ps1 -Env staging -Depth full -ExpectedCommit c2fc133` passed with warnings.
-  - Authenticated staging API smoke passed: `login -> mission-brief -> create/list/get/patch package` for package `cdp_ytAcghZT9L`.
-  - `python scripts/mark_release_ready.py --updated-by codex` wrote the guarded staging release-ready marker for `c2fc1335c1638184882cfae91a254cd6992048a4`.
-  - `python scripts/deploy_all.py --target prod --updated-by codex` deployed `c2fc133` and passed version consistency checks for prod.
-  - `smoke_http.ps1 -Env prod -Depth full -ExpectedCommit c2fc133` passed with warnings.
-  - Authenticated prod API smoke passed without mutating package data: `login -> mission-brief -> list packages`.
-  - `python scripts/set_deployment_state.py --target prod --phase idle --updated-by codex` restored prod to `idle`.
+  - `node --import tsx --test tests/campaignMissionBrief.test.ts` in `h5-video-tool-api/`
+  - `python scripts/workflow_guard.py --run-id 2026-05-07-campaign-to-distribution-handoff-mvp --stage build`
+  - `python scripts/workflow_guard.py --run-id 2026-05-07-campaign-to-distribution-handoff-mvp --stage verify`
+  - `python scripts/deploy_all.py --target staging`
+  - `smoke_http.ps1 -Env staging -Depth full -ExpectedCommit 1988f6a -RunId 2026-05-07-campaign-to-distribution-handoff-mvp`
+  - 3 repeated authenticated staging `mission-brief` API calls returning `generationSource: llm`
+  - `python scripts/mark_release_ready.py --updated-by codex`
+  - `python scripts/deploy_all.py --target prod --updated-by codex`
+  - `smoke_http.ps1 -Env prod -Depth full -ExpectedCommit 1988f6a -RunId 2026-05-07-campaign-to-distribution-handoff-mvp`
+  - 5 repeated authenticated prod `mission-brief` API calls returning `generationSource: llm`
+  - `python scripts/set_deployment_state.py --target prod --phase idle --updated-by codex`
 
 ## 2) Delivery Decision
 - Decision: GO
-- Decision time: 2026-05-07T18:19:47+08:00
+- Decision time: 2026-05-07T19:26:41+08:00
 - Decision owner: codex
 
 ## 3) Blocking Issues
 | ID | Severity | Description | Owner | Required before release |
 |---|---|---|---|---|
-| None | - | No P0/P1 blocker remained after staging/prod verification. | codex | No |
+| None | - | No P0/P1 blocker remained after the final `1988f6a` verification loop. | codex | No |
 
 ## 4) Accepted Risks
 | Risk | Severity | Why accepted | Boundary/Workaround | Follow-up date |
 |---|---|---|---|---|
-| Public-env visual browser smoke was not completed in the in-app browser | Medium | Browser-use could not reliably open the public staging URL, so public visual validation fell back to deterministic HTTP smoke plus authenticated API verification. | Local browser smoke already covered the full mission-first handoff UI, and staging/prod both passed route/version/API checks on the deployed SHA. | 2026-05-08 |
-| GeeLark publish-history subpanel was not visually rechecked on staging/prod | Medium | Local smoke showed an existing local-env history auth warning, but the release focus stayed on the new package handoff and deploy safety. | Route reachability, auth, mission-brief, and package endpoints passed on staging/prod; follow up with a real browser session against `/distribute` history when public browser tooling is stable. | 2026-05-08 |
-| No mutation-based package creation smoke was run on prod | Low | Avoided polluting prod with a synthetic pending package record. | Prod verification used `login -> mission-brief -> list packages`; full create/update behavior was validated on staging before promotion. | 2026-05-08 |
+| Public-env visual browser walkthrough was not repeated after the final docs-sync release | Medium | Deterministic smoke plus repeated authenticated API checks already covered the bug that triggered this run, but they do not replace a human visual walk. | Route/version smoke passed on staging and prod, and the exact warning-producing API path was exercised repeatedly with `llm` responses only. | 2026-05-08 |
+| Verification stayed read-only on prod except for auth/session state | Low | Avoided creating synthetic business records on prod while closing the Mission Brief stability bug. | Full mutation flows remain covered by earlier MVP verification on staging; this release focused on the mission-brief warning regression. | 2026-05-08 |
 
 ## 5) Scope Compliance
-- Delivered in scope: Yes. The release contains the pending distribution package API/persistence, Campaign Creative package creation panel, Distribution pending-package intake, and the login auth-base consistency fix needed for isolated browser smoke.
+- Delivered in scope: Yes. The final release only stabilizes the mission-first `Campaign Creative` brief-generation path inside the existing distribution-handoff run.
 - Out-of-scope changes found: None.
-- Notes: No AGENTS.md forbidden files were touched. No scheduling engine, analytics dashboard, automatic social publishing, or broad EditorWorkbench refactor was introduced. The repo-level `release_guard.ps1` helper was not treated as authoritative for this worktree because it resolves the main workspace root; authoritative guard evidence came from worktree-local deploy scripts and `scripts/workflow_guard.py`.
+- Notes: No AGENTS.md forbidden files were touched. The fix stays inside `campaignMissionBrief.ts`, its backend regression test, and required product/run documentation.
 
 ## 6) Release Boundary
-- What is guaranteed: The `Campaign Creative -> Distribution Handoff MVP` behavior introduced in feature baseline `c2fc133` is included in the current mainline release and was validated for mission-first brief generation, pending-package persistence on staging, explicit-account Distribution intake behavior in local browser smoke, route/version health in staging/prod, and authenticated campaign API health in prod.
-- What is not guaranteed: Public-env visual browser walkthroughs of `/campaign-creative` and `/distribute?package=` were not completed inside the in-app browser, race/concurrency behavior was not stress-tested, and the GeeLark publish-history panel was not specifically revalidated on staging/prod.
-- Environments validated: Local isolated worktree app, staging (`http://43.134.186.196:8080`), and prod (`http://43.134.186.196`).
+- What is guaranteed: On commit `1988f6a`, staging and prod both run the same code, HTTP smoke passes, and repeated authenticated `POST /api/campaign-creative/mission-brief` calls for the reported `新英雄参赛宣传` mission stay on `generationSource: llm` with zero warnings under the routed 8-pack Gold and Glory context.
+- What is not guaranteed: A browser-driven public visual walkthrough of `/campaign-creative` was not repeated after the final docs-sync release, and broader publish-history or non-mission-brief surfaces were not revalidated beyond unchanged route smoke.
+- Environments validated: Local replay with real staging/prod routed packs, staging (`http://43.134.186.196:8080`), and prod (`http://43.134.186.196`).
 
 ## 7) Next Actions
-1. Re-run a real browser session against staging/prod `/distribute` once public-URL browser automation is stable, with special attention to the publish-history panel.
-2. Watch the first real marketer-created pending package and confirm the asset-library / Quick Film follow-through path feels clear without the Editor detour.
-3. If follow-up smoke stays clean, consider small UX polish for pending-package empty/needs-asset copy rather than broad workflow expansion.
+1. Do one public visual browser follow-up on `/campaign-creative` to confirm the warning banner stays gone in the live UI, not just at the API level.
+2. Keep the mission-brief regression test in the default backend verification set for future Campaign Creative work.
+3. If the routed brain grows again, prefer tightening the deterministic summary layer before changing the user-facing mission-first flow.
