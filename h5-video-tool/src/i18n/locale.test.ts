@@ -100,6 +100,10 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'editorProjectManager.title'), 'My editing projects');
   assert.equal(getMessage('en', 'importGuideModal.generateMusic'), 'Generate music');
   assert.equal(getMessage('en', 'syncProductionModal.title'), 'Sync production updates');
+  assert.equal(getMessage('en', 'home.hero.badge'), 'Campaign Mission Control');
+  assert.equal(getMessage('en', 'home.hero.primaryCta'), 'Create Campaign');
+  assert.equal(getMessage('en', 'home.reviewQueue.title'), 'Needs Your Review');
+  assert.equal(getMessage('en', 'layout.studio'), 'Advanced Studio');
   assert.equal(getMessage('en', 'editorWorkbench.projectNameRequired'), 'Enter a project name first.');
   assert.equal(getMessage('en', 'editorWorkbench.namingModalTitle'), 'Create a new editing project');
   assert.equal(getMessage('en', 'editorWorkbench.onboardingTitle'), 'Welcome to the editing workbench');

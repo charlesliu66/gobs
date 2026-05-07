@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.148 - 2026-05-07
+**Campaign Mission Control phase-0 marketer-first shell**
+**Campaign / Mission Control / Handoff:**
+- Added shared `campaignProfile`, `campaignPlan`, and optional `feedbackRecords` contracts to the Campaign Creative -> Editor normalization seam so the marketer-facing shell can carry mission-control context without breaking the existing knowledge-aware strategy flow.
+- Reframed the homepage and top-level navigation around `Campaign Mission Control`, kept `/campaign-creative` as the recommended entry, and moved deeper editor-style routes under an `Advanced Studio` label instead of leading with tool-first copy.
+- Reworked `/campaign-creative` to present campaign brief, selected knowledge, system plan, and pending review decisions ahead of local tuning controls while preserving the existing strategy card, variant pack, and editor launch path.
+**Tests:**
+- Added mission-control seam and planning regression tests, refreshed locale assertions, and revalidated backend seam tests plus frontend/backend production builds.
+
 ## v0.147 - 2026-05-07
 **Campaign planning docs and workflow template sync**
 **Docs / Workflow / Planning:**

@@ -1,13 +1,18 @@
 import type {
+  CampaignAutomationLevel,
   CampaignCreativeBrief,
   CampaignCreativeCtaType,
   CampaignCreativeHookApproach,
   CampaignCreativeMode,
+  CampaignPlan,
+  CampaignProfile,
   CampaignCreativeStrategy,
   CampaignCreativeStrategyTuning,
   CampaignCreativeVariant,
   CampaignCreativeVariantEmphasis,
   CampaignCreativeVariantPack,
+  FeedbackRecord,
+  CampaignFeedbackType,
 } from './model';
 import type { DerivedCampaignKnowledgeContext } from '../../api/campaignKnowledge';
 
@@ -21,7 +26,11 @@ function firstLine(items: string[], fallback: string): string {
   return items[0] ?? fallback;
 }
 
-function createObjectId(prefix: 'brief' | 'strategy' | 'variant_pack'): string {
+const DEFAULT_CAMPAIGN_AUTOMATION_LEVEL: CampaignAutomationLevel = 'managed_autopilot';
+
+function createObjectId(
+  prefix: 'brief' | 'strategy' | 'variant_pack' | 'campaign' | 'feedback',
+): string {
   const suffix =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID().slice(0, 8)
@@ -384,6 +393,158 @@ export function buildDefaultStrategyTuning(
     hookApproach: resolveDefaultHookApproach(brief.mode),
     sellingPointFocus: buildDefaultSellingPointFocus(brief),
     ctaType: resolveDefaultCtaType(brief.mode),
+  };
+}
+
+export function buildCampaignProfile(
+  brief: CampaignCreativeBrief,
+  options?: {
+    campaignId?: string;
+    automationLevel?: CampaignAutomationLevel;
+    knowledgeContext?: DerivedCampaignKnowledgeContext;
+  },
+): CampaignProfile {
+  const knowledgeContext = options?.knowledgeContext;
+  const selectedKnowledgePackIds = mergeUniqueStrings(knowledgeContext?.selectedPackIds);
+
+  return {
+    campaignId: options?.campaignId ?? createObjectId('campaign'),
+    briefId: brief.briefId,
+    automationLevel: options?.automationLevel ?? DEFAULT_CAMPAIGN_AUTOMATION_LEVEL,
+    selectedKnowledgePackIds,
+    knowledgeContext:
+      knowledgeContext && (
+        selectedKnowledgePackIds.length > 0 ||
+        knowledgeContext.marketTruth.length > 0 ||
+        knowledgeContext.audienceTension.length > 0 ||
+        knowledgeContext.toneRules.length > 0 ||
+        knowledgeContext.forbiddenClaims.length > 0 ||
+        knowledgeContext.approvedAngles.length > 0 ||
+        knowledgeContext.hookCandidates.length > 0 ||
+        knowledgeContext.visualCues.length > 0 ||
+        knowledgeContext.rationaleNotes.length > 0
+      )
+        ? {
+            selectedPackIds: selectedKnowledgePackIds,
+            marketTruth: mergeUniqueStrings(knowledgeContext.marketTruth),
+            audienceTension: mergeUniqueStrings(knowledgeContext.audienceTension),
+            toneRules: mergeUniqueStrings(knowledgeContext.toneRules),
+            forbiddenClaims: mergeUniqueStrings(knowledgeContext.forbiddenClaims),
+            approvedAngles: mergeUniqueStrings(knowledgeContext.approvedAngles),
+            hookCandidates: mergeUniqueStrings(knowledgeContext.hookCandidates),
+            visualCues: mergeUniqueStrings(knowledgeContext.visualCues),
+            rationaleNotes: mergeUniqueStrings(knowledgeContext.rationaleNotes),
+          }
+        : undefined,
+  };
+}
+
+export function buildCampaignPlan(
+  brief: CampaignCreativeBrief,
+  strategy: CampaignCreativeStrategy,
+  options?: {
+    campaignId?: string;
+    automationLevel?: CampaignAutomationLevel;
+    variantPack?: CampaignCreativeVariantPack | null;
+    knowledgeContext?: DerivedCampaignKnowledgeContext;
+  },
+): CampaignPlan {
+  const automationLevel = options?.automationLevel ?? DEFAULT_CAMPAIGN_AUTOMATION_LEVEL;
+  const variantCount = options?.variantPack?.variants.length ?? 3;
+  const knowledgePackCount =
+    options?.knowledgeContext?.selectedPackIds.length ??
+    strategy.knowledgePackIds.length;
+  const reviewDecisions = mergeUniqueStrings(
+    strategy.forbiddenClaims.length > 0
+      ? ['Human review required before publish because claims are tightly constrained.']
+      : [],
+    strategy.riskNotes.length > 0 && !brief.region
+      ? ['Quick review recommended before publish to confirm guardrails and tone.']
+      : [],
+    brief.region
+      ? [`Review market fit for ${brief.region} before distribution goes live.`]
+      : [],
+  );
+
+  const knowledgeLine =
+    knowledgePackCount > 0
+      ? `Anchor the plan in ${knowledgePackCount} selected knowledge pack${knowledgePackCount > 1 ? 's' : ''}.`
+      : 'Proceed from the campaign brief alone and keep the first publish review lightweight.';
+
+  return {
+    campaignId: options?.campaignId ?? createObjectId('campaign'),
+    briefId: brief.briefId,
+    strategyId: strategy.strategyId,
+    automationLevel,
+    summary:
+      `System will produce a ${variantCount}-variant TikTok pack around "${strategy.sellingPointFocus ?? strategy.objective}" and prepare it for distribution review. ${knowledgeLine}`,
+    productionDecisions: mergeUniqueStrings(
+      [`${variantCount} TikTok variants built around ${strategy.sellingPointFocus ?? strategy.objective}`],
+      [`Lead with ${strategy.recommendedHook}`],
+      strategy.cta ? [`Keep the CTA ready: ${strategy.cta}`] : [],
+    ),
+    distributionDecisions: mergeUniqueStrings(
+      ['Prepare TikTok publish metadata'],
+      knowledgePackCount > 0 ? ['Carry the selected knowledge context into review and distribution prep'] : [],
+      automationLevel === 'full_autopilot'
+        ? ['Auto-queue publish after validation']
+        : ['Queue for campaign review before publish'],
+    ),
+    reviewDecisions:
+      reviewDecisions.length > 0
+        ? reviewDecisions
+        : ['Review the recommended variant before the first publish batch.'],
+  };
+}
+
+export function describeCampaignAutomationLevel(
+  level: CampaignAutomationLevel,
+): string {
+  if (level === 'assist') {
+    return 'System proposes the plan, but a human still approves each major step before it moves forward.';
+  }
+  if (level === 'full_autopilot') {
+    return 'System keeps planning, producing, and queuing distribution unless an exception or guardrail blocks it.';
+  }
+  return 'System handles planning and preparation, but still pauses for risky or low-confidence review.';
+}
+
+export function buildCampaignPendingActions(
+  brief: CampaignCreativeBrief,
+  strategy: CampaignCreativeStrategy,
+  options?: {
+    automationLevel?: CampaignAutomationLevel;
+    variantCount?: number;
+  },
+): string[] {
+  const actions = mergeUniqueStrings(
+    strategy.forbiddenClaims.length > 0 || Boolean(brief.region)
+      ? ['Review claim and region guardrails before publish.']
+      : [],
+    (options?.variantCount ?? 0) > 1
+      ? ['Confirm the first publish-ready variant.']
+      : [],
+    (options?.automationLevel ?? DEFAULT_CAMPAIGN_AUTOMATION_LEVEL) === 'assist'
+      ? ['Approve the campaign plan before distribution prep continues.']
+      : [],
+  );
+
+  return actions.length > 0
+    ? actions
+    : ['No manual review is required before the first publish queue.'];
+}
+
+export function buildFeedbackRecord(
+  campaignId: string,
+  summary: string,
+  feedbackType: CampaignFeedbackType = 'human_direction',
+  feedbackId?: string,
+): FeedbackRecord {
+  return {
+    feedbackId: feedbackId ?? createObjectId('feedback'),
+    campaignId,
+    feedbackType,
+    summary: summary.trim(),
   };
 }
 

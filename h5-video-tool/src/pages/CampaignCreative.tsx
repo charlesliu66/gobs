@@ -8,9 +8,13 @@ import { useLocale } from '../i18n/LocaleContext.tsx';
 import { CampaignBriefForm } from '../components/campaign/CampaignBriefForm';
 import { CampaignKnowledgeSelector } from '../components/campaign/CampaignKnowledgeSelector';
 import { CampaignModeSwitch } from '../components/campaign/CampaignModeSwitch';
+import { CampaignPendingActionsCard } from '../components/campaign/CampaignPendingActionsCard';
+import { CampaignPlanCard } from '../components/campaign/CampaignPlanCard';
 import { CampaignStrategyCard } from '../components/campaign/CampaignStrategyCard';
 import { CampaignStrategyTuningPanel } from '../components/campaign/CampaignStrategyTuningPanel';
 import type {
+  CampaignPlan,
+  CampaignProfile,
   CampaignCreativeBrief,
   CampaignCreativeFormState,
   CampaignCreativeHandoffPayload,
@@ -18,10 +22,15 @@ import type {
   CampaignCreativeStrategy,
   CampaignCreativeStrategyTuning,
   CampaignCreativeVariantPack,
+  FeedbackRecord,
 } from '../components/campaign/model';
 import {
+  buildCampaignPendingActions,
+  buildCampaignPlan,
+  buildCampaignProfile,
   buildBriefFromForm,
   buildDefaultStrategyTuning,
+  describeCampaignAutomationLevel,
   buildStrategyFromBrief,
   buildVariantPackFromStrategy,
 } from '../components/campaign/strategy';
@@ -92,6 +101,34 @@ function buildAppliedKnowledgeContext(
   };
 }
 
+function buildMissionControlState(input: {
+  brief: CampaignCreativeBrief;
+  strategy: CampaignCreativeStrategy;
+  variantPack: CampaignCreativeVariantPack;
+  knowledgeContext: DerivedCampaignKnowledgeContext | null;
+  previousProfile?: CampaignProfile | null;
+}): {
+  campaignProfile: CampaignProfile;
+  campaignPlan: CampaignPlan;
+} {
+  const campaignProfile = buildCampaignProfile(input.brief, {
+    campaignId: input.previousProfile?.campaignId,
+    automationLevel: input.previousProfile?.automationLevel,
+    knowledgeContext: input.knowledgeContext ?? undefined,
+  });
+  const campaignPlan = buildCampaignPlan(input.brief, input.strategy, {
+    campaignId: campaignProfile.campaignId,
+    automationLevel: campaignProfile.automationLevel,
+    variantPack: input.variantPack,
+    knowledgeContext: input.knowledgeContext ?? undefined,
+  });
+
+  return {
+    campaignProfile,
+    campaignPlan,
+  };
+}
+
 export function CampaignCreative() {
   const { t, uiLocale } = useLocale();
   const navigate = useNavigate();
@@ -116,10 +153,13 @@ export function CampaignCreative() {
   const [strategy, setStrategy] = useState<CampaignCreativeStrategy | null>(null);
   const [strategyTuning, setStrategyTuning] = useState<CampaignCreativeStrategyTuning | null>(null);
   const [variantPack, setVariantPack] = useState<CampaignCreativeVariantPack | null>(null);
+  const [campaignProfile, setCampaignProfile] = useState<CampaignProfile | null>(null);
+  const [campaignPlan, setCampaignPlan] = useState<CampaignPlan | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [knowledgeContext, setKnowledgeContext] = useState<DerivedCampaignKnowledgeContext | null>(null);
   const [selectedKnowledgeByGame, setSelectedKnowledgeByGame] = useState<Record<string, string[]>>({});
   const [knowledgeNotice, setKnowledgeNotice] = useState<string | null>(null);
+  const feedbackRecords: FeedbackRecord[] = [];
 
   const selectedGame = useMemo(
     () => games.find((game) => game.id === selectedGameId) ?? games[0] ?? null,
@@ -138,6 +178,16 @@ export function CampaignCreative() {
   const strategyNotice =
     knowledgeNotice ??
     (strategySelectionChanged ? t('campaignCreative.knowledge.selectionChanged') : null);
+  const automationSummary = campaignProfile
+    ? describeCampaignAutomationLevel(campaignProfile.automationLevel)
+    : '';
+  const pendingActions =
+    brief && strategy
+      ? buildCampaignPendingActions(brief, strategy, {
+          automationLevel: campaignProfile?.automationLevel,
+          variantCount: variantPack?.variants.length,
+        })
+      : [];
 
   useEffect(() => {
     if (!routeState) return;
@@ -220,10 +270,19 @@ export function CampaignCreative() {
       knowledgeContext: nextKnowledgeContext,
     });
     const nextVariantPack = buildVariantPackFromStrategy(nextBrief, nextStrategy);
+    const nextMissionControl = buildMissionControlState({
+      brief: nextBrief,
+      strategy: nextStrategy,
+      variantPack: nextVariantPack,
+      knowledgeContext: nextKnowledgeContext ?? null,
+      previousProfile: null,
+    });
     setBrief(nextBrief);
     setStrategyTuning(nextTuning);
     setStrategy(nextStrategy);
     setVariantPack(nextVariantPack);
+    setCampaignProfile(nextMissionControl.campaignProfile);
+    setCampaignPlan(nextMissionControl.campaignPlan);
     setSelectedVariantId(nextVariantPack.selectedVariantId);
     setKnowledgeContext(nextKnowledgeContext ?? null);
     setKnowledgeNotice(nextKnowledgeNotice);
@@ -240,7 +299,16 @@ export function CampaignCreative() {
         knowledgeContext: knowledgeContext ?? undefined,
       });
       const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
+      const nextMissionControl = buildMissionControlState({
+        brief,
+        strategy: nextStrategy,
+        variantPack: nextVariantPack,
+        knowledgeContext,
+        previousProfile: campaignProfile,
+      });
       setVariantPack(nextVariantPack);
+      setCampaignProfile(nextMissionControl.campaignProfile);
+      setCampaignPlan(nextMissionControl.campaignPlan);
       setSelectedVariantId((currentSelected) =>
         currentSelected && nextVariantPack.variants.some((variant) => variant.variantId === currentSelected)
           ? currentSelected
@@ -261,7 +329,16 @@ export function CampaignCreative() {
         knowledgeContext: knowledgeContext ?? undefined,
       });
       const nextVariantPack = buildVariantPackFromStrategy(brief, nextStrategy);
+      const nextMissionControl = buildMissionControlState({
+        brief,
+        strategy: nextStrategy,
+        variantPack: nextVariantPack,
+        knowledgeContext,
+        previousProfile: campaignProfile,
+      });
       setVariantPack(nextVariantPack);
+      setCampaignProfile(nextMissionControl.campaignProfile);
+      setCampaignPlan(nextMissionControl.campaignPlan);
       setSelectedVariantId((currentSelected) =>
         currentSelected && nextVariantPack.variants.some((variant) => variant.variantId === currentSelected)
           ? currentSelected
@@ -287,6 +364,9 @@ export function CampaignCreative() {
           }
         : undefined,
       selectedVariant,
+      campaignProfile: campaignProfile ?? undefined,
+      campaignPlan: campaignPlan ?? undefined,
+      feedbackRecords: feedbackRecords.length > 0 ? feedbackRecords : undefined,
       knowledgePackIds: appliedKnowledgeContext?.selectedPackIds ?? strategy.knowledgePackIds,
       knowledgeContext: appliedKnowledgeContext,
       source: 'campaign-creative',
@@ -441,35 +521,31 @@ export function CampaignCreative() {
         </div>
 
         <div className="grid gap-6">
-          <CampaignStrategyTuningPanel
-            brief={brief}
-            tuning={strategyTuning}
-            onChange={handleStrategyTuningChange}
-            onReset={handleStrategyTuningReset}
+          <CampaignPlanCard
+            plan={campaignPlan}
+            profile={campaignProfile}
+            automationSummary={automationSummary}
             copy={{
-              title: t('campaignCreative.tuning.title'),
-              subtitle: t('campaignCreative.tuning.subtitle'),
-              hookApproach: t('campaignCreative.tuning.hookApproach'),
-              sellingPointFocus: t('campaignCreative.tuning.sellingPointFocus'),
-              ctaType: t('campaignCreative.tuning.ctaType'),
-              reset: t('campaignCreative.tuning.reset'),
-              emptySellingPoints: t('campaignCreative.tuning.emptySellingPoints'),
-              optionLabels: {
-                benefitFirst: t('campaignCreative.tuning.optionLabels.benefitFirst'),
-                conflictFirst: t('campaignCreative.tuning.optionLabels.conflictFirst'),
-                storyFirst: t('campaignCreative.tuning.optionLabels.storyFirst'),
-                directResponse: t('campaignCreative.tuning.optionLabels.directResponse'),
-                softConversion: t('campaignCreative.tuning.optionLabels.softConversion'),
-                brandFollow: t('campaignCreative.tuning.optionLabels.brandFollow'),
-              },
+              emptyTitle: t('campaignCreative.plan.emptyTitle'),
+              emptyBody: t('campaignCreative.plan.emptyBody'),
+              title: t('campaignCreative.plan.title'),
+              summary: t('campaignCreative.plan.summary'),
+              automation: t('campaignCreative.plan.automation'),
+              knowledge: t('campaignCreative.plan.knowledge'),
+              production: t('campaignCreative.plan.production'),
+              distribution: t('campaignCreative.plan.distribution'),
             }}
           />
 
-          {strategyNotice ? (
-            <div className="rounded-2xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 px-4 py-3 text-sm leading-6 text-[var(--color-text)]">
-              {strategyNotice}
-            </div>
-          ) : null}
+          <CampaignPendingActionsCard
+            items={pendingActions}
+            notice={strategyNotice}
+            copy={{
+              title: t('campaignCreative.pending.title'),
+              subtitle: t('campaignCreative.pending.subtitle'),
+              empty: t('campaignCreative.pending.empty'),
+            }}
+          />
 
           <CampaignStrategyCard
             brief={brief}
@@ -541,6 +617,42 @@ export function CampaignCreative() {
                   },
             }}
           />
+
+          <details className="rounded-3xl border border-[var(--color-border)]/55 bg-[var(--color-surface-elevated)]">
+            <summary className="cursor-pointer list-none px-6 py-5">
+              <div className="text-lg font-semibold text-[var(--color-text)]">
+                {t('campaignCreative.tuning.title')}
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
+                {t('campaignCreative.tuning.subtitle')}
+              </p>
+            </summary>
+            <div className="px-6 pb-6">
+              <CampaignStrategyTuningPanel
+                brief={brief}
+                tuning={strategyTuning}
+                onChange={handleStrategyTuningChange}
+                onReset={handleStrategyTuningReset}
+                copy={{
+                  title: t('campaignCreative.tuning.title'),
+                  subtitle: t('campaignCreative.tuning.subtitle'),
+                  hookApproach: t('campaignCreative.tuning.hookApproach'),
+                  sellingPointFocus: t('campaignCreative.tuning.sellingPointFocus'),
+                  ctaType: t('campaignCreative.tuning.ctaType'),
+                  reset: t('campaignCreative.tuning.reset'),
+                  emptySellingPoints: t('campaignCreative.tuning.emptySellingPoints'),
+                  optionLabels: {
+                    benefitFirst: t('campaignCreative.tuning.optionLabels.benefitFirst'),
+                    conflictFirst: t('campaignCreative.tuning.optionLabels.conflictFirst'),
+                    storyFirst: t('campaignCreative.tuning.optionLabels.storyFirst'),
+                    directResponse: t('campaignCreative.tuning.optionLabels.directResponse'),
+                    softConversion: t('campaignCreative.tuning.optionLabels.softConversion'),
+                    brandFollow: t('campaignCreative.tuning.optionLabels.brandFollow'),
+                  },
+                }}
+              />
+            </div>
+          </details>
         </div>
       </section>
     </div>

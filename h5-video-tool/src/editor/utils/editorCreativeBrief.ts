@@ -28,6 +28,45 @@ export interface EditorCreativeKnowledgeContext {
   rationaleNotes: string[];
 }
 
+export type EditorCampaignAutomationLevel = 'assist' | 'managed_autopilot' | 'full_autopilot';
+export type EditorCampaignFeedbackType =
+  | 'human_direction'
+  | 'approval'
+  | 'revision'
+  | 'channel_pause';
+
+export interface EditorCampaignProfile {
+  campaignId: string;
+  briefId: string;
+  automationLevel: EditorCampaignAutomationLevel;
+  selectedKnowledgePackIds: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
+}
+
+export interface EditorCampaignPlan {
+  campaignId: string;
+  briefId: string;
+  strategyId?: string;
+  automationLevel: EditorCampaignAutomationLevel;
+  summary: string;
+  productionDecisions: string[];
+  distributionDecisions: string[];
+  reviewDecisions: string[];
+}
+
+export interface EditorCampaignFeedbackRecord {
+  feedbackId?: string;
+  campaignId: string;
+  feedbackType: EditorCampaignFeedbackType;
+  summary: string;
+}
+
+export interface EditorCampaignMissionControl {
+  campaignProfile?: EditorCampaignProfile;
+  campaignPlan?: EditorCampaignPlan;
+  feedbackRecords: EditorCampaignFeedbackRecord[];
+}
+
 export interface EditorCreativeStrategy {
   strategyId?: string;
   briefId?: string;
@@ -116,6 +155,21 @@ function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis
     : undefined;
 }
 
+function normalizeAutomationLevel(value: unknown): EditorCampaignAutomationLevel | undefined {
+  return value === 'assist' || value === 'managed_autopilot' || value === 'full_autopilot'
+    ? value
+    : undefined;
+}
+
+function normalizeFeedbackType(value: unknown): EditorCampaignFeedbackType | undefined {
+  return value === 'human_direction' ||
+    value === 'approval' ||
+    value === 'revision' ||
+    value === 'channel_pause'
+    ? value
+    : undefined;
+}
+
 export function normalizeEditorCreativeKnowledgeContextForRequest(input: {
   selectedPackIds?: string[] | string;
   knowledgePackIds?: string[] | string;
@@ -165,6 +219,181 @@ export function normalizeEditorCreativeKnowledgeContextForRequest(input: {
     hookCandidates,
     visualCues,
     rationaleNotes,
+  };
+}
+
+export function normalizeEditorCampaignProfileForRequest(input: {
+  campaignId?: string;
+  briefId?: string;
+  automationLevel?: EditorCampaignAutomationLevel;
+  selectedKnowledgePackIds?: string[] | string;
+  knowledgePackIds?: string[] | string;
+  knowledgeContext?: {
+    selectedPackIds?: string[] | string;
+    knowledgePackIds?: string[] | string;
+    marketTruth?: string[] | string;
+    audienceTension?: string[] | string;
+    toneRules?: string[] | string;
+    forbiddenClaims?: string[] | string;
+    approvedAngles?: string[] | string;
+    hookCandidates?: string[] | string;
+    visualCues?: string[] | string;
+    rationaleNotes?: string[] | string;
+  };
+  campaignKnowledgeContext?: {
+    selectedPackIds?: string[] | string;
+    knowledgePackIds?: string[] | string;
+    marketTruth?: string[] | string;
+    audienceTension?: string[] | string;
+    toneRules?: string[] | string;
+    forbiddenClaims?: string[] | string;
+    approvedAngles?: string[] | string;
+    hookCandidates?: string[] | string;
+    visualCues?: string[] | string;
+    rationaleNotes?: string[] | string;
+  };
+} | undefined): EditorCampaignProfile | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const campaignId = cleanText(input.campaignId);
+  const briefId = cleanText(input.briefId);
+  const knowledgeContext = normalizeEditorCreativeKnowledgeContextForRequest(
+    input.knowledgeContext ?? input.campaignKnowledgeContext,
+  );
+  const selectedKnowledgePackIds = uniqueStrings(
+    normalizeStringList(input.selectedKnowledgePackIds ?? input.knowledgePackIds)
+      .concat(knowledgeContext?.selectedPackIds ?? []),
+  );
+  const automationLevel = normalizeAutomationLevel(input.automationLevel) ?? 'assist';
+
+  const hasContent = Boolean(
+    campaignId ||
+    briefId ||
+    selectedKnowledgePackIds.length > 0 ||
+    knowledgeContext,
+  );
+  if (!hasContent || !campaignId || !briefId) {
+    return undefined;
+  }
+
+  return {
+    campaignId,
+    briefId,
+    automationLevel,
+    selectedKnowledgePackIds,
+    knowledgeContext,
+  };
+}
+
+export function normalizeEditorCampaignPlanForRequest(input: {
+  campaignId?: string;
+  briefId?: string;
+  strategyId?: string;
+  automationLevel?: EditorCampaignAutomationLevel;
+  summary?: string;
+  productionDecisions?: string[] | string;
+  distributionDecisions?: string[] | string;
+  reviewDecisions?: string[] | string;
+} | undefined): EditorCampaignPlan | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const campaignId = cleanText(input.campaignId);
+  const briefId = cleanText(input.briefId);
+  const strategyId = cleanText(input.strategyId);
+  const summary = cleanText(input.summary);
+  const productionDecisions = uniqueStrings(normalizeStringList(input.productionDecisions));
+  const distributionDecisions = uniqueStrings(normalizeStringList(input.distributionDecisions));
+  const reviewDecisions = uniqueStrings(normalizeStringList(input.reviewDecisions));
+  const automationLevel = normalizeAutomationLevel(input.automationLevel) ?? 'assist';
+
+  const hasContent = Boolean(
+    campaignId ||
+    briefId ||
+    strategyId ||
+    summary ||
+    productionDecisions.length > 0 ||
+    distributionDecisions.length > 0 ||
+    reviewDecisions.length > 0,
+  );
+  if (!hasContent || !campaignId || !briefId) {
+    return undefined;
+  }
+
+  return {
+    campaignId,
+    briefId,
+    strategyId,
+    automationLevel,
+    summary:
+      summary ??
+      productionDecisions[0] ??
+      distributionDecisions[0] ??
+      reviewDecisions[0] ??
+      '',
+    productionDecisions,
+    distributionDecisions,
+    reviewDecisions,
+  };
+}
+
+export function normalizeEditorCampaignFeedbackRecordsForRequest(
+  input: Array<{
+    feedbackId?: string;
+    campaignId?: string;
+    feedbackType?: EditorCampaignFeedbackType;
+    summary?: string;
+  }> | {
+    feedbackId?: string;
+    campaignId?: string;
+    feedbackType?: EditorCampaignFeedbackType;
+    summary?: string;
+  } | undefined,
+): EditorCampaignFeedbackRecord[] {
+  const items = Array.isArray(input) ? input : input ? [input] : [];
+  return items
+    .map((item) => {
+      const campaignId = cleanText(item.campaignId);
+      const summary = cleanText(item.summary);
+      if (!campaignId || !summary) {
+        return undefined;
+      }
+
+      const record: EditorCampaignFeedbackRecord = {
+        feedbackId: cleanText(item.feedbackId),
+        campaignId,
+        feedbackType: normalizeFeedbackType(item.feedbackType) ?? 'human_direction',
+        summary,
+      };
+      return record;
+    })
+    .filter((item): item is EditorCampaignFeedbackRecord => Boolean(item));
+}
+
+export function normalizeEditorCampaignMissionControlForRequest(input: {
+  campaignProfile?: Parameters<typeof normalizeEditorCampaignProfileForRequest>[0];
+  profile?: Parameters<typeof normalizeEditorCampaignProfileForRequest>[0];
+  campaignPlan?: Parameters<typeof normalizeEditorCampaignPlanForRequest>[0];
+  plan?: Parameters<typeof normalizeEditorCampaignPlanForRequest>[0];
+  feedbackRecords?: Parameters<typeof normalizeEditorCampaignFeedbackRecordsForRequest>[0];
+  feedback?: Parameters<typeof normalizeEditorCampaignFeedbackRecordsForRequest>[0];
+} | undefined): EditorCampaignMissionControl | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const campaignProfile = normalizeEditorCampaignProfileForRequest(
+    input.campaignProfile ?? input.profile,
+  );
+  const campaignPlan = normalizeEditorCampaignPlanForRequest(
+    input.campaignPlan ?? input.plan,
+  );
+  const feedbackRecords = normalizeEditorCampaignFeedbackRecordsForRequest(
+    input.feedbackRecords ?? input.feedback,
+  );
+
+  if (!campaignProfile && !campaignPlan && feedbackRecords.length === 0) {
+    return undefined;
+  }
+
+  return {
+    campaignProfile,
+    campaignPlan,
+    feedbackRecords,
   };
 }
 

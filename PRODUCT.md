@@ -2068,7 +2068,7 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-07 (v0.147)*
+*Last updated: 2026-05-07 (v0.148)*
 
 Latest update 2026-05-07: Synced the campaign mission-control, fastpublish knowledge-integration, and workflow-template docs into the latest mainline planning baseline.
 
@@ -2090,6 +2090,12 @@ Latest update 2026-05-06: Advanced Production and Editor mainline English intera
 - Updated the campaign mission-control phase-0 implementation plan so it explicitly depends on the landed knowledge-aware creative flow instead of the older brief-only assumption.
 - Added a reusable `planner-spec-template.md` and upgraded the run templates with a shared Campaign Creative Agent north-star guardrail.
 - Cleaned the plans index to point at active workspace documents instead of stale machine-specific paths.
+
+## v0.148 - 2026-05-07 (Campaign Mission Control Phase 0 Addendum)
+- Added mission-control-friendly campaign contracts to the Campaign Creative -> Editor seam so a marketer-first shell can pass `campaignProfile`, `campaignPlan`, and optional human feedback records without inventing a second schema.
+- Reframed the default homepage and global navigation around `Campaign Mission Control`, kept `/campaign-creative` as the primary path, and relabeled deeper editor-style routes as `Advanced Studio`.
+- Reworked the Campaign Creative page so brief, applied knowledge, system plan, and pending review decisions appear before local strategy tuning controls.
+- Added targeted regression coverage for mission-control brief normalization, locale copy, and knowledge-aware planning helpers while preserving the shipped strategy, variant-pack, and editor handoff flow.
 
 ## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
 - Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.

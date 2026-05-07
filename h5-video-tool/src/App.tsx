@@ -65,6 +65,7 @@ function App() {
               <Route element={<RequireAuth />}>
                 <Route element={<Layout />}>
                   <Route path="/" element={<Home />} />
+                  <Route path="/mission-control" element={<CampaignCreative />} />
                   <Route path="/campaign-creative" element={<CampaignCreative />} />
                   <Route path="/studio" element={<Studio />} />
                   <Route path="/studio/production" element={<ProductionWizard />} />

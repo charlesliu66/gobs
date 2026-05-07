@@ -101,7 +101,7 @@ export function Home() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/quickfilm')}
+              onClick={() => navigate('/studio')}
               className="rounded-full border border-[var(--color-border)]/70 bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text)] transition-all hover:border-[var(--color-primary)]/30 hover:bg-[var(--color-surface-hover)]"
             >
               {t('home.hero.secondaryCta')}
@@ -166,6 +166,35 @@ export function Home() {
       </section>
 
       <section className="animate-fade-in" style={{ animationDelay: '200ms' }}>
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 p-6">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-primary)]">
+              {t('home.reviewQueue.title')}
+            </div>
+            <p className="mt-3 text-sm leading-7 text-[var(--color-text-muted)]">
+              {t('home.reviewQueue.body')}
+            </p>
+            <div className="mt-4 grid gap-3">
+              <ReviewQueueItem body={t('home.reviewQueue.items.guardrails')} />
+              <ReviewQueueItem body={t('home.reviewQueue.items.variant')} />
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/campaign-creative')}
+              className="mt-5 rounded-full border border-[var(--color-primary)]/35 bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-primary)] transition-all hover:border-[var(--color-primary)]/55 hover:bg-[var(--color-primary)]/10"
+            >
+              {t('home.paths.campaignCreative.action')}
+            </button>
+          </div>
+
+          <ValueCard
+            title={t('home.advancedStudio.title')}
+            body={t('home.advancedStudio.body')}
+          />
+        </div>
+      </section>
+
+      <section className="animate-fade-in" style={{ animationDelay: '260ms' }}>
         <div className="grid gap-4 lg:grid-cols-3">
           <ValueCard
             title={t('home.outcomes.brief.title')}
@@ -181,6 +210,14 @@ export function Home() {
           />
         </div>
       </section>
+    </div>
+  );
+}
+
+function ReviewQueueItem({ body }: { body: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--color-border)]/55 bg-[var(--color-surface)]/80 px-4 py-3 text-sm leading-6 text-[var(--color-text)]">
+      {body}
     </div>
   );
 }

@@ -4,6 +4,8 @@ export type CampaignCreativeMode = 'tiktok_content' | 'tiktok_ua';
 export type CampaignCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
 export type CampaignCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
 export type CampaignCreativeVariantEmphasis = 'hook_focus' | 'selling_point_focus' | 'cta_focus';
+export type CampaignAutomationLevel = 'assist' | 'managed_autopilot' | 'full_autopilot';
+export type CampaignFeedbackType = 'human_direction' | 'approval' | 'revision' | 'channel_pause';
 
 export interface CampaignCreativeBrief {
   briefId: string;
@@ -81,11 +83,40 @@ export interface CampaignCreativeVariantPack {
   selectedVariantId: string;
 }
 
+export interface CampaignProfile {
+  campaignId: string;
+  briefId: string;
+  automationLevel: CampaignAutomationLevel;
+  selectedKnowledgePackIds: string[];
+  knowledgeContext?: DerivedCampaignKnowledgeContext;
+}
+
+export interface CampaignPlan {
+  campaignId: string;
+  briefId: string;
+  strategyId?: string;
+  automationLevel: CampaignAutomationLevel;
+  summary: string;
+  productionDecisions: string[];
+  distributionDecisions: string[];
+  reviewDecisions: string[];
+}
+
+export interface FeedbackRecord {
+  feedbackId?: string;
+  campaignId: string;
+  feedbackType: CampaignFeedbackType;
+  summary: string;
+}
+
 export interface CampaignCreativeHandoffPayload {
   brief: CampaignCreativeBrief;
   strategy: CampaignCreativeStrategy;
   variantPack?: CampaignCreativeVariantPack;
   selectedVariant?: CampaignCreativeVariant;
+  campaignProfile?: CampaignProfile;
+  campaignPlan?: CampaignPlan;
+  feedbackRecords?: FeedbackRecord[];
   knowledgePackIds?: string[];
   knowledgeContext?: DerivedCampaignKnowledgeContext;
   source: 'campaign-creative';

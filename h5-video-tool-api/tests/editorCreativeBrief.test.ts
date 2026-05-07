@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildEditorCreativeKnowledgeContextFromStrategy,
+  normalizeEditorCampaignMissionControl,
   buildCreativeBriefPromptBlock,
   buildCreativeHookOptions,
   buildCreativeStrategy,
@@ -348,4 +349,80 @@ test('buildCreativeBriefPromptBlock includes selected variant context', () => {
   assert.match(promptBlock, /Selected variant/i);
   assert.match(promptBlock, /Hook punch/);
   assert.match(promptBlock, /Cut hard inside the first 2 seconds/i);
+});
+
+test('normalizeEditorCampaignMissionControl preserves campaign profile, plan, and feedback summaries', () => {
+  const missionControl = normalizeEditorCampaignMissionControl({
+    campaignProfile: {
+      campaignId: 'campaign_alpha',
+      briefId: 'brief_alpha',
+      automationLevel: 'managed_autopilot',
+      selectedKnowledgePackIds: ' pack_a , pack_b ',
+      knowledgeContext: {
+        selectedPackIds: ['pack_b'],
+        marketTruth: ['Reward windows drive conversion spikes'],
+        toneRules: ['Keep the payoff visible in the first 2 seconds'],
+      },
+    },
+    campaignPlan: {
+      campaignId: 'campaign_alpha',
+      briefId: 'brief_alpha',
+      strategyId: 'strategy_alpha',
+      automationLevel: 'managed_autopilot',
+      summary: 'System will produce a three-variant TikTok pack and prepare it for distribution review.',
+      productionDecisions: '3 TikTok variants, reward-first opener, CTA-ready closing line',
+      distributionDecisions: ['Prepare TikTok publish metadata', 'Queue for campaign review'],
+      reviewDecisions: 'Human review required before publish because claims are tightly constrained.',
+    },
+    feedbackRecords: [
+      {
+        feedbackId: 'feedback_alpha',
+        campaignId: 'campaign_alpha',
+        feedbackType: 'human_direction',
+        summary: 'Keep the reward-led angle but make the brand tone safer.',
+      },
+    ],
+  });
+
+  assert.deepEqual(missionControl, {
+    campaignProfile: {
+      campaignId: 'campaign_alpha',
+      briefId: 'brief_alpha',
+      automationLevel: 'managed_autopilot',
+      selectedKnowledgePackIds: ['pack_a', 'pack_b'],
+      knowledgeContext: {
+        selectedPackIds: ['pack_b'],
+        marketTruth: ['Reward windows drive conversion spikes'],
+        audienceTension: [],
+        toneRules: ['Keep the payoff visible in the first 2 seconds'],
+        forbiddenClaims: [],
+        approvedAngles: [],
+        hookCandidates: [],
+        visualCues: [],
+        rationaleNotes: [],
+      },
+    },
+    campaignPlan: {
+      campaignId: 'campaign_alpha',
+      briefId: 'brief_alpha',
+      strategyId: 'strategy_alpha',
+      automationLevel: 'managed_autopilot',
+      summary: 'System will produce a three-variant TikTok pack and prepare it for distribution review.',
+      productionDecisions: [
+        '3 TikTok variants',
+        'reward-first opener',
+        'CTA-ready closing line',
+      ],
+      distributionDecisions: ['Prepare TikTok publish metadata', 'Queue for campaign review'],
+      reviewDecisions: ['Human review required before publish because claims are tightly constrained.'],
+    },
+    feedbackRecords: [
+      {
+        feedbackId: 'feedback_alpha',
+        campaignId: 'campaign_alpha',
+        feedbackType: 'human_direction',
+        summary: 'Keep the reward-led angle but make the brand tone safer.',
+      },
+    ],
+  });
 });

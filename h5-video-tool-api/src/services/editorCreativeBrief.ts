@@ -31,6 +31,45 @@ export interface EditorCreativeKnowledgeContext {
   rationaleNotes: string[];
 }
 
+export type EditorCampaignAutomationLevel = 'assist' | 'managed_autopilot' | 'full_autopilot';
+export type EditorCampaignFeedbackType =
+  | 'human_direction'
+  | 'approval'
+  | 'revision'
+  | 'channel_pause';
+
+export interface EditorCampaignProfile {
+  campaignId: string;
+  briefId: string;
+  automationLevel: EditorCampaignAutomationLevel;
+  selectedKnowledgePackIds: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
+}
+
+export interface EditorCampaignPlan {
+  campaignId: string;
+  briefId: string;
+  strategyId?: string;
+  automationLevel: EditorCampaignAutomationLevel;
+  summary: string;
+  productionDecisions: string[];
+  distributionDecisions: string[];
+  reviewDecisions: string[];
+}
+
+export interface EditorCampaignFeedbackRecord {
+  feedbackId?: string;
+  campaignId: string;
+  feedbackType: EditorCampaignFeedbackType;
+  summary: string;
+}
+
+export interface EditorCampaignMissionControl {
+  campaignProfile?: EditorCampaignProfile;
+  campaignPlan?: EditorCampaignPlan;
+  feedbackRecords: EditorCampaignFeedbackRecord[];
+}
+
 export interface EditorCreativeStrategy {
   strategyId?: string;
   briefId?: string;
@@ -119,6 +158,21 @@ function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis
     : undefined;
 }
 
+function normalizeAutomationLevel(value: unknown): EditorCampaignAutomationLevel | undefined {
+  return value === 'assist' || value === 'managed_autopilot' || value === 'full_autopilot'
+    ? value
+    : undefined;
+}
+
+function normalizeFeedbackType(value: unknown): EditorCampaignFeedbackType | undefined {
+  return value === 'human_direction' ||
+    value === 'approval' ||
+    value === 'revision' ||
+    value === 'channel_pause'
+    ? value
+    : undefined;
+}
+
 export function normalizeEditorCreativeKnowledgeContext(input: unknown): EditorCreativeKnowledgeContext | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const raw = input as Record<string, unknown>;
@@ -159,6 +213,132 @@ export function normalizeEditorCreativeKnowledgeContext(input: unknown): EditorC
     hookCandidates,
     visualCues,
     rationaleNotes,
+  };
+}
+
+export function normalizeEditorCampaignProfile(input: unknown): EditorCampaignProfile | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const campaignId = cleanText(raw.campaignId);
+  const briefId = cleanText(raw.briefId);
+  const knowledgeContext = normalizeEditorCreativeKnowledgeContext(
+    raw.knowledgeContext ?? raw.campaignKnowledgeContext,
+  );
+  const selectedKnowledgePackIds = uniqueStrings(
+    normalizeStringList(raw.selectedKnowledgePackIds ?? raw.knowledgePackIds)
+      .concat(knowledgeContext?.selectedPackIds ?? []),
+  );
+  const automationLevel = normalizeAutomationLevel(raw.automationLevel) ?? 'assist';
+
+  const hasContent = Boolean(
+    campaignId ||
+    briefId ||
+    selectedKnowledgePackIds.length > 0 ||
+    knowledgeContext,
+  );
+  if (!hasContent || !campaignId || !briefId) {
+    return undefined;
+  }
+
+  return {
+    campaignId,
+    briefId,
+    automationLevel,
+    selectedKnowledgePackIds,
+    knowledgeContext,
+  };
+}
+
+export function normalizeEditorCampaignPlan(input: unknown): EditorCampaignPlan | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const campaignId = cleanText(raw.campaignId);
+  const briefId = cleanText(raw.briefId);
+  const strategyId = cleanText(raw.strategyId);
+  const summary = cleanText(raw.summary);
+  const productionDecisions = uniqueStrings(normalizeStringList(raw.productionDecisions));
+  const distributionDecisions = uniqueStrings(normalizeStringList(raw.distributionDecisions));
+  const reviewDecisions = uniqueStrings(normalizeStringList(raw.reviewDecisions));
+  const automationLevel = normalizeAutomationLevel(raw.automationLevel) ?? 'assist';
+
+  const hasContent = Boolean(
+    campaignId ||
+    briefId ||
+    strategyId ||
+    summary ||
+    productionDecisions.length > 0 ||
+    distributionDecisions.length > 0 ||
+    reviewDecisions.length > 0,
+  );
+  if (!hasContent || !campaignId || !briefId) {
+    return undefined;
+  }
+
+  return {
+    campaignId,
+    briefId,
+    strategyId,
+    automationLevel,
+    summary:
+      summary ??
+      productionDecisions[0] ??
+      distributionDecisions[0] ??
+      reviewDecisions[0] ??
+      '',
+    productionDecisions,
+    distributionDecisions,
+    reviewDecisions,
+  };
+}
+
+export function normalizeEditorCampaignFeedbackRecords(
+  input: unknown,
+): EditorCampaignFeedbackRecord[] {
+  const items = Array.isArray(input) ? input : input ? [input] : [];
+  return items
+    .map((item) => {
+      if (!item || typeof item !== 'object') return undefined;
+      const raw = item as Record<string, unknown>;
+      const campaignId = cleanText(raw.campaignId);
+      const summary = cleanText(raw.summary);
+      if (!campaignId || !summary) {
+        return undefined;
+      }
+
+      const record: EditorCampaignFeedbackRecord = {
+        feedbackId: cleanText(raw.feedbackId),
+        campaignId,
+        feedbackType: normalizeFeedbackType(raw.feedbackType) ?? 'human_direction',
+        summary,
+      };
+      return record;
+    })
+    .filter((item): item is EditorCampaignFeedbackRecord => Boolean(item));
+}
+
+export function normalizeEditorCampaignMissionControl(
+  input: unknown,
+): EditorCampaignMissionControl | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Record<string, unknown>;
+  const campaignProfile = normalizeEditorCampaignProfile(
+    raw.campaignProfile ?? raw.profile,
+  );
+  const campaignPlan = normalizeEditorCampaignPlan(
+    raw.campaignPlan ?? raw.plan,
+  );
+  const feedbackRecords = normalizeEditorCampaignFeedbackRecords(
+    raw.feedbackRecords ?? raw.feedback,
+  );
+
+  if (!campaignProfile && !campaignPlan && feedbackRecords.length === 0) {
+    return undefined;
+  }
+
+  return {
+    campaignProfile,
+    campaignPlan,
+    feedbackRecords,
   };
 }
 

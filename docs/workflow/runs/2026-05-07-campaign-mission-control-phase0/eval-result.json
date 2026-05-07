@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-07-campaign-mission-control-phase0",
+  "timestamp": "2026-05-07T03:32:54Z",
+  "checks": {
+    "backend_build": { "status": "pass", "error": "" },
+    "frontend_build": { "status": "pass", "error": "" },
+    "typescript": { "status": "pass", "errors": [] },
+    "api_health": { "status": "fail", "code": 0 },
+    "smoke_tests": []
+  },
+  "verdict": "P1_WARN"
+}
