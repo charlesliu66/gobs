@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.149 - 2026-05-07
+**Advanced Studio phase-0 marketer-first entry demotion**
+**Campaign / Studio / Copy Hierarchy:**
+- Reframed advanced follow-on entry points so `/campaign-creative` launches `Open In Advanced Studio` as a clearly secondary step instead of reading like the default workflow.
+- Updated `/projects` to read as an advanced review workspace with `Review Before Publish` framing while preserving the existing project list, card click behavior, and route targets.
+- Added an editor-side `Fine-Tune In Editor` guidance banner so shot-level and subtitle-level controls remain available without competing with the marketer-first Mission Control flow.
+**Tests:**
+- Added locale assertions for the new advanced-entry labels, reran the targeted locale regression suite, rebuilt the frontend bundle, and captured `eval.sh` evidence for the run.
+
 ## v0.148 - 2026-05-07
 **Campaign Mission Control phase-0 marketer-first shell**
 **Campaign / Mission Control / Handoff:**

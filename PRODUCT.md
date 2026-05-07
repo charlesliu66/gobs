@@ -2068,9 +2068,11 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-07 (v0.148)*
+*Last updated: 2026-05-07 (v0.149)*
 
 Latest update 2026-05-07: Synced the campaign mission-control, fastpublish knowledge-integration, and workflow-template docs into the latest mainline planning baseline.
+
+Latest update 2026-05-07: Reframed advanced follow-on entry points as `Advanced Studio`, `Fine-Tune In Editor`, and `Review Before Publish` so marketers stay on the Mission Control path by default.
 
 Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 
@@ -2096,6 +2098,12 @@ Latest update 2026-05-06: Advanced Production and Editor mainline English intera
 - Reframed the default homepage and global navigation around `Campaign Mission Control`, kept `/campaign-creative` as the primary path, and relabeled deeper editor-style routes as `Advanced Studio`.
 - Reworked the Campaign Creative page so brief, applied knowledge, system plan, and pending review decisions appear before local strategy tuning controls.
 - Added targeted regression coverage for mission-control brief normalization, locale copy, and knowledge-aware planning helpers while preserving the shipped strategy, variant-pack, and editor handoff flow.
+
+## v0.149 - 2026-05-07 (Advanced Studio Phase 0 Addendum)
+- Reframed the strategy-card editor launch as a secondary advanced action so the default Campaign Creative path still centers on brief, knowledge, and system plan review before deeper production work.
+- Updated the advanced project workspace copy to emphasize review-before-publish and advanced follow-on editing without changing project routing, storage, or click behavior.
+- Added an EditorWorkbench guidance banner that explains when to fine-tune inside the editor while keeping the existing advanced controls and handoff behavior intact.
+- Added targeted locale regression coverage for the normalized `Open In Advanced Studio`, `Review Before Publish`, and `Fine-Tune In Editor` labels.
 
 ## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
 - Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.

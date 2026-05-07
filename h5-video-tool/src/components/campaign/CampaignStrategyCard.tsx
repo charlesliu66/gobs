@@ -264,12 +264,12 @@ export function CampaignStrategyCard({
         </div>
       ) : null}
 
-      <div className="mt-6 rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface)] p-4">
+      <div className="mt-6 rounded-2xl border border-dashed border-[var(--color-border)]/70 bg-[var(--color-surface-elevated)]/70 p-4">
         <div className="text-sm font-semibold text-[var(--color-text)]">{copy.nextStepTitle}</div>
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
           {selectedVariant ? `${copy.nextStepBody} ${copy.selectedVariant}: ${selectedVariant.title}` : copy.nextStepBody}
         </p>
-        <button type="button" onClick={onLaunchEditor} className="btn-primary mt-4">
+        <button type="button" onClick={onLaunchEditor} className="btn-secondary mt-4">
           {copy.launchEditor}
         </button>
       </div>

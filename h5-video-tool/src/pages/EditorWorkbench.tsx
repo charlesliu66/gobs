@@ -1865,11 +1865,22 @@ export function EditorWorkbench() {
 
   return (
     <>
-    <style>{`@keyframes editorFadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-      <EditorShell
-        aspectRatio={aspectRatio}
-        onAspectRatioChange={setAspectRatio}
+      <style>{`@keyframes editorFadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+        <div className="mb-3 rounded-2xl border border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)]/80 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="chip">{t('layout.studio')}</span>
+            <div className="text-sm font-semibold text-[var(--color-text)]">
+              {t('editorWorkbench.fineTuneInEditor')}
+            </div>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
+            {t('editorWorkbench.fineTuneHint')}
+          </p>
+        </div>
+        <EditorShell
+          aspectRatio={aspectRatio}
+          onAspectRatioChange={setAspectRatio}
         materialsPanel={
           showTextPanel ? (
             <div className="flex flex-col h-full">

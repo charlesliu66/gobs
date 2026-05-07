@@ -140,6 +140,7 @@ export function ProjectList() {
 
       <div className="gobs-card mb-6 flex items-center justify-between rounded-2xl px-5 py-4">
         <div>
+          <span className="chip">{t('layout.studio')}</span>
           <h1 className="text-2xl font-semibold text-[var(--color-text)]">
             {t('projectListPage.title')}
           </h1>
@@ -282,6 +283,10 @@ export function ProjectList() {
                   <span className="inline-flex items-center rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--color-primary)]">
                     {getStepLabel(project.step, t, text)}
                   </span>
+                </div>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)] px-3 py-1 text-[11px] font-medium text-[var(--color-text-muted)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />
+                  {t('projectListPage.reviewBeforePublish')}
                 </div>
               </button>
 
