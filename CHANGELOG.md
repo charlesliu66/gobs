@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.147 - 2026-05-07
+**Campaign planning docs and workflow template sync**
+**Docs / Workflow / Planning:**
+- Added the fastpublish knowledge-integration design and implementation plans to the mainline docs set so the shipped Knowledge Brain work has a durable upstream reference.
+- Refreshed the campaign mission-control implementation plan to depend on the landed knowledge-aware creative flow instead of the older brief-only assumption.
+- Added a reusable `planner-spec-template.md` and upgraded the run templates so campaign-creative-related runs carry the same north-star and product-shape guardrail by default.
+- Cleaned the plans index so the current campaign, mission-control, and knowledge-brain docs resolve to the active workspace paths instead of stale machine-specific links.
+
 ## v0.144 - 2026-05-06
 **Campaign Creative -> Editor knowledge handoff**
 **Editor / Knowledge Context / Memory:**

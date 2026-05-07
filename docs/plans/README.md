@@ -1,6 +1,6 @@
 # Plans Index
 
-> 最后更新：2026-04-21
+> 最后更新：2026-05-07
 > 用途：说明 `docs/plans/` 存什么、什么时候该放到这里，而不是放进 `workflow/runs/`。
 
 ---
@@ -24,7 +24,15 @@
 
 ## 当前值得优先关注的方案
 
-- [2026-05-01-campaign-creative-agent-implementation-plan.md](</Users/wei.liu/Documents/work/ai projects/gobs/docs/plans/2026-05-01-campaign-creative-agent-implementation-plan.md>)
+- [2026-05-06-campaign-creative-agent-next-phase-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-campaign-creative-agent-next-phase-design.md>)
+  - 将产品默认形态从工具集合收敛为面向市场/运营的 `Campaign Mission Control`
+- [2026-05-06-campaign-mission-control-phase0-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-campaign-mission-control-phase0-implementation-plan.md>)
+  - 基于 knowledge-aware creative 前提的 Mission Control Phase 0 实施计划
+- [2026-05-06-gobs-fastpublish-knowledge-integration-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md>)
+  - GOBS 如何吸收 fastpublish 的 knowledge 分层，把 `Knowledge Brain -> Campaign Creative -> Editor` 串成可落地方案
+- [2026-05-06-gobs-fastpublish-knowledge-integration-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-gobs-fastpublish-knowledge-integration-implementation-plan.md>)
+  - 对应的前后端实施拆解，覆盖 knowledge pack 存储、导入、strategy 消费和 editor 注入
+- [2026-05-01-campaign-creative-agent-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-01-campaign-creative-agent-implementation-plan.md>)
   - 基于“游戏营销创意生产系统 / Campaign Creative Agent”目标的收口方向与分阶段落地建议
 - [2026-04-21-i18n-phase0-phase1-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-i18n-phase0-phase1-implementation-plan.md>)
   - 当前 H5 中英文切换 Phase 0/1 的可执行计划

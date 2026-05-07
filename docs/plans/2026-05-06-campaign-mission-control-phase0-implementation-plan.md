@@ -2,11 +2,33 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Reframe the default product surface from tool-first to campaign-first so marketers and operators can create, review, and distribute campaign content with fewer decisions and fewer clicks.
+**Goal:** After the Knowledge Brain foundation lands, reframe the default product surface from tool-first to campaign-first so marketers and operators can create, review, and distribute campaign content with fewer decisions and fewer clicks.
 
-**Architecture:** Keep the existing `Campaign Creative -> strategy -> variant -> Editor` foundation, but reorganize it around a `Campaign Mission Control` shell. Move professional controls behind an `Advanced Studio` boundary, add explicit `Campaign` / `Campaign Plan` / `Feedback Record` objects, and make human feedback the short-term learning loop instead of performance analytics.
+**Architecture:** Treat `Knowledge Brain -> Campaign Creative -> Editor` as the new base layer, not a future assumption. Keep the existing `Campaign Creative -> strategy -> variant -> Editor` foundation, but reorganize it around a `Campaign Mission Control` shell after knowledge-aware strategy generation is already in place. Move professional controls behind an `Advanced Studio` boundary, add explicit `Campaign` / `Campaign Plan` / `Feedback Record` objects, and make human feedback the short-term learning loop instead of performance analytics.
 
 **Tech Stack:** React 19 + Vite + TypeScript (`h5-video-tool/`), Express + TypeScript (`h5-video-tool-api/`), Node built-in test runner for pure TypeScript logic, existing editor handoff and distribution routes.
+
+---
+
+## Execution Prerequisite
+
+Do not start this plan until `2026-05-06-campaign-knowledge-brain-foundation` is merged or otherwise stabilized in the active working branch.
+
+Before Task 1, verify the actual landed shape of:
+
+- `h5-video-tool/src/components/campaign/model.ts`
+- `h5-video-tool/src/components/campaign/strategy.ts`
+- `h5-video-tool/src/pages/CampaignCreative.tsx`
+- `h5-video-tool-api/src/services/campaignKnowledgeDerivation.ts`
+- `h5-video-tool-api/src/services/editorCreativeBrief.ts`
+
+This plan assumes the current creative flow can already consume:
+
+- `selectedKnowledgePackIds`
+- `DerivedCampaignKnowledgeContext`
+- knowledge-aware strategy fields such as `marketTruth`, `toneRules`, `forbiddenClaims`, `approvedAngles`, or equivalent stable outputs
+
+If the finished Knowledge Brain run lands the same concepts under different field names, adapt this plan to the shipped names instead of adding duplicate structures.
 
 ---
 
@@ -24,7 +46,8 @@
 Add coverage for three new ideas:
 
 - `CampaignProfile.automationLevel`
-- `CampaignPlan` summary fields that describe what the system decided to produce
+- `CampaignProfile.selectedKnowledgePackIds` and a stable knowledge-context slot that reuses the landed Knowledge Brain shape
+- `CampaignPlan` summary fields that describe what the system decided to produce from both brief and knowledge context
 - `FeedbackRecord` summary lines that must survive handoff serialization
 
 Use the existing `node:test` style in `h5-video-tool-api/tests/editorCreativeBrief.test.ts`.
@@ -47,6 +70,7 @@ Add the new type fields in `model.ts`, then teach the front-end and API `editorC
 Keep it DRY:
 
 - add shared field names once
+- reuse the landed knowledge-context keys instead of inventing parallel mission-control copies
 - reuse the same summary keys on both front end and API
 - default to empty arrays / null-safe strings instead of optional nested objects exploding downstream
 
@@ -109,6 +133,7 @@ Update `messages.ts`, then reframe `Home.tsx`, `Layout.tsx`, and route labels in
 - campaign list / campaign creation
 - system status
 - pending decisions
+- knowledge-aware campaign planning as the primary path
 
 Do not remove advanced routes. Instead, demote them visually and label them as advanced / studio-oriented.
 
@@ -133,13 +158,14 @@ git commit -m "feat: reframe home as campaign mission control"
 
 ---
 
-### Task 3: Rebuild `CampaignCreative` as a marketer-first campaign shell
+### Task 3: Rebuild `CampaignCreative` as a marketer-first campaign shell on top of knowledge-aware inputs
 
 **Files:**
 - Modify: `h5-video-tool/src/pages/CampaignCreative.tsx`
 - Modify: `h5-video-tool/src/components/campaign/CampaignBriefForm.tsx`
 - Modify: `h5-video-tool/src/components/campaign/CampaignStrategyCard.tsx`
 - Modify: `h5-video-tool/src/components/campaign/CampaignStrategyTuningPanel.tsx`
+- Modify: `h5-video-tool/src/components/campaign/CampaignKnowledgeSelector.tsx`
 - Create: `h5-video-tool/src/components/campaign/CampaignPlanCard.tsx`
 - Create: `h5-video-tool/src/components/campaign/CampaignPendingActionsCard.tsx`
 - Test: `h5-video-tool/src/components/campaign/strategy.test.ts`
@@ -150,6 +176,7 @@ Create a pure logic test around `strategy.ts` that proves the planner can derive
 
 - a short campaign plan summary
 - an explicit automation level summary
+- a knowledge-aware plan summary that reacts to selected pack context
 - a short pending-actions list when the campaign is high risk
 
 Use `node:test` with `tsx` so the test remains lightweight.
@@ -170,6 +197,7 @@ Expected: FAIL because the current strategy helpers do not expose these mission-
 Add planner helpers in `strategy.ts`, then update `CampaignCreative.tsx` and the new cards so the page defaults to:
 
 - brief input
+- selected knowledge packs / derived context summary
 - system plan
 - asset pack preview
 - pending decisions
@@ -231,7 +259,7 @@ Expected: FAIL because these labels do not exist yet.
 Re-label the editor-first affordances so the default experience stays campaign-first:
 
 - editor entry is still available, but clearly “advanced”
-- the current variant stays visible as context, not as the primary screen goal
+- the current variant and knowledge-aware rationale stay visible as context, not as the primary screen goal
 - project / studio links are still reachable, but visually secondary
 
 **Step 4: Run test to verify it passes**
@@ -293,6 +321,12 @@ Expected: FAIL because the current prompt/distribution context does not understa
 Add a light feedback bar in `CampaignCreative.tsx`, store the chosen feedback actions in the campaign model, and thread that context into prompt / publish preparation routes.
 
 Do not build analytics dashboards. This task is only about remembering human judgment and making it available to the next round.
+
+Where possible, attach the feedback to the shipped knowledge-aware campaign object instead of inventing a separate memory silo. The next round should be able to see:
+
+- which knowledge packs were active
+- which direction the human approved or rejected
+- which channels were paused or allowed
 
 **Step 4: Run test to verify it passes**
 
@@ -356,13 +390,13 @@ Expected: PASS.
 Validate this exact path:
 
 1. Open `/campaign-creative`
-2. Create a campaign with minimal brief input
-3. Confirm the page shows system plan + asset pack + pending actions
+2. Select one or more knowledge packs and create a campaign with minimal brief input
+3. Confirm the page shows knowledge-aware system plan + asset pack + pending actions
 4. Confirm advanced tuning stays collapsed / secondary
 5. Send one variant into editor
-6. Confirm editor still receives campaign context
+6. Confirm editor still receives campaign plus knowledge context
 7. Add one short feedback action
-8. Confirm the next prompt / publish preparation sees that feedback
+8. Confirm the next prompt / publish preparation sees both the feedback and the originating knowledge-aware campaign context
 
 **Step 4: Stage release evidence**
 

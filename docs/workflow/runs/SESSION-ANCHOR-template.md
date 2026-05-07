@@ -6,9 +6,18 @@
 ## Run Summary
 - Run ID: <run-id>
 - Goal: [Copy the one-sentence goal from planner-spec.md]
+- North Star: [Campaign Creative Agent must start from campaign brief, produce creative assets/variants, and move them into distribution.]
 - Owner: [owner name]
 - Branch or commit context: [branch@commit]
 - Last updated: [ISO-8601 timestamp]
+
+## Product Shape Guardrail
+
+Use this short version in every campaign-creative-related run:
+
+> `Campaign Creative Agent` must start from campaign brief, produce creative assets or variants, and move them into distribution.
+
+If a change improves a local tool or editing experience but does not make the system more capable on this chain, treat it as secondary work rather than core roadmap progress.
 
 ## Acceptance Criteria Snapshot
 - AC-01: [summary]

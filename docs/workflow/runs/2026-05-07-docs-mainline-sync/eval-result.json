@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-07-docs-mainline-sync",
+  "timestamp": "2026-05-07T02:29:57Z",
+  "checks": {
+    "backend_build": { "status": "pass", "error": "" },
+    "frontend_build": { "status": "pass", "error": "" },
+    "typescript": { "status": "pass", "errors": [] },
+    "api_health": { "status": "fail", "code": 000000 },
+    "smoke_tests": []
+  },
+  "verdict": "P1_WARN"
+}

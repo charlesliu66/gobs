@@ -2068,7 +2068,9 @@ ole="presentation"
 
 ---
 
-*Last updated: 2026-05-06 (v0.146)*
+*Last updated: 2026-05-07 (v0.147)*
+
+Latest update 2026-05-07: Synced the campaign mission-control, fastpublish knowledge-integration, and workflow-template docs into the latest mainline planning baseline.
 
 Latest update 2026-05-06: Campaign Creative handoff now carries applied knowledge packs and structured knowledge context into the Editor prompt, strategy summary, and project memory.
 
@@ -2082,6 +2084,12 @@ Latest update 2026-05-06: Advanced Production and Editor mainline English intera
 
 
 ---
+
+## v0.147 - 2026-05-07 (Planning and Workflow Docs Sync Addendum)
+- Added the fastpublish knowledge-integration design and implementation plans to the repo's main planning index so the shipped Knowledge Brain foundation and editor handoff work have a stable upstream reference.
+- Updated the campaign mission-control phase-0 implementation plan so it explicitly depends on the landed knowledge-aware creative flow instead of the older brief-only assumption.
+- Added a reusable `planner-spec-template.md` and upgraded the run templates with a shared Campaign Creative Agent north-star guardrail.
+- Cleaned the plans index to point at active workspace documents instead of stale machine-specific paths.
 
 ## v0.142 - 2026-05-06 (Campaign Creative Knowledge Addendum)
 - Added a Knowledge Brain selector on /campaign-creative so users can apply the current game's persisted knowledge packs before generating a strategy.
