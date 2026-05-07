@@ -1,4 +1,7 @@
 import {
+  createHash,
+} from 'node:crypto';
+import {
   type CampaignKnowledgePack,
   type CampaignKnowledgePackType,
   type CampaignKnowledgeSource,
@@ -6,8 +9,15 @@ import {
   saveCampaignKnowledgeSource,
   upsertCampaignKnowledgePack,
 } from './campaignKnowledgeStore.js';
+import {
+  GOLD_AND_GLORY_CANONICAL_PACKS,
+  GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID,
+  GOLD_AND_GLORY_GAME_ID,
+  type CanonicalKnowledgePackSeed,
+} from '../config/campaignKnowledge/goldAndGloryCanonicalPacks.js';
 
 export const FASTPUBLISH_CORE_TEMPLATE_ID = 'fastpublish-core';
+export { GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID };
 
 type TemplatePackSeed = {
   type: CampaignKnowledgePackType;
@@ -18,6 +28,11 @@ type TemplatePackSeed = {
   avoid: string[];
   hookSeeds: string[];
   visualCues: string[];
+  sources?: Array<{
+    title: string;
+    relativePath?: string;
+    content: string;
+  }>;
 };
 
 const FASTPUBLISH_CORE_TEMPLATE: TemplatePackSeed[] = [
@@ -111,6 +126,51 @@ function toTemplatePackId(type: CampaignKnowledgePackType): string {
   return `ckp_tpl_${type}`;
 }
 
+function toCanonicalSourceId(type: CampaignKnowledgePackType, index: number): string {
+  return `cks_gng_${type}_${String(index + 1).padStart(2, '0')}`;
+}
+
+function toCanonicalPackId(type: CampaignKnowledgePackType): string {
+  return `ckp_gng_${type}`;
+}
+
+function checksumFor(templateId: string, type: CampaignKnowledgePackType, content: string): string {
+  const hash = createHash('sha256').update(`${templateId}:${type}:${content}`).digest('hex');
+  return `${templateId}:sha256:${hash}`;
+}
+
+function getTemplatePackSeeds(gameId: string, templateId: string): Array<TemplatePackSeed | CanonicalKnowledgePackSeed> {
+  if (templateId === FASTPUBLISH_CORE_TEMPLATE_ID) {
+    return FASTPUBLISH_CORE_TEMPLATE;
+  }
+  if (templateId === GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID) {
+    if (gameId !== GOLD_AND_GLORY_GAME_ID) {
+      throw new Error('Gold and Glory canonical brain can only be imported for gold-and-glory');
+    }
+    return GOLD_AND_GLORY_CANONICAL_PACKS;
+  }
+  throw new Error('Unsupported templateId');
+}
+
+function getPackId(seed: TemplatePackSeed | CanonicalKnowledgePackSeed, templateId: string): string {
+  return templateId === GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID ? toCanonicalPackId(seed.type) : toTemplatePackId(seed.type);
+}
+
+function getSourceSeeds(seed: TemplatePackSeed | CanonicalKnowledgePackSeed): Array<{
+  title: string;
+  relativePath?: string;
+  content: string;
+}> {
+  return seed.sources && seed.sources.length > 0
+    ? seed.sources
+    : [
+        {
+          title: `${seed.title} Template`,
+          content: [seed.summary, ...seed.facts, ...seed.preferences, ...seed.avoid].join('\n'),
+        },
+      ];
+}
+
 export async function importCampaignKnowledgeTemplate(
   username: string,
   gameId: string,
@@ -121,27 +181,35 @@ export async function importCampaignKnowledgeTemplate(
   packs: CampaignKnowledgePack[];
   sources: CampaignKnowledgeSource[];
 }> {
-  if (templateId !== FASTPUBLISH_CORE_TEMPLATE_ID) {
-    throw new Error('Unsupported templateId');
-  }
+  const packSeeds = getTemplatePackSeeds(gameId, templateId);
 
   const sources: CampaignKnowledgeSource[] = [];
   const importedPackIds: string[] = [];
 
-  for (const seed of FASTPUBLISH_CORE_TEMPLATE) {
-    const source = await saveCampaignKnowledgeSource(username, gameId, {
-      sourceId: toTemplateSourceId(seed.type),
-      gameId,
-      sourceType: 'fastpublish-template',
-      title: `${seed.title} Template`,
-      checksum: `${templateId}:${seed.type}`,
-      packType: seed.type,
-      content: [seed.summary, ...seed.facts, ...seed.preferences, ...seed.avoid].join('\n'),
-    });
-    sources.push(source);
+  for (const seed of packSeeds) {
+    const sourceIds: string[] = [];
+    const sourceSeeds = getSourceSeeds(seed);
+
+    for (const [index, sourceSeed] of sourceSeeds.entries()) {
+      const sourceId = templateId === GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID
+        ? toCanonicalSourceId(seed.type, index)
+        : toTemplateSourceId(seed.type);
+      const source = await saveCampaignKnowledgeSource(username, gameId, {
+        sourceId,
+        gameId,
+        sourceType: 'fastpublish-template',
+        title: sourceSeed.title,
+        originalPath: sourceSeed.relativePath,
+        checksum: checksumFor(templateId, seed.type, sourceSeed.content),
+        packType: seed.type,
+        content: sourceSeed.content,
+      });
+      sources.push(source);
+      sourceIds.push(source.sourceId);
+    }
 
     const pack = await upsertCampaignKnowledgePack(username, gameId, {
-      packId: toTemplatePackId(seed.type),
+      packId: getPackId(seed, templateId),
       gameId,
       type: seed.type,
       title: seed.title,
@@ -152,7 +220,7 @@ export async function importCampaignKnowledgeTemplate(
       avoid: seed.avoid,
       hookSeeds: seed.hookSeeds,
       visualCues: seed.visualCues,
-      sourceIds: [source.sourceId],
+      sourceIds,
       templateId,
     });
     importedPackIds.push(pack.packId);

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID,
+  GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID,
   campaignKnowledgeDeriveContextPath,
   campaignKnowledgeImportTemplatePath,
   campaignKnowledgePacksPath,
@@ -17,4 +19,9 @@ test('campaign knowledge API helpers build the expected endpoint paths', () => {
 test('campaign knowledge API helpers encode game ids safely', () => {
   assert.equal(campaignKnowledgePacksPath('SEA launch'), '/api/campaign-knowledge/games/SEA%20launch/packs');
   assert.equal(campaignKnowledgeImportTemplatePath('TH/ID'), '/api/campaign-knowledge/games/TH%2FID/import-template');
+});
+
+test('campaign knowledge API defaults to the Gold and Glory canonical brain template', () => {
+  assert.equal(GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID, 'gold-and-glory-canonical');
+  assert.equal(DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID, GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID);
 });

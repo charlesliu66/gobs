@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   createKnowledgeSource,
+  DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID,
   importKnowledgeTemplate,
   listCampaignKnowledgePacks,
   type CampaignKnowledgePack,
@@ -375,7 +376,7 @@ export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
     setKnowledgeLoading(true);
     setKnowledgeError(null);
     try {
-      const result = await importKnowledgeTemplate(selectedGameId);
+      const result = await importKnowledgeTemplate(selectedGameId, DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID);
       setKnowledgePacks(result.packs);
     } catch (error) {
       setKnowledgeError(error instanceof Error ? error.message : '导入知识包失败');

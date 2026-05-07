@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.152 - 2026-05-07
+**Gold and Glory canonical fastpublish brain**
+**Campaign Knowledge / Fastpublish Brain:**
+- Added a committed `gold-and-glory-canonical` brain seed derived from curated fastpublishing knowledge across brand tone, compliance, visual style, Malaysia market, persona, live ops calendar, live ops history, and selling-point playbook.
+- Backend template import now creates stable persisted source and pack ids for the canonical brain, with original fastpublishing source paths and `sha256` checksums for future refresh/diff runs.
+- Frontend brain import now targets the Gold and Glory canonical template instead of the generic `fastpublish-core` demo template, and the Platform Framework action copy now says `GNG Brain` explicitly.
+**Tests / Docs:**
+- Added targeted backend coverage for repeatable canonical import, wrong-game protection, source metadata, and derived campaign context; added frontend coverage for the default canonical template id; documented the manual fastpublishing -> GOBS refresh workflow.
+
 ## v0.151 - 2026-05-07
 **Gold and Glory single-brain shell correction**
 **Campaign Creative / Knowledge Brain / Platform Memory:**

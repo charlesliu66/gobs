@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.151)*
+*Last updated: 2026-05-07 (v0.152)*
 
-**Latest update - v0.151**
-- Corrected the marketer-facing Knowledge Brain shell so the only visible frontstage brain target is `Gold and Glory`.
-- Removed historical demo seed framing such as `Project Nova Arena`, `Idle Kingdom Go`, and `Current Game` from the Campaign Creative knowledge surface.
-- Kept product truth explicit: this slice fixes the frontstage shell only and does not claim that the real Gold and Glory fastpublish brain content has already been fully ingested.
+**Latest update - v0.152**
+- Added the first real `Gold and Glory` canonical brain seed derived from curated fastpublishing knowledge.
+- The backend can now import `gold-and-glory-canonical` into persistent Campaign Knowledge sources and packs with source paths and checksums.
+- The frontend import flow now targets the Gold and Glory canonical brain instead of the generic `fastpublish-core` demo template.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -253,6 +253,14 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.152 - 2026-05-07
+**Gold and Glory canonical fastpublish brain**
+
+- **[campaign knowledge backend] Added a committed Gold and Glory canonical brain seed** (`h5-video-tool-api/src/config/campaignKnowledge/goldAndGloryCanonicalPacks.ts`, `h5-video-tool-api/src/services/campaignKnowledgeImport.ts`): importing `gold-and-glory-canonical` creates 8 persisted ready packs covering brand tone, compliance, visual style, Malaysia market, persona, live ops calendar, live ops history, and selling-point playbook.
+- **[source integrity] Stored durable source metadata for the canonical brain** (`h5-video-tool-api/src/services/campaignKnowledgeImport.ts`): each imported source now carries an original fastpublishing path and `gold-and-glory-canonical:sha256:<hash>` checksum so future refresh runs can diff against the source of truth.
+- **[frontend brain import] Pointed the Gold and Glory import flow at the canonical template** (`h5-video-tool/src/api/campaignKnowledge.ts`, `h5-video-tool/src/context/PlatformMemoryContext.tsx`, `h5-video-tool/src/pages/PlatformFramework.tsx`): the visible action now imports GNG Brain instead of the generic recommended/demo packs.
+- **[docs/tests] Documented the manual fastpublishing refresh loop and added targeted coverage** (`docs/plans/2026-05-07-gold-and-glory-canonical-brain-sync-design.md`, `h5-video-tool-api/tests/campaignKnowledgeImport.test.ts`, `h5-video-tool/tests/campaignKnowledgeApi.test.ts`): repeatable import, wrong-game protection, source metadata, derivation context, and default template selection are covered.
 
 ### v0.151 - 2026-05-07
 **Gold and Glory single-brain shell correction**

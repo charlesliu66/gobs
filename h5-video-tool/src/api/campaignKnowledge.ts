@@ -8,6 +8,8 @@ export const CAMPAIGN_KNOWLEDGE_PACK_TYPES = [
   'live_ops_history',
   'selling_point_playbook',
 ] as const;
+export const GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID = 'gold-and-glory-canonical';
+export const DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID = GOLD_AND_GLORY_CANONICAL_TEMPLATE_ID;
 
 export type CampaignKnowledgePackType = (typeof CAMPAIGN_KNOWLEDGE_PACK_TYPES)[number];
 export type CampaignKnowledgePackStatus = 'draft' | 'ready' | 'archived';
@@ -72,7 +74,7 @@ export async function listCampaignKnowledgePacks(
 
 export async function importKnowledgeTemplate(
   gameId: string,
-  templateId = 'fastpublish-core',
+  templateId = DEFAULT_CAMPAIGN_KNOWLEDGE_TEMPLATE_ID,
 ): Promise<{ gameId: string; importedPackIds: string[]; packs: CampaignKnowledgePack[] }> {
   const { apiPost } = await loadClient();
   return apiPost(campaignKnowledgeImportTemplatePath(gameId), {

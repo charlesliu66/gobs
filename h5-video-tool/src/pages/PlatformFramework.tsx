@@ -261,18 +261,18 @@ export function PlatformFramework() {
       {/* Upload + Brain */}
       <section id="knowledge-brain" className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6">
-          <SectionTitle title="Knowledge Brain（第一批真实接入）" desc="这轮先打通推荐知识包导入与持久化，手工资料上传放到下一阶段。" action={<span className="rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">Step 2</span>} />
+          <SectionTitle title="Gold and Glory Brain（真实 fastpublish 接入）" desc="把 fastpublishing 中已整理的品牌、市场、人群、活动和卖点知识灌进持久化脑子。" action={<span className="rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">Step 2</span>} />
           <div className="mt-6 rounded-3xl border border-dashed border-[var(--color-primary)]/40 bg-[var(--color-primary)]/6 p-6 text-center">
             <div className="text-base font-semibold text-[var(--color-text)]">
-              {knowledgeGameSupported ? '为当前游戏导入第一批 fastpublish 风格知识包' : '当前选中的新建游戏暂不支持持久化 Knowledge Brain'}
+              {knowledgeGameSupported ? '导入 Gold and Glory canonical fastpublish brain' : '当前选中的新建游戏暂不支持持久化 Knowledge Brain'}
             </div>
             <div className="mt-2 text-sm text-[var(--color-text-muted)]">
               {knowledgeGameSupported
-                ? '先把品牌语气、合规、市场、人群、卖点 playbook 导进来，后面再接手工资料与 GitHub 源导入。'
+                ? '会生成 8 类可选择 knowledge packs：品牌语气、合规、视觉、马来西亚市场、人群、活动日历、活动复盘、卖点 playbook。'
                 : '本轮只支持内置稳定游戏 ID 的知识包持久化。新增游戏入口先继续作为 demo 流程展示，避免刷新后丢失知识上下文。'}
             </div>
             <button type="button" disabled={!knowledgeGameSupported || knowledgeLoading} onClick={() => void importFastpublishKnowledge()} className="mt-5 rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/12 px-4 py-3 text-sm font-medium text-[var(--color-primary)] transition hover:bg-[var(--color-primary)]/18 disabled:cursor-not-allowed disabled:opacity-50">
-              {knowledgeLoading ? '导入中...' : '导入推荐知识包'}
+              {knowledgeLoading ? '导入中...' : '导入 GNG Brain'}
             </button>
           </div>
           {knowledgeError ? (
