@@ -1,0 +1,53 @@
+{
+  "run_id": "2026-05-07-campaign-to-distribution-handoff-mvp",
+  "timestamp": "2026-05-07T10:19:47Z",
+  "checks": {
+    "backend_seam_tests": {
+      "status": "pass",
+      "command": "npx --prefix h5-video-tool-api tsx --test h5-video-tool-api/tests/campaignDistributionPackage.test.ts",
+      "details": "5/5 green"
+    },
+    "frontend_focused_tests": {
+      "status": "pass",
+      "command": "npx --prefix h5-video-tool-api tsx --test h5-video-tool/tests/campaignDistributionApi.test.ts h5-video-tool/tests/campaignDistributionPackage.test.ts h5-video-tool/tests/campaignDistributionPanelPresence.test.ts h5-video-tool/tests/distributionPackageIntake.test.ts h5-video-tool/tests/campaignCreativeEditorHandoffPresence.test.ts h5-video-tool/tests/distributionPendingPackagesPresence.test.ts h5-video-tool/tests/loginApiBasePresence.test.ts",
+      "details": "9/9 green"
+    },
+    "backend_typecheck": {
+      "status": "pass",
+      "command": ".\\node_modules\\.bin\\tsc.cmd --noEmit",
+      "details": "h5-video-tool-api"
+    },
+    "frontend_typecheck": {
+      "status": "pass",
+      "command": ".\\node_modules\\.bin\\tsc.cmd --noEmit",
+      "details": "h5-video-tool"
+    },
+    "workflow_guard_build": {
+      "status": "pass",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-07-campaign-to-distribution-handoff-mvp --stage build"
+    },
+    "workflow_guard_verify": {
+      "status": "pass",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-07-campaign-to-distribution-handoff-mvp --stage verify"
+    },
+    "staging_smoke": {
+      "status": "pass_with_warnings",
+      "command": "smoke_http.ps1 -Env staging -Depth full -ExpectedCommit c2fc133 -RunId 2026-05-07-campaign-to-distribution-handoff-mvp",
+      "details": "Version payload staging @ c2fc133; key routes reachable"
+    },
+    "staging_api_handoff": {
+      "status": "pass",
+      "details": "login -> mission-brief -> create/list/get/patch package cdp_ytAcghZT9L"
+    },
+    "prod_smoke": {
+      "status": "pass_with_warnings",
+      "command": "smoke_http.ps1 -Env prod -Depth full -ExpectedCommit c2fc133 -RunId 2026-05-07-campaign-to-distribution-handoff-mvp",
+      "details": "Version payload prod @ c2fc133; key routes reachable"
+    },
+    "prod_api_readonly": {
+      "status": "pass",
+      "details": "login -> mission-brief -> list packages"
+    }
+  },
+  "verdict": "PASS"
+}

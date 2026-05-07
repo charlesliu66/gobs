@@ -6,7 +6,7 @@
 - Owner: codex
 - Branch context: main after mission-first release; implementation branch may use `codex/campaign-to-distribution-handoff-mvp`
 - Gate 1 planning baseline: a94a7f5
-- Last updated: 2026-05-07T17:25:00+08:00
+- Last updated: 2026-05-07T18:19:47+08:00
 
 ## Acceptance Criteria Snapshot
 - AC-01: Campaign Creative can create a distribution-package draft from a confirmed generated brief plus selected/recommended variant while preserving mission/brief snapshot, CTA, copy, assets, asset readiness, and routed knowledge context.
@@ -76,11 +76,11 @@
 - Any change to AGENTS.md forbidden video-generation service files.
 
 ## Progress Checklist
-- [ ] Planner approved
-- [ ] Challenger approved
-- [ ] Builder self-test recorded
-- [ ] Verifier P0/P1 count is zero
-- [ ] Release decision written
+- [x] Planner approved
+- [x] Challenger approved
+- [x] Builder self-test recorded
+- [x] Verifier P0/P1 count is zero
+- [x] Release decision written
 
 ## Escalation Rules
 - Escalate if a change requires touching any AGENTS.md forbidden file.
