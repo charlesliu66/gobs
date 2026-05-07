@@ -3,13 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.160)*
+*Last updated: 2026-05-07 (v0.161)*
 
-**Latest update - v0.160**
-- Implemented the backend `Campaign Distribution` package seam: create/list/read/update APIs now persist package payloads in SQLite with server-owned audit fields and owner filtering.
-- Added a mission-first `Distribution Package` panel to `/campaign-creative`, so a confirmed brief plus selected/recommended variant can become a pending package without forcing the default path through Editor.
-- Added `Pending Packages` intake in `/distribute`, including `?package=` hydration, package-to-draft mapping, missing-asset next actions, and explicit account-selection safety.
-- Aligned the login page with the shared `VITE_API_BASE_URL`, so isolated worktrees and split-port browser smoke authenticate against the same backend as the rest of the mission-first flow.
+**Latest update - v0.161**
+- Compacted routed Gold and Glory knowledge context before `Mission Brief` LLM calls, so verbose ready-pack sets stay inside a safe prompt budget and no longer drop the default mission-first entry into deterministic fallback just because the model response was truncated.
+- Added a focused backend regression test for the verbose-context case, alongside the existing mission-brief happy-path and fallback coverage.
+- Preserved the mission-first main chain and backend-routed brain model: the default Campaign Creative page still consumes routed knowledge context automatically and does not reintroduce marketer-facing pack selection or the old expert brief form.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

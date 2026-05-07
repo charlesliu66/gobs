@@ -12,6 +12,14 @@
 **Tests / Build:**
 - Added focused frontend source/adapter tests plus backend seam tests, added a login auth-base regression test, reran backend/frontend typecheck, reran the frontend build, revalidated `workflow_guard --stage build/verify`, and completed local browser smoke for `/campaign-creative` -> `/distribute?package=<id>`.
 
+## v0.161 - 2026-05-07
+**Mission-first brief generation stability**
+**Campaign Creative / Gold and Glory Brain:**
+- Compacted the routed Gold and Glory knowledge digest before `POST /api/campaign-creative/mission-brief` LLM calls, capping per-section verbosity and total prompt size so large ready-pack sets no longer truncate the JSON reply and force a noisy deterministic fallback in the default Campaign Creative path.
+- Preserved the backend-routed knowledge model and full returned `knowledgeContext`; only the LLM-facing digest was compacted, so downstream System Plan / Variant Pack / Distribution Package consumers still receive the same routed context fields.
+**Tests / Build:**
+- Added a focused backend regression test for verbose routed context and reran the backend mission-brief suite plus frontend/backend production builds before release sync.
+
 ## v0.159 - 2026-05-07
 **Campaign distribution handoff mission-first alignment**
 **Docs / Product Planning:**

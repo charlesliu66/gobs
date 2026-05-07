@@ -101,6 +101,20 @@ function pickReadyKnowledgePackIds(packs: CampaignKnowledgePack[]): string[] {
   return packs.filter((pack) => pack.status === 'ready').map((pack) => pack.packId);
 }
 
+const CONTEXT_DIGEST_MAX_ITEMS_PER_SECTION = 3;
+const CONTEXT_DIGEST_ITEM_CHAR_LIMIT = 120;
+const CONTEXT_DIGEST_SECTION_CHAR_LIMIT = 260;
+const CONTEXT_DIGEST_TOTAL_CHAR_LIMIT = 1100;
+const CONTEXT_DIGEST_MIN_SECTION_CHAR_LIMIT = 60;
+
+function clipDigestText(value: string, limit: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
+}
+
 function buildContextDigest(context: DerivedCampaignKnowledgeContext): string {
   const sections = [
     ['marketTruth', context.marketTruth],
@@ -112,13 +126,38 @@ function buildContextDigest(context: DerivedCampaignKnowledgeContext): string {
     ['forbiddenClaims', context.forbiddenClaims],
   ];
 
-  return sections
-    .map(([label, values]) => {
-      const lines = (values as string[]).slice(0, 8);
-      return lines.length > 0 ? `${label}: ${lines.join(' | ')}` : '';
-    })
-    .filter(Boolean)
-    .join('\n');
+  const lines: string[] = [];
+  let usedChars = 0;
+
+  for (const [label, values] of sections) {
+    const compactValues = (values as string[])
+      .map((value) => clipDigestText(value, CONTEXT_DIGEST_ITEM_CHAR_LIMIT))
+      .filter(Boolean)
+      .slice(0, CONTEXT_DIGEST_MAX_ITEMS_PER_SECTION);
+
+    if (compactValues.length === 0) {
+      continue;
+    }
+
+    const renderedLine = clipDigestText(
+      `${label}: ${compactValues.join(' | ')}`,
+      CONTEXT_DIGEST_SECTION_CHAR_LIMIT,
+    );
+    const remainingChars = CONTEXT_DIGEST_TOTAL_CHAR_LIMIT - usedChars;
+    if (remainingChars < CONTEXT_DIGEST_MIN_SECTION_CHAR_LIMIT) {
+      break;
+    }
+
+    const budgetedLine = clipDigestText(renderedLine, Math.min(CONTEXT_DIGEST_SECTION_CHAR_LIMIT, remainingChars));
+    if (!budgetedLine) {
+      continue;
+    }
+
+    lines.push(budgetedLine);
+    usedChars += budgetedLine.length + 1;
+  }
+
+  return lines.join('\n');
 }
 
 function extractJsonObject(text: string): unknown {

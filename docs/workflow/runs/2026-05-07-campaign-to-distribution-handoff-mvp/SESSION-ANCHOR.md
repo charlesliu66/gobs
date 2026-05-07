@@ -39,6 +39,7 @@
 - h5-video-tool-api/src/routes/campaignDistribution.ts
 - h5-video-tool-api/src/index.ts
 - h5-video-tool-api/src/db/assetDb.ts
+- h5-video-tool-api/src/services/campaignMissionBrief.ts
 - h5-video-tool-api/src/services/campaignDistributionPackage.ts
 - h5-video-tool-api/tests/
 - PRODUCT.md
