@@ -3,14 +3,14 @@
 ## 1) Project Goal
 - Business goal: Remove stale task-routing signals so future GOBS Agent work stays on the Campaign Creative Agent mainline.
 - User value: The next run can start from a clean product map instead of rediscovering which documents are stale.
-- Success metrics: Current task index names the right next work, release notes have no duplicate trailing blocks, and no unfinished TODO run is shown as active.
+- Success metrics: Current task index names the right next work, release notes have no duplicate trailing blocks, and Advanced Studio side work is not shown as the next product-mainline task.
 
 ## 2) Scope
 ### In Scope
 - Rewrite `docs/TASK-INDEX.md` as the current entry point.
 - Add a small v0.153 documentation-hygiene record to `PRODUCT.md` and `CHANGELOG.md`.
 - Remove duplicate appended release-note fragments from `PRODUCT.md` and `CHANGELOG.md`.
-- Remove the incomplete `docs/workflow/runs/2026-05-07-production-english-reference-ux/` TODO run.
+- Ensure `docs/workflow/runs/2026-05-07-production-english-reference-ux/` is not treated as current product-mainline work; if a completed parallel run exists, preserve it as Advanced Studio side-lane history.
 
 ### Out of Scope
 - Any frontend or backend runtime behavior.
@@ -21,7 +21,7 @@
 - Keep the cleanup text-first and scoped to documentation.
 - Treat `CHANGELOG.md` as the canonical recent release history and `PRODUCT.md` as product overview plus near-term changelog.
 - Do not move old valid history; only remove duplicated trailing fragments that repeat existing version entries.
-- Prefer deletion of the template-only run over marking it active, because it had no implemented changes or verification evidence.
+- Prefer removing or reclassifying template-only run signals over marking them active; after a completed parallel run lands, preserve it but keep it out of the next-mainline slot.
 
 ## 4) Risks
 | Risk | Trigger | Impact | Mitigation | Owner |
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | AC-01 | Task index reflects current mainline | Read `docs/TASK-INDEX.md` | It names Gold and Glory Brain, Campaign Creative Agent north star, and next recommended work |
 | AC-02 | Release notes are deduplicated | Search version markers in `PRODUCT.md` and `CHANGELOG.md` | No stale `v0.150` tail in PRODUCT and no repeated `v0.135-v0.138` tail in CHANGELOG |
-| AC-03 | Template-only run is removed from active runs | `Test-Path` and `git status` | `production-english-reference-ux` is no longer present or staged |
+| AC-03 | Advanced Studio reference UX work is not treated as the next product mainline | Task index and run status review | `production-english-reference-ux` is either absent as a stale TODO run or present only as completed Advanced Studio side-lane history |
 
 ## 6) Test Matrix
 | Category | Cases |

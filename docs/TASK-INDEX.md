@@ -7,7 +7,7 @@
 
 ## 当前状态
 
-- 最新已发布主线：`main@1ee752c`，线上已接入真实 `Gold and Glory` canonical fastpublish brain。
+- 最新发布主线以 `/api/system/version` 和 `origin/main` 为准；当前阶段已经接入真实 `Gold and Glory` canonical fastpublish brain。
 - 当前产品北极星：`Campaign Creative Agent` 必须从 campaign brief 出发，产出创意素材或变体，并把它们送入分发。
 - 当前默认受众：市场和运营同学；专业剪辑、制片和深度调参能力保留在 `Advanced Studio`，不再定义默认体验。
 - 当前最值得继续推进的方向：
@@ -49,12 +49,13 @@
 | `2026-05-07-campaign-mission-control-phase0` | 把默认体验改成面向市场/运营的 Campaign Mission Control | 已完成 |
 | `2026-05-07-campaign-advanced-studio-phase1` | 下沉 Advanced Studio，不让专业工具抢默认主链路 | 已完成 |
 | `2026-05-07-docs-mainline-sync` | 同步 campaign / knowledge / workflow 模板文档 | 已完成 |
+| `2026-05-07-production-english-reference-ux` | Advanced Production 英文 reference-image UX 修复 | 已完成 / 非当前产品主链路 |
 
 ---
 
 ## 暂停或不作为当前主线
 
-- `production-english-reference-ux` 属于 Advanced Studio 英文体验清理，不是当前 Campaign Creative Agent 主链路；未完成的 TODO run 已从 active runs 清理，后续如确有需要应重新开 scoped run。
+- `production-english-reference-ux` 属于 Advanced Studio 英文体验清理，已由并行修复完成；它不是当前 Campaign Creative Agent 主链路，后续不应抢占默认下一轮优化。
 - 4 月下旬的稳定性、i18n、Production Wizard 收口任务仍可回溯，但不再作为当前默认任务入口。
 
 ---

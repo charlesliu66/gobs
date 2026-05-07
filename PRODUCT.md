@@ -260,7 +260,7 @@
 
 - **[task index] Refreshed the current task entry point** (`docs/TASK-INDEX.md`): the index now points at the Gold and Glory canonical brain, Campaign Creative Agent north star, and the recommended next mainline of distribution handoff, human feedback, and brain refresh.
 - **[release notes] Removed duplicate trailing changelog fragments** (`PRODUCT.md`, `CHANGELOG.md`): stale appended `v0.150` and repeated `v0.135-v0.138` blocks no longer compete with the canonical recent history.
-- **[workflow runs] Cleared an unfinished Advanced Studio TODO run** (`docs/workflow/runs/2026-05-07-production-english-reference-ux/`): the incomplete template-only run is no longer presented as active mainline work.
+- **[workflow runs] Reclassified the Advanced Studio English-reference run as non-mainline work** (`docs/workflow/runs/2026-05-07-production-english-reference-ux/`): the originally stale TODO placeholder was cleaned up, and the subsequently completed fix is treated as an Advanced Studio side-lane rather than the next Campaign Creative Agent priority.
 
 ### v0.152 - 2026-05-07
 **Gold and Glory canonical fastpublish brain**

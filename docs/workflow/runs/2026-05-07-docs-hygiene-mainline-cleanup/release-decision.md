@@ -23,12 +23,12 @@
 | Unrelated untracked local docs/skill files | P3 | They pre-existed this run and are intentionally not staged. | Stage only scoped files; release guard may warn if it sees the whole worktree. | Before any unrelated cleanup commit |
 
 ## 5) Scope Compliance
-- Delivered in scope: task index refresh, release-note dedupe, unfinished TODO run cleanup, workflow documentation for this run.
+- Delivered in scope: task index refresh, release-note dedupe, non-mainline workflow signal cleanup, workflow documentation for this run.
 - Out-of-scope changes found: none in staged scope.
 - Notes: No runtime files, env files, deployment scripts, or forbidden backend service files were changed.
 
 ## 6) Release Boundary
-- What is guaranteed: repo documentation now points at the current Gold and Glory Campaign Creative Agent mainline and no longer exposes the unfinished Advanced Studio TODO run as active work.
+- What is guaranteed: repo documentation now points at the current Gold and Glory Campaign Creative Agent mainline and no longer treats Advanced Studio English-reference work as the next product-mainline task.
 - What is not guaranteed: full historical encoding repair of `PRODUCT.md`.
 - Environments validated: local docs checks plus frontend/backend builds passed; staging/prod validation pending after commit and push.
 

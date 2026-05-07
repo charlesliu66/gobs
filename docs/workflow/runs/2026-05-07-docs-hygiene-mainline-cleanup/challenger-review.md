@@ -11,7 +11,7 @@
 | None | N/A | No blocking issue found. | N/A |
 
 ## Challenge Notes
-- The cleanup should not implement the Advanced Studio English-reference work; it should only remove the unfinished TODO run from the active workflow set.
+- The cleanup should not implement the Advanced Studio English-reference work; it should only prevent that side-lane from being mistaken for the next Campaign Creative Agent mainline.
 - The release-note cleanup must avoid broad rewrites of `PRODUCT.md`, because much of its older history is already encoding-fragile.
 - A small v0.153 note is acceptable because this is a governance cleanup that affects future operator behavior.
 

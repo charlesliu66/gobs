@@ -2,10 +2,10 @@
 
 ## Run Summary
 - Run ID: 2026-05-07-docs-hygiene-mainline-cleanup
-- Goal: Clean stale task index, duplicate release notes, and unfinished non-mainline workflow run.
+- Goal: Clean stale task index, duplicate release notes, and non-mainline workflow signals.
 - North Star: Campaign Creative Agent must start from campaign brief, produce creative assets or variants, and move them into distribution.
 - Owner: codex
-- Branch or commit context: main@1ee752c
+- Branch or commit context: docs cleanup started after canonical brain release and was reconciled after origin/main@965c152 landed.
 - Last updated: 2026-05-07T07:21:15Z
 
 ## Product Shape Guardrail
@@ -17,7 +17,7 @@ This run is documentation hygiene only. It should make the current mainline easi
 ## Acceptance Criteria Snapshot
 - AC-01: `docs/TASK-INDEX.md` reflects the current Gold and Glory Campaign Creative Agent mainline instead of the stale April stability backlog.
 - AC-02: `PRODUCT.md` and `CHANGELOG.md` no longer contain duplicated trailing release-note fragments, while preserving canonical recent history.
-- AC-03: The unfinished template-only `production-english-reference-ux` run is removed from active workflow runs because it is not current product-mainline work.
+- AC-03: The `production-english-reference-ux` signal is not presented as the next Campaign Creative Agent mainline; after the parallel completed run landed, it is documented as an Advanced Studio side-lane.
 
 ## Editable Files (Builder Ownership)
 - docs/TASK-INDEX.md

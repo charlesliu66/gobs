@@ -10,7 +10,7 @@
 |---|---|---|---|
 | AC-01 | Rewrote the task index around the current Gold and Glory Campaign Creative Agent mainline and next recommended work. | `docs/TASK-INDEX.md` | Removed stale April stability/current-status references. |
 | AC-02 | Added v0.153 docs-hygiene notes and removed duplicate trailing release-note fragments. | `PRODUCT.md`, `CHANGELOG.md` | Preserved canonical recent history. |
-| AC-03 | Removed the unfinished template-only Advanced Studio English-reference run from active workflow runs. | `docs/workflow/runs/2026-05-07-production-english-reference-ux/` | The idea can be reopened later as a fresh scoped run. |
+| AC-03 | Reclassified the Advanced Studio English-reference run signal as non-mainline. | `docs/TASK-INDEX.md`, `docs/workflow/runs/2026-05-07-production-english-reference-ux/` | The completed parallel run can remain as history, but it is not the next Campaign Creative Agent priority. |
 
 ## 3) Not Implemented
 | AC ID | Reason | Impact | Proposed next step |
@@ -22,7 +22,7 @@
 |---|---|---|---|
 | Diff hygiene | `git diff --check` | PASS | Whitespace check completed; only Git CRLF warnings were reported. |
 | Marker check | `Select-String` on `PRODUCT.md` and `CHANGELOG.md` | PASS | `PRODUCT.md` now shows v0.153/v0.152 only at the top of recent history; duplicate v0.150 tail is gone. `CHANGELOG.md` no longer shows the repeated v0.135-v0.138 tail. |
-| Run cleanup | `Test-Path docs/workflow/runs/2026-05-07-production-english-reference-ux` | PASS | Returned `false` after removing the empty TODO run directory. |
+| Run cleanup | `Test-Path docs/workflow/runs/2026-05-07-production-english-reference-ux` plus post-merge review | PASS | Initially removed the empty TODO run directory; after the parallel completed run landed, task routing now classifies it as completed Advanced Studio side-lane work. |
 | Backend build | `npm run build` in `h5-video-tool-api` | PASS | TypeScript build and build-info generation succeeded. |
 | Frontend build | `npm run build` in `h5-video-tool` | PASS | Vite build succeeded; existing dynamic/static import warning remains non-blocking. |
 
@@ -37,6 +37,6 @@
 - If No, list deviations and reasons: N/A.
 
 ## 7) Change Summary
-- What changed: task index, release-note hygiene, and active workflow run cleanup.
+- What changed: task index, release-note hygiene, and active workflow signal cleanup.
 - Why changed: keep future work pointed at the Campaign Creative Agent mainline.
 - What did not change: runtime behavior, deployment scripts, env vars, and forbidden backend services.

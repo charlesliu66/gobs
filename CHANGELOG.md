@@ -2,12 +2,19 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.154 - 2026-05-07
+**Advanced Production English reference UX**
+**Advanced Studio / Production Wizard:**
+- Fixed English-mode Dreamina multimodal reference UX so reference cards, manual matching controls, context hints, and prompt restore actions follow English UI copy while preserving Dreamina's required `@图片n` protocol tokens.
+- Improved English reference injection for names such as `Mexican Gaming Son`, `Mexican Father`, and `Toothbrush Aisle` through unique aliases without stacking multiple tags on shared words.
+- Dreamina multimodal enqueue now submits the visible multimodal prompt instead of stale execution segment text, so queued jobs carry the image-reference prompt shown in the panel.
+
 ## v0.153 - 2026-05-07
 **Documentation hygiene and active-run cleanup**
 **Docs / Workflow:**
 - Refreshed `docs/TASK-INDEX.md` so the active project entry point reflects the current Gold and Glory Campaign Creative Agent mainline instead of the old April stability backlog.
 - Removed duplicate trailing release-note fragments from `PRODUCT.md` and `CHANGELOG.md`, keeping recent history canonical and easier to scan.
-- Cleared the unfinished template-only `production-english-reference-ux` workflow run from active runs; it remains a future Advanced Studio idea, not current product-mainline work.
+- Reclassified `production-english-reference-ux` as Advanced Studio side-lane work after the parallel fix landed, so it remains documented without becoming the current Campaign Creative Agent priority.
 
 ## v0.152 - 2026-05-07
 **Gold and Glory canonical fastpublish brain**

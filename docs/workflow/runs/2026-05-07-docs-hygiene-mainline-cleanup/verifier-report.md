@@ -12,7 +12,7 @@
 |---|---|---|
 | AC-01 | PASS | `docs/TASK-INDEX.md` now names Gold and Glory Brain, Campaign Creative Agent north star, and the next mainline work: distribution handoff, human feedback, and brain refresh. |
 | AC-02 | PASS | Version-marker search confirms `PRODUCT.md` starts at v0.153/v0.152 and no longer has the stale v0.150 appended tail; `CHANGELOG.md` starts at v0.153/v0.152 and no longer has the duplicate v0.135-v0.138 tail. |
-| AC-03 | PASS | `Test-Path docs/workflow/runs/2026-05-07-production-english-reference-ux` returned `false`. |
+| AC-03 | PASS | The stale TODO run was removed during cleanup; after the parallel completed run landed, `docs/TASK-INDEX.md` now classifies it as completed Advanced Studio side-lane work, not the next Campaign Creative Agent priority. |
 
 ## 3) Six-Class Check
 | Class | Result | Notes |
@@ -29,7 +29,7 @@
 |---|---|
 | `git diff --check` | PASS |
 | `Select-String` marker checks for `PRODUCT.md` and `CHANGELOG.md` | PASS |
-| `Test-Path docs/workflow/runs/2026-05-07-production-english-reference-ux` | PASS (`false`) |
+| `Test-Path docs/workflow/runs/2026-05-07-production-english-reference-ux` and post-merge task-index review | PASS |
 | `npm run build` in `h5-video-tool-api` | PASS |
 | `npm run build` in `h5-video-tool` | PASS |
 
