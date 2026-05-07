@@ -11,6 +11,12 @@ import type {
   WardrobeItem,
 } from './productionTypes';
 
+type ReferencePromptLocale = 'zh' | 'en';
+
+function normalizeReferencePromptLocale(locale?: string | null): ReferencePromptLocale {
+  return String(locale || '').trim().toLowerCase().startsWith('en') ? 'en' : 'zh';
+}
+
 /** 制作清单道具：供角色定妆时统一世界观（全表） */
 function formatProductionPropsForCharacter(props: PropItem[] | undefined): string {
   if (!props?.length) return '';
@@ -430,7 +436,9 @@ function firstPropVariantImageUrl(sheet: PropSheet): string | undefined {
 export function buildProductionShotVideoStoryboardText(
   shot: ProductionShot,
   globalStyleRef?: string,
+  locale?: ReferencePromptLocale,
 ): string {
+  const textLocale = normalizeReferencePromptLocale(locale);
   return [
     shot.structuredStill.sp_subject,
     shot.structuredStill.sp_environment,
@@ -439,12 +447,129 @@ export function buildProductionShotVideoStoryboardText(
     shot.structuredMotion.mp_motion,
     shot.structuredMotion.mp_camera,
     shot.structuredMotion.mp_tempo,
-    shot.dialogue ? `对白：${shot.dialogue}` : '',
-    shot.audioCue ? `声音：${shot.audioCue}` : '',
-    globalStyleRef?.trim() ? `整体视觉风格：${globalStyleRef.trim()}` : '',
+    shot.dialogue ? `${textLocale === 'en' ? 'Dialogue' : '对白'}：${shot.dialogue}` : '',
+    shot.audioCue ? `${textLocale === 'en' ? 'Audio' : '声音'}：${shot.audioCue}` : '',
+    globalStyleRef?.trim()
+      ? `${textLocale === 'en' ? 'Overall visual style' : '整体视觉风格'}：${globalStyleRef.trim()}`
+      : '',
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function isAsciiText(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 0x7f) return false;
+  }
+  return true;
+}
+
+function isAsciiWordChar(value: string | undefined): boolean {
+  return !!value && /[A-Za-z0-9_]/.test(value);
+}
+
+function aliasKey(value: string): string {
+  const trimmed = value.trim();
+  return isAsciiText(trimmed) ? trimmed.toLocaleLowerCase() : trimmed;
+}
+
+function uniqueAliases(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value) continue;
+    const key = aliasKey(value);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function findAliasIndex(text: string, name: string, from = 0): number {
+  const needle = name.trim();
+  if (!needle) return -1;
+  if (!isAsciiText(needle)) return text.indexOf(needle, from);
+  const haystack = text.toLocaleLowerCase();
+  const lowerNeedle = needle.toLocaleLowerCase();
+  let idx = haystack.indexOf(lowerNeedle, from);
+  while (idx >= 0) {
+    const before = text[idx - 1];
+    const after = text[idx + needle.length];
+    if (!isAsciiWordChar(before) && !isAsciiWordChar(after)) return idx;
+    idx = haystack.indexOf(lowerNeedle, idx + 1);
+  }
+  return -1;
+}
+
+function textIncludesAlias(text: string, name: string): boolean {
+  return findAliasIndex(text, name) >= 0;
+}
+
+function splitEntityName(name: string): string[] {
+  return name
+    .split(/[\s·・·/_-]+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= 2);
+}
+
+function buildEntityInjectNames(name: string): string[] {
+  const trimmed = name.trim();
+  const parts = splitEntityName(trimmed);
+  const suffixes = parts.length >= 2 ? [parts.slice(-2).join(' ')] : [];
+  const lastPart = parts.length ? parts[parts.length - 1]! : '';
+  return uniqueAliases([trimmed, ...suffixes, lastPart]);
+}
+
+function buildSceneInjectNames(name: string, sceneRef?: string): string[] {
+  const injectNames = buildEntityInjectNames(name);
+  if (sceneRef?.trim()) injectNames.push(sceneRef.trim());
+  if (name.includes(' - ')) injectNames.push(name.split(' - ')[0]!.trim());
+  return uniqueAliases(injectNames);
+}
+
+function buildInjectionSlots(entries: { injectNames: string[] }[]): { injectNames: string[]; k: number }[] {
+  const owners = new Map<string, Set<number>>();
+  entries.forEach((entry, index) => {
+    for (const name of uniqueAliases(entry.injectNames)) {
+      const key = aliasKey(name);
+      const set = owners.get(key) ?? new Set<number>();
+      set.add(index);
+      owners.set(key, set);
+    }
+  });
+
+  return entries.map((entry, index) => ({
+    injectNames: uniqueAliases(entry.injectNames).filter((name) => (owners.get(aliasKey(name))?.size ?? 0) === 1),
+    k: index + 1,
+  }));
+}
+
+function formatRefLabel(
+  kind: 'character' | 'scene' | 'prop',
+  name: string,
+  locale: ReferencePromptLocale,
+  stateLabel?: string | null,
+): string {
+  if (locale === 'en') {
+    if (kind === 'character') return `Character [${name}]${stateLabel ? ` (${stateLabel})` : ''}`;
+    if (kind === 'scene') return `Scene [${name}]`;
+    return `Prop [${name}]`;
+  }
+  if (kind === 'character') return stateLabel ? `角色「${name}」(${stateLabel})` : `角色「${name}」`;
+  if (kind === 'scene') return `场景「${name}」`;
+  return `道具「${name}」`;
+}
+
+function formatReferencePromptSuffix(entries: { label: string }[], locale: ReferencePromptLocale): string {
+  if (!entries.length) return '';
+  if (locale === 'en') {
+    return `Reference order (same as uploaded image order): ${entries
+      .map((entry, i) => `@图片${i + 1} is ${entry.label}`)
+      .join('; ')}.`;
+  }
+  return `参考对应（与上传素材顺序一致）：${entries.map((entry, i) => `@图片${i + 1}为${entry.label}`).join('，')}。`;
 }
 
 /**
@@ -453,10 +578,16 @@ export function buildProductionShotVideoStoryboardText(
 function tryInjectNameWithTag(text: string, name: string, tag: string): string | null {
   let from = 0;
   while (from < text.length) {
-    const i = text.indexOf(name, from);
+    const i = findAliasIndex(text, name, from);
     if (i < 0) return null;
-    if (text.slice(i + name.length).startsWith(tag)) {
+    const actualName = text.slice(i, i + name.length);
+    const afterText = text.slice(i + name.length);
+    if (afterText.startsWith(tag)) {
       from = i + name.length + tag.length;
+      continue;
+    }
+    if (/^@图片\d+/.test(afterText)) {
+      from = i + name.length;
       continue;
     }
     const after = text.slice(i + name.length, i + name.length + 1);
@@ -464,7 +595,7 @@ function tryInjectNameWithTag(text: string, name: string, tag: string): string |
       from = i + 1;
       continue;
     }
-    return text.slice(0, i) + name + tag + text.slice(i + name.length);
+    return text.slice(0, i) + actualName + tag + text.slice(i + name.length);
   }
   return null;
 }
@@ -499,34 +630,43 @@ function injectAtImageTagsInNarrative(
 /** 文案写「父亲」等称谓，但角色卡名为「龙父」「李父」等时的宽松匹配（排除「师父」等） */
 function fatherLikeCharacterName(nm: string): boolean {
   if (nm.includes('师')) return false;
-  return nm === '父亲' || nm === '爸爸' || /[父爸爹]/.test(nm);
+  return nm === '父亲'
+    || nm === '爸爸'
+    || /[父爸爹]/.test(nm)
+    || /\b(father|dad|daddy|papa)\b/i.test(nm);
 }
 
 function motherLikeCharacterName(nm: string): boolean {
   if (nm.includes('师父')) return false;
-  return nm === '母亲' || nm === '妈妈' || /[母妈娘]/.test(nm);
+  return nm === '母亲'
+    || nm === '妈妈'
+    || /[母妈娘]/.test(nm)
+    || /\b(mother|mom|mommy|mama)\b/i.test(nm);
 }
 
 /** 角色是否被本镜文案「点到」：全名包含、全名拆分部分匹配，或称谓与卡名对应 */
 export function characterMentionedInShotBlob(ch: CharacterSheet, blob: string): boolean {
   const nm = ch.name?.trim();
   if (!nm) return false;
-  if (blob.includes(nm)) return true;
+  if (textIncludesAlias(blob, nm)) return true;
   // 拆分全名，任意部分 >=2 字出现在 blob 里也算匹配（处理「桜木 小樱」→「小樱」）
-  const parts = nm.split(/[\s·・·\-_]+/).filter((p) => p.length >= 2);
-  if (parts.some((p) => blob.includes(p))) return true;
+  const parts = splitEntityName(nm);
+  if (parts.some((p) => textIncludesAlias(blob, p))) return true;
   if (/(父亲|爸爸|爹|老爹)/.test(blob) && fatherLikeCharacterName(nm)) return true;
+  if (/\b(father|dad|daddy|papa)\b/i.test(blob) && fatherLikeCharacterName(nm)) return true;
   if (/(母亲|妈妈|娘|老妈)/.test(blob) && motherLikeCharacterName(nm)) return true;
+  if (/\b(mother|mom|mommy|mama)\b/i.test(blob) && motherLikeCharacterName(nm)) return true;
   return false;
 }
 
 function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
   const nm = ch.name?.trim() ?? '';
-  if (nm && blob.includes(nm)) return blob.indexOf(nm);
+  const nameIndex = nm ? findAliasIndex(blob, nm) : -1;
+  if (nameIndex >= 0) return nameIndex;
   // 拆分部分匹配时取最早出现位置
-  const parts = nm.split(/[\s·・·\-_]+/).filter((p) => p.length >= 2);
+  const parts = splitEntityName(nm);
   const partMin = parts.reduce((min, p) => {
-    const idx = blob.indexOf(p);
+    const idx = findAliasIndex(blob, p);
     return idx >= 0 ? Math.min(min, idx) : min;
   }, 1e9);
   if (partMin < 1e9) return partMin;
@@ -534,8 +674,16 @@ function firstCharacterMentionIndex(ch: CharacterSheet, blob: string): number {
     const m = blob.match(/父亲|爸爸|爹|老爹/);
     if (m && m.index !== undefined) return m.index;
   }
+  if (nm && /\b(father|dad|daddy|papa)\b/i.test(blob) && fatherLikeCharacterName(nm)) {
+    const m = blob.match(/\b(father|dad|daddy|papa)\b/i);
+    if (m && m.index !== undefined) return m.index;
+  }
   if (nm && /(母亲|妈妈|娘|老妈)/.test(blob) && motherLikeCharacterName(nm)) {
     const m = blob.match(/母亲|妈妈|娘|老妈/);
+    if (m && m.index !== undefined) return m.index;
+  }
+  if (nm && /\b(mother|mom|mommy|mama)\b/i.test(blob) && motherLikeCharacterName(nm)) {
+    const m = blob.match(/\b(mother|mom|mommy|mama)\b/i);
     if (m && m.index !== undefined) return m.index;
   }
   return 1e9;
@@ -571,6 +719,7 @@ export function buildShotMultimodalRefPack(
   sceneSheets: SceneSheet[],
   propSheets?: PropSheet[],
   manualOverrides?: ProductionShot['manualRefOverrides'],
+  locale?: ReferencePromptLocale,
 ): {
   multimodalImages: { base64: string; mimeType: string }[];
   /** 与 multimodalImages 下标对齐，供 UI 展示 */
@@ -580,6 +729,7 @@ export function buildShotMultimodalRefPack(
   narrativeWithInlineTags: string;
   defaultVideoPrompt: string;
 } {
+  const textLocale = normalizeReferencePromptLocale(locale);
   const blob = [
     shot.subject,
     shot.action,
@@ -637,8 +787,8 @@ export function buildShotMultimodalRefPack(
     entries.push({
       base64: parsed.base64,
       mimeType: parsed.mimeType || 'image/png',
-      label: stateLabel ? `角色「${nm}」(${stateLabel})` : `角色「${nm}」`,
-      injectNames: nm ? [nm] : [],
+      label: formatRefLabel('character', nm, textLocale, stateLabel),
+      injectNames: nm ? buildEntityInjectNames(nm) : [],
     });
   }
 
@@ -655,15 +805,12 @@ export function buildShotMultimodalRefPack(
       const parsed = dataUrlToBase64Mime(url);
       if (parsed) {
         const sn = scene.name?.trim() || '';
-        const injectNames = new Set<string>();
-        if (sn) injectNames.add(sn);
-        if (scene.sceneRef?.trim()) injectNames.add(scene.sceneRef.trim());
-        if (sn.includes(' - ')) injectNames.add(sn.split(' - ')[0]!.trim());
+        const sceneName = sn || scene.sceneRef;
         entries.push({
           base64: parsed.base64,
           mimeType: parsed.mimeType || 'image/png',
-          label: `场景「${sn || scene.sceneRef}」`,
-          injectNames: [...injectNames],
+          label: formatRefLabel('scene', sceneName, textLocale),
+          injectNames: buildSceneInjectNames(sn, scene.sceneRef),
         });
       }
     }
@@ -680,7 +827,7 @@ export function buildShotMultimodalRefPack(
       propCandidates = propSheets.filter((ps) => {
         const nm = ps.name?.trim();
         if (!nm || nm.length < 2) return false;
-        return blob.includes(nm);
+        return buildEntityInjectNames(nm).some((candidate) => textIncludesAlias(blob, candidate));
       });
       propCandidates.sort((a, b) => b.name.length - a.name.length);
     }
@@ -693,23 +840,17 @@ export function buildShotMultimodalRefPack(
       entries.push({
         base64: parsed.base64,
         mimeType: parsed.mimeType || 'image/png',
-        label: `道具「${nm}」`,
-        injectNames: [nm],
+        label: formatRefLabel('prop', nm, textLocale),
+        injectNames: buildEntityInjectNames(nm),
       });
     }
   }
 
   const capped = entries.slice(0, 9);
-  const refPromptSuffix =
-    capped.length > 0
-      ? `参考对应（与上传素材顺序一致）：${capped.map((_, i) => `@图片${i + 1}为${capped[i]!.label}`).join('，')}。`
-      : '';
+  const refPromptSuffix = formatReferencePromptSuffix(capped, textLocale);
 
-  const baseNarrative = buildProductionShotVideoStoryboardText(shot);
-  const slots = capped.map((e, i) => ({
-    injectNames: e.injectNames,
-    k: i + 1,
-  }));
+  const baseNarrative = buildProductionShotVideoStoryboardText(shot, undefined, textLocale);
+  const slots = buildInjectionSlots(capped);
   const narrativeWithInlineTags =
     capped.length > 0 ? injectAtImageTagsInNarrative(baseNarrative, slots) : baseNarrative;
   const defaultVideoPrompt =
@@ -790,7 +931,9 @@ export async function buildShotMultimodalRefPackAsync(
   sceneSheets: SceneSheet[],
   propSheets?: PropSheet[],
   manualOverrides?: ProductionShot['manualRefOverrides'],
+  locale?: ReferencePromptLocale,
 ): Promise<ReturnType<typeof buildShotMultimodalRefPack>> {
+  const textLocale = normalizeReferencePromptLocale(locale);
   const blob = [
     shot.subject,
     shot.action,
@@ -846,8 +989,8 @@ export async function buildShotMultimodalRefPackAsync(
     entries.push({
       base64: parsed.base64,
       mimeType: parsed.mimeType,
-      label: stateLabel ? `角色「${nm}」(${stateLabel})` : `角色「${nm}」`,
-      injectNames: nm ? [nm] : [],
+      label: formatRefLabel('character', nm, textLocale, stateLabel),
+      injectNames: nm ? buildEntityInjectNames(nm) : [],
     });
   }
 
@@ -865,15 +1008,12 @@ export async function buildShotMultimodalRefPackAsync(
       if (raw) {
         const parsed = await compressImageToJpeg(raw.base64, raw.mimeType || 'image/png');
         const sn = scene.name?.trim() || '';
-        const injectNames = new Set<string>();
-        if (sn) injectNames.add(sn);
-        if (scene.sceneRef?.trim()) injectNames.add(scene.sceneRef.trim());
-        if (sn.includes(' - ')) injectNames.add(sn.split(' - ')[0]!.trim());
+        const sceneName = sn || scene.sceneRef;
         entries.push({
           base64: parsed.base64,
           mimeType: parsed.mimeType,
-          label: `场景「${sn || scene.sceneRef}」`,
-          injectNames: [...injectNames],
+          label: formatRefLabel('scene', sceneName, textLocale),
+          injectNames: buildSceneInjectNames(sn, scene.sceneRef),
         });
       }
     }
@@ -889,7 +1029,7 @@ export async function buildShotMultimodalRefPackAsync(
       propCandidates = propSheets.filter((ps) => {
         const nm = ps.name?.trim();
         if (!nm || nm.length < 2) return false;
-        return blob.includes(nm);
+        return buildEntityInjectNames(nm).some((candidate) => textIncludesAlias(blob, candidate));
       });
       propCandidates.sort((a, b) => b.name.length - a.name.length);
     }
@@ -903,23 +1043,17 @@ export async function buildShotMultimodalRefPackAsync(
       entries.push({
         base64: parsed.base64,
         mimeType: parsed.mimeType,
-        label: `道具「${nm}」`,
-        injectNames: [nm],
+        label: formatRefLabel('prop', nm, textLocale),
+        injectNames: buildEntityInjectNames(nm),
       });
     }
   }
 
   const capped = entries.slice(0, 9);
-  const refPromptSuffix =
-    capped.length > 0
-      ? `参考对应（与上传素材顺序一致）：${capped.map((_, i) => `@图片${i + 1}为${capped[i]!.label}`).join('，')}。`
-      : '';
+  const refPromptSuffix = formatReferencePromptSuffix(capped, textLocale);
 
-  const baseNarrative = buildProductionShotVideoStoryboardText(shot);
-  const slots = capped.map((e, i) => ({
-    injectNames: e.injectNames,
-    k: i + 1,
-  }));
+  const baseNarrative = buildProductionShotVideoStoryboardText(shot, undefined, textLocale);
+  const slots = buildInjectionSlots(capped);
   const narrativeWithInlineTags =
     capped.length > 0 ? injectAtImageTagsInNarrative(baseNarrative, slots) : baseNarrative;
   const defaultVideoPrompt =
@@ -935,11 +1069,17 @@ export async function buildShotMultimodalRefPackAsync(
 }
 
 /** 从已注入 @图片n 的文案里提取第 n 张图的插入位置上下文（用于 UI 提示） */
-export function extractAtImageContext(narrative: string, n: number): string {
+export function extractAtImageContext(narrative: string, n: number, locale?: string): string {
+  const textLocale = normalizeReferencePromptLocale(locale);
   const tag = `@图片${n}`;
   const idx = narrative.indexOf(tag);
   if (idx < 0) return '';
   const before = narrative.slice(Math.max(0, idx - 10), idx).trim();
+  if (textLocale === 'en') {
+    const fullBefore = narrative.slice(0, idx).trim();
+    const lastToken = fullBefore.split(/\s+/).filter(Boolean).at(-1) ?? before;
+    return lastToken ? `after "...${lastToken}"` : 'at the start of the prompt';
+  }
   return before ? `「…${before}」后` : '文案开头';
 }
 
@@ -952,19 +1092,21 @@ export function computeShotRefTags(
   },
   characterSheets: CharacterSheet[],
   sceneSheets: SceneSheet[],
+  locale?: string,
 ): string[] {
+  const textLocale = normalizeReferencePromptLocale(locale);
   const tags: string[] = [];
   const scene = sceneSheets.find((s) => s.sceneRef === shot.sceneRef || s.id === shot.sceneRef);
   if (scene) tags.push(`@${scene.name}`);
   const blob = `${shot.subject} ${shot.action}`;
   for (const ch of characterSheets) {
-    if (ch.name && blob.includes(ch.name)) {
+    if (ch.name && characterMentionedInShotBlob(ch, blob)) {
       const node = getCharacterActiveNode(ensureCharacterLookTree(ch));
       const lab = node?.label ?? ch.variants[0]?.label;
       tags.push(`@${ch.name}${lab ? `-${lab}` : ''}`);
     }
   }
-  return tags.length ? tags : [`@场景:${shot.sceneRef}`];
+  return tags.length ? tags : [`@${textLocale === 'en' ? 'scene' : '场景'}:${shot.sceneRef}`];
 }
 
 /**

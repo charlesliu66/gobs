@@ -1,0 +1,55 @@
+{
+  "runId": "2026-05-07-production-english-reference-ux",
+  "status": "pass",
+  "checkedAt": "2026-05-07T07:20:00Z",
+  "commitUnderTest": "codex/production-english-reference-ux working tree",
+  "checks": [
+    {
+      "name": "focused_multimodal_refs",
+      "command": "node --test tests/productionMultimodalRefs.test.ts",
+      "status": "pass",
+      "evidence": "3/3 passing"
+    },
+    {
+      "name": "targeted_frontend_regression",
+      "command": "node --test tests/productionMultimodalRefs.test.ts tests/storyboardCharacterStateReference.test.ts tests/executionSegments.test.ts tests/storyboardQueueState.test.ts",
+      "status": "pass",
+      "evidence": "16/16 passing"
+    },
+    {
+      "name": "frontend_build",
+      "command": "npm run build",
+      "cwd": "h5-video-tool",
+      "status": "pass",
+      "evidence": "tsc -b && vite build completed"
+    },
+    {
+      "name": "backend_typecheck",
+      "command": "npx tsc --noEmit",
+      "cwd": "h5-video-tool-api",
+      "status": "pass",
+      "evidence": "no TypeScript errors"
+    },
+    {
+      "name": "backend_build",
+      "command": "npm run build",
+      "cwd": "h5-video-tool-api",
+      "status": "pass",
+      "evidence": "tsc, copy-build-assets, and build-info completed"
+    }
+  ],
+  "knownNonBlockingIssues": [
+    {
+      "name": "productionExportStoryboardStatus_direct_node",
+      "severity": "P3",
+      "status": "known_unrelated",
+      "detail": "Direct Node execution fails on an existing extensionless import path in productionWizardStorage.ts; frontend build passes."
+    },
+    {
+      "name": "frontend_lint_baseline",
+      "severity": "P3",
+      "status": "known_unrelated",
+      "detail": "npm run lint fails on the existing repository-wide lint baseline; scoped tests and production builds pass."
+    }
+  ]
+}

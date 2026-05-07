@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.153)*
+*Last updated: 2026-05-07 (v0.154)*
 
-**Latest update - v0.153**
-- Refreshed `docs/TASK-INDEX.md` so the active entry point now reflects the Gold and Glory Campaign Creative Agent mainline.
-- Removed stale duplicate release notes from `PRODUCT.md` and `CHANGELOG.md`.
-- Cleared the unfinished Advanced Studio English-reference TODO run from the active workflow area.
+**Latest update - v0.154**
+- Fixed Advanced Production English-mode Dreamina multimodal reference UX: reference cards, manual matching controls, context hints, and prompt restore actions now follow English UI copy while preserving Dreamina's required `@图片n` protocol tokens.
+- Improved English reference injection so cards like `Mexican Gaming Son`, `Mexican Father`, and `Toothbrush Aisle` can inject the right `@图片n` tag through unique aliases such as `son`, `father`, and `aisle` without stacking multiple tags on shared words.
+- Dreamina multimodal enqueue now submits the visible multimodal prompt (`videoStoryboardOverride` or the regenerated `defaultVideoPrompt`) instead of stale execution segment text, so queued jobs carry the image-reference prompt seen in the panel.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -77,6 +77,7 @@
 
 **鍗虫ⅵ澶氭ā鎬侊紙Dreamina Multimodal锛夛細**
 - 鏈€澶?9 寮犲弬鑰冨浘锛堣鑹插畾濡?鐘舵€佸浘 + 鍦烘櫙 + 閬撳叿锛夛紝鑷姩鍘嬬缉涓?JPEG 768px 浠ュ唴锛岄伩鍏?TOS 涓婁紶澶辫触
+- **Advanced Production English multimodal references (v0.153)**: English-mode reference cards and controls use English copy, English aliases inject `@图片n` beside the correct character/scene phrase, and queued Dreamina multimodal jobs submit the same reference prompt shown in the panel.
 - **瑙掕壊鐘舵€佹劅鐭ワ紙v0.54锛?*锛氬垎闀滃紩鐢ㄨ鑹叉椂鑷姩鍖归厤鐘舵€佸浘锛堝彈浼?鎴樻枟/绔ュ勾绛夛級锛屼紭鍏堢骇锛氬垎闀滄墜鍔ㄨ鐩?> 瑙掕壊榛樿婵€娲荤姸鎬?> 瀹氱褰㈣薄
 - 鏀寔骞跺彂鎻愪氦锛氬涓垎闀滃悓鏃惰繘鍏ラ槦鍒楋紝骞跺彂鏁伴€氳繃 `DREAMINA_MAX_CONCURRENT` 閰嶇疆
 - **鍚庣鏅鸿兘杞 + SSE 鎺ㄩ€侊紙v0.35a+锛?*锛氬嵆姊︿换鍔＄敱鏈嶅姟绔悗鍙拌疆璇紝瑙嗛灏辩华鍚?SSE 瀹炴椂閫氱煡鍓嶇锛涘叧闂祻瑙堝櫒涔熶笉涓㈠け鐢熸垚缁撴灉

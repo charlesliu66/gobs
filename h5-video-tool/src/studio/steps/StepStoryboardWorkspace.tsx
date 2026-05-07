@@ -464,7 +464,7 @@ export function StepStoryboardWorkspace({
             styleRefSummary={styleRefSummary}
             storySceneCoverage={storySceneCoverage}
             shotIndex={shot.shotIndex}
-            shotRefTagsText={computeShotRefTags(shot, chSheets, scSheets).join(' ')}
+            shotRefTagsText={computeShotRefTags(shot, chSheets, scSheets, uiLocale).join(' ')}
             shotVideoDreaminaModel={shotVideoDreaminaModel}
             dreaminaModelVersion={dreaminaModelVersion}
             onShotVideoDreaminaModelChange={onSetShotVideoDreaminaModel}

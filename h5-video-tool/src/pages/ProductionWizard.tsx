@@ -733,7 +733,7 @@ export function ProductionWizard() {
         } as ProductionShot;
         return { ...p, shots, assembled: null };
       });
-      const line = buildProductionShotVideoStoryboardText(s);
+      const line = buildProductionShotVideoStoryboardText(s, undefined, contentLocale);
       const title = (project.meta.title || t('productionWizard.untitledHistoryProject')).trim();
       saveVideoToHistory({
         taskId: taskId || `production-shot-${s.shotIndex}-${Date.now()}`,
@@ -748,7 +748,7 @@ export function ProductionWizard() {
       toast.success(t('productionWizard.shotVideoSavedToHistory'));
       needsFlushRef.current = true;
     },
-    [formatText, project.shots, project.meta.title, serverProjectId, setProject, t],
+    [contentLocale, formatText, project.shots, project.meta.title, serverProjectId, setProject, t],
   );
 
   const handledJobStateRef = useRef<Record<string, string>>({});
@@ -1946,6 +1946,7 @@ export function ProductionWizard() {
             project.sceneAssets ?? [],
             project.propAssets ?? [],
             s.manualRefOverrides,
+            contentLocale,
           )
         : null;
       if (pref === 'dreamina-multimodal' && !multimodalPack?.multimodalImages.length) {
@@ -1961,7 +1962,10 @@ export function ProductionWizard() {
         );
         if (duplicateJob) continue;
 
-        let storyboardText = segment.storyboardText?.trim() || buildProductionShotVideoStoryboardText(s);
+        const multimodalPrompt = pref === 'dreamina-multimodal'
+          ? (s.videoStoryboardOverride?.trim() || multimodalPack?.defaultVideoPrompt?.trim() || '')
+          : '';
+        let storyboardText = multimodalPrompt || segment.storyboardText?.trim() || buildProductionShotVideoStoryboardText(s, undefined, contentLocale);
         if (!storyboardText.trim()) {
           setErr(t('productionWizard.shotPromptRequired'));
           return;
@@ -2076,6 +2080,7 @@ export function ProductionWizard() {
     project.meta.shotVideoDreaminaModel,
     project.meta.dreaminaModelVersion,
     project.meta.styleRefSummary,
+    contentLocale,
     ar,
     serverProjectId,
     setShotBusy,
@@ -2271,11 +2276,11 @@ export function ProductionWizard() {
   useEffect(() => {
     if (!shot) { setMultimodalRefPack(null); return; }
     let cancelled = false;
-    buildShotMultimodalRefPackAsync(shot, chSheets, scSheets, propSheets, shot.manualRefOverrides)
+    buildShotMultimodalRefPackAsync(shot, chSheets, scSheets, propSheets, shot.manualRefOverrides, contentLocale)
       .then((pack) => { if (!cancelled) setMultimodalRefPack(pack); })
       .catch(() => { if (!cancelled) setMultimodalRefPack(null); });
     return () => { cancelled = true; };
-  }, [shot, chSheets, scSheets, propSheets]);
+  }, [shot, chSheets, scSheets, propSheets, contentLocale]);
 
   const shotBlob = useMemo(() => (shot ? buildShotBlobText(shot) : ''), [shot]);
 
@@ -2288,6 +2293,10 @@ export function ProductionWizard() {
   });
 
   const multimodalAutoPrompt = multimodalRefPack?.defaultVideoPrompt ?? '';
+  const buildLocalizedStoryLine = useCallback(
+    (lineShot: ProductionShot, globalStyleRef?: string) => buildProductionShotVideoStoryboardText(lineShot, globalStyleRef, contentLocale),
+    [contentLocale],
+  );
 
   /** L1 场景 id 与当前分镜表 sceneRef 是否一一出现过（用于提示「为何 5 张场景图只用了 3 处」） */
   const storySceneCoverage = useMemo(() => {
@@ -2562,7 +2571,7 @@ export function ProductionWizard() {
           <StepExportWorkspace
             shots={project.shots}
             scSheets={scSheets}
-            buildStoryLine={buildProductionShotVideoStoryboardText}
+            buildStoryLine={buildLocalizedStoryLine}
             resolveVideoSrc={resolveProductionShotPreviewVideoSrc}
             busyVis={busyVis}
             busyAsm={busyAsm}
