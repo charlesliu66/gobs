@@ -101,11 +101,12 @@ function pickReadyKnowledgePackIds(packs: CampaignKnowledgePack[]): string[] {
   return packs.filter((pack) => pack.status === 'ready').map((pack) => pack.packId);
 }
 
-const CONTEXT_DIGEST_MAX_ITEMS_PER_SECTION = 3;
-const CONTEXT_DIGEST_ITEM_CHAR_LIMIT = 120;
-const CONTEXT_DIGEST_SECTION_CHAR_LIMIT = 260;
-const CONTEXT_DIGEST_TOTAL_CHAR_LIMIT = 1100;
-const CONTEXT_DIGEST_MIN_SECTION_CHAR_LIMIT = 60;
+const CONTEXT_DIGEST_MAX_ITEMS_PER_SECTION = 1;
+const CONTEXT_DIGEST_ITEM_CHAR_LIMIT = 56;
+const CONTEXT_DIGEST_SECTION_CHAR_LIMIT = 92;
+const CONTEXT_DIGEST_TOTAL_CHAR_LIMIT = 420;
+const CONTEXT_DIGEST_MIN_SECTION_CHAR_LIMIT = 48;
+const CONTEXT_DIGEST_MAX_WORDS_PER_ITEM = 10;
 
 function clipDigestText(value: string, limit: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -115,15 +116,35 @@ function clipDigestText(value: string, limit: number): string {
   return `${normalized.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
 }
 
+function summarizeDigestValue(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  let clause = normalized.split(/[\n|。；;!?！？]/)[0]?.trim() || normalized;
+  const commaSnippet = clause.split(/[,，]/)[0]?.trim();
+  if (commaSnippet && commaSnippet.length >= 24) {
+    clause = commaSnippet;
+  }
+
+  if (clause.includes(' ')) {
+    const words = clause.split(/\s+/).filter(Boolean);
+    clause = words.slice(0, CONTEXT_DIGEST_MAX_WORDS_PER_ITEM).join(' ');
+  }
+
+  return clipDigestText(clause, CONTEXT_DIGEST_ITEM_CHAR_LIMIT);
+}
+
 function buildContextDigest(context: DerivedCampaignKnowledgeContext): string {
   const sections = [
     ['marketTruth', context.marketTruth],
     ['audienceTension', context.audienceTension],
-    ['toneRules', context.toneRules],
     ['approvedAngles', context.approvedAngles],
+    ['forbiddenClaims', context.forbiddenClaims],
+    ['toneRules', context.toneRules],
     ['hookCandidates', context.hookCandidates],
     ['visualCues', context.visualCues],
-    ['forbiddenClaims', context.forbiddenClaims],
   ];
 
   const lines: string[] = [];
@@ -131,7 +152,7 @@ function buildContextDigest(context: DerivedCampaignKnowledgeContext): string {
 
   for (const [label, values] of sections) {
     const compactValues = (values as string[])
-      .map((value) => clipDigestText(value, CONTEXT_DIGEST_ITEM_CHAR_LIMIT))
+      .map((value) => summarizeDigestValue(value))
       .filter(Boolean)
       .slice(0, CONTEXT_DIGEST_MAX_ITEMS_PER_SECTION);
 

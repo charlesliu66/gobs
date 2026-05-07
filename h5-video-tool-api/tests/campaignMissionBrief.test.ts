@@ -218,7 +218,7 @@ test('generateCampaignMissionBrief compacts verbose routed context before callin
       packs: verbosePacks,
       chatCompletion: async ({ userText }) => {
         seenUserText.push(userText);
-        if (userText.length > 1600) {
+        if (userText.length > 800) {
           return '```json\n{"objective":"truncated"';
         }
         return `{
@@ -240,7 +240,7 @@ test('generateCampaignMissionBrief compacts verbose routed context before callin
 
   assert.equal(seenUserText.length, 1);
   assert.ok(seenUserText[0].includes('Routed Gold and Glory Brain context:'));
-  assert.ok(seenUserText[0].length <= 1600, `expected compact prompt, got ${seenUserText[0].length} chars`);
+  assert.ok(seenUserText[0].length <= 800, `expected compact prompt, got ${seenUserText[0].length} chars`);
   assert.equal(result.generationSource, 'llm');
   assert.equal(result.warnings.length, 0);
   assert.equal(result.brief.cta, 'Download Gold and Glory now');
