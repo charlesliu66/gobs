@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.155 - 2026-05-07
+**Campaign Creative to Distribution handoff planning**
+**Docs / Product Planning:**
+- Added the Campaign Creative -> Distribution Handoff MVP design, aligning OpenClaw's code/product evaluation with the current GOBS north star: knowledge-backed campaign variants should become publish-ready packages instead of forcing marketers through the heavy Editor by default.
+- Bootstrapped run `2026-05-07-campaign-to-distribution-handoff-mvp` with a scoped Gate 1 planner-spec covering package data contracts, backend package APIs, Campaign Creative package creation, Distribution intake, safety guardrails, and test expectations.
+- Refreshed task and plan indexes so the next active mainline points to the campaign-to-distribution package workflow before Dashboard, navigation IA, scheduling, analytics, or Knowledge -> Memory writeback work.
+
 ## v0.154 - 2026-05-07
 **Advanced Production English reference UX**
 **Advanced Studio / Production Wizard:**

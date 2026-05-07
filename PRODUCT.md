@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.154)*
+*Last updated: 2026-05-07 (v0.155)*
 
-**Latest update - v0.154**
-- Fixed Advanced Production English-mode Dreamina multimodal reference UX: reference cards, manual matching controls, context hints, and prompt restore actions now follow English UI copy while preserving Dreamina's required `@图片n` protocol tokens.
-- Improved English reference injection so cards like `Mexican Gaming Son`, `Mexican Father`, and `Toothbrush Aisle` can inject the right `@图片n` tag through unique aliases such as `son`, `father`, and `aisle` without stacking multiple tags on shared words.
-- Dreamina multimodal enqueue now submits the visible multimodal prompt (`videoStoryboardOverride` or the regenerated `defaultVideoPrompt`) instead of stale execution segment text, so queued jobs carry the image-reference prompt seen in the panel.
+**Latest update - v0.155**
+- Added the Campaign Creative -> Distribution Handoff MVP design as the next active product/technical direction after the OpenClaw code and product evaluations.
+- Bootstrapped run `2026-05-07-campaign-to-distribution-handoff-mvp` with a Gate 1 planner-spec for turning selected campaign variants, CTA, assets, and applied knowledge context into pending distribution packages.
+- Updated task and plan indexes so the next implementation slice prioritizes `Campaign Creative -> Distribution Package -> Distribution` before Dashboard, navigation IA, scheduling, analytics, or Knowledge -> Memory writeback.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-07-campaign-to-distribution-handoff-mvp-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md>)
+  - 基于 OpenClaw 代码/产品评估与当前北极星，定义 `Campaign Creative -> Distribution Package -> 分发` 的下一步主线、产品形态、技术边界和分期路线。
 - [2026-05-06-campaign-creative-agent-next-phase-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-campaign-creative-agent-next-phase-design.md>)
   - 将产品默认形态从工具集合收敛为面向市场/运营的 `Campaign Mission Control`
 - [2026-05-06-campaign-mission-control-phase0-implementation-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-campaign-mission-control-phase0-implementation-plan.md>)

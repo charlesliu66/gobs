@@ -33,6 +33,7 @@
 
 ### 3. 当前主线方案
 
+- [2026-05-07-campaign-to-distribution-handoff-mvp-design.md](plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md)：把 OpenClaw 产品/代码评估收敛成 `Campaign Creative -> Distribution Package -> 分发` 的下一步优化方案。
 - [2026-05-06-campaign-creative-agent-next-phase-design.md](plans/2026-05-06-campaign-creative-agent-next-phase-design.md)：Campaign Creative Agent 的受众、形态和长期主链路。
 - [2026-05-06-campaign-mission-control-phase0-implementation-plan.md](plans/2026-05-06-campaign-mission-control-phase0-implementation-plan.md)：Mission Control Phase 0 的产品骨架。
 - [2026-05-06-gobs-fastpublish-knowledge-integration-design.md](plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md)：fastpublish 知识如何进入 GOBS。
@@ -44,6 +45,7 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-07-campaign-to-distribution-handoff-mvp` | 下一步主线：把选中 campaign variant / CTA / knowledge context 送入待发布包并进入分发 | Gate 1 planner-spec 已落地，待 Challenger/Builder |
 | `2026-05-07-gold-and-glory-canonical-brain-sync` | 把真实 fastpublishing 内容导入持久化 Gold and Glory Brain | 已发布到 staging/prod |
 | `2026-05-07-gold-and-glory-single-brain-phase0` | 收掉多项目 demo 心智，默认只服务 Gold and Glory | 已完成 |
 | `2026-05-07-campaign-mission-control-phase0` | 把默认体验改成面向市场/运营的 Campaign Mission Control | 已完成 |
