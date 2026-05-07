@@ -114,10 +114,13 @@ type PlatformMemoryContextValue = {
 
 const PlatformMemoryContext = createContext<PlatformMemoryContextValue | null>(null);
 
+const PRIMARY_GAME_ID = 'gold-and-glory';
+const PRIMARY_GAME_NAME = 'Gold and Glory';
+
 const initialGames: PlatformGame[] = [
   {
-    id: 'g1',
-    name: 'Project Nova Arena',
+    id: PRIMARY_GAME_ID,
+    name: PRIMARY_GAME_NAME,
     genre: 'SLG',
     stage: '首发期',
     region: 'SEA',
@@ -156,33 +159,12 @@ const initialGames: PlatformGame[] = [
       },
     ],
   },
-  {
-    id: 'g2',
-    name: 'Idle Kingdom Go',
-    genre: 'Idle RPG',
-    stage: '爬坡期',
-    region: 'TH / ID',
-    status: '分析中',
-    assets: 21,
-    docs: 8,
-    goals: [
-      {
-        id: 'goal-2',
-        title: '爬坡期月流水突破 US$200K',
-        metric: 'Revenue ≥ $200K/月',
-        children: [
-          { id: 'goal-2-1', title: '付费转化率提升到 3.5%' },
-          { id: 'goal-2-2', title: 'KOL 合作覆盖 TH/ID 头部 10 位' },
-        ],
-      },
-    ],
-  },
 ];
 
 const initialStrategies: PlatformStrategy[] = [
   {
     id: 'a1',
-    gameId: 'g1',
+    gameId: PRIMARY_GAME_ID,
     name: '复用"版本卖点混剪"模板扩展到泰语市场',
     scope: 'SLG / 首发期 / TikTok',
     risk: '低风险',
@@ -197,7 +179,7 @@ const initialStrategies: PlatformStrategy[] = [
   },
   {
     id: 'a2',
-    gameId: 'g1',
+    gameId: PRIMARY_GAME_ID,
     name: '针对评论争议自动生成统一回复并发布',
     scope: '社区管理 / 对外表达',
     risk: '高风险',
@@ -210,21 +192,6 @@ const initialStrategies: PlatformStrategy[] = [
     agentType: '社区舆情',
     approvalLevel: '人工批准',
   },
-  {
-    id: 'a3',
-    gameId: 'g2',
-    name: '继续加大旧素材在 Meta Ads 的预算',
-    scope: 'Meta Ads / 全阶段',
-    risk: '中风险',
-    weight: 49,
-    priority: 52,
-    trend: -18,
-    reason: '素材疲劳导致 CPM 上升、ROI 下滑',
-    mode: '自动降低',
-    goalChain: ['爬坡期月流水突破 US$200K', '付费转化率提升到 3.5%'],
-    agentType: '买量投放',
-    approvalLevel: '通知可否决',
-  },
 ];
 
 const initialBudgets: AgentBudget[] = [
@@ -236,13 +203,12 @@ const initialBudgets: AgentBudget[] = [
 ];
 
 const initialHeartbeats: HeartbeatLog[] = [
-  { id: 'hb-1', time: '今天 08:00', gameId: 'g1', source: '定时心跳', summary: '拉取 TikTok/Meta/YouTube 24h 数据，生成 2 条洞察、1 条 Action。', insightsGenerated: 2, actionsGenerated: 1, status: '完成' },
-  { id: 'hb-2', time: '今天 08:00', gameId: 'g2', source: '定时心跳', summary: '拉取 Meta Ads 数据，检测到素材疲劳信号。', insightsGenerated: 1, actionsGenerated: 1, status: '完成' },
-  { id: 'hb-3', time: '昨天 20:00', gameId: 'g1', source: '事件触发', summary: '评论负面情绪急升触发舆情检测。', insightsGenerated: 1, actionsGenerated: 1, status: '完成' },
+  { id: 'hb-1', time: '今天 08:00', gameId: PRIMARY_GAME_ID, source: '定时心跳', summary: '拉取 TikTok/Meta/YouTube 24h 数据，生成 2 条洞察、1 条 Action。', insightsGenerated: 2, actionsGenerated: 1, status: '完成' },
+  { id: 'hb-3', time: '昨天 20:00', gameId: PRIMARY_GAME_ID, source: '事件触发', summary: '评论负面情绪急升触发舆情检测。', insightsGenerated: 1, actionsGenerated: 1, status: '完成' },
 ];
 
 const initialUploadedFiles = ['世界观设定.pdf', '版本卖点整理.docx', '近30天素材表现.xlsx'];
-const stableKnowledgeGameIds = new Set(initialGames.map((game) => game.id));
+const stableKnowledgeGameIds = new Set([PRIMARY_GAME_ID]);
 
 function getCurrentUiLocale(): UiLocale {
   if (typeof window === 'undefined') return getInitialUiLocale(null, null);
@@ -263,8 +229,8 @@ export function isStableKnowledgeGameId(gameId: string): boolean {
 }
 
 export function PlatformMemoryProvider({ children }: { children: ReactNode }) {
-  const [games, setGames] = useState<PlatformGame[]>(initialGames);
-  const [selectedGameId, setSelectedGameId] = useState<string>(initialGames[0].id);
+  const [games, setGames] = useState<PlatformGame[]>(() => [initialGames[0]]);
+  const [selectedGameId, setSelectedGameId] = useState<string>(PRIMARY_GAME_ID);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>(initialUploadedFiles);
   const [strategies, setStrategies] = useState<PlatformStrategy[]>(initialStrategies);
   const [feedbackLogs, setFeedbackLogs] = useState<PlatformFeedbackLog[]>([]);

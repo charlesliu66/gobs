@@ -109,6 +109,18 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'layout.studio'), 'Advanced Studio');
   assert.equal(getMessage('en', 'layout.projects'), 'Advanced Projects');
   assert.equal(getMessage('en', 'campaignCreative.strategy.launchEditor'), 'Open In Advanced Studio');
+  assert.equal(
+    getMessage('en', 'campaignCreative.knowledge.subtitle'),
+    'Bring Gold and Glory brand, market, audience, and compliance knowledge into this campaign strategy.',
+  );
+  assert.equal(
+    getMessage('en', 'campaignCreative.knowledge.emptyBody'),
+    'Load Gold and Glory fastpublish material or other source knowledge into the brain, then return here for a stronger strategy.',
+  );
+  assert.equal(
+    getMessage('en', 'campaignCreative.knowledge.fallbackWarning'),
+    'Gold and Glory brain context was unavailable, so the strategy fell back to the local brief only.',
+  );
   assert.equal(getMessage('en', 'projectListPage.reviewBeforePublish'), 'Review Before Publish');
   assert.equal(getMessage('en', 'editorWorkbench.fineTuneInEditor'), 'Fine-Tune In Editor');
   assert.equal(getMessage('en', 'editorWorkbench.projectNameRequired'), 'Enter a project name first.');

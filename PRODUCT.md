@@ -3,6 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
+*Last updated: 2026-05-07 (v0.151)*
+
+**Latest update - v0.151**
+- Corrected the marketer-facing Knowledge Brain shell so the only visible frontstage brain target is `Gold and Glory`.
+- Removed historical demo seed framing such as `Project Nova Arena`, `Idle Kingdom Go`, and `Current Game` from the Campaign Creative knowledge surface.
+- Kept product truth explicit: this slice fixes the frontstage shell only and does not claim that the real Gold and Glory fastpublish brain content has already been fully ingested.
+
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
 - [docs/product/user-journeys.md](./docs/product/user-journeys.md) 鈥?涓€閿垚鐗?/ 楂樼骇鍒剁墖 / 鍒嗗彂杩愯惀涓夋潯鐢ㄦ埛璺緞銆?
@@ -246,6 +253,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.151 - 2026-05-07
+**Gold and Glory single-brain shell correction**
+
+- **[campaign creative / platform memory] Removed marketer-facing demo project seeds from the default brain shell** (`h5-video-tool/src/context/PlatformMemoryContext.tsx`, `h5-video-tool/src/pages/CampaignCreative.tsx`): the frontstage path now defaults to a single `Gold and Glory` brain target instead of exposing multi-project demo state.
+- **[knowledge shell copy] Reframed the Knowledge Brain panel to be honest and Gold-and-Glory-specific** (`h5-video-tool/src/components/campaign/CampaignKnowledgeSelector.tsx`, `h5-video-tool/src/i18n/messages.ts`): the panel no longer shows `Current Game` framing or old demo names, and its empty/fallback copy no longer overstates real fastpublish brain readiness.
+- **[tests] Locked the single-brain behavior into targeted regression coverage** (`h5-video-tool/tests/platformKnowledgeBrain.test.tsx`, `h5-video-tool/src/i18n/locale.test.ts`): the stable knowledge id helper, selector shell rendering, and Gold-and-Glory-specific locale copy are now all asserted before release.
 
 ### v0.146 - 2026-05-06
 **English mainline closeout for Production -> Editor**

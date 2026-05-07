@@ -459,7 +459,7 @@ export function CampaignCreative() {
           </div>
 
           <CampaignKnowledgeSelector
-            gameName={selectedGame?.name ?? t('common.unknown')}
+            brainName={selectedGame?.name ?? 'Gold and Glory'}
             supported={knowledgeGameSupported}
             loading={knowledgeLoading}
             error={knowledgeError}
@@ -477,7 +477,6 @@ export function CampaignCreative() {
             copy={{
               title: t('campaignCreative.knowledge.title'),
               subtitle: t('campaignCreative.knowledge.subtitle'),
-              currentGame: t('campaignCreative.knowledge.currentGame'),
               unsupportedTitle: t('campaignCreative.knowledge.unsupportedTitle'),
               unsupportedBody: t('campaignCreative.knowledge.unsupportedBody'),
               emptyTitle: t('campaignCreative.knowledge.emptyTitle'),

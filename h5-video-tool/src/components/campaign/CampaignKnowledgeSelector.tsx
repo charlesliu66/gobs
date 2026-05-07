@@ -3,7 +3,6 @@ import type { CampaignKnowledgePack } from '../../api/campaignKnowledge';
 type Copy = {
   title: string;
   subtitle: string;
-  currentGame: string;
   unsupportedTitle: string;
   unsupportedBody: string;
   emptyTitle: string;
@@ -19,7 +18,7 @@ type Copy = {
 };
 
 interface CampaignKnowledgeSelectorProps {
-  gameName: string;
+  brainName: string;
   supported: boolean;
   loading: boolean;
   error: string | null;
@@ -34,7 +33,7 @@ interface CampaignKnowledgeSelectorProps {
 }
 
 export function CampaignKnowledgeSelector({
-  gameName,
+  brainName,
   supported,
   loading,
   error,
@@ -56,7 +55,7 @@ export function CampaignKnowledgeSelector({
           <div className="text-lg font-semibold text-[var(--color-text)]">{copy.title}</div>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{copy.subtitle}</p>
           <div className="mt-3 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-text-subtle)]">
-            {copy.currentGame}: {gameName}
+            {brainName}
           </div>
         </div>
 

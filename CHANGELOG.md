@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.151 - 2026-05-07
+**Gold and Glory single-brain shell correction**
+**Campaign Creative / Knowledge Brain / Platform Memory:**
+- Removed the marketer-facing multi-project demo seed from the frontstage platform memory defaults and collapsed the visible brain target to `Gold and Glory` only.
+- Reframed the `Knowledge Brain` shell so `/campaign-creative` no longer shows `Project Nova Arena`, `Idle Kingdom Go`, or `Current Game` copy, while keeping the existing knowledge API contract and derivation flow intact.
+- Tightened the empty-state, unsupported-state, and fallback copy so the UI stays honest: Gold and Glory is the only supported frontstage brain target, but real fastpublish knowledge content may still be missing and strategy generation can still fall back to brief-only mode.
+**Tests:**
+- Added single-brain frontstage regression coverage for the stable knowledge id helper and selector shell copy, reran the targeted locale/brain tests, rebuilt the frontend bundle, and revalidated backend typecheck plus workflow guard.
+
 ## v0.150 - 2026-05-07
 **Advanced Studio phase-1 nav demotion and review-queue emphasis**
 **Campaign / Home / Navigation:**
