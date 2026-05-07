@@ -12,10 +12,15 @@ import {
   type UserProfileDimensionKey,
 } from '../services/editorMemoryControls.js';
 import {
-  buildDefaultCreativeUserMessage,
+  normalizeEditorCreativeVariant,
+  normalizeEditorCreativeVariantPack,
   normalizeEditorCreativeBrief,
+  normalizeEditorCreativeKnowledgeContext,
+  resolveEditorCreativeKnowledgeState,
   normalizeEditorCreativeStrategy,
+  type EditorCreativeKnowledgeContext,
 } from '../services/editorCreativeBrief.js';
+import { buildDefaultCreativeUserMessageWithVariant } from '../services/editorCreativeVariantContext.js';
 import {
   collectStringSamples,
   resolveReplyLocale,
@@ -101,9 +106,29 @@ function getEditorReplyLocale(
   });
 }
 
-function buildInstructionMemoryPromotion(
+function normalizeOptionalStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(
+      value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean),
+    )];
+  }
+  if (typeof value === 'string') {
+    return [...new Set(
+      value
+        .split(/\r?\n|,|;|锛寍锛?/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    )];
+  }
+  return [];
+}
+
+export function buildInstructionMemoryPromotion(
   message: string,
   creativeBrief: ReturnType<typeof normalizeEditorCreativeBrief>,
+  knowledgeContext?: EditorCreativeKnowledgeContext,
 ): ProjectMemoryPromotionInput {
   const stableFacts: ProjectMemoryPromotionInput['stableFacts'] = [];
   const preferenceSignals: ProjectMemoryPromotionInput['preferenceSignals'] = [];
@@ -146,6 +171,25 @@ function buildInstructionMemoryPromotion(
   }
   if (/不要太长解释|别讲太多原因|不用讲太多原因/u.test(message)) {
     negativePreferenceSignals?.push({ key: 'response_style', value: 'long_explanations' });
+  }
+
+
+  if (knowledgeContext) {
+    knowledgeContext.marketTruth.slice(0, 4).forEach((value, index) => {
+      stableFacts?.push({ key: `knowledge_market_truth_${index + 1}`, value });
+    });
+    knowledgeContext.audienceTension.slice(0, 4).forEach((value, index) => {
+      stableFacts?.push({ key: `knowledge_audience_tension_${index + 1}`, value });
+    });
+    knowledgeContext.toneRules.slice(0, 4).forEach((value, index) => {
+      preferenceSignals?.push({ key: `knowledge_tone_rule_${index + 1}`, value });
+    });
+    knowledgeContext.visualCues.slice(0, 4).forEach((value, index) => {
+      preferenceSignals?.push({ key: `knowledge_visual_cue_${index + 1}`, value });
+    });
+    knowledgeContext.forbiddenClaims.slice(0, 5).forEach((value, index) => {
+      negativePreferenceSignals?.push({ key: `knowledge_forbidden_claim_${index + 1}`, value });
+    });
   }
 
   return {
@@ -329,6 +373,10 @@ interface ApplyBody {
   projectMemory?: unknown;
   creativeBrief?: unknown;
   creativeStrategy?: unknown;
+  creativeVariant?: unknown;
+  creativeVariantPack?: unknown;
+  knowledgePackIds?: unknown;
+  knowledgeContext?: unknown;
   visionFocus?: unknown;
   replyLocale?: string;
 }
@@ -338,9 +386,39 @@ function buildEditorApplyInput(
   replyLocale: ReplyLocale,
 ): { ok: true; input: EditorAgentApplyInput } | { ok: false; error: string } {
   const creativeBrief = normalizeEditorCreativeBrief(body.creativeBrief);
-  const creativeStrategy = normalizeEditorCreativeStrategy(body.creativeStrategy);
+  const normalizedStrategy = normalizeEditorCreativeStrategy(body.creativeStrategy);
+  const creativeVariant = normalizeEditorCreativeVariant(body.creativeVariant);
+  const creativeVariantPack = normalizeEditorCreativeVariantPack(body.creativeVariantPack);
+  const knowledgePackIds = normalizeOptionalStringList(body.knowledgePackIds);
+  const payloadKnowledgeContext = normalizeEditorCreativeKnowledgeContext(
+    body.knowledgeContext && typeof body.knowledgeContext === 'object'
+      ? {
+          ...(body.knowledgeContext as Record<string, unknown>),
+          selectedPackIds:
+            (body.knowledgeContext as Record<string, unknown>).selectedPackIds ?? knowledgePackIds,
+        }
+      : undefined,
+  );
+  const {
+    creativeStrategy,
+    knowledgeContext,
+    knowledgePackIds: resolvedKnowledgePackIds,
+  } = resolveEditorCreativeKnowledgeState({
+    brief: creativeBrief,
+    strategy: normalizedStrategy,
+    knowledgeContext: payloadKnowledgeContext,
+    knowledgePackIds,
+    replyLocale,
+  });
   const rawMessage = typeof body.userMessage === 'string' ? body.userMessage.trim() : '';
-  const msg = rawMessage || (creativeBrief ? buildDefaultCreativeUserMessage(creativeBrief, creativeStrategy, replyLocale) : '');
+  const msg = rawMessage || (creativeBrief
+    ? buildDefaultCreativeUserMessageWithVariant(
+        creativeBrief,
+        creativeStrategy,
+        creativeVariant,
+        replyLocale,
+      )
+    : '');
 
   if (!msg) {
     return { ok: false, error: 'Please provide userMessage or creativeBrief' };
@@ -410,6 +488,13 @@ function buildEditorApplyInput(
       projectMemory: body.projectMemory,
       creativeBrief,
       creativeStrategy,
+      creativeVariant,
+      creativeVariantPack,
+      knowledgePackIds: resolvedKnowledgePackIds,
+      knowledgeContext:
+        knowledgeContext
+          ? { ...knowledgeContext, selectedPackIds: resolvedKnowledgePackIds }
+          : undefined,
       visionFocus,
       replyLocale,
     },
@@ -430,15 +515,23 @@ router.post('/agent/apply', async (req, res) => {
     const { summary, project, llmUsage, creativeStrategy } = await runEditorAgentApply(parsed.input, {
       username,
     });
+    const applyMetadata = parsed.input.knowledgePackIds.length > 0
+      ? { knowledgePackIds: parsed.input.knowledgePackIds }
+      : undefined;
     const promotedMemory = promoteProjectMemory(
       appendAgentMessageEvent(body.projectMemory, {
         role: 'user',
         kind: 'apply_request',
         route: 'apply',
         content: parsed.input.userMessage,
+        metadata: applyMetadata,
       }),
       {
-        ...buildInstructionMemoryPromotion(parsed.input.userMessage, parsed.input.creativeBrief),
+        ...buildInstructionMemoryPromotion(
+          parsed.input.userMessage,
+          parsed.input.creativeBrief,
+          parsed.input.knowledgeContext,
+        ),
         decisions: [{ decision: summary, outcome: 'accepted' }],
       },
     );
@@ -447,6 +540,7 @@ router.post('/agent/apply', async (req, res) => {
       kind: 'apply_result',
       route: 'apply',
       content: summary,
+      metadata: applyMetadata,
     });
     const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
       userMessage: body.userMessage,
@@ -483,15 +577,23 @@ router.post('/agent/apply-stream', async (req, res) => {
       onProgress: (progress) => send({ type: 'progress', ...progress }),
       username,
     });
+    const applyMetadata = parsed.input.knowledgePackIds.length > 0
+      ? { knowledgePackIds: parsed.input.knowledgePackIds }
+      : undefined;
     const promotedMemory = promoteProjectMemory(
       appendAgentMessageEvent(body.projectMemory, {
         role: 'user',
         kind: 'apply_request',
         route: 'apply_stream',
         content: parsed.input.userMessage,
+        metadata: applyMetadata,
       }),
       {
-        ...buildInstructionMemoryPromotion(parsed.input.userMessage, parsed.input.creativeBrief),
+        ...buildInstructionMemoryPromotion(
+          parsed.input.userMessage,
+          parsed.input.creativeBrief,
+          parsed.input.knowledgeContext,
+        ),
         decisions: [{ decision: result.summary, outcome: 'accepted' }],
       },
     );
@@ -500,6 +602,7 @@ router.post('/agent/apply-stream', async (req, res) => {
       kind: 'apply_result',
       route: 'apply_stream',
       content: result.summary,
+      metadata: applyMetadata,
     });
     const userCommunicationProfile = await updateEditorUserCommunicationProfileForUser(username, {
       userMessage: body.userMessage,

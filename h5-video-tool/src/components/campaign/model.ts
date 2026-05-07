@@ -1,6 +1,9 @@
+import type { DerivedCampaignKnowledgeContext } from '../../api/campaignKnowledge.ts';
+
 export type CampaignCreativeMode = 'tiktok_content' | 'tiktok_ua';
 export type CampaignCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
 export type CampaignCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
+export type CampaignCreativeVariantEmphasis = 'hook_focus' | 'selling_point_focus' | 'cta_focus';
 
 export interface CampaignCreativeBrief {
   briefId: string;
@@ -33,6 +36,14 @@ export interface CampaignCreativeStrategy {
   tone?: string;
   assetNeeds: string[];
   riskNotes: string[];
+  knowledgePackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
 }
 
 export interface CampaignCreativeStrategyTuning {
@@ -41,9 +52,42 @@ export interface CampaignCreativeStrategyTuning {
   ctaType: CampaignCreativeCtaType;
 }
 
+export interface CampaignCreativeVariant {
+  variantId: string;
+  variantPackId: string;
+  briefId: string;
+  strategyId: string;
+  emphasis: CampaignCreativeVariantEmphasis;
+  title: string;
+  hook: string;
+  openingBeat: string;
+  sellingPointFocus: string;
+  cta: string;
+  ctaType?: CampaignCreativeCtaType;
+  editingDirection: string;
+  assetSuggestion: string;
+  differenceSummary: string;
+  isRecommended: boolean;
+}
+
+export interface CampaignCreativeVariantPack {
+  variantPackId: string;
+  briefId: string;
+  strategyId: string;
+  mode: CampaignCreativeMode;
+  summary: string;
+  comparisonAxes: string[];
+  variants: CampaignCreativeVariant[];
+  selectedVariantId: string;
+}
+
 export interface CampaignCreativeHandoffPayload {
   brief: CampaignCreativeBrief;
   strategy: CampaignCreativeStrategy;
+  variantPack?: CampaignCreativeVariantPack;
+  selectedVariant?: CampaignCreativeVariant;
+  knowledgePackIds?: string[];
+  knowledgeContext?: DerivedCampaignKnowledgeContext;
   source: 'campaign-creative';
   createdAt: number;
 }

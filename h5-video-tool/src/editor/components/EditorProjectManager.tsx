@@ -1,20 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { EditorProjectRecord } from '../../api/editor';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
+import { formatMessage, formatRelativeTime } from '../../i18n/locale.ts';
 import { isUnnamedEditorProjectName } from '../../utils/projectLifecycle.ts';
 
 type ProjectListItem = Pick<EditorProjectRecord, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'aspectRatio'>;
-
-function relativeTime(iso: string, uiLocale: 'zh-CN' | 'en'): string {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return uiLocale === 'en' ? 'just now' : '刚刚';
-  if (diff < 3_600_000) return uiLocale === 'en' ? `${Math.floor(diff / 60_000)} min ago` : `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return uiLocale === 'en' ? `${Math.floor(diff / 3_600_000)} hr ago` : `${Math.floor(diff / 3_600_000)} 小时前`;
-  if (diff < 7 * 86_400_000) return uiLocale === 'en' ? `${Math.floor(diff / 86_400_000)} days ago` : `${Math.floor(diff / 86_400_000)} 天前`;
-  return new Date(iso).toLocaleDateString(uiLocale === 'en' ? 'en-US' : 'zh-CN');
-}
 
 interface EditorProjectManagerProps {
   projectList: ProjectListItem[];
@@ -39,8 +29,7 @@ export function EditorProjectManager({
   governanceBusy,
   onClose,
 }: EditorProjectManagerProps) {
-  const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { uiLocale, t } = useLocale();
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -92,12 +81,12 @@ export function EditorProjectManager({
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-[var(--color-text)]">
-              {uiText('我的剪辑项目', 'My editing projects')}
+              {t('editorProjectManager.title')}
             </h2>
             <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
               {unnamedCount > 0
-                ? uiText(`还有 ${unnamedCount} 个未命名项目可治理`, `${unnamedCount} unnamed projects can be cleaned up`)
-                : uiText('项目列表已整洁', 'Project list is already clean')}
+                ? formatMessage(t('editorProjectManager.unnamedCleanable'), { count: unnamedCount })
+                : t('editorProjectManager.listClean')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -107,9 +96,7 @@ export function EditorProjectManager({
               onClick={() => void onGovernUnnamed()}
               className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {governanceBusy
-                ? uiText('治理中...', 'Cleaning...')
-                : uiText('治理未命名项目', 'Clean unnamed projects')}
+              {governanceBusy ? t('editorProjectManager.cleaning') : t('editorProjectManager.cleanUnnamed')}
             </button>
             <button
               type="button"
@@ -119,14 +106,14 @@ export function EditorProjectManager({
               }}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
-              {uiText('+ 新建剪辑', '+ New edit')}
+              {t('editorProjectManager.newEdit')}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              {uiText('关闭', 'Close')}
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -134,7 +121,7 @@ export function EditorProjectManager({
         <div className="border-b border-[var(--color-border)] px-5 py-2.5">
           <input
             type="text"
-            placeholder={uiText('搜索项目名称...', 'Search project name...')}
+            placeholder={t('editorProjectManager.searchPlaceholder')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
@@ -144,9 +131,7 @@ export function EditorProjectManager({
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
-              {search
-                ? uiText('没有匹配的项目', 'No matching projects')
-                : uiText('暂时还没有剪辑项目', 'No editing projects yet')}
+              {search ? t('editorProjectManager.noMatching') : t('editorProjectManager.noProjects')}
             </div>
           ) : (
             filtered.map((projectItem) => {
@@ -177,28 +162,28 @@ export function EditorProjectManager({
                       />
                     ) : (
                       <div className="truncate text-xs font-medium text-[var(--color-text)]">
-                        {projectItem.name || uiText('未命名剪辑项目', 'Untitled edit')}
+                        {projectItem.name || t('editorProjectManager.untitledEdit')}
                         {isCurrent && (
                           <span className="ml-1.5 rounded bg-[var(--color-primary)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-primary)]">
-                            {uiText('当前', 'Current')}
+                            {t('editorProjectManager.current')}
                           </span>
                         )}
                         {isUnnamed && (
                           <span className="ml-1.5 rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-300">
-                            {uiText('待治理', 'Needs cleanup')}
+                            {t('editorProjectManager.needsCleanup')}
                           </span>
                         )}
                       </div>
                     )}
                     <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
-                      {relativeTime(projectItem.updatedAt, uiLocale)}
+                      {projectItem.updatedAt ? formatRelativeTime(projectItem.updatedAt, uiLocale) : ''}
                     </div>
                   </div>
 
                   {isConfirmDelete ? (
                     <div className="flex shrink-0 items-center gap-1.5 text-xs">
                       <span className="text-[var(--color-text-muted)]">
-                        {uiText('确认删除这个项目？', 'Delete this project?')}
+                        {t('editorProjectManager.deleteConfirm')}
                       </span>
                       <button
                         type="button"
@@ -206,14 +191,14 @@ export function EditorProjectManager({
                         onClick={() => void handleDeleteConfirm(projectItem.id)}
                         className="rounded bg-red-500/10 px-2 py-0.5 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                       >
-                        {isBusy ? uiText('删除中...', 'Deleting...') : uiText('删除', 'Delete')}
+                        {isBusy ? t('editorProjectManager.deleting') : t('common.delete')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        {uiText('取消', 'Cancel')}
+                        {t('common.cancel')}
                       </button>
                     </div>
                   ) : isRenaming ? (
@@ -224,14 +209,14 @@ export function EditorProjectManager({
                         onClick={() => void handleRenameConfirm(projectItem.id)}
                         className="rounded bg-[var(--color-primary)]/10 px-2 py-0.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 disabled:opacity-50"
                       >
-                        {isBusy ? uiText('保存中...', 'Saving...') : uiText('保存', 'Save')}
+                        {isBusy ? t('projectListPage.savingAction') : t('common.save')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setRenamingId(null)}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        {uiText('取消', 'Cancel')}
+                        {t('common.cancel')}
                       </button>
                     </div>
                   ) : (
@@ -245,7 +230,7 @@ export function EditorProjectManager({
                           }}
                           className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                         >
-                          {uiText('打开', 'Open')}
+                          {t('editorProjectManager.open')}
                         </button>
                       )}
                       <button
@@ -256,7 +241,7 @@ export function EditorProjectManager({
                         }}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       >
-                        {uiText('重命名', 'Rename')}
+                        {t('editorProjectManager.rename')}
                       </button>
                       <button
                         type="button"
@@ -266,7 +251,7 @@ export function EditorProjectManager({
                         }}
                         className="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-red-400"
                       >
-                        {uiText('删除', 'Delete')}
+                        {t('common.delete')}
                       </button>
                     </div>
                   )}

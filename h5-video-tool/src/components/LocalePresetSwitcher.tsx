@@ -1,25 +1,30 @@
 import { useLocale } from '../i18n/LocaleContext.tsx';
-import { normalizeUiLocale, type UiLocale } from '../i18n/locale.ts';
+import {
+  getLocalePairForPreset,
+  getLocalePreset,
+  type LocalePresetId,
+} from '../i18n/locale.ts';
 
 export function LocalePresetSwitcher({ compact = false }: { compact?: boolean }) {
-  const { uiLocale, setLanguage } = useLocale();
-  const text =
-    uiLocale === 'en'
-      ? {
-          label: 'Language',
-          hint: 'Switch UI and generated content together',
-          chinese: '简体中文',
-          english: 'English',
-        }
-      : {
-          label: '语言',
-          hint: '界面和生成内容一起切换',
-          chinese: '简体中文',
-          english: 'English',
-        };
+  const { uiLocale, contentLocale, setLocalePair, t } = useLocale();
+  const currentPreset = getLocalePreset(uiLocale, contentLocale);
+  const options: Array<{ value: LocalePresetId; label: string }> = [
+    {
+      value: 'zh-ui-zh-content',
+      label: t('localeSwitcher.presetChineseUiChineseContent'),
+    },
+    {
+      value: 'en-ui-zh-content',
+      label: t('localeSwitcher.presetEnglishUiChineseContent'),
+    },
+    {
+      value: 'en-ui-en-content',
+      label: t('localeSwitcher.presetEnglishUiEnglishContent'),
+    },
+  ];
 
   const handleChange = (value: string) => {
-    setLanguage(normalizeUiLocale(value) as UiLocale);
+    setLocalePair(getLocalePairForPreset(value as LocalePresetId));
   };
 
   return (
@@ -34,10 +39,10 @@ export function LocalePresetSwitcher({ compact = false }: { compact?: boolean })
         <div className="mb-2">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-subtle)]">
-              {text.label}
+              {t('localeSwitcher.title')}
             </p>
             <p className="mt-1 text-[11px] leading-4 text-[var(--color-text-muted)]">
-              {text.hint}
+              {t('localeSwitcher.hint')}
             </p>
           </div>
         </div>
@@ -45,8 +50,8 @@ export function LocalePresetSwitcher({ compact = false }: { compact?: boolean })
 
       <div className={compact ? 'min-w-[132px]' : ''}>
         <select
-          aria-label={text.label}
-          value={uiLocale}
+          aria-label={t('localeSwitcher.title')}
+          value={currentPreset}
           onChange={(event) => handleChange(event.target.value)}
           className={`w-full cursor-pointer appearance-none rounded-xl border border-[var(--color-primary)]/25 bg-[rgba(9,12,24,0.86)] bg-no-repeat px-3 py-2 pr-9 text-sm font-medium text-[var(--color-text)] outline-none transition hover:border-[var(--color-primary)]/45 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/15 ${
             compact ? 'text-[13px]' : 'mt-1'
@@ -57,8 +62,11 @@ export function LocalePresetSwitcher({ compact = false }: { compact?: boolean })
             backgroundPosition: 'right 12px center',
           }}
         >
-          <option value="zh-CN">{text.chinese}</option>
-          <option value="en">{text.english}</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
     </div>

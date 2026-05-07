@@ -1,6 +1,7 @@
 export type EditorCreativeMode = 'tiktok_content' | 'tiktok_ua';
 export type EditorCreativeCtaType = 'direct_response' | 'soft_conversion' | 'brand_follow';
 export type EditorCreativeHookApproach = 'benefit_first' | 'conflict_first' | 'story_first';
+export type EditorCreativeVariantEmphasis = 'hook_focus' | 'selling_point_focus' | 'cta_focus';
 
 export interface EditorCreativeBrief {
   briefId?: string;
@@ -13,6 +14,18 @@ export interface EditorCreativeBrief {
   referenceStyle?: string;
   region?: string;
   forbiddenClaims?: string[];
+}
+
+export interface EditorCreativeKnowledgeContext {
+  selectedPackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
+  visualCues: string[];
+  rationaleNotes: string[];
 }
 
 export interface EditorCreativeStrategy {
@@ -33,12 +46,53 @@ export interface EditorCreativeStrategy {
   tone?: string;
   assetNeeds: string[];
   riskNotes: string[];
+  knowledgePackIds: string[];
+  marketTruth: string[];
+  audienceTension: string[];
+  toneRules: string[];
+  forbiddenClaims: string[];
+  visualCues: string[];
+  approvedAngles: string[];
+  hookCandidates: string[];
+}
+
+export interface EditorCreativeVariant {
+  variantId?: string;
+  variantPackId?: string;
+  strategyId?: string;
+  briefId?: string;
+  emphasis?: EditorCreativeVariantEmphasis;
+  title: string;
+  hook: string;
+  openingBeat?: string;
+  sellingPointFocus?: string;
+  cta: string;
+  ctaType?: EditorCreativeCtaType;
+  editingDirection?: string;
+  assetSuggestion?: string;
+  differenceSummary: string;
+  isRecommended?: boolean;
+}
+
+export interface EditorCreativeVariantPack {
+  variantPackId?: string;
+  briefId?: string;
+  strategyId?: string;
+  mode?: EditorCreativeMode;
+  summary?: string;
+  comparisonAxes: string[];
+  variants: EditorCreativeVariant[];
+  selectedVariantId?: string;
 }
 
 function cleanText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function uniqueStrings(items: string[]): string[] {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
 }
 
 function normalizeStringList(value: unknown): string[] {
@@ -54,6 +108,80 @@ function normalizeStringList(value: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+function normalizeVariantEmphasis(value: unknown): EditorCreativeVariantEmphasis | undefined {
+  return value === 'hook_focus' || value === 'selling_point_focus' || value === 'cta_focus'
+    ? value
+    : undefined;
+}
+
+export function normalizeEditorCreativeKnowledgeContextForRequest(input: {
+  selectedPackIds?: string[] | string;
+  knowledgePackIds?: string[] | string;
+  marketTruth?: string[] | string;
+  audienceTension?: string[] | string;
+  toneRules?: string[] | string;
+  forbiddenClaims?: string[] | string;
+  approvedAngles?: string[] | string;
+  hookCandidates?: string[] | string;
+  visualCues?: string[] | string;
+  rationaleNotes?: string[] | string;
+} | undefined): EditorCreativeKnowledgeContext | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+
+  const selectedPackIds = uniqueStrings(
+    normalizeStringList(input.selectedPackIds ?? input.knowledgePackIds),
+  );
+  const marketTruth = uniqueStrings(normalizeStringList(input.marketTruth));
+  const audienceTension = uniqueStrings(normalizeStringList(input.audienceTension));
+  const toneRules = uniqueStrings(normalizeStringList(input.toneRules));
+  const forbiddenClaims = uniqueStrings(normalizeStringList(input.forbiddenClaims));
+  const approvedAngles = uniqueStrings(normalizeStringList(input.approvedAngles));
+  const hookCandidates = uniqueStrings(normalizeStringList(input.hookCandidates));
+  const visualCues = uniqueStrings(normalizeStringList(input.visualCues));
+  const rationaleNotes = uniqueStrings(normalizeStringList(input.rationaleNotes));
+
+  const hasContent = Boolean(
+    selectedPackIds.length > 0 ||
+    marketTruth.length > 0 ||
+    audienceTension.length > 0 ||
+    toneRules.length > 0 ||
+    forbiddenClaims.length > 0 ||
+    approvedAngles.length > 0 ||
+    hookCandidates.length > 0 ||
+    visualCues.length > 0 ||
+    rationaleNotes.length > 0
+  );
+  if (!hasContent) return undefined;
+
+  return {
+    selectedPackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    approvedAngles,
+    hookCandidates,
+    visualCues,
+    rationaleNotes,
+  };
+}
+
+export function buildEditorCreativeKnowledgeContextFromStrategy(
+  strategy?: EditorCreativeStrategy | null,
+): EditorCreativeKnowledgeContext | undefined {
+  if (!strategy) return undefined;
+  return normalizeEditorCreativeKnowledgeContextForRequest({
+    selectedPackIds: strategy.knowledgePackIds,
+    marketTruth: strategy.marketTruth,
+    audienceTension: strategy.audienceTension,
+    toneRules: strategy.toneRules,
+    forbiddenClaims: strategy.forbiddenClaims,
+    approvedAngles: strategy.approvedAngles,
+    hookCandidates: strategy.hookCandidates,
+    visualCues: strategy.visualCues,
+  });
 }
 
 export function normalizeEditorCreativeBriefForRequest(input: {
@@ -101,5 +229,89 @@ export function normalizeEditorCreativeBriefForRequest(input: {
     referenceStyle,
     region,
     forbiddenClaims,
+  };
+}
+
+export function normalizeEditorCreativeVariantForRequest(input: {
+  variantId?: string;
+  variantPackId?: string;
+  strategyId?: string;
+  briefId?: string;
+  emphasis?: EditorCreativeVariantEmphasis;
+  title?: string;
+  hook?: string;
+  openingBeat?: string;
+  sellingPointFocus?: string;
+  cta?: string;
+  ctaType?: EditorCreativeCtaType;
+  editingDirection?: string;
+  assetSuggestion?: string;
+  differenceSummary?: string;
+  isRecommended?: boolean;
+}): EditorCreativeVariant | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const title = cleanText(input.title);
+  const hook = cleanText(input.hook);
+  const cta = cleanText(input.cta);
+  const differenceSummary = cleanText(input.differenceSummary);
+  if (!title || !hook || !cta || !differenceSummary) return undefined;
+
+  return {
+    variantId: cleanText(input.variantId),
+    variantPackId: cleanText(input.variantPackId),
+    strategyId: cleanText(input.strategyId),
+    briefId: cleanText(input.briefId),
+    emphasis: normalizeVariantEmphasis(input.emphasis),
+    title,
+    hook,
+    openingBeat: cleanText(input.openingBeat),
+    sellingPointFocus: cleanText(input.sellingPointFocus),
+    cta,
+    ctaType:
+      input.ctaType === 'direct_response' ||
+      input.ctaType === 'soft_conversion' ||
+      input.ctaType === 'brand_follow'
+        ? input.ctaType
+        : undefined,
+    editingDirection: cleanText(input.editingDirection),
+    assetSuggestion: cleanText(input.assetSuggestion),
+    differenceSummary,
+    isRecommended: input.isRecommended === true,
+  };
+}
+
+export function normalizeEditorCreativeVariantPackForRequest(input: {
+  variantPackId?: string;
+  briefId?: string;
+  strategyId?: string;
+  mode?: EditorCreativeMode;
+  summary?: string;
+  comparisonAxes?: string[] | string;
+  variants?: Array<Parameters<typeof normalizeEditorCreativeVariantForRequest>[0]> | unknown;
+  selectedVariantId?: string;
+}): EditorCreativeVariantPack | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const variants = Array.isArray(input.variants)
+    ? input.variants
+        .map((variant) => normalizeEditorCreativeVariantForRequest(
+          variant as Parameters<typeof normalizeEditorCreativeVariantForRequest>[0],
+        ))
+        .filter((variant): variant is EditorCreativeVariant => Boolean(variant))
+    : [];
+  if (variants.length === 0) return undefined;
+
+  const selectedVariantId = cleanText(input.selectedVariantId);
+  return {
+    variantPackId: cleanText(input.variantPackId),
+    briefId: cleanText(input.briefId),
+    strategyId: cleanText(input.strategyId),
+    mode: input.mode === 'tiktok_ua' ? 'tiktok_ua' : input.mode === 'tiktok_content' ? 'tiktok_content' : undefined,
+    summary: cleanText(input.summary),
+    comparisonAxes: normalizeStringList(input.comparisonAxes),
+    variants,
+    selectedVariantId:
+      selectedVariantId && variants.some((variant) => variant.variantId === selectedVariantId)
+        ? selectedVariantId
+        : variants[0]?.variantId,
   };
 }

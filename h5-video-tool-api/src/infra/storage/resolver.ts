@@ -33,6 +33,7 @@ export type StorageType =
   | 'editor-projects'       // <root>/editor-projects — 剪辑项目 JSON
   | 'quickfilm/drafts'      // <root>/quickfilm/drafts
   | 'quickfilm/sessions'    // <root>/quickfilm/sessions
+  | 'campaign-knowledge'    // <root>/.data/campaign-knowledge
   // 内部状态
   | '.data'                 // <root>/.data — 内部数据（key 统计、规则等）
   | '.data/remix-rules'     // <root>/.data/remix-rules
@@ -60,6 +61,7 @@ const PATH_MAP: Record<StorageType, () => string> = {
   'editor-projects':      () => path.join(getApiDataDir(), 'editor-projects'),
   'quickfilm/drafts':     () => path.join(getApiDataDir(), 'quickfilm', 'drafts'),
   'quickfilm/sessions':   () => path.join(getApiDataDir(), 'quickfilm', 'sessions'),
+  'campaign-knowledge':   () => path.join(getApiDataDir(), '.data', 'campaign-knowledge'),
   '.data':                () => path.join(getApiDataDir(), '.data'),
   '.data/remix-rules':    () => path.join(getApiDataDir(), '.data', 'remix-rules'),
   'assets-index':         () => getApiDataDir(),

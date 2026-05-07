@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from '../components/Toast';
 import { ExportPanel } from '../editor/components/ExportPanel';
@@ -62,10 +62,17 @@ import {
 import {
   applyEditorAgentCreativeStream,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 } from '../api/editorCreative';
 import {
+  buildEditorCreativeKnowledgeContextFromStrategy,
   normalizeEditorCreativeBriefForRequest,
+  normalizeEditorCreativeKnowledgeContextForRequest,
+  normalizeEditorCreativeVariantForRequest,
+  normalizeEditorCreativeVariantPackForRequest,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
 } from '../editor/utils/editorCreativeBrief';
 import {
   deleteEditorProjectMemoryItem,
@@ -90,8 +97,8 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import type { EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import { useLocale } from '../i18n/LocaleContext.tsx';
+import { formatMessage } from '../i18n/locale.ts';
 import { resolveReplyLocale } from '../i18n/replyLocale.ts';
-import { pickUiText } from '../i18n/uiText.ts';
 
 const MIN_EDIT_SEC = 0.12;
 
@@ -106,6 +113,10 @@ const CAMPAIGN_HANDOFF_STORAGE_KEYS = [
 interface CampaignCreativeEditorHandoff {
   brief: EditorCreativeBrief;
   strategy?: EditorCreativeStrategy;
+  variantPack?: EditorCreativeVariantPack;
+  selectedVariant?: EditorCreativeVariant;
+  knowledgePackIds?: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
   source: 'campaign-creative';
   createdAt: number;
 }
@@ -168,6 +179,14 @@ function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | unde
   const hookOptions = normalizeHandoffStringList(raw.hookOptions);
   const assetNeeds = normalizeHandoffStringList(raw.assetNeeds);
   const riskNotes = normalizeHandoffStringList(raw.riskNotes);
+  const knowledgePackIds = normalizeHandoffStringList(raw.knowledgePackIds);
+  const marketTruth = normalizeHandoffStringList(raw.marketTruth);
+  const audienceTension = normalizeHandoffStringList(raw.audienceTension);
+  const toneRules = normalizeHandoffStringList(raw.toneRules);
+  const forbiddenClaims = normalizeHandoffStringList(raw.forbiddenClaims);
+  const visualCues = normalizeHandoffStringList(raw.visualCues);
+  const approvedAngles = normalizeHandoffStringList(raw.approvedAngles);
+  const hookCandidates = normalizeHandoffStringList(raw.hookCandidates);
 
   if (!objective || !recommendedHook || !cta || !rationale) return undefined;
 
@@ -189,7 +208,43 @@ function normalizeHandoffStrategy(input: unknown): EditorCreativeStrategy | unde
     tone,
     assetNeeds,
     riskNotes,
+    knowledgePackIds,
+    marketTruth,
+    audienceTension,
+    toneRules,
+    forbiddenClaims,
+    visualCues,
+    approvedAngles,
+    hookCandidates,
   };
+}
+
+function normalizeHandoffKnowledgeContext(
+  input: unknown,
+  strategy?: EditorCreativeStrategy,
+  knowledgePackIds: string[] = [],
+): EditorCreativeKnowledgeContext | undefined {
+  const payloadContext = input && typeof input === 'object'
+    ? normalizeEditorCreativeKnowledgeContextForRequest({
+        ...(input as Record<string, unknown>),
+        selectedPackIds:
+          ((input as Record<string, unknown>).selectedPackIds as string[] | string | undefined) ?? knowledgePackIds,
+      })
+    : undefined;
+  if (payloadContext) {
+    return payloadContext;
+  }
+
+  const strategyContext = buildEditorCreativeKnowledgeContextFromStrategy(
+    strategy
+      ? {
+          ...strategy,
+          knowledgePackIds:
+            knowledgePackIds.length > 0 ? knowledgePackIds : strategy.knowledgePackIds,
+        }
+      : null,
+  );
+  return strategyContext;
 }
 
 function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEditorHandoff | null {
@@ -211,10 +266,61 @@ function normalizeCampaignCreativeHandoff(input: unknown): CampaignCreativeEdito
     typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
       ? raw.createdAt
       : Date.now();
+  const strategy = normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy);
+  const knowledgePackIds = normalizeHandoffStringList(raw.knowledgePackIds);
+  const knowledgeContext = normalizeHandoffKnowledgeContext(
+    raw.knowledgeContext ?? raw.campaignKnowledgeContext,
+    strategy,
+    knowledgePackIds,
+  );
+  const effectiveKnowledgePackIds =
+    knowledgeContext?.selectedPackIds && knowledgeContext.selectedPackIds.length > 0
+      ? knowledgeContext.selectedPackIds
+      : knowledgePackIds.length > 0
+        ? knowledgePackIds
+        : (strategy?.knowledgePackIds ?? []);
+  const nextStrategy = strategy
+    ? {
+        ...strategy,
+        knowledgePackIds: effectiveKnowledgePackIds,
+        marketTruth: strategy.marketTruth.length > 0 ? strategy.marketTruth : (knowledgeContext?.marketTruth ?? []),
+        audienceTension:
+          strategy.audienceTension.length > 0
+            ? strategy.audienceTension
+            : (knowledgeContext?.audienceTension ?? []),
+        toneRules: strategy.toneRules.length > 0 ? strategy.toneRules : (knowledgeContext?.toneRules ?? []),
+        forbiddenClaims:
+          strategy.forbiddenClaims.length > 0
+            ? strategy.forbiddenClaims
+            : (knowledgeContext?.forbiddenClaims ?? []),
+        visualCues: strategy.visualCues.length > 0 ? strategy.visualCues : (knowledgeContext?.visualCues ?? []),
+        approvedAngles:
+          strategy.approvedAngles.length > 0
+            ? strategy.approvedAngles
+            : (knowledgeContext?.approvedAngles ?? []),
+        hookCandidates:
+          strategy.hookCandidates.length > 0
+            ? strategy.hookCandidates
+            : (knowledgeContext?.hookCandidates ?? []),
+      }
+    : strategy;
+
+  const variantPack = normalizeEditorCreativeVariantPackForRequest(
+    (raw.variantPack ?? raw.creativeVariantPack) as Parameters<typeof normalizeEditorCreativeVariantPackForRequest>[0],
+  );
+  const selectedVariant =
+    normalizeEditorCreativeVariantForRequest(
+      (raw.selectedVariant ?? raw.creativeVariant ?? raw.variant) as Parameters<typeof normalizeEditorCreativeVariantForRequest>[0],
+    ) ??
+    (variantPack?.variants.find((variant) => variant.variantId === variantPack.selectedVariantId) ?? undefined);
 
   return {
     brief,
-    strategy: normalizeHandoffStrategy(raw.strategy ?? raw.creativeStrategy),
+    strategy: nextStrategy,
+    variantPack,
+    selectedVariant,
+    knowledgePackIds: effectiveKnowledgePackIds,
+    knowledgeContext,
     source,
     createdAt,
   };
@@ -291,8 +397,8 @@ function mergeAssetsForTimelineClips(
 }
 
 export function EditorWorkbench() {
-  const { contentLocale, uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const { contentLocale, t } = useLocale();
+  const tx = (path: string, values?: Record<string, string | number>) => formatMessage(t(path), values);
   const {
     aspectRatio,
     setAspectRatio,
@@ -356,6 +462,7 @@ export function EditorWorkbench() {
   /** Agent 成功后展示成片 Markdown 表（对标竞品交付物） */
   const [agentDeliverable, setAgentDeliverable] = useState<string | null>(null);
   const [agentCreativeStrategy, setAgentCreativeStrategy] = useState<EditorCreativeStrategy | null>(null);
+  const [agentCreativeVariant, setAgentCreativeVariant] = useState<EditorCreativeVariant | null>(null);
   const [campaignCreativeHandoff, setCampaignCreativeHandoff] = useState<CampaignCreativeEditorHandoff | null>(null);
   const [campaignCreativeHandoffConsumed, setCampaignCreativeHandoffConsumed] = useState(false);
   /** Agent 自动配乐成功后同步到左下「配乐生成」文案 */
@@ -437,7 +544,7 @@ export function EditorWorkbench() {
   const handleConfirmProjectNaming = useCallback(() => {
     const name = projectNamingModal.name.trim();
     if (!name) {
-      toast.error(uiText('请先填写项目名称', 'Enter a project name first.'));
+      toast.error(t('editorWorkbench.projectNameRequired'));
       return;
     }
     if (projectNamingModal.mode === 'new') {
@@ -451,7 +558,7 @@ export function EditorWorkbench() {
       setProjectName(name);
     }
     setProjectNamingModal({ open: false, mode: 'new', name: '' });
-  }, [createNewProject, projectNamingModal.mode, projectNamingModal.name, setProjectName, setSearchParams, uiText]);
+  }, [createNewProject, projectNamingModal.mode, projectNamingModal.name, setProjectName, setSearchParams, t]);
 
   const handleRemoveProject = useCallback(async (id: string) => {
     await removeProject(id);
@@ -467,7 +574,7 @@ export function EditorWorkbench() {
   const handleGovernUnnamedProjects = useCallback(async () => {
     const targets = projectList.filter((item) => isUnnamedEditorProjectName(item.name));
     if (targets.length === 0) {
-      toast.info(uiText('当前没有待治理的未命名项目', 'There are no unnamed projects to clean up.'));
+      toast.info(t('editorWorkbench.noUnnamedProjects'));
       return;
     }
     setGovernanceBusy(true);
@@ -510,19 +617,19 @@ export function EditorWorkbench() {
       }
       await refreshProjectList();
       if (renamed > 0 || deleted > 0) {
+        const failedPart = failed > 0
+          ? formatMessage(t('editorWorkbench.failedSuffix'), { failed })
+          : '';
         toast.success(
-          uiText(
-            `已治理未命名项目：重命名 ${renamed} 个，删除 ${deleted} 个${failed ? `，失败 ${failed} 个` : ''}`,
-            `Unnamed project cleanup finished: renamed ${renamed}, deleted ${deleted}${failed ? `, failed ${failed}` : ''}.`,
-          ),
+          formatMessage(t('editorWorkbench.unnamedProjectsCleanupDone'), { renamed, deleted, failedPart }),
         );
       } else {
-        toast.info(uiText('未命名项目没有可治理的内容', 'No unnamed projects needed cleanup.'));
+        toast.info(t('editorWorkbench.unnamedProjectsNoContent'));
       }
     } finally {
       setGovernanceBusy(false);
     }
-  }, [buildSuggestedProjectName, handleRemoveProject, projectList, refreshProjectList, renameProject, uiText]);
+  }, [buildSuggestedProjectName, handleRemoveProject, projectList, refreshProjectList, renameProject, t]);
 
   useEffect(() => {
     setAgentChatHistory(projectMemoryToChatTurns(projectMemory));
@@ -532,6 +639,7 @@ export function EditorWorkbench() {
     setAgentLogs([]);
     setAgentDeliverable(null);
     setAgentCreativeStrategy(null);
+    setAgentCreativeVariant(null);
     setAgentJobProgress(null);
     setAgentUserCommunicationProfile(null);
     setCampaignCreativeHandoffConsumed(false);
@@ -582,14 +690,11 @@ export function EditorWorkbench() {
       setCampaignCreativeHandoff(normalized);
       setCampaignCreativeHandoffConsumed(false);
       setAgentCreativeStrategy(normalized.strategy ?? null);
-      pushLog(pickUiText(
-        uiLocale,
-        '已接收 Campaign Creative handoff，上下文会优先用于首次 Agent 执行。',
-        'Campaign Creative handoff received. The first agent run will prioritize this context.',
-      ));
+      setAgentCreativeVariant(normalized.selectedVariant ?? null);
+      pushLog(t('editorWorkbench.handoffReceived'));
       return;
     }
-  }, [campaignCreativeHandoff, pushLog, uiLocale]);
+  }, [campaignCreativeHandoff, pushLog, t]);
 
   useEffect(() => {
     if (!requiresProjectNaming || hasPersistedProject) return;
@@ -661,10 +766,10 @@ export function EditorWorkbench() {
       try {
         await openProject(qp);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : '加载剪辑项目失败');
+        toast.error(e instanceof Error ? e.message : t('editorWorkbench.projectOpenFailed'));
       }
     })();
-  }, [searchParams, openProject, projectId]);
+  }, [searchParams, openProject, projectId, t]);
 
   useEffect(() => {
     // sync URL param to reflect current projectId
@@ -757,12 +862,12 @@ export function EditorWorkbench() {
 
   const runAutoBgmFromAgentMessage = useCallback(
     async (userMessage: string) => {
-      pushLog(uiText('进度：检测到配乐需求，正在润色并生成 BGM…', 'Progress: detected a music request, polishing the prompt and generating BGM…'));
+      pushLog(t('editorWorkbench.bgmDetectedProgress'));
       try {
         const out = await withTimeout(
           polishEditorMusicPrompt(userMessage),
           45_000,
-          '配乐提示词润色超时（45s）',
+          t('editorWorkbench.musicPromptPolishTimeout'),
         );
         setBgmFormSync({
           prompt: out.prompt,
@@ -776,10 +881,10 @@ export function EditorWorkbench() {
             sampleCount: 1,
           }),
           160_000,
-          '配乐生成超时（160s）',
+          t('editorWorkbench.musicGenerationTimeout'),
         );
         const item = res.items[0];
-        if (!item) throw new Error('未返回音频');
+        if (!item) throw new Error(t('editorWorkbench.noAudioReturned'));
         const url = mixEditorMusicUrl(item.url);
         setAssets((prev) => ({
           ...prev,
@@ -793,19 +898,16 @@ export function EditorWorkbench() {
         }));
         setProject((p) => setBgmClipOnProject(p, item.id, item.durationSec));
         const providerName = res.provider === 'suno' ? 'Suno' : 'Lyria';
-        pushLog(uiText(
-          `已根据对话自动完成配乐（引擎：${providerName}）；不满意可在左下「配乐生成」微调后再点「生成」。`,
-          `Music was generated automatically from the conversation (engine: ${providerName}). If it is not right yet, fine-tune it in the music panel and generate again.`,
-        ));
+        pushLog(tx('editorWorkbench.autoMusicGenerated', { provider: providerName }));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const hint = isLikelyQuotaOrRateLimitError(msg)
-          ? uiText('（疑似模型限流/配额不足）', ' (possible model rate limit or quota issue)')
+          ? t('editorWorkbench.quotaHint')
           : '';
-        pushLog(uiText(`自动配乐未成功：${msg}${hint}`, `Automatic music generation did not complete: ${msg}${hint}`));
+        pushLog(tx('editorWorkbench.autoMusicFailed', { message: msg, hint }));
       }
     },
-    [pushLog, setAssets, setProject],
+    [pushLog, setAssets, setProject, t, tx],
   );
 
   const handleAgentApply = useCallback(
@@ -820,10 +922,9 @@ export function EditorWorkbench() {
         try {
           route = await routeEditorAgentMessage(userMessage);
         } catch (e) {
-          pushLog(uiText(
-            `错误：意图识别失败：${e instanceof Error ? e.message : String(e)}`,
-            `Error: intent detection failed: ${e instanceof Error ? e.message : String(e)}`,
-          ));
+          pushLog(tx('editorWorkbench.intentDetectionFailed', {
+            message: e instanceof Error ? e.message : String(e),
+          }));
           return;
         }
         if (route.intent === 'chat') {
@@ -833,14 +934,13 @@ export function EditorWorkbench() {
               projectMemory: nextProjectMemory,
               userCommunicationProfile,
             } = await chatEditorAgent(userMessage, projectMemory, replyLocale);
-            pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
+            pushLog(tx('editorWorkbench.assistantReply', { reply }));
             setProjectMemory(nextProjectMemory ?? projectMemory);
             setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
           } catch (e) {
-            pushLog(uiText(
-              `错误：对话失败：${e instanceof Error ? e.message : String(e)}`,
-              `Error: chat failed: ${e instanceof Error ? e.message : String(e)}`,
-            ));
+            pushLog(tx('editorWorkbench.chatFailed', {
+              message: e instanceof Error ? e.message : String(e),
+            }));
           }
           return;
         }
@@ -850,7 +950,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog(uiText('请先勾选左侧素材，或先在时间轴上加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
+          pushLog(t('editorWorkbench.selectAssetsFirst'));
           return;
         }
 
@@ -929,11 +1029,15 @@ export function EditorWorkbench() {
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
 
-        pushLog(`Agent：${summary}`);
+        pushLog(tx('editorWorkbench.agentSummary', { summary }));
         if (llmUsage?.totals) {
-          const t = llmUsage.totals;
+          const totals = llmUsage.totals;
           pushLog(
-            `Token 合计：prompt ${t.prompt_tokens ?? '—'} · completion ${t.completion_tokens ?? '—'} · total ${t.total_tokens ?? '—'}`,
+            tx('editorWorkbench.tokenUsage', {
+              prompt: totals.prompt_tokens ?? '—',
+              completion: totals.completion_tokens ?? '—',
+              total: totals.total_tokens ?? '—',
+            }),
           );
         }
         agentOk = true;
@@ -983,10 +1087,45 @@ export function EditorWorkbench() {
       const activeCreativeStrategy = shouldUseHandoffStrategy
         ? campaignCreativeHandoff?.strategy
         : undefined;
+      const shouldUseHandoffKnowledge = Boolean(
+        campaignCreativeHandoff?.knowledgeContext &&
+        (
+          !creativeBrief ||
+          isSameCreativeBrief(creativeBrief, campaignCreativeHandoff?.brief)
+        ),
+      );
+      const strategyKnowledgeContext = buildEditorCreativeKnowledgeContextFromStrategy(
+        activeCreativeStrategy ?? campaignCreativeHandoff?.strategy ?? null,
+      );
+      const activeKnowledgeContext = shouldUseHandoffKnowledge
+        ? campaignCreativeHandoff?.knowledgeContext ?? strategyKnowledgeContext
+        : strategyKnowledgeContext;
+      const activeKnowledgePackIds =
+        activeKnowledgeContext?.selectedPackIds.length
+          ? activeKnowledgeContext.selectedPackIds
+          : (
+            activeCreativeStrategy?.knowledgePackIds ??
+            campaignCreativeHandoff?.knowledgePackIds ??
+            []
+          );
+      const shouldUseHandoffVariant = Boolean(
+        !campaignCreativeHandoffConsumed &&
+        campaignCreativeHandoff?.selectedVariant &&
+        (
+          !creativeBrief ||
+          isSameCreativeBrief(creativeBrief, campaignCreativeHandoff?.brief)
+        ),
+      );
+      const activeCreativeVariant = shouldUseHandoffVariant
+        ? campaignCreativeHandoff?.selectedVariant
+        : undefined;
+      const activeCreativeVariantPack = shouldUseHandoffVariant
+        ? campaignCreativeHandoff?.variantPack
+        : undefined;
       const shouldConsumeCampaignHandoff = Boolean(
         !campaignCreativeHandoffConsumed &&
         campaignCreativeHandoff?.brief &&
-        (shouldUseHandoffStrategy || !creativeBrief),
+        ((shouldUseHandoffStrategy || shouldUseHandoffVariant || shouldUseHandoffKnowledge) || !creativeBrief),
       );
       const replyLocale = resolveEditorReplyLocale(activeCreativeBrief, [trimmedMessage]);
       const shouldForceEdit = Boolean(activeCreativeBrief);
@@ -995,6 +1134,7 @@ export function EditorWorkbench() {
       setAgentBusy(true);
       setAgentDeliverable(null);
       setAgentCreativeStrategy(activeCreativeStrategy ?? null);
+      setAgentCreativeVariant(activeCreativeVariant ?? null);
       setAgentJobProgress(null);
 
       try {
@@ -1003,10 +1143,9 @@ export function EditorWorkbench() {
           try {
             route = await routeEditorAgentMessage(trimmedMessage);
           } catch (error) {
-            pushLog(uiText(
-              `错误：意图识别失败：${error instanceof Error ? error.message : String(error)}`,
-              `Error: intent detection failed: ${error instanceof Error ? error.message : String(error)}`,
-            ));
+            pushLog(tx('editorWorkbench.intentDetectionFailed', {
+              message: error instanceof Error ? error.message : String(error),
+            }));
             return;
           }
 
@@ -1017,14 +1156,13 @@ export function EditorWorkbench() {
                 projectMemory: nextProjectMemory,
                 userCommunicationProfile,
               } = await chatEditorAgent(trimmedMessage, projectMemory, replyLocale);
-              pushLog(uiText(`助手：${reply}`, `Assistant: ${reply}`));
+              pushLog(tx('editorWorkbench.assistantReply', { reply }));
               setProjectMemory(nextProjectMemory ?? projectMemory);
               setAgentUserCommunicationProfile((prev) => userCommunicationProfile ?? prev);
             } catch (error) {
-              pushLog(uiText(
-                `错误：对话失败：${error instanceof Error ? error.message : String(error)}`,
-                `Error: chat failed: ${error instanceof Error ? error.message : String(error)}`,
-              ));
+              pushLog(tx('editorWorkbench.chatFailed', {
+                message: error instanceof Error ? error.message : String(error),
+              }));
             }
             return;
           }
@@ -1035,7 +1173,7 @@ export function EditorWorkbench() {
           ids = uniqueVideoAssetIds(project);
         }
         if (ids.length === 0) {
-          pushLog(uiText('请先勾选左侧素材，或先在时间轴中加入至少一段视频。', 'Select source assets first, or add at least one video clip to the timeline.'));
+          pushLog(t('editorWorkbench.selectAssetsFirst'));
           return;
         }
 
@@ -1101,6 +1239,10 @@ export function EditorWorkbench() {
             projectMemory,
             creativeBrief: activeCreativeBrief,
             creativeStrategy: activeCreativeStrategy,
+            creativeVariant: activeCreativeVariant,
+            creativeVariantPack: activeCreativeVariantPack,
+            knowledgePackIds: activeKnowledgePackIds,
+            knowledgeContext: activeKnowledgeContext,
             replyLocale,
           } as Parameters<typeof applyEditorAgentCreativeStream>[0],
           (progress) => setAgentJobProgress(progress),
@@ -1117,6 +1259,7 @@ export function EditorWorkbench() {
         setCurrentTime(0);
         setIsPlaying(false);
         setAgentCreativeStrategy(creativeStrategy ?? activeCreativeStrategy ?? null);
+        setAgentCreativeVariant(activeCreativeVariant ?? null);
         if (shouldConsumeCampaignHandoff) {
           setCampaignCreativeHandoffConsumed(true);
         }
@@ -1124,11 +1267,15 @@ export function EditorWorkbench() {
         const resolveName = buildAssetNameResolver(assetsForNames, libraryItems);
         setAgentDeliverable(formatAgentDeliverableMarkdown(syncedProject, resolveName));
 
-        pushLog(`Agent：${summary}`);
+        pushLog(tx('editorWorkbench.agentSummary', { summary }));
         if (llmUsage?.totals) {
           const totals = llmUsage.totals;
           pushLog(
-            `Token 合计：prompt ${totals.prompt_tokens ?? '—'} / completion ${totals.completion_tokens ?? '—'} / total ${totals.total_tokens ?? '—'}`,
+            tx('editorWorkbench.tokenUsage', {
+              prompt: totals.prompt_tokens ?? '—',
+              completion: totals.completion_tokens ?? '—',
+              total: totals.total_tokens ?? '—',
+            }),
           );
         }
         agentOk = true;
@@ -1165,49 +1312,49 @@ export function EditorWorkbench() {
   const handleRememberDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
+        toast.warning(t('editorWorkbench.saveProjectBeforeMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'remember', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText(`系统：已记住偏好 - ${text}`, `System: remembered preference - ${text}`));
+      pushLog(tx('editorWorkbench.rememberedPreference', { text }));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t, tx],
   );
 
   const handleAvoidDraftMemory = useCallback(
     async (text: string) => {
       if (!projectId) {
-        toast.warning(uiText('请先保存当前剪辑项目，再记录 Agent 记忆', 'Save the current editing project before storing agent memory'));
+        toast.warning(t('editorWorkbench.saveProjectBeforeMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await rememberEditorProjectFeedback(projectId, 'avoid', text);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText(`系统：已记为避免 - ${text}`, `System: marked to avoid - ${text}`));
+      pushLog(tx('editorWorkbench.rememberedAvoid', { text }));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t, tx],
   );
 
   const handleDeleteProjectMemoryItem = useCallback(
     async (bucket: EditorProjectMemoryBucket, target: { id?: string; value?: string }) => {
       if (!projectId) {
-        toast.warning(uiText('当前项目还没有可编辑的记忆记录', 'There is no editable project memory yet'));
+        toast.warning(t('editorWorkbench.noEditableMemory'));
         return;
       }
       const { projectMemory: nextProjectMemory } = await deleteEditorProjectMemoryItem(projectId, bucket, target);
       setProjectMemory(nextProjectMemory);
-      pushLog(uiText('系统：已移除一条项目记忆', 'System: removed one project memory item'));
+      pushLog(t('editorWorkbench.memoryRemoved'));
     },
-    [projectId, pushLog, setProjectMemory, uiLocale],
+    [projectId, pushLog, setProjectMemory, t],
   );
 
   const handleWeakenUserProfileDimension = useCallback(
     async (dimension: EditorUserProfileDimensionKey) => {
       const { userCommunicationProfile } = await weakenEditorUserProfileDimension(dimension);
       setAgentUserCommunicationProfile(userCommunicationProfile);
-      pushLog(uiText(`系统：已将 ${dimension} 降为更弱的提示`, `System: weakened ${dimension} into a lighter hint`));
+      pushLog(tx('editorWorkbench.profileWeakened', { dimension }));
     },
-    [pushLog, uiLocale],
+    [pushLog, tx],
   );
 
   const handleAddToTimeline = useCallback(
@@ -1218,14 +1365,17 @@ export function EditorWorkbench() {
         sourceLen = await probeVideoDuration(asset.url);
       } catch {
         probeFailed = true;
-        pushLog('⚠️ 无法读取视频时长，使用默认 10s 片段（可能是跨域或浏览器不兼容）。');
-        toast.warning(`${asset.originalName}：视频时长读取失败，暂用 10s 占位，加入后请手动调整入出点。`);
+        pushLog(t('editorWorkbench.durationProbeFallback'));
+        toast.warning(tx('editorWorkbench.durationProbeFallbackToast', { name: asset.originalName }));
       }
       const rawLen = sourceLen;
       sourceLen = Math.min(Math.max(sourceLen, 0.5), 300);
       if (!probeFailed && rawLen > 300) {
-        pushLog(`⚠️ 视频 ${rawLen.toFixed(1)}s 超过单片 300s 上限，已截断为 300s。`);
-        toast.warning(`${asset.originalName} 原始 ${rawLen.toFixed(0)}s 超过 300s 上限，时间轴上仅取前 300s。`);
+        pushLog(tx('editorWorkbench.durationCappedLog', { seconds: rawLen.toFixed(1) }));
+        toast.warning(tx('editorWorkbench.durationCappedToast', {
+          name: asset.originalName,
+          seconds: rawLen.toFixed(0),
+        }));
       }
       setAssets((prev) => ({
         ...prev,
@@ -1238,9 +1388,12 @@ export function EditorWorkbench() {
         },
       }));
       setProject((p) => snapVideoClipsSequential(appendVideoClipToProject(p, asset.id, sourceLen)));
-      pushLog(`已将「${asset.originalName}」追加到 V1（约 ${sourceLen.toFixed(1)}s）。`);
+      pushLog(tx('editorWorkbench.appendedToTimeline', {
+        name: asset.originalName,
+        seconds: sourceLen.toFixed(1),
+      }));
     },
-    [setAssets, setProject, pushLog],
+    [pushLog, setAssets, setProject, t, tx],
   );
 
   // 读取 History 页面「导入到时间轴」存入的 pending import
@@ -1256,7 +1409,7 @@ export function EditorWorkbench() {
       const timer = setTimeout(async () => {
         const asset: EditorAssetDto = { id: assetId, url, kind: 'video', originalName, durationSec: 10 };
         await handleAddToTimeline(asset);
-        toast.success(`已导入「${originalName}」到时间轴`);
+        toast.success(tx('editorWorkbench.importedToTimeline', { name: originalName }));
       }, 800);
       return () => clearTimeout(timer);
     } catch {
@@ -1329,8 +1482,8 @@ export function EditorWorkbench() {
       return snapVideoClipsSequential({ ...next, durationSec: computeDurationSec(next) });
     });
     setCurrentTime(0);
-    pushLog('已加载示例视频片段（12s）到视频轨。');
-  }, [setAssets, setProject, setCurrentTime, pushLog]);
+    pushLog(t('editorWorkbench.demoLoaded'));
+  }, [pushLog, setAssets, setProject, setCurrentTime, t]);
 
   /** 暂停：必须 pause，否则解码器会继续跑；并同步源时间 */
   useEffect(() => {
@@ -1455,67 +1608,78 @@ export function EditorWorkbench() {
   const clipSummaryLine = useMemo(() => {
     if (!selectedVideoClip) return '';
     const name = resolveAssetName(selectedVideoClip.assetId);
-    const shot = selectedVideoClip.shotIndex != null ? `镜${selectedVideoClip.shotIndex} · ` : '';
-    return `${shot}${name} · 源 ${formatTimelineTime(selectedVideoClip.sourceStart)}→${formatTimelineTime(selectedVideoClip.sourceEnd)} · 成片 ${formatTimelineTime(selectedVideoClip.timelineStart)} 起`;
-  }, [selectedVideoClip, resolveAssetName]);
+    const values = {
+      shotIndex: selectedVideoClip.shotIndex ?? '',
+      name,
+      sourceStart: formatTimelineTime(selectedVideoClip.sourceStart),
+      sourceEnd: formatTimelineTime(selectedVideoClip.sourceEnd),
+      timelineStart: formatTimelineTime(selectedVideoClip.timelineStart),
+    };
+    return selectedVideoClip.shotIndex != null
+      ? tx('editorWorkbench.clipSummaryWithShot', values)
+      : tx('editorWorkbench.clipSummaryWithoutShot', values);
+  }, [selectedVideoClip, resolveAssetName, tx]);
 
   const handleClipSplit = useCallback(() => {
     if (!selectedVideoClipId) return;
     const r = splitVideoClipAtPlayhead(project, selectedVideoClipId, currentTime);
     if (!r) {
-      pushLog('拆分失败：将播放头移到片段内部，且两侧至少保留约 0.12s。');
+      pushLog(t('editorWorkbench.clipSplitFailed'));
       return;
     }
     applyTimelineProject(r.project);
     setSelectedVideoClipId(r.newClipIdRight);
-    pushLog('已在播放头处拆分。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipSplitDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipTrimHead = useCallback(() => {
     if (!selectedVideoClipId) return;
     const next = trimVideoClipHeadToPlayhead(project, selectedVideoClipId, currentTime);
     if (!next) {
-      pushLog('掐头失败：播放头需在片段内，且剩余段长需足够。');
+      pushLog(t('editorWorkbench.clipTrimHeadFailed'));
       return;
     }
     applyTimelineProject(next);
-    pushLog('已掐头：丢弃播放头之前的画面。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipTrimHeadDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipTrimTail = useCallback(() => {
     if (!selectedVideoClipId) return;
     const next = trimVideoClipTailToPlayhead(project, selectedVideoClipId, currentTime);
     if (!next) {
-      pushLog('去尾失败：播放头需在片段内，且剩余段长需足够。');
+      pushLog(t('editorWorkbench.clipTrimTailFailed'));
       return;
     }
     applyTimelineProject(next);
-    pushLog('已去尾：丢弃播放头之后的画面。');
-  }, [project, selectedVideoClipId, currentTime, applyTimelineProject, pushLog]);
+    pushLog(t('editorWorkbench.clipTrimTailDone'));
+  }, [applyTimelineProject, currentTime, project, pushLog, selectedVideoClipId, t]);
 
   const handleClipDelete = useCallback(() => {
     if (!selectedVideoClipId) return;
     handleDeleteClip('v1', selectedVideoClipId);
-    pushLog('已删除片段。');
-  }, [selectedVideoClipId, handleDeleteClip, pushLog]);
+    pushLog(t('editorWorkbench.clipDeleted'));
+  }, [handleDeleteClip, pushLog, selectedVideoClipId, t]);
 
   const handleSetSourceRange = useCallback(
     (start: number, end: number) => {
       if (!selectedVideoClipId) return;
       const next = updateVideoClipSourceRange(project, selectedVideoClipId, { sourceStart: start, sourceEnd: end });
       applyTimelineProject(next);
-      pushLog(`已设置入出点 ${start.toFixed(2)}s → ${end.toFixed(2)}s`);
+      pushLog(tx('editorWorkbench.sourceRangeSet', {
+        start: start.toFixed(2),
+        end: end.toFixed(2),
+      }));
     },
-    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, selectedVideoClipId, tx],
   );
 
   const handleSetSpeed = useCallback(
     (speed: number) => {
       if (!selectedVideoClipId) return;
       applyTimelineProject(setVideoClipSpeed(project, selectedVideoClipId, speed));
-      pushLog(`播放速度已设为 ${speed}x`);
+      pushLog(tx('editorWorkbench.speedSet', { speed }));
     },
-    [project, selectedVideoClipId, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, selectedVideoClipId, tx],
   );
 
   const handleSetVolume = useCallback(
@@ -1550,17 +1714,17 @@ export function EditorWorkbench() {
     (text: string, startSec: number, endSec: number) => {
       const id = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       applyTimelineProject(upsertSubtitleCue(project, { id, startSec, endSec, text }));
-      pushLog(uiText('已添加字幕。', 'Subtitle added.'));
+      pushLog(t('editorWorkbench.subtitleAdded'));
     },
-    [project, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, t],
   );
 
   const handleRemoveSubtitle = useCallback(
     (cueId: string) => {
       applyTimelineProject(removeSubtitleCue(project, cueId));
-      pushLog(uiText('已删除字幕。', 'Subtitle removed.'));
+      pushLog(t('editorWorkbench.subtitleRemoved'));
     },
-    [project, applyTimelineProject, pushLog],
+    [applyTimelineProject, project, pushLog, t],
   );
 
   // ──────────────── 文字轨 handlers ────────────────
@@ -1575,20 +1739,30 @@ export function EditorWorkbench() {
   }, [project, applyTimelineProject, selectedTextClipId]);
 
   const handleAddIntro = useCallback(() => {
-    const p = addIntroTextClip(project, uiText('片头标题', 'Title card'), uiText('副标题文字', 'Subtitle'), 'intro-minimal');
+    const p = addIntroTextClip(
+      project,
+      t('editorWorkbench.introTitleDefault'),
+      t('editorWorkbench.introSubtitleDefault'),
+      'intro-minimal',
+    );
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[0].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, project, t]);
 
   const handleAddOutro = useCallback(() => {
-    const p = addOutroTextClip(project, uiText('关注我们', 'Follow us'), uiText('获取更多精彩内容', 'See more highlights'), 'outro-follow');
+    const p = addOutroTextClip(
+      project,
+      t('editorWorkbench.outroTitleDefault'),
+      t('editorWorkbench.outroSubtitleDefault'),
+      'outro-follow',
+    );
     applyTimelineProject(p);
     const clips = getAllTextClips(p);
     if (clips.length > 0) setSelectedTextClipId(clips[clips.length - 1].id);
     setShowTextPanel(true);
-  }, [project, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, project, t]);
 
   const handleAddSubtitleText = useCallback(() => {
     const id = `text_${Date.now()}`;
@@ -1596,13 +1770,13 @@ export function EditorWorkbench() {
       id,
       timelineStart: currentTime,
       timelineEnd: Math.min(currentTime + 2, project.durationSec),
-      text: uiText('字幕文字', 'Subtitle text'),
+      text: t('editorWorkbench.subtitleTextDefault'),
       presetId: 'sub-bottom',
     };
     applyTimelineProject(upsertTextClip(project, clip));
     setSelectedTextClipId(id);
     setShowTextPanel(true);
-  }, [project, currentTime, applyTimelineProject, uiLocale]);
+  }, [applyTimelineProject, currentTime, project, t]);
 
   const activeTextClips = useMemo(
     () => getActiveTextClips(project, currentTime),
@@ -1665,9 +1839,12 @@ export function EditorWorkbench() {
     }
   }, []);
 
-    const handleCaptureCover = useCallback(() => {
+  const handleCaptureCover = useCallback(() => {
     const video = document.querySelector<HTMLVideoElement>('video');
-    if (!video) { toast.info('暂无视频可截取'); return; }
+    if (!video) {
+      toast.info(t('editorWorkbench.noVideoToCapture'));
+      return;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth || 1080;
     canvas.height = video.videoHeight || 1920;
@@ -1682,9 +1859,9 @@ export function EditorWorkbench() {
       a.download = `cover_${Date.now()}.jpg`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('封面已截取，请检查下载文件');
+      toast.success(t('editorWorkbench.coverCaptured'));
     }, 'image/jpeg', 0.92);
-  }, []);
+  }, [t]);
 
   return (
     <>
@@ -1697,13 +1874,13 @@ export function EditorWorkbench() {
           showTextPanel ? (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-                <span className="text-xs font-semibold text-[var(--color-text)]">{uiText('文字编辑', 'Text editing')}</span>
+                <span className="text-xs font-semibold text-[var(--color-text)]">{t('editorWorkbench.textEditing')}</span>
                 <button
                   type="button"
                   onClick={() => setShowTextPanel(false)}
                   className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xs"
                 >
-                  {uiText('← 素材', '← Media')}
+                  {t('editorWorkbench.mediaBack')}
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1743,7 +1920,7 @@ export function EditorWorkbench() {
             className="flex h-full min-h-0 flex-col bg-[var(--color-surface)] [&:fullscreen]:bg-black"
           >
             <div className="border-b border-[var(--color-border)] px-3 py-2">
-              <span className="text-xs font-medium text-[var(--color-text-muted)]">{uiText('预览', 'Preview')}</span>
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">{t('editorWorkbench.preview')}</span>
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black p-2">
               <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
@@ -1815,7 +1992,7 @@ export function EditorWorkbench() {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-xs text-white/50">
-                    {uiText('加载示例、上传素材或 Agent 生成时间轴后预览', 'Load the demo, upload media, or let the agent build a timeline to preview here')}
+                    {t('editorWorkbench.previewEmptyHint')}
                   </div>
                 )}
                 {activeSubtitleText ? (
@@ -1853,7 +2030,7 @@ export function EditorWorkbench() {
             onAbort={() => {
               if (agentAbortRef.current) {
                 agentAbortRef.current.abort();
-                pushLog(uiText('已取消 Agent 任务', 'Agent task cancelled.'));
+                pushLog(t('editorWorkbench.agentTaskCancelled'));
               }
             }}
             jobProgress={agentJobProgress}
@@ -1862,6 +2039,7 @@ export function EditorWorkbench() {
             deliverableMarkdown={agentDeliverable}
             chatHistory={agentChatHistory}
             creativeStrategy={agentCreativeStrategy}
+            creativeVariant={agentCreativeVariant ?? campaignCreativeHandoff?.selectedVariant ?? null}
             initialCreativeBrief={campaignCreativeHandoff?.brief ?? null}
           />
         }
@@ -1944,9 +2122,9 @@ export function EditorWorkbench() {
                 <a
                   href={`/studio/production${project.sourceProductionProjectId ? `?projectId=${project.sourceProductionProjectId}` : ''}`}
                   className="flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
-                  title={uiText('打开来源制片项目', 'Open source production project')}
+                  title={t('editorWorkbench.openSourceProject')}
                 >
-                  {uiText(`📎 来自「${project.sourceProductionTitle}」`, `📎 From “${project.sourceProductionTitle}”`)}
+                  {formatMessage(t('editorWorkbench.sourceProductionTag'), { title: project.sourceProductionTitle })}
                   <span className="opacity-60">→</span>
                 </a>
                 {project.sourceProductionProjectId && projectId && (
@@ -1954,9 +2132,9 @@ export function EditorWorkbench() {
                     type="button"
                     onClick={() => setShowSyncModal(true)}
                     className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
-                    title={uiText('从制片项目同步最新版本', 'Sync the latest versions from production')}
+                    title={t('editorWorkbench.syncLatest')}
                   >
-                    {uiText('🔄 同步更新', '🔄 Sync')}
+                    {t('editorWorkbench.syncLatest')}
                   </button>
                 )}
               </>
@@ -1966,16 +2144,16 @@ export function EditorWorkbench() {
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 className="w-[140px] bg-transparent text-xs text-[var(--color-text)] outline-none"
-                placeholder={uiText('项目名', 'Project name')}
+                placeholder={t('editorWorkbench.projectNamePlaceholder')}
               />
               <span className={`text-[10px] ${saveState === 'needs_name' ? 'text-amber-300' : 'text-[var(--color-text-muted)]'}`}>
                 {saveState === 'saving'
-                  ? uiText('保存中...', 'Saving...')
+                  ? t('editorWorkbench.saveStateSaving')
                   : saveState === 'saved'
-                    ? uiText('已保存', 'Saved')
+                    ? t('editorWorkbench.saveStateSaved')
                     : saveState === 'error'
-                      ? uiText('保存失败', 'Save failed')
-                      : uiText('未保存', 'Unsaved')}
+                      ? t('editorWorkbench.saveStateFailed')
+                      : t('editorWorkbench.saveStateUnsaved')}
               </span>
             </div>
             <button
@@ -1983,71 +2161,68 @@ export function EditorWorkbench() {
               onClick={() => setShowProjectManager(true)}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              {uiText('我的项目', 'My projects')}{projectList.length > 0 ? ` (${projectList.length})` : ''}
+              {t('editorWorkbench.myProjects')}{projectList.length > 0 ? ` (${projectList.length})` : ''}
             </button>
             <button
               type="button"
               onClick={() => {
-                const dateStamp = '';
-                const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-                void defaultName;
                 openNewProjectNamingModal();
               }}
               className="rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
             >
-              {uiText('+ 新建', '+ New')}
+              {t('editorWorkbench.newProject')}
             </button>
             <button
               type="button"
               onClick={undo}
               disabled={!canUndo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title={uiText('撤销 Ctrl+Z', 'Undo Ctrl+Z')}
+              title={t('editorWorkbench.undoTitle')}
             >
-              {uiText('撤销', 'Undo')}
+              {t('editorWorkbench.undo')}
             </button>
             <button
               type="button"
               onClick={redo}
               disabled={!canRedo}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] disabled:opacity-40"
-              title={uiText('重做 Ctrl+Shift+Z', 'Redo Ctrl+Shift+Z')}
+              title={t('editorWorkbench.redoTitle')}
             >
-              {uiText('重做', 'Redo')}
+              {t('editorWorkbench.redo')}
             </button>
             <div className="flex items-center gap-1 border-r border-[var(--color-border)] pr-2 mr-1">
               <button
                 type="button"
                 onClick={handleAddIntro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在开头添加片头', 'Add a title card at the beginning')}
+                title={t('editorWorkbench.addIntroTitle')}
               >
-                {uiText('片头', 'Intro')}
+                {t('editorWorkbench.addIntro')}
               </button>
               <button
                 type="button"
                 onClick={handleAddSubtitleText}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在当前时间添加字幕', 'Add a subtitle at the current time')}
+                title={t('editorWorkbench.addSubtitleTitle')}
               >
-                {uiText('+ 字幕', '+ Subtitle')}
+                {t('editorWorkbench.addSubtitle')}
               </button>
               <button
                 type="button"
                 onClick={handleAddOutro}
                 className="rounded px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                title={uiText('在末尾添加片尾', 'Add an outro at the end')}
+                title={t('editorWorkbench.addOutroTitle')}
               >
-                {uiText('片尾', 'Outro')}
+                {t('editorWorkbench.addOutro')}
               </button>
             </div>
             <button
               type="button"
               onClick={handleCaptureCover}
-              title={uiText('截取当前帧为封面', 'Capture the current frame as cover')}
+              title={t('editorWorkbench.captureFrameTitle')}
               className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
-              {uiText('📷 截帧', '📷 Capture')}
+              {t('editorWorkbench.captureFrame')}
             </button>
             <ExportPanel
               project={project}
@@ -2072,9 +2247,6 @@ export function EditorWorkbench() {
           });
         }}
         onNew={() => {
-          const dateStamp = '';
-          const defaultName = `${uiText('剪辑', 'Edit')}-${dateStamp}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
-          void defaultName;
           openNewProjectNamingModal();
           setShowProjectManager(false);
         }}
@@ -2111,7 +2283,7 @@ export function EditorWorkbench() {
           const negativePrompt = 'vocals, lyrics';
           setBgmFormSync({ prompt, negativePrompt, key });
           setBgmAutoGenerateRequest({ prompt, negativePrompt, key });
-          pushLog(uiText('🎵 已根据导入分镜触发一键智能配乐…', '🎵 Triggered smart music generation from the imported storyboard…'));
+          pushLog(t('editorWorkbench.importedStoryboardMusicTriggered'));
         }}
         onPreview={() => {
           if (!isPlaying) togglePlay();
@@ -2127,8 +2299,8 @@ export function EditorWorkbench() {
         onClick={(e) => { if (e.target === e.currentTarget) closeProjectNamingModal(); }}
       >
         <div className="w-80 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 shadow-2xl">
-          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{uiText('新建剪辑项目', 'Create a new editing project')}</h3>
-          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">{uiText('为新项目起一个名字，之后可以随时修改', 'Give the new project a name. You can rename it later any time.')}</p>
+          <h3 className="mb-1 text-sm font-semibold text-[var(--color-text)]">{t('editorWorkbench.namingModalTitle')}</h3>
+          <p className="mb-3 text-[11px] text-[var(--color-text-muted)]">{t('editorWorkbench.namingModalBody')}</p>
           <input
             autoFocus
             type="text"
@@ -2140,7 +2312,7 @@ export function EditorWorkbench() {
               }
               if (e.key === 'Escape') closeProjectNamingModal();
             }}
-            placeholder={uiText('例：产品宣传片-0415', 'Example: Product launch cut - 0415')}
+            placeholder={t('editorWorkbench.namingModalPlaceholder')}
             className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)]"
           />
           <div className="flex justify-end gap-2">
@@ -2149,14 +2321,14 @@ export function EditorWorkbench() {
               onClick={closeProjectNamingModal}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              {uiText('取消', 'Cancel')}
+              {t('common.cancel')}
             </button>
             <button
               type="button"
               onClick={handleConfirmProjectNaming}
               className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white"
             >
-              {uiText('创建', 'Create')}
+              {t('editorWorkbench.create')}
             </button>
           </div>
         </div>
@@ -2170,20 +2342,20 @@ export function EditorWorkbench() {
         <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-2xl p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-bold text-[var(--color-text)]">
-              {uiText('欢迎使用剪辑工作台', 'Welcome to the editing workbench')}
+              {t('editorWorkbench.onboardingTitle')}
             </h2>
             <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">1</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('告诉 AI 你想怎么剪', 'Tell AI how you want to edit')}</strong> {uiText('— 右侧「AI 助手」面板支持自然语言指令，例如"帮我把第 2 段移到开头"、"加一段欢快的 BGM"。', '— The AI Assistant panel on the right accepts natural language instructions like “move clip 2 to the opening” or “add an upbeat BGM track.”')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingTellAiTitle')}</strong> - {t('editorWorkbench.onboardingTellAiBody')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">2</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('左侧添加素材', 'Add source media on the left')}</strong> {uiText('— 上传视频或从素材库选择，点击即可加入时间轴。', '— Upload videos or choose them from the asset library, then click to place them on the timeline.')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingAddMediaTitle')}</strong> - {t('editorWorkbench.onboardingAddMediaBody')}</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center text-xs font-bold">3</span>
-                <p><strong className="text-[var(--color-text)]">{uiText('一键导出', 'Export in one click')}</strong> {uiText('— 满意后点击导出，AI 自动合成高清视频。', '— When you are happy with the cut, export and let AI assemble the final HD video.')}</p>
+                <p><strong className="text-[var(--color-text)]">{t('editorWorkbench.onboardingExportTitle')}</strong> - {t('editorWorkbench.onboardingExportBody')}</p>
               </div>
             </div>
             <button
@@ -2194,7 +2366,7 @@ export function EditorWorkbench() {
               }}
               className="w-full py-2.5 bg-[var(--color-primary)] text-white rounded-xl font-semibold hover:bg-[var(--color-primary-hover)] transition"
             >
-              {uiText('开始剪辑', 'Start editing')}
+              {t('editorWorkbench.onboardingStartEditing')}
             </button>
           </div>
         </div>
@@ -2214,7 +2386,7 @@ function probeVideoDuration(url: string): Promise<number> {
       v.load();
       resolve(Number.isFinite(d) && d > 0 ? d : 10);
     };
-    v.onerror = () => reject(new Error('无法读取元数据'));
+    v.onerror = () => reject(new Error('Failed to read media metadata'));
     v.src = url;
   });
 }

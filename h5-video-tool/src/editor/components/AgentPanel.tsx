@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { EditorAgentJobProgress } from '../../api/editor';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { pickUiText } from '../../i18n/uiText.ts';
 import type {
   EditorProjectMemoryBucket,
   EditorUserProfileDimensionKey,
@@ -11,9 +10,12 @@ import {
   type EditorCreativeBrief,
   type EditorCreativeMode,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
 } from '../../api/editorCreative';
 import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../types/agentMemory';
 import { AgentMemoryPanel } from './AgentMemoryPanel';
+
+void React;
 
 type LogVariant = 'user' | 'agent' | 'progress' | 'token' | 'error' | 'system';
 
@@ -67,6 +69,7 @@ interface AgentPanelProps {
   chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   onAbort?: () => void;
   creativeStrategy?: EditorCreativeStrategy | null;
+  creativeVariant?: EditorCreativeVariant | null;
   initialCreativeBrief?: EditorCreativeBrief | null;
 }
 
@@ -114,10 +117,11 @@ export function AgentPanel({
   chatHistory,
   onAbort,
   creativeStrategy,
+  creativeVariant,
   initialCreativeBrief,
 }: AgentPanelProps) {
   const { uiLocale } = useLocale();
-  const uiText = <T,>(zh: T, en: T) => pickUiText(uiLocale, zh, en);
+  const uiText = <T,>(zh: T, en: T) => (uiLocale === 'en' ? en : zh);
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showBrief, setShowBrief] = useState(true);
@@ -203,6 +207,52 @@ export function AgentPanel({
   const recentHistory = chatHistory && chatHistory.length > 0 ? chatHistory.slice(-10) : [];
   const creativeHookApproachLabel = hookApproachLabel(creativeStrategy?.hookApproach, uiLocale);
   const creativeCtaTypeLabel = ctaTypeLabel(creativeStrategy?.ctaType, uiLocale);
+  const appliedKnowledgeSections = creativeStrategy
+    ? [
+        {
+          key: 'marketTruth',
+          label: uiText('市场事实', 'Market truth'),
+          items: creativeStrategy.marketTruth,
+          pillClass: 'border-sky-500/25 bg-sky-500/8 text-sky-200',
+        },
+        {
+          key: 'audienceTension',
+          label: uiText('人群张力', 'Audience tension'),
+          items: creativeStrategy.audienceTension,
+          pillClass: 'border-fuchsia-500/25 bg-fuchsia-500/8 text-fuchsia-200',
+        },
+        {
+          key: 'toneRules',
+          label: uiText('语气规则', 'Tone rules'),
+          items: creativeStrategy.toneRules,
+          pillClass: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-200',
+        },
+        {
+          key: 'visualCues',
+          label: uiText('视觉线索', 'Visual cues'),
+          items: creativeStrategy.visualCues,
+          pillClass: 'border-cyan-500/25 bg-cyan-500/8 text-cyan-200',
+        },
+        {
+          key: 'approvedAngles',
+          label: uiText('可用角度', 'Approved angles'),
+          items: creativeStrategy.approvedAngles,
+          pillClass: 'border-violet-500/25 bg-violet-500/8 text-violet-200',
+        },
+        {
+          key: 'hookCandidates',
+          label: uiText('Hook 备选', 'Hook candidates'),
+          items: creativeStrategy.hookCandidates,
+          pillClass: 'border-indigo-500/25 bg-indigo-500/8 text-indigo-200',
+        },
+        {
+          key: 'forbiddenClaims',
+          label: uiText('避免表达', 'Forbidden claims'),
+          items: creativeStrategy.forbiddenClaims,
+          pillClass: 'border-amber-500/25 bg-amber-500/8 text-amber-200',
+        },
+      ].filter((section) => section.items.length > 0)
+    : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
@@ -419,6 +469,86 @@ export function AgentPanel({
                 </div>
               </div>
             ) : null}
+            {appliedKnowledgeSections.length > 0 ? (
+              <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] text-[var(--color-text-muted)]">
+                    {uiText('已应用知识', 'Applied knowledge')}
+                  </div>
+                  {creativeStrategy.knowledgePackIds.length > 0 ? (
+                    <span className="rounded-full border border-[var(--color-primary)]/25 px-2 py-0.5 text-[9px] text-[var(--color-primary)]">
+                      {uiText(
+                        `已应用 ${creativeStrategy.knowledgePackIds.length} 个 pack`,
+                        `${creativeStrategy.knowledgePackIds.length} packs`,
+                      )}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 space-y-2">
+                  {appliedKnowledgeSections.map((section) => (
+                    <div key={section.key}>
+                      <div className="text-[10px] text-[var(--color-text-muted)]">{section.label}</div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {section.items.slice(0, 4).map((item) => (
+                          <span
+                            key={`${section.key}-${item}`}
+                            className={`rounded-full border px-2 py-1 text-[10px] ${section.pillClass}`}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                        {section.items.length > 4 ? (
+                          <span className="rounded-full border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-text-muted)]">
+                            +{section.items.length - 4}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {creativeVariant ? (
+        <div className="border-b border-[var(--color-border)] px-3 py-2">
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold text-[var(--color-text)]">
+                  {uiText('当前 Variant', 'Selected variant')}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+                  {creativeVariant.title}
+                </div>
+              </div>
+              <span className="rounded-full border border-sky-500/30 px-2 py-0.5 text-[10px] text-sky-200">
+                {creativeVariant.cta}
+              </span>
+            </div>
+            <div className="mt-2 grid gap-2">
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('Variant Hook', 'Variant hook')}</div>
+                <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeVariant.hook}</div>
+              </div>
+              {creativeVariant.openingBeat ? (
+                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                  <div className="text-[10px] text-[var(--color-text-muted)]">{uiText('开场节奏', 'Opening beat')}</div>
+                  <div className="mt-1 text-[11px] text-[var(--color-text)]">{creativeVariant.openingBeat}</div>
+                </div>
+              ) : null}
+              <p className="text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                {creativeVariant.differenceSummary}
+              </p>
+              {creativeVariant.editingDirection ? (
+                <p className="text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                  {uiText('剪辑方向：', 'Editing direction: ')}
+                  {creativeVariant.editingDirection}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

@@ -7,6 +7,7 @@ import { appendFileAccessToken } from '../api/client';
  * key 按账号分桶，避免多账号数据混用
  */
 const MAX_ITEMS = 100;
+const DISTRIBUTE_ASSET_DRAFT_KEY = 'h5-distribute-asset-draft';
 
 function getCurrentUsername(): string {
   try {
@@ -23,6 +24,10 @@ function getStorageKey(): string {
   return `h5-video-history-${getCurrentUsername()}`;
 }
 
+function getDistributeAssetDraftStorageKey(): string {
+  return `${DISTRIBUTE_ASSET_DRAFT_KEY}-${getCurrentUsername()}`;
+}
+
 export interface VideoHistoryItem {
   taskId: string;
   /** 本地 output 相对路径（有则优先；即梦/Veo 等写入本机文件时用它，避免把 base64 塞进 localStorage） */
@@ -33,6 +38,16 @@ export interface VideoHistoryItem {
   createdAt: number;
   /** 星标：排序靠前 */
   starred?: boolean;
+}
+
+export interface SavedDistributeAssetDraft {
+  id: string;
+  source: 'create-flow' | 'history' | 'server-output';
+  title?: string;
+  videoPath?: string;
+  videoUrl?: string;
+  taskId?: string;
+  savedAt: number;
 }
 
 export function loadVideoHistory(): VideoHistoryItem[] {
@@ -132,6 +147,36 @@ export function getRecentPromptForVideo(taskId?: string | null): string {
     if (found?.prompt?.trim()) return found.prompt.trim();
   }
   return list[0]?.prompt?.trim() ?? '';
+}
+
+export function saveDistributeAssetDraft(draft: Omit<SavedDistributeAssetDraft, 'savedAt'>): void {
+  try {
+    const entry: SavedDistributeAssetDraft = {
+      ...draft,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(getDistributeAssetDraftStorageKey(), JSON.stringify(entry));
+  } catch {}
+}
+
+export function loadDistributeAssetDraft(): SavedDistributeAssetDraft | null {
+  try {
+    const raw = localStorage.getItem(getDistributeAssetDraftStorageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedDistributeAssetDraft;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.id !== 'string' || !parsed.id.trim()) return null;
+    if (typeof parsed.source !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDistributeAssetDraft(): void {
+  try {
+    localStorage.removeItem(getDistributeAssetDraftStorageKey());
+  } catch {}
 }
 
 /** 构建视频播放 URL（通过 API 获取文件）

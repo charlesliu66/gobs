@@ -1,6 +1,15 @@
 import { apiGet, apiPost, redirectToLogin } from './client';
 import type { EditorProjectMemory, EditorUserCommunicationProfile } from '../editor/types/agentMemory';
 import type { AspectRatioPreset, MediaAsset, TimelineProject } from '../editor/types/timeline';
+import { getMessage } from '../i18n/messages.ts';
+import {
+  buildLocaleHeaders,
+  formatMessage,
+  getInitialContentLocale,
+  getInitialUiLocale,
+  readStoredContentLocale,
+  readStoredUiLocale,
+} from '../i18n/locale.ts';
 import { generateUUID } from '../utils/uuid';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -8,6 +17,25 @@ const BASE = import.meta.env.VITE_API_BASE_URL || '';
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('gobs_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function getLocaleState() {
+  const storage = typeof window === 'undefined' ? null : window.localStorage;
+  const uiLocale = storage ? readStoredUiLocale(storage) : getInitialUiLocale(null, null);
+  const contentLocale = storage
+    ? readStoredContentLocale(storage, uiLocale)
+    : getInitialContentLocale(null, uiLocale);
+  return { uiLocale, contentLocale };
+}
+
+function getLocaleHeaders(): Record<string, string> {
+  const { uiLocale, contentLocale } = getLocaleState();
+  return buildLocaleHeaders(uiLocale, contentLocale);
+}
+
+function runtimeText(path: string, values?: Record<string, string | number>): string {
+  const { uiLocale } = getLocaleState();
+  return formatMessage(getMessage(uiLocale, path), values);
 }
 
 function handleUnauthorized(res: Response): void {
@@ -35,7 +63,10 @@ export async function listEditorAssets(): Promise<{ assets: EditorAssetDto[] }> 
 export async function deleteEditorAsset(id: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/assets/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+    },
   });
   handleUnauthorized(res);
   if (!res.ok) {
@@ -46,7 +77,10 @@ export async function deleteEditorAsset(id: string): Promise<void> {
 
 export async function getEditorUploadConfig(): Promise<{ maxMb: number; maxBytes: number }> {
   const res = await fetch(`${BASE}/api/editor/upload-config`, {
-    headers: getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+    },
   });
   handleUnauthorized(res);
   if (!res.ok) {
@@ -60,63 +94,76 @@ export async function uploadEditorAsset(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<{ asset: EditorAssetDto }> {
-  // 前置单文件上限校验，失败给出含 MB 的可读提示（优于服务端 413 默默失败）
+  let tooLargeMessage = '';
+
   try {
     const cfg = await getEditorUploadConfig();
     if (file.size > cfg.maxBytes) {
       const fileMb = (file.size / 1024 / 1024).toFixed(1);
-      throw new Error(
-        `文件 ${fileMb} MB 超过单文件上限 ${cfg.maxMb} MB，请裁剪或提高 EDITOR_UPLOAD_MAX_MB 后重试。`,
-      );
+      tooLargeMessage = runtimeText('errors.uploadFileTooLarge', { fileMb, maxMb: cfg.maxMb });
+      throw new Error(tooLargeMessage);
     }
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('超过单文件上限')) throw e;
+  } catch (error) {
+    if (error instanceof Error && tooLargeMessage && error.message === tooLargeMessage) {
+      throw error;
+    }
   }
 
   const fd = new FormData();
   fd.append('file', file);
   fd.append('originalName', file.name);
 
-  // 若提供进度回调，改用 XHR 以获取 upload progress 事件
   if (onProgress) {
     const token = localStorage.getItem('gobs_token');
+    const localeHeaders = getLocaleHeaders();
+
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${BASE}/api/editor/assets/upload`);
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.timeout = 600_000; // 10 分钟
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
+      Object.entries(localeHeaders).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+      xhr.timeout = 600_000;
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
         }
       });
+
       xhr.addEventListener('load', () => {
         if (xhr.status === 401) {
           redirectToLogin();
-          reject(new Error('登录已过期，请重新登录'));
+          reject(new Error(runtimeText('errors.authSessionExpired')));
           return;
         }
+
         if (xhr.status < 200 || xhr.status >= 300) {
           let errMsg = xhr.statusText;
           try {
             const body = JSON.parse(xhr.responseText) as { error?: string };
             if (body.error) errMsg = body.error;
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
           reject(new Error(errMsg));
           return;
         }
+
         try {
           resolve(JSON.parse(xhr.responseText) as { asset: EditorAssetDto });
         } catch {
-          reject(new Error('响应解析失败'));
+          reject(new Error(runtimeText('errors.uploadParseFailed')));
         }
       });
+
       xhr.addEventListener('error', () => {
-        reject(new Error('上传请求未到达 API（网络中断/CORS/网关限制）。若上传大文件，请检查 Nginx 的 client_max_body_size 是否已放宽。'));
+        reject(new Error(runtimeText('errors.uploadRequestFailed')));
       });
+
       xhr.addEventListener('timeout', () => {
-        reject(new Error('上传超时（>10分钟），请检查网络或文件大小'));
+        reject(new Error(runtimeText('errors.uploadTimeout')));
       });
+
       xhr.send(fd);
     });
   }
@@ -125,23 +172,26 @@ export async function uploadEditorAsset(
   try {
     res = await fetch(`${BASE}/api/editor/assets/upload`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+        ...getLocaleHeaders(),
+      },
       body: fd,
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     if (/Failed to fetch|NetworkError|network/i.test(msg)) {
-      throw new Error(
-        '上传请求未到达 API（网络中断/CORS/网关限制）。若上传大文件，请检查 Nginx 的 client_max_body_size 是否已放宽。',
-      );
+      throw new Error(runtimeText('errors.uploadRequestFailed'));
     }
-    throw e;
+    throw error;
   }
+
   handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error || res.statusText);
   }
+
   return res.json() as Promise<{ asset: EditorAssetDto }>;
 }
 
@@ -180,7 +230,11 @@ export async function saveEditorProject(input: {
 export async function renameEditorProject(id: string, name: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ name }),
   });
   handleUnauthorized(res);
@@ -193,7 +247,10 @@ export async function renameEditorProject(id: string, name: string): Promise<voi
 export async function deleteEditorProject(id: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+    },
   });
   handleUnauthorized(res);
   if (!res.ok) {
@@ -237,7 +294,11 @@ export async function applySyncReplacements(
 ): Promise<EditorProjectRecord> {
   const res = await fetch(`${BASE}/api/editor/projects/${encodeURIComponent(editorProjectId)}/apply-sync`, {
     method: 'PATCH',
-    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ replacements }),
   });
   handleUnauthorized(res);
@@ -296,7 +357,10 @@ export async function listExportFiles(): Promise<{ files: ExportFileRecord[] }> 
 export async function deleteExportFile(filename: string): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/export/files/${encodeURIComponent(filename)}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders(),
+      ...getLocaleHeaders(),
+    },
   });
   handleUnauthorized(res);
   if (!res.ok) {
@@ -374,6 +438,7 @@ export async function applyEditorAgentStream(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       ...getAuthHeaders(),
+      ...getLocaleHeaders(),
     },
     body: JSON.stringify(body),
     signal,
@@ -384,8 +449,9 @@ export async function applyEditorAgentStream(
     throw new Error((err as { error?: string }).error || res.statusText);
   }
   if (!res.body) {
-    throw new Error('服务端未返回流式正文');
+    throw new Error(runtimeText('errors.streamBodyMissing'));
   }
+
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -397,14 +463,16 @@ export async function applyEditorAgentStream(
     buffer += decoder.decode(value, { stream: true });
     const chunks = buffer.split('\n\n');
     buffer = chunks.pop() ?? '';
+
     for (const rawBlock of chunks) {
       const block = rawBlock.trim();
       if (!block) continue;
       const dataLine = block
         .split('\n')
-        .map((l) => l.trim())
-        .find((l) => l.startsWith('data:'));
+        .map((line) => line.trim())
+        .find((line) => line.startsWith('data:'));
       if (!dataLine) continue;
+
       const jsonStr = dataLine.startsWith('data:') ? dataLine.slice(5).trim() : dataLine;
       let payload: {
         type?: string;
@@ -419,11 +487,13 @@ export async function applyEditorAgentStream(
         llmUsage?: ApplyEditorAgentResponse['llmUsage'];
         error?: string;
       };
+
       try {
         payload = JSON.parse(jsonStr) as typeof payload;
       } catch {
         continue;
       }
+
       if (payload.type === 'progress' && payload.percent != null && payload.message) {
         onProgress({
           stage: payload.stage ?? 'progress',
@@ -432,6 +502,7 @@ export async function applyEditorAgentStream(
           etaSec: payload.etaSec,
         });
       }
+
       if (payload.type === 'done' && payload.project) {
         finalResult = {
           summary: payload.summary ?? '',
@@ -441,19 +512,20 @@ export async function applyEditorAgentStream(
           llmUsage: payload.llmUsage,
         };
       }
+
       if (payload.type === 'error') {
-        throw new Error(payload.error || '剪辑任务失败');
+        throw new Error(payload.error || runtimeText('errors.editTaskFailed'));
       }
     }
   }
 
   if (!finalResult) {
-    throw new Error('流已结束但未收到剪辑结果，请重试');
+    throw new Error(runtimeText('errors.editTaskMissingResult'));
   }
+
   return finalResult;
 }
 
-/** 先判定「闲聊」还是「剪辑任务」 */
 export type RouteEditorAgentResponse = { intent: 'edit' } | { intent: 'chat' };
 
 export async function routeEditorAgentMessage(userMessage: string): Promise<RouteEditorAgentResponse> {
@@ -494,22 +566,23 @@ async function uploadChunkOnce(
   fd.append('chunkIndex', String(chunkIndex));
   fd.append('totalChunks', String(totalChunks));
   fd.append('chunk', chunk);
+
   const token = localStorage.getItem('gobs_token');
   const res = await fetch(`${BASE}/api/editor/assets/upload-chunk`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getLocaleHeaders(),
+    },
     body: fd,
   });
+  handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
 }
 
-/**
- * 分片上传 with 指数退避重试。大文件上传容易被网络抖动打断，
- * 一片挂就全链路失败不友好。重试 2 次（总共 3 次尝试）。
- */
 async function uploadChunk(
   uploadId: string,
   chunkIndex: number,
@@ -542,9 +615,11 @@ async function assembleChunks(
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getLocaleHeaders(),
     },
     body: JSON.stringify({ uploadId, originalName, expectedTotalSize }),
   });
+  handleUnauthorized(res);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -552,26 +627,25 @@ async function assembleChunks(
   return res.json() as Promise<{ asset: EditorAssetDto }>;
 }
 
-/** 分片上传（并发池 3），大文件上传整体时长由串行 N 片缩短为 ceil(N/3) 倍时间 */
 export async function uploadEditorAssetChunked(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<{ asset: EditorAssetDto }> {
   const uploadId = generateUUID();
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  let tooLargeMessage = '';
 
-  // 前置大小校验：超出单文件上限直接抛友好错误，避免分片全传完后才被服务端拒绝
   try {
     const cfg = await getEditorUploadConfig();
     if (file.size > cfg.maxBytes) {
       const fileMb = (file.size / 1024 / 1024).toFixed(1);
-      throw new Error(
-        `文件 ${fileMb} MB 超过单文件上限 ${cfg.maxMb} MB，请裁剪或提高 EDITOR_UPLOAD_MAX_MB 后重试。`,
-      );
+      tooLargeMessage = runtimeText('errors.uploadFileTooLarge', { fileMb, maxMb: cfg.maxMb });
+      throw new Error(tooLargeMessage);
     }
-  } catch (e) {
-    // 仅当真正抛出"超出上限"文案时才阻断，其它探测失败不影响继续
-    if (e instanceof Error && e.message.includes('超过单文件上限')) throw e;
+  } catch (error) {
+    if (error instanceof Error && tooLargeMessage && error.message === tooLargeMessage) {
+      throw error;
+    }
   }
 
   const CONCURRENCY = 3;
@@ -583,11 +657,11 @@ export async function uploadEditorAssetChunked(
 
   async function worker(): Promise<void> {
     while (true) {
-      const i = nextIndex;
-      if (i >= totalChunks) return;
+      const index = nextIndex;
+      if (index >= totalChunks) return;
       nextIndex += 1;
-      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      await uploadChunk(uploadId, i, totalChunks, chunk);
+      const chunk = file.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
+      await uploadChunk(uploadId, index, totalChunks, chunk);
       done += 1;
       updateProgress();
     }

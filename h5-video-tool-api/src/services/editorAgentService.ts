@@ -28,11 +28,14 @@ import { loadGameTaxonomy } from './video/gameTaxonomy.js';
 import { buildAovDslPlan, looksLikeAovRequest } from './aovDslPlanner.js';
 import { getActiveAovRuleset } from './aovRulesetService.js';
 import {
-  buildCreativeBriefPromptBlock,
-  buildCreativeStrategy,
+  resolveEditorCreativeKnowledgeState,
   type EditorCreativeBrief,
+  type EditorCreativeKnowledgeContext,
   type EditorCreativeStrategy,
+  type EditorCreativeVariant,
+  type EditorCreativeVariantPack,
 } from './editorCreativeBrief.js';
+import { buildCreativeBriefPromptBlockWithVariant } from './editorCreativeVariantContext.js';
 import {
   localizedText,
   localizeStructuredPayload,
@@ -60,6 +63,10 @@ export interface EditorAgentApplyInput {
   projectMemory?: unknown;
   creativeBrief?: EditorCreativeBrief;
   creativeStrategy?: EditorCreativeStrategy;
+  creativeVariant?: EditorCreativeVariant;
+  creativeVariantPack?: EditorCreativeVariantPack;
+  knowledgePackIds: string[];
+  knowledgeContext?: EditorCreativeKnowledgeContext;
   /** 仅在 vision/hybrid 下生效：先缩窗再抽帧 Gemini */
   visionFocus?: EditorVisionFocus;
   replyLocale: ReplyLocale;
@@ -790,7 +797,16 @@ export async function runEditorAgentApply(
   const usageSink = (stage: string, usage: CompassChatUsage | undefined) => {
     usageRecords.push({ stage, usage });
   };
-  const creativeStrategy = input.creativeStrategy ?? buildCreativeStrategy(input.creativeBrief, replyLocale);
+  const resolvedCreativeState = resolveEditorCreativeKnowledgeState({
+    brief: input.creativeBrief,
+    strategy: input.creativeStrategy,
+    knowledgeContext: input.knowledgeContext,
+    knowledgePackIds: input.knowledgePackIds,
+    replyLocale,
+  });
+  const creativeStrategy = resolvedCreativeState.creativeStrategy;
+  const knowledgeContext = resolvedCreativeState.knowledgeContext;
+  const knowledgePackIds = resolvedCreativeState.knowledgePackIds;
 
   let effectiveUserMessage = input.userMessage;
   const combatLike = isCombatLikeIntent(effectiveUserMessage);
@@ -968,6 +984,8 @@ export async function runEditorAgentApply(
     requestedRole,
     creativeBrief: input.creativeBrief,
     creativeStrategy,
+    knowledgePackIds,
+    knowledgeContext,
   }, null, 2);
 
   // ─── 阶段 1: Plan（自然语言选段方案）────────────────────────────────────────
@@ -995,7 +1013,14 @@ export async function runEditorAgentApply(
     contentManifest,
     beatGuide: beatGuideBlock,
     currentClipsMetaBlock,
-    creativeBriefBlock: buildCreativeBriefPromptBlock(input.creativeBrief, creativeStrategy, replyLocale),
+    creativeBriefBlock: buildCreativeBriefPromptBlockWithVariant(
+      input.creativeBrief,
+      creativeStrategy,
+      input.creativeVariant,
+      input.creativeVariantPack,
+      knowledgeContext,
+      replyLocale,
+    ),
     memoryContextBlock,
   });
 

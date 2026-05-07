@@ -1,0 +1,51 @@
+{
+  "runId": "2026-05-06-english-i18n-mainline-closeout",
+  "status": "pass-local-pending-env",
+  "checks": [
+    {
+      "name": "backend-typecheck",
+      "status": "pass",
+      "command": "npx tsc --noEmit",
+      "cwd": "h5-video-tool-api"
+    },
+    {
+      "name": "backend-build",
+      "status": "pass",
+      "command": "npm run build",
+      "cwd": "h5-video-tool-api"
+    },
+    {
+      "name": "frontend-locale-test",
+      "status": "pass",
+      "command": "node --test src/i18n/locale.test.ts",
+      "cwd": "h5-video-tool"
+    },
+    {
+      "name": "frontend-build",
+      "status": "pass",
+      "command": "npm run build",
+      "cwd": "h5-video-tool"
+    },
+    {
+      "name": "pickUiText-residue-scan",
+      "status": "pass",
+      "command": "git grep -n \"pickUiText(\" -- h5-video-tool/src",
+      "cwd": "."
+    },
+    {
+      "name": "scoped-uiText-residue-scan",
+      "status": "pass",
+      "command": "git grep -n \"uiText(\" -- <scoped files>",
+      "cwd": "."
+    }
+  ],
+  "next": [
+    "commit-and-push",
+    "release-guard-rerun",
+    "deploy-staging",
+    "smoke-staging",
+    "mark-release-ready",
+    "deploy-prod",
+    "smoke-prod"
+  ]
+}
