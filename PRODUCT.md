@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.156)*
+*Last updated: 2026-05-07 (v0.157)*
 
-**Latest update - v0.156**
-- Tightened the Campaign Creative -> Distribution Handoff MVP planning with package-level user ownership, current-user API filtering, and explicit `ownerId/createdBy/updatedBy` requirements.
-- Split asset readiness from review status so `needs_asset` is no longer ambiguous, and direct publish requires a server-resolvable path, verified URL, or backend-resolvable gallery asset.
-- Added a package-to-distribution-draft adapter requirement plus ownership, asset-readiness, and deterministic intake tests before Builder starts implementation.
+**Latest update - v0.157**
+- Reworked Campaign Mission Control into a mission-first flow: market/ops users now start with one campaign mission, then review a system-generated brief instead of filling a full expert form.
+- Added backend Gold and Glory Brain routing for `POST /api/campaign-creative/mission-brief`, with Compass LLM generation and deterministic fallback when the model or knowledge context is unavailable.
+- Removed marketer-facing knowledge-pack selection from the default campaign page while preserving the existing System Plan, Variant Pack, and Advanced Studio handoff after brief confirmation.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -254,6 +254,28 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.157 - 2026-05-07
+**Campaign Mission Control mission-first autopilot**
+
+- **[backend mission brief] Added `POST /api/campaign-creative/mission-brief`** (`h5-video-tool-api/src/routes/campaignCreative.ts`, `h5-video-tool-api/src/services/campaignMissionBrief.ts`): the endpoint routes ready Gold and Glory knowledge packs automatically, derives campaign context, asks Compass for a structured brief, and falls back to deterministic brief generation when needed.
+- **[frontend mission flow] Rebuilt `/campaign-creative` around a single mission composer** (`h5-video-tool/src/pages/CampaignCreative.tsx`, `h5-video-tool/src/components/campaign/MissionComposer.tsx`, `h5-video-tool/src/components/campaign/GeneratedBriefReview.tsx`): users no longer select knowledge packs or fill a blank expert brief before the system drafts the campaign direction.
+- **[handoff preservation] Kept the confirmed brief feeding the existing System Plan, Variant Pack, and Advanced Studio handoff path** (`h5-video-tool/src/api/campaignCreative.ts`, campaign strategy helpers): this run simplifies the entry point without changing downstream campaign payload contracts.
+- **[tests] Added targeted backend/frontend coverage** (`h5-video-tool-api/tests/campaignMissionBrief.test.ts`, `h5-video-tool/tests/campaignCreativeApi.test.ts`, `h5-video-tool/tests/campaignMissionFirstPage.test.ts`) for routing, LLM parsing, fallback, endpoint wiring, and selector removal.
+
+### v0.156 - 2026-05-07
+**Campaign distribution handoff planning guardrails**
+
+- **[package ownership] Tightened the CampaignDistributionPackage design** (`docs/workflow/runs/2026-05-07-campaign-to-distribution-handoff-mvp/planner-spec.md`): package list/read/update APIs must use server-owned `ownerId`, `createdBy`, and `updatedBy` fields with current-user filtering.
+- **[asset readiness] Split asset readiness from review status** (`docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md`): `needs_asset` is package asset state, not review status, and direct publish requires a server-resolvable path, verified URL, or backend-resolvable gallery asset.
+- **[distribution intake] Added adapter and test requirements**: the planner now requires deterministic package-to-distribution-draft mapping plus ownership and asset-readiness tests before Builder starts implementation.
+
+### v0.155 - 2026-05-07
+**Campaign Creative -> Distribution Handoff MVP design**
+
+- **[mainline design] Added the distribution handoff MVP design** (`docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md`): campaign variants, CTA, and knowledge context should become publish-ready packages instead of forcing marketers through the heavy Editor by default.
+- **[workflow run] Bootstrapped run `2026-05-07-campaign-to-distribution-handoff-mvp`**: Gate 1 planner-spec covers package data contracts, backend APIs, Campaign Creative package creation, Distribution intake, guardrails, and test expectations.
+- **[indexes] Refreshed task and plan indexes** (`docs/TASK-INDEX.md`, `docs/plans/README.md`) so distribution packaging remains the next mainline after this mission-first entry cleanup.
 
 ### v0.153 - 2026-05-07
 **Documentation hygiene and active-run cleanup**
