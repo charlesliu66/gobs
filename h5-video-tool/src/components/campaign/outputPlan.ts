@@ -28,6 +28,20 @@ export type ProductionItemStatus =
   | 'failed'
   | 'skipped';
 
+export type ProducedOutputKind = 'caption' | 'headline' | 'hashtag' | 'post_copy';
+export type ProducedOutputStatus = 'draft' | 'needs_review' | 'approved';
+
+export interface ProducedOutputDraft {
+  id: string;
+  kind: ProducedOutputKind;
+  title: string;
+  body: string;
+  variants: string[];
+  platform: string;
+  status: ProducedOutputStatus;
+  createdAt: string;
+}
+
 export interface ProductionItem {
   id: string;
   type: ProductionItemType;
@@ -41,6 +55,7 @@ export interface ProductionItem {
   gobsCanProduce: boolean;
   outputAssetIds: string[];
   distributionPackageIds: string[];
+  producedOutputs?: ProducedOutputDraft[];
   humanAction?: {
     type: 'confirm' | 'provide_source_asset' | 'review_risk' | 'external_production';
     label: string;
@@ -109,6 +124,16 @@ export interface BuildCampaignOutputPlanArgs {
   availableSourceAssets?: AvailableSourceAsset[];
 }
 
+export interface ProduceSupportedCampaignOutputsArgs {
+  plan: CampaignOutputPlan;
+  mission: string;
+  brief: CampaignCreativeBrief;
+  strategy?: CampaignCreativeStrategy | null;
+  variantPack?: CampaignCreativeVariantPack | null;
+  selectedVariantId?: string | null;
+  selectedVariantTitle?: string | null;
+}
+
 const SOURCE_ASSET_LABELS: Record<string, string> = {
   game_logo: 'Game logo',
   key_art: 'Key art',
@@ -132,6 +157,11 @@ function slugify(value: string): string {
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => value?.trim() || '').filter(Boolean))];
+}
+
+function safeSentence(value: string | null | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
 }
 
 function normalizePlatforms(brief: CampaignCreativeBrief, requestedPlatforms?: string[]): string[] {
@@ -258,6 +288,7 @@ function makeItem(input: {
     gobsCanProduce: input.capability === 'supported' || (input.capability === 'supported_with_source_assets' && status !== 'blocked'),
     outputAssetIds: [],
     distributionPackageIds: [],
+    producedOutputs: [],
   };
   if (input.fallbackReview) {
     item.humanAction = {
@@ -330,6 +361,171 @@ function buildCapabilityGaps(
       });
     });
   return gaps;
+}
+
+function resolveVariantTitle(args: ProduceSupportedCampaignOutputsArgs): string | undefined {
+  if (args.selectedVariantTitle?.trim()) return args.selectedVariantTitle.trim();
+  const variant = args.variantPack?.variants.find((item) => item.variantId === args.selectedVariantId)
+    ?? args.variantPack?.variants.find((item) => item.variantId === args.variantPack?.selectedVariantId)
+    ?? args.variantPack?.variants[0];
+  return variant?.title;
+}
+
+function textSignals(args: ProduceSupportedCampaignOutputsArgs): {
+  hook: string;
+  objective: string;
+  audience: string;
+  cta: string;
+  proof: string;
+  angle: string;
+} {
+  return {
+    hook: safeSentence(args.strategy?.recommendedHook, safeSentence(resolveVariantTitle(args), args.brief.objective || args.mission)),
+    objective: safeSentence(args.brief.objective || args.strategy?.objective, args.mission),
+    audience: safeSentence(args.strategy?.targetAudience || args.brief.audience, 'Gold and Glory players'),
+    cta: safeSentence(args.strategy?.cta || args.brief.cta, 'Play Gold and Glory today'),
+    proof: safeSentence(args.strategy?.sellingPointFocus || args.brief.sellingPoints[0], args.brief.objective || args.mission),
+    angle: safeSentence(args.strategy?.angle || resolveVariantTitle(args), args.brief.objective || args.mission),
+  };
+}
+
+function outputId(item: ProductionItem, index: number): string {
+  return `copy_${slugify(item.id)}_${index + 1}`;
+}
+
+function hashtagsFromSignals(signals: ReturnType<typeof textSignals>, platform: string): string[] {
+  const raw = [
+    'GoldAndGlory',
+    platform === 'facebook' ? 'FacebookGaming' : 'MobileRPG',
+    signals.proof,
+    signals.angle,
+  ];
+  return uniqueStrings(raw)
+    .map((value) => value.replace(/[^a-zA-Z0-9]+/g, ''))
+    .filter((value) => value.length > 2)
+    .slice(0, 6)
+    .map((value) => `#${value}`);
+}
+
+function producedDraft(
+  item: ProductionItem,
+  kind: ProducedOutputKind,
+  index: number,
+  title: string,
+  body: string,
+  variants: string[],
+  createdAt: string,
+): ProducedOutputDraft {
+  return {
+    id: outputId(item, index),
+    kind,
+    title,
+    body,
+    variants,
+    platform: item.platform,
+    status: 'draft',
+    createdAt,
+  };
+}
+
+function buildProducedOutputsForItem(
+  item: ProductionItem,
+  args: ProduceSupportedCampaignOutputsArgs,
+  createdAt: string,
+): ProducedOutputDraft[] {
+  const signals = textSignals(args);
+  const captionVariants = uniqueStrings([
+    `${signals.hook}. ${signals.cta}.`,
+    `${signals.objective} for ${signals.audience}. ${signals.cta}.`,
+    `${signals.proof}. ${signals.cta}.`,
+  ]);
+  const headlineVariants = uniqueStrings([
+    resolveVariantTitle(args),
+    signals.angle,
+    signals.hook,
+    signals.proof,
+  ]).slice(0, 3);
+  const hashtags = hashtagsFromSignals(signals, item.platform);
+
+  switch (item.type) {
+    case 'caption_set':
+      return [
+        producedDraft(item, 'caption', 0, 'Caption variants', captionVariants[0], captionVariants, createdAt),
+      ];
+    case 'headline_set':
+      return [
+        producedDraft(item, 'headline', 0, 'Headline variants', headlineVariants[0], headlineVariants, createdAt),
+      ];
+    case 'hashtag_set':
+      return [
+        producedDraft(item, 'hashtag', 0, 'Hashtag set', hashtags.join(' '), hashtags, createdAt),
+      ];
+    case 'fb_post': {
+      const postBodies = Array.from({ length: Math.max(1, item.quantity) }, (_, index) => {
+        const opener = captionVariants[index % captionVariants.length];
+        return `${opener} ${signals.proof}.`;
+      });
+      return postBodies.map((body, index) =>
+        producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt),
+      );
+    }
+    default:
+      return [];
+  }
+}
+
+function isTextProductionSupported(item: ProductionItem): boolean {
+  return ['caption_set', 'headline_set', 'hashtag_set', 'fb_post'].includes(item.type)
+    && item.status !== 'blocked'
+    && item.productionCapability !== 'manual_recommended'
+    && item.productionCapability !== 'unsupported'
+    && item.gobsCanProduce;
+}
+
+export function produceSupportedCampaignOutputs(
+  args: ProduceSupportedCampaignOutputsArgs,
+): CampaignOutputPlan {
+  const nowIso = new Date().toISOString();
+  let producedCount = 0;
+  const items = args.plan.items.map((item) => {
+    if ((item.producedOutputs?.length ?? 0) > 0 && item.status === 'produced') {
+      producedCount += 1;
+      return item;
+    }
+    if (!isTextProductionSupported(item)) {
+      return {
+        ...item,
+        producedOutputs: item.producedOutputs ?? [],
+      };
+    }
+
+    const producedOutputs = buildProducedOutputsForItem(item, args, nowIso);
+    if (producedOutputs.length === 0) {
+      return {
+        ...item,
+        producedOutputs: item.producedOutputs ?? [],
+      };
+    }
+    producedCount += 1;
+    return {
+      ...item,
+      status: 'produced' as const,
+      outputAssetIds: producedOutputs.map((output) => output.id),
+      producedOutputs,
+      humanAction: {
+        type: 'confirm' as const,
+        label: 'Review produced draft',
+        detail: 'GOBS produced this draft copy. Review it before distribution.',
+      },
+    };
+  });
+
+  return {
+    ...args.plan,
+    status: producedCount > 0 ? 'ready_for_distribution' : args.plan.status,
+    items,
+    updatedAt: nowIso,
+  };
 }
 
 export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): CampaignOutputPlan {

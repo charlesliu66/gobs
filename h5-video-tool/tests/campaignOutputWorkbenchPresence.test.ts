@@ -26,6 +26,7 @@ test('CampaignOutputWorkbench exposes output, source asset, gap, and production 
   assert.match(source, /sourceAssetReadiness/);
   assert.match(source, /capabilityGaps/);
   assert.match(source, /confirmProduction/);
+  assert.match(source, /producedOutputs/);
 });
 
 test('campaign output workbench i18n exists in Chinese and English locale blocks', () => {
@@ -35,4 +36,5 @@ test('campaign output workbench i18n exists in Chinese and English locale blocks
   assert.match(messages, /产出清单/);
   assert.match(messages, /Output Workbench/);
   assert.match(messages, /Source Asset Readiness/);
+  assert.match(messages, /Produced Outputs/);
 });

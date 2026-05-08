@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.166 - 2026-05-08
+**Campaign Output production adapters Phase 2A**
+**Campaign / Production / Distribution:**
+- Added deterministic Phase 2A production for supported Output Workbench text items: captions, headlines, hashtags, and Facebook posts now produce reviewable draft content after output-plan confirmation.
+- Extended `ProductionItem` with validated `producedOutputs` and preserved those drafts through the owner-scoped `/api/campaign-output/plans` API.
+- Updated Campaign Creative package creation so produced text outputs feed pending distribution package copy while account selection, media readiness, and final publish remain explicit.
+**Tests / Build:**
+- Added frontend adapter, UI presence/integration, distribution bridge, and backend persistence tests; reran targeted suites plus backend and frontend production builds.
+
 ## v0.165 - 2026-05-08
 **Campaign Output Workbench Phase 1**
 **Campaign / Distribution / Source Assets:**

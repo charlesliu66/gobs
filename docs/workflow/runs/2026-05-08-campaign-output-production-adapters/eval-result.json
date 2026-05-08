@@ -1,0 +1,62 @@
+{
+  "runId": "2026-05-08-campaign-output-production-adapters",
+  "status": "go",
+  "p0": 0,
+  "p1": 0,
+  "checkedAt": "2026-05-08T04:05:00Z",
+  "evidence": [
+    {
+      "name": "frontend output production adapter tests",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputProductionAdapter.test.ts",
+      "result": "pass",
+      "passed": 3
+    },
+    {
+      "name": "frontend distribution bridge tests",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignDistributionPackage.test.ts",
+      "result": "pass",
+      "passed": 5
+    },
+    {
+      "name": "frontend workbench presence and integration tests",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputWorkbenchPresence.test.ts && node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputWorkbenchIntegration.test.ts",
+      "result": "pass",
+      "passed": 6
+    },
+    {
+      "name": "backend output plan API tests",
+      "command": "node --import tsx tests/campaignOutputPlan.test.ts",
+      "result": "pass",
+      "passed": 6
+    },
+    {
+      "name": "backend build",
+      "command": "npm run build",
+      "result": "pass"
+    },
+    {
+      "name": "frontend build",
+      "command": "npm run build",
+      "result": "pass"
+    },
+    {
+      "name": "workflow guard build and verify",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-08-campaign-output-production-adapters --stage build && python scripts/workflow_guard.py --run-id 2026-05-08-campaign-output-production-adapters --stage verify",
+      "result": "pass"
+    },
+    {
+      "name": "repo eval script",
+      "command": "bash scripts/eval.sh 2026-05-08-campaign-output-production-adapters",
+      "result": "not_run",
+      "reason": "PowerShell environment does not have bash on PATH"
+    },
+    {
+      "name": "local smoke",
+      "command": "powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1 -Env local -Depth quick -BaseUrl http://127.0.0.1:5174 -ApiUrl http://127.0.0.1:3001; Invoke-WebRequest http://127.0.0.1:5174/campaign-creative",
+      "result": "pass"
+    }
+  ],
+  "knownRisks": [
+    "Deterministic copy quality is basic; drafts require user review before distribution."
+  ]
+}

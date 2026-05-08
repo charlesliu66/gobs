@@ -240,3 +240,52 @@ test('buildCampaignDistributionCreateInputFromProductionItem keeps blocked outpu
   assert.match(draft.assetReadiness.reason ?? '', /gameplay footage/i);
   assert.equal(draft.review.status, 'draft');
 });
+
+test('buildCampaignDistributionCreateInputFromProductionItem uses produced text outputs for package copy', () => {
+  const draft = buildCampaignDistributionCreateInputFromProductionItem({
+    mission: 'Prepare produced Facebook copy for distribution.',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    variantPack: createVariantPack(),
+    selectedVariantId: 'variant_reward',
+    knowledgeContext: createKnowledgeContext(),
+    routedKnowledgePackIds: ['gold-market', 'gold-persona'],
+    generationSource: 'llm',
+    warnings: [],
+    productionItem: {
+      id: 'item_facebook_fb_post',
+      type: 'fb_post',
+      quantity: 1,
+      platform: 'facebook',
+      title: 'Facebook post pack',
+      contentBrief: 'Post the reward reveal for returning players.',
+      requiredSourceAssetIds: [],
+      productionCapability: 'supported',
+      status: 'produced',
+      gobsCanProduce: true,
+      outputAssetIds: ['copy_item_facebook_fb_post_1'],
+      distributionPackageIds: [],
+      producedOutputs: [
+        {
+          id: 'copy_item_facebook_fb_post_1',
+          kind: 'post_copy',
+          title: 'Reward reveal post',
+          body: 'One run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.',
+          variants: [
+            'One run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.',
+          ],
+          platform: 'facebook',
+          status: 'draft',
+          createdAt: '2026-05-08T00:00:00.000Z',
+        },
+      ],
+    },
+    outputAssets: [],
+    sourceAssetRequirements: [],
+  });
+
+  assert.equal(draft.copy.caption, 'One run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.');
+  assert.equal(draft.source.sourceId, 'item_facebook_fb_post');
+  assert.deepEqual(draft.publishIntent.platforms, ['facebook']);
+  assert.equal(draft.review.status, 'needs_review');
+});

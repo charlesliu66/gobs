@@ -7,6 +7,7 @@ import type {
 } from './model.ts';
 import type {
   GameSourceAssetRequirement,
+  ProducedOutputDraft,
   ProductionItem,
 } from './outputPlan.ts';
 
@@ -330,6 +331,28 @@ function sourceAssetReasonForProductionItem(
   return related.map((asset) => asset.guidance || `${asset.label} is required.`).join(' ');
 }
 
+function firstProducedOutput(
+  item: ProductionItem,
+  kinds: ProducedOutputDraft['kind'][],
+): ProducedOutputDraft | undefined {
+  return item.producedOutputs?.find((output) => kinds.includes(output.kind) && output.body.trim());
+}
+
+function producedPackageCopy(item: ProductionItem): Partial<CampaignDistributionPackageCopy> | null {
+  if (item.status !== 'produced' || (item.producedOutputs?.length ?? 0) === 0) return null;
+  const post = firstProducedOutput(item, ['post_copy']);
+  const caption = firstProducedOutput(item, ['caption']);
+  const headline = firstProducedOutput(item, ['headline']);
+  const hashtags = firstProducedOutput(item, ['hashtag']);
+  const captionBody = post?.body || caption?.body;
+  if (!captionBody && !headline?.body && !hashtags?.variants.length) return null;
+  return {
+    headline: headline?.body,
+    caption: captionBody,
+    hashtags: hashtags?.variants ?? [],
+  };
+}
+
 export function buildCampaignDistributionCreateInputFromProductionItem(
   args: BuildCampaignDistributionCreateInputFromProductionItemArgs,
 ): CampaignDistributionCreateInput {
@@ -351,6 +374,9 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
         }
       : undefined,
   });
+  const producedCopy = producedPackageCopy(args.productionItem);
+  const hasProducedCopy = Boolean(producedCopy);
+  const firstProducedTextAssetId = args.productionItem.producedOutputs?.[0]?.id;
 
   return {
     ...draft,
@@ -363,11 +389,30 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
       ? draft.assetReadiness
       : {
           state: 'needs_asset',
-          reason: sourceAssetReasonForProductionItem(args.productionItem, args.sourceAssetRequirements),
+          reason: hasProducedCopy
+            ? 'Produced copy is ready for review; choose accounts and attach required platform media before final publish.'
+            : sourceAssetReasonForProductionItem(args.productionItem, args.sourceAssetRequirements),
         },
+    assets: selectedOutputAsset
+      ? draft.assets
+      : hasProducedCopy
+        ? [{
+            assetId: firstProducedTextAssetId,
+            type: 'caption_only',
+            status: 'ready',
+          }]
+        : draft.assets,
+    copy: producedCopy
+      ? {
+          ...draft.copy,
+          headline: producedCopy.headline ?? draft.copy.headline,
+          caption: producedCopy.caption ?? draft.copy.caption,
+          hashtags: producedCopy.hashtags ?? draft.copy.hashtags,
+        }
+      : draft.copy,
     review: {
       ...draft.review,
-      status: selectedOutputAsset ? draft.review.status : 'draft',
+      status: selectedOutputAsset || hasProducedCopy ? 'needs_review' : 'draft',
     },
     publishIntent: {
       ...draft.publishIntent,

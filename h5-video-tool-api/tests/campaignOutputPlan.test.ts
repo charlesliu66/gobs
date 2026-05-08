@@ -46,6 +46,7 @@ function buildPlanPayload(seed: string, overrides: Record<string, unknown> = {})
         gobsCanProduce: false,
         outputAssetIds: [],
         distributionPackageIds: [],
+        producedOutputs: [],
         humanAction: {
           type: 'provide_source_asset',
           label: 'Provide source assets',
@@ -269,6 +270,71 @@ test('PATCH /plans/:id updates allowed fields and preserves audit fields', async
   });
 });
 
+test('POST and PATCH /plans round-trip produced output drafts', async () => {
+  await withServer(async (baseUrl) => {
+    const payload = buildPlanPayload('produced', {
+      items: [
+        {
+          ...buildPlanPayload('produced').items[0],
+          id: 'item_produced_caption',
+          type: 'caption_set',
+          platform: 'cross_platform',
+          title: 'Caption set',
+          status: 'produced',
+          gobsCanProduce: true,
+          requiredSourceAssetIds: [],
+          outputAssetIds: ['copy_item_produced_caption_1'],
+          producedOutputs: [
+            {
+              id: 'copy_item_produced_caption_1',
+              kind: 'caption',
+              title: 'Caption 1',
+              body: 'One run, one mistake, one comeback.',
+              variants: ['One run, one mistake, one comeback.'],
+              platform: 'cross_platform',
+              createdAt: '2026-05-08T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+      sourceAssetRequirements: [],
+      capabilityGaps: [],
+    });
+
+    const created = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/plans',
+      username: 'produced_owner',
+      body: payload,
+    });
+    assert.equal(created.response.status, 201);
+    assert.equal(created.json.items[0].producedOutputs[0].kind, 'caption');
+    assert.equal(created.json.items[0].producedOutputs[0].body, 'One run, one mistake, one comeback.');
+
+    const patched = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'produced_owner',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                ...created.json.items[0].producedOutputs[0],
+                body: 'One squad, one comeback, one story worth sharing.',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    assert.equal(patched.response.status, 200);
+    assert.equal(patched.json.items[0].producedOutputs[0].body, 'One squad, one comeback, one story worth sharing.');
+  });
+});
+
 test('routes reject malformed output plan payloads with 400-level errors', async () => {
   await withServer(async (baseUrl) => {
     const invalidCreate = await requestJson(baseUrl, {
@@ -305,6 +371,32 @@ test('routes reject malformed output plan payloads with 400-level errors', async
     });
     assert.equal(invalidPatch.response.status, 400);
     assert.match(String(invalidPatch.json?.error ?? ''), /items\[0\]\.type/i);
+
+    const invalidProducedOutput = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'validator',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                id: 'copy_bad',
+                kind: 'video',
+                title: 'Bad output',
+                body: 'This should not validate.',
+                variants: ['This should not validate.'],
+                platform: 'tiktok',
+                createdAt: '2026-05-08T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(invalidProducedOutput.response.status, 400);
+    assert.match(String(invalidProducedOutput.json?.error ?? ''), /producedOutputs\[0\]\.kind/i);
   });
 });
 

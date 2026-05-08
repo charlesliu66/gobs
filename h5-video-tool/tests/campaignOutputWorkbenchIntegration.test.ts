@@ -11,7 +11,9 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /CampaignOutputWorkbench/);
   assert.match(pageSource, /campaignOutputPlanDraft/);
   assert.match(pageSource, /buildCampaignOutputPlan/);
+  assert.match(pageSource, /produceSupportedCampaignOutputs/);
   assert.match(pageSource, /createCampaignOutputPlan/);
+  assert.match(pageSource, /buildCampaignDistributionCreateInputFromProductionItem/);
 });
 
 test('CampaignCreative keeps system plan and strategy controls secondary', () => {

@@ -26,6 +26,7 @@ type Copy = {
   openAssetLibrary: string;
   openQuickFilm: string;
   createDistributionPackage: string;
+  producedOutputs: string;
   error: string;
   gapWorkaround: string;
 };
@@ -203,6 +204,26 @@ function ProductionItemCard({
         <InfoLine label={copy.requiredAssets} value={itemRequirements.map((asset) => asset.label).join(', ') || '-'} />
         <InfoLine label={copy.nextAction} value={item.humanAction?.label ?? (item.gobsCanProduce ? copy.confirmProduction : '-')} />
       </div>
+      {(item.producedOutputs?.length ?? 0) > 0 ? (
+        <div className="mt-4 rounded-2xl border border-[#d5b56a]/20 bg-[#d5b56a]/8 p-4" data-section="producedOutputs">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#e6c66e]">
+            {copy.producedOutputs}
+          </div>
+          <div className="mt-3 grid gap-3">
+            {item.producedOutputs?.map((output) => (
+              <div key={output.id} className="rounded-xl border border-[var(--color-border)]/35 bg-black/12 px-3 py-3">
+                <div className="text-sm font-semibold text-[var(--color-text)]">{output.title}</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{output.body}</p>
+                {output.variants.length > 1 ? (
+                  <div className="mt-2 text-xs leading-5 text-[var(--color-text-subtle)]">
+                    {output.variants.join(' / ')}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }

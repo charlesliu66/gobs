@@ -18,9 +18,14 @@ import { CampaignStrategyCard } from '../components/campaign/CampaignStrategyCar
 import { CampaignStrategyTuningPanel } from '../components/campaign/CampaignStrategyTuningPanel';
 import {
   buildCampaignDistributionCreateInput,
+  buildCampaignDistributionCreateInputFromProductionItem,
   type CampaignDistributionPackage,
 } from '../components/campaign/distributionPackage.ts';
-import { buildCampaignOutputPlan, type CampaignOutputPlan } from '../components/campaign/outputPlan.ts';
+import {
+  buildCampaignOutputPlan,
+  produceSupportedCampaignOutputs,
+  type CampaignOutputPlan,
+} from '../components/campaign/outputPlan.ts';
 import type {
   CampaignCreativeBrief,
   CampaignCreativeFormState,
@@ -230,6 +235,28 @@ export function CampaignCreative() {
       warnings: missionBriefResult?.warnings ?? [],
     });
   }, [brief, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
+
+  const producedDistributionPackageDraft = useMemo(() => {
+    if (!brief || !strategy || !createdOutputPlan) return null;
+    const producedItem = createdOutputPlan.items.find((item) => item.status === 'produced');
+    if (!producedItem) return null;
+    return buildCampaignDistributionCreateInputFromProductionItem({
+      mission,
+      brief,
+      strategy,
+      variantPack,
+      selectedVariantId,
+      knowledgeContext,
+      routedKnowledgePackIds: missionBriefResult?.routedKnowledgePackIds,
+      generationSource: missionBriefResult?.generationSource ?? 'fallback',
+      warnings: missionBriefResult?.warnings ?? [],
+      productionItem: producedItem,
+      outputAssets: [],
+      sourceAssetRequirements: createdOutputPlan.sourceAssetRequirements,
+    });
+  }, [brief, createdOutputPlan, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
+
+  const activeDistributionPackageDraft = producedDistributionPackageDraft ?? distributionPackageDraft;
 
   const campaignOutputPlanDraft = useMemo(() => {
     if (!brief) return null;
@@ -452,11 +479,11 @@ export function CampaignCreative() {
   };
 
   const handleCreateDistributionPackage = async () => {
-    if (!distributionPackageDraft || distributionPackageLoading) return;
+    if (!activeDistributionPackageDraft || distributionPackageLoading) return;
     setDistributionPackageLoading(true);
     setDistributionPackageError(null);
     try {
-      const createdPackage = await createCampaignDistributionPackage(distributionPackageDraft);
+      const createdPackage = await createCampaignDistributionPackage(activeDistributionPackageDraft);
       setCreatedDistributionPackage(createdPackage);
     } catch (error) {
       setDistributionPackageError(
@@ -482,12 +509,23 @@ export function CampaignCreative() {
   };
 
   const handleConfirmOutputProduction = async () => {
-    if (!createdOutputPlan || outputPlanLoading) return;
+    if (!createdOutputPlan || !brief || outputPlanLoading) return;
     setOutputPlanLoading(true);
     setOutputPlanError(null);
     try {
+      const producedPlan = produceSupportedCampaignOutputs({
+        plan: createdOutputPlan,
+        mission,
+        brief,
+        strategy,
+        variantPack,
+        selectedVariantId,
+      });
       const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
-        status: 'confirmed',
+        status: producedPlan.status,
+        items: producedPlan.items,
+        sourceAssetRequirements: producedPlan.sourceAssetRequirements,
+        capabilityGaps: producedPlan.capabilityGaps,
       });
       setCreatedOutputPlan(confirmedPlan);
     } catch (error) {
@@ -616,6 +654,7 @@ export function CampaignCreative() {
               openAssetLibrary: t('campaignCreative.outputWorkbench.openAssetLibrary'),
               openQuickFilm: t('campaignCreative.outputWorkbench.openQuickFilm'),
               createDistributionPackage: t('campaignCreative.outputWorkbench.createDistributionPackage'),
+              producedOutputs: t('campaignCreative.outputWorkbench.producedOutputs'),
               error: t('campaignCreative.outputWorkbench.error'),
               gapWorkaround: t('campaignCreative.outputWorkbench.gapWorkaround'),
             }}
@@ -719,7 +758,7 @@ export function CampaignCreative() {
           />
 
           <DistributionPackagePanel
-            draft={distributionPackageDraft}
+            draft={activeDistributionPackageDraft}
             createdPackage={createdDistributionPackage}
             isCreating={distributionPackageLoading}
             errorMessage={distributionPackageError}

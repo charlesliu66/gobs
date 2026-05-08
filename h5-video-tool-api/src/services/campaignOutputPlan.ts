@@ -58,6 +58,17 @@ const HUMAN_ACTION_TYPES = [
   'review_risk',
   'external_production',
 ] as const;
+const PRODUCED_OUTPUT_KINDS = [
+  'caption',
+  'headline',
+  'hashtag',
+  'post_copy',
+] as const;
+const PRODUCED_OUTPUT_STATUSES = [
+  'draft',
+  'needs_review',
+  'approved',
+] as const;
 
 export type CampaignOutputPlanStatus = (typeof CAMPAIGN_OUTPUT_PLAN_STATUSES)[number];
 
@@ -210,6 +221,26 @@ function normalizeHumanAction(value: unknown, field: string): UnknownRecord | un
   };
 }
 
+function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new CampaignOutputPlanValidationError(`${field} must be an array`);
+  }
+  return value.map((item, index) => {
+    const raw = requireObject(item, `${field}[${index}]`);
+    return {
+      id: requireSafeIdentifier(raw.id, `${field}[${index}].id`),
+      kind: requireEnum(raw.kind, `${field}[${index}].kind`, PRODUCED_OUTPUT_KINDS),
+      title: requireText(raw.title, `${field}[${index}].title`),
+      body: requireText(raw.body, `${field}[${index}].body`),
+      variants: normalizeStringList(raw.variants, `${field}[${index}].variants`),
+      platform: requireText(raw.platform, `${field}[${index}].platform`),
+      status: normalizeOptionalEnum(raw.status, `${field}[${index}].status`, PRODUCED_OUTPUT_STATUSES) ?? 'draft',
+      createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
+    };
+  });
+}
+
 function normalizeProductionItems(value: unknown): UnknownRecord[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new CampaignOutputPlanValidationError('items must be a non-empty array');
@@ -239,6 +270,7 @@ function normalizeProductionItems(value: unknown): UnknownRecord[] {
         raw.distributionPackageIds,
         `items[${index}].distributionPackageIds`,
       ),
+      producedOutputs: normalizeProducedOutputs(raw.producedOutputs, `items[${index}].producedOutputs`),
       humanAction: normalizeHumanAction(raw.humanAction, `items[${index}].humanAction`),
     };
   });
