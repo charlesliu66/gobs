@@ -15,7 +15,7 @@ export interface PromptTemplateConfig {
   /** 注入 LLM 的模板专属说明 */
   systemPromptSuffix: string;
   defaultSearchKeywords?: string[];
-  /** 短剧专用：剧情子模板，如猫猫后宫剧、隐藏大佬打脸 */
+  /** Legacy preset metadata; active Studio Phase 1 templates do not use it. */
   storyPresets?: Array<{
     id: string;
     nameZh: string;

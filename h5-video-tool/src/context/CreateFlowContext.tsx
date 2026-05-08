@@ -37,7 +37,7 @@ interface CreateFlowState {
   taskId: string | null;
   hasPolishedPrompt: boolean;
   hasMatchedMaterials: boolean;
-  /** Pipeline 模板 ID：viral-dance | cg-trailer | 空表示默认 */
+  /** Pipeline 模板 ID：custom | viral-dance | boss-showcase | 空表示默认 */
   templateId: string;
   /** 多镜头模式：镜头列表，每镜含 duration(5-8)、prompt */
   shots: ShotItem[];
@@ -45,9 +45,9 @@ interface CreateFlowState {
   multiShotEnabled: boolean;
   /** 每镜首尾帧（及可选中间帧）预览；视频生成仍使用每镜 first 作为参考 */
   shotFrames: Record<number, ShotFramePreview>;
-  /** 短剧模式：剧本中的人物/角色名称，用于用户上传对应角色图 */
+  /** 模板提取的人物/角色名称（保留给后续多角色模板复用） */
   characters: string[];
-  /** Viral 舞蹈：可灵 Omni 参考视频公网直链（与素材顺序 @图片1/@图片2 配合） */
+  /** 动作迁移：可灵 Omni 参考视频公网直链（与素材顺序 @图片1/@图片2 配合） */
   viralDanceReferenceVideoUrl: string;
   /** 即梦「全能参考」上传项（顺序对应 @图片n / @视频n / @音频n） */
   dreaminaMultimodalItems: DreaminaMultimodalItem[];
@@ -55,9 +55,9 @@ interface CreateFlowState {
   videoModel: string;
   /** Seedance 版本（如 'seedance2.0'） */
   dreaminaModelVersion: string;
-  /** 比例 16:9 | 9:16 */
+  /** 比例 16:9 | 9:16 | 1:1（快速单段） */
   videoAspectRatio: string;
-  /** 时长（秒）4–8 或 10、60（模板指定时） */
+  /** 时长（秒），由当前 Studio 模板限定可选项 */
   videoDuration: number;
   /** 分辨率 720p | 1080p | 4k */
   videoResolution: string;

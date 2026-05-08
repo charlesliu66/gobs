@@ -26,7 +26,7 @@ interface ViralDanceMaterialPickerProps {
 }
 
 /**
- * Viral 舞蹈：固定 @图片1（角色）与 @图片2（场景），支持在已验证 Drive 根下进入子文件夹手动勾选，
+ * 动作迁移：固定 @图片1（角色）与 @图片2（场景），支持在已验证 Drive 根下进入子文件夹手动勾选，
  * 以及从服化道形象库直接选角色。
  */
 export function ViralDanceMaterialPicker({

@@ -4,7 +4,6 @@ import {
   polishPrompt,
   generateCaptionForPost,
   translateCaptionForPost,
-  expandShortDramaFromIdea,
 } from '../services/promptPolish.js';
 import {
   replyLocaleToCaptionLanguage,
@@ -95,7 +94,7 @@ export function normalizeCaptionCampaignContextInput(body: Record<string, unknow
 
 /**
  * GET /api/prompt/templates
- * Response: { templates: [...] } — 含 cat-harem（供短剧子模板使用），前端 TemplatePicker 可过滤
+ * Response: { templates: [...] } — Studio Phase 1 active templates only.
  */
 promptRouter.get('/templates', (_req: Request, res: Response) => {
   const templates = getTemplates().map((t) => ({
@@ -112,7 +111,10 @@ promptRouter.get('/templates', (_req: Request, res: Response) => {
 
 /**
  * GET /api/prompt/short-drama-presets
- * Response: { presets: [{ id, nameZh, description, templateId, defaultPrompt }] }
+ * Response: { presets: [] }
+ *
+ * Kept as a compatibility-safe legacy endpoint after short-drama templates were removed
+ * from Studio Phase 1.
  */
 promptRouter.get('/short-drama-presets', (_req: Request, res: Response) => {
   res.json({ presets: getShortDramaPresets() });
@@ -126,30 +128,6 @@ promptRouter.get('/short-drama-presets', (_req: Request, res: Response) => {
  * templateId 优先于 style。传入 templateId 时按模板优化。
  * 自定义模式 + multishot：仅用导演知识生成多镜分镜。
  */
-/**
- * POST /api/prompt/expand-short-drama
- * Body: { idea: string }
- * Response: { summary: { protagonist, storyGenre, synopsis, background, setting, oneLineStory }, scriptContent }
- *
- * 将用户模糊创意扩展为剧本摘要 + 剧本正文（竖屏短剧策划）。
- */
-promptRouter.post('/expand-short-drama', async (req: Request, res: Response) => {
-  const { idea } = req.body as { idea?: string };
-  const raw = typeof idea === 'string' ? idea.trim() : '';
-  if (!raw) {
-    res.status(400).json({ error: '请提供 idea（短剧创意）' });
-    return;
-  }
-  try {
-    const result = await expandShortDramaFromIdea(raw);
-    res.json(result);
-  } catch (err) {
-    console.error('[prompt/expand-short-drama]', err);
-    const msg = err instanceof Error ? err.message : '生成失败';
-    res.status(500).json({ error: msg });
-  }
-});
-
 promptRouter.post('/polish', async (req: Request, res: Response) => {
   const { prompt, templateId, style, multishot, duration, aspectRatio } = req.body as {
     prompt?: string;

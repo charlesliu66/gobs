@@ -4,11 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   polishPrompt,
   getTemplates,
-  getShortDramaPresets,
-  expandShortDramaFromIdea,
   type PromptTemplate,
-  type ShortDramaPreset,
-  type ShortDramaExpandResult,
 } from '../api/promptPolish';
 import { listCharacterLibrary } from '../api/characterLibrary';
 import { useGoogleDrive, type DriveFile } from '../hooks/useGoogleDrive';
@@ -17,7 +13,6 @@ import { useMaterials } from '../context/MaterialsContext';
 import { DriveMaterialPicker } from '../components/DriveMaterialPicker';
 import { DriveExplorer } from '../components/DriveExplorer';
 import { ViralDanceMaterialPicker } from '../components/ViralDanceMaterialPicker';
-import { ShortDramaMaterialPicker } from '../components/ShortDramaMaterialPicker';
 import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
@@ -25,33 +20,14 @@ import { AssetPicker } from '../components/AssetPicker';
 import { RunningStatus } from '../components/RunningStatus';
 import { recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
 import { useLocale } from '../i18n/LocaleContext.tsx';
-
-type DramaOutlineLabels = {
-  outlineTitle: string;
-  protagonist: string;
-  storyGenre: string;
-  synopsis: string;
-  background: string;
-  setting: string;
-  oneLineStory: string;
-  scriptTitle: string;
-};
-
-function formatLocalizedDramaOutlineForPrompt(r: ShortDramaExpandResult, labels: DramaOutlineLabels): string {
-  const { summary, scriptContent } = r;
-  return [
-    `【${labels.outlineTitle}】`,
-    `${labels.protagonist}：${summary.protagonist}`,
-    `${labels.storyGenre}：${summary.storyGenre}`,
-    `${labels.synopsis}：${summary.synopsis}`,
-    `${labels.background}：${summary.background}`,
-    `${labels.setting}：${summary.setting}`,
-    `${labels.oneLineStory}：${summary.oneLineStory}`,
-    '',
-    `【${labels.scriptTitle}】`,
-    scriptContent,
-  ].join('\n');
-}
+import {
+  filterVisibleStudioTemplates,
+  getStudioTemplateAspectRatioOptions,
+  getStudioTemplateDurationOptions,
+  isValidStudioAspectRatio,
+  isValidStudioDuration,
+} from '../config/studioTemplateOptions';
+import { PROMPT_INSPIRATIONS } from '../config/promptInspirations';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -96,16 +72,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     }
     return message;
   }, [t]);
-  const dramaOutlineLabels: DramaOutlineLabels = {
-    outlineTitle: t('generate.outlineTitle'),
-    protagonist: t('generate.protagonist'),
-    storyGenre: t('generate.storyGenre'),
-    synopsis: t('generate.synopsis'),
-    background: t('generate.background'),
-    setting: t('generate.setting'),
-    oneLineStory: t('generate.oneLineStory'),
-    scriptTitle: t('generate.scriptContentTitle'),
-  };
   const localizedSeedanceModels = LOCALIZED_SEEDANCE_MODEL_KEYS.map((item) => ({
     value: item.value,
     label: t(item.labelKey),
@@ -142,17 +108,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setShotFrames,
     multiShotEnabled,
     setMultiShotEnabled,
-    characters,
-    setCharacters,
     viralDanceReferenceVideoUrl,
     setViralDanceReferenceVideoUrl,
     setDreaminaMultimodalItems,
   } = useCreateFlow();
 
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
-  const [shortDramaPresets, setShortDramaPresets] = useState<ShortDramaPreset[]>([]);
-  const [shortDramaPresetId, setShortDramaPresetId] = useState<string>('custom');
-  const currentTemplate = templates.find((t) => t.id === templateId);
+  const visibleTemplates = filterVisibleStudioTemplates(templates);
+  const currentTemplate = visibleTemplates.find((t) => t.id === templateId);
   const isMultishotTemplate = currentTemplate?.pipelineMode === 'multishot';
 
   const {
@@ -183,9 +146,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [tipsExpanded, setTipsExpanded] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [expertMode, setExpertMode] = useState(false);
-  const [dramaExpandLoading, setDramaExpandLoading] = useState(false);
-  const [dramaExpandError, setDramaExpandError] = useState<string | null>(null);
-  const [dramaExpanded, setDramaExpanded] = useState<ShortDramaExpandResult | null>(null);
   /** TASK-D: 资产选择器状态 */
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [assetPickerMode, setAssetPickerMode] = useState<'image' | 'video'>('image');
@@ -222,52 +182,49 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     getTemplates().then(setTemplates).catch(() => {});
   }, []);
 
+  /** 模板切换时清理模板专属状态，避免旧素材或分镜误带到新模板。 */
   useEffect(() => {
-    getShortDramaPresets().then(setShortDramaPresets).catch(() => {});
-  }, []);
+    setShowGenerationFlow(false);
+    setPolishError(null);
+    setHasPolishedPrompt(false);
+    setHasMatchedMaterials(false);
+    setSelectedOrder([]);
+    setShots([]);
+    setShotFrames({});
+    setMultiShotEnabled(false);
+    setDreaminaMultimodalItems([]);
+    if (templateId !== 'viral-dance') setViralDanceReferenceVideoUrl('');
+  }, [
+    templateId,
+    setDreaminaMultimodalItems,
+    setHasMatchedMaterials,
+    setHasPolishedPrompt,
+    setMultiShotEnabled,
+    setSelectedOrder,
+    setShotFrames,
+    setShots,
+    setViralDanceReferenceVideoUrl,
+  ]);
 
-  /** 短剧：templateId 与 presetId 同步（cat-harem ↔ preset cat-harem） */
-  useEffect(() => {
-    if (templateId === 'cat-harem' && shortDramaPresetId !== 'cat-harem') setShortDramaPresetId('cat-harem');
-    if (templateId === 'short-drama' && shortDramaPresetId === 'cat-harem') setShortDramaPresetId('custom');
-  }, [templateId]);
-
-  /** 离开人类短剧模板时清空剧本摘要展开状态 */
-  useEffect(() => {
-    if (templateId !== 'short-drama') {
-      setDramaExpanded(null);
-      setDramaExpandError(null);
-    }
-  }, [templateId]);
-
-  /** 离开 Viral 舞蹈模板时清空参考视频链接 */
-  useEffect(() => {
-    if (templateId !== 'viral-dance') {
-      setViralDanceReferenceVideoUrl('');
-    }
-  }, [templateId, setViralDanceReferenceVideoUrl]);
-
-  /** Viral Dance + TikTok URL 自动预填 prompt（越懒越好） */
+  /** Motion Transfer + 参考视频自动预填 prompt（越懒越好） */
   useEffect(() => {
     if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim() && !prompt.trim()) {
       setPrompt(
         contentLocale === 'en'
-          ? 'The character in @图片1 dances in the reference scene from @图片2, following the dancer motion from @视频1. Smooth rhythm, consistent character design, vertical 9:16, 8 seconds, energetic.'
-          : '角色（@图片1）在参考场景（@图片2）中，跟随参考视频（@视频1）中舞者的动作起舞，节奏流畅，角色造型保持一致，竖屏 9:16，8 秒，活力充沛',
+          ? 'The character in @图片1 follows the motion from @视频1 inside the optional scene from @图片2. Smooth rhythm, consistent character design, vertical 9:16, energetic.'
+          : '角色（@图片1）在参考场景（@图片2，可选）中，跟随参考视频（@视频1）的动作节奏动起来，动作清晰，角色造型保持一致，竖屏 9:16',
       );
     }
-  }, [contentLocale, templateId, viralDanceReferenceVideoUrl]);
+  }, [contentLocale, prompt, setPrompt, templateId, viralDanceReferenceVideoUrl]);
 
   const handleOneClickPrompt = useCallback(
     async (styleId?: string) => {
-      const catHaremPreset = shortDramaPresets.find((p) => p.id === 'cat-harem');
-      let effectivePrompt =
-        templateId === 'cat-harem' && !prompt.trim() && catHaremPreset ? catHaremPreset.defaultPrompt : prompt;
+      let effectivePrompt = prompt;
       if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim()) {
         const referenceVideoHeader =
           contentLocale === 'en'
             ? '[Reference video URL provided by the user. This is the motion source and maps to API video_list.]'
-            : '【用户将提供的参考视频直链（动作来源，与 API video_list 对应）】';
+            : '【用户提供的参考视频直链（动作来源，与 API video_list 对应）】';
         effectivePrompt = `${referenceVideoHeader}\n${viralDanceReferenceVideoUrl.trim()}\n\n${effectivePrompt}`;
       }
       if (!effectivePrompt.trim()) return;
@@ -287,17 +244,17 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         } else {
           opts = styleId ? { styleId } : undefined;
         }
-        const { polishedPrompt, searchKeywords, folderHints: hints, template, shots: polishedShots, characters: extractedChars } = await polishPrompt(effectivePrompt, opts);
+        const { polishedPrompt, searchKeywords, folderHints: hints, template, shots: polishedShots } = await polishPrompt(effectivePrompt, opts);
         setKeywords(searchKeywords);
         setFolderHints(hints || []);
         setHasPolishedPrompt(true);
-        if (extractedChars?.length) {
-          setCharacters(extractedChars);
-          setSelectedOrder([]);
-        }
         if (template) {
-          setVideoDuration(template.duration);
-          setVideoAspectRatio(template.aspectRatio);
+          if (!isValidStudioDuration(templateId, videoDuration, multiShotEnabled)) {
+            setVideoDuration(template.duration);
+          }
+          if (!isValidStudioAspectRatio(templateId, videoAspectRatio, multiShotEnabled)) {
+            setVideoAspectRatio(template.aspectRatio);
+          }
         }
         if (polishedShots?.length && template?.pipelineMode === 'multishot') {
           setMultiShotEnabled(true);
@@ -315,7 +272,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     [
       prompt,
       templateId,
-      shortDramaPresets,
       multiShotEnabled,
       videoDuration,
       videoAspectRatio,
@@ -329,55 +285,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       setVideoAspectRatio,
       setMultiShotEnabled,
       setShots,
-      setCharacters,
-      setSelectedOrder,
+      t,
     ]
   );
 
-  const handleShortDramaPresetChange = useCallback(
-    (presetId: string) => {
-      const preset = shortDramaPresets.find((p) => p.id === presetId);
-      if (!preset) return;
-      setShortDramaPresetId(presetId);
-      setTemplateId(preset.templateId);
-      setPrompt(preset.defaultPrompt);
-      setCharacters([]);
-      setSelectedOrder([]);
-      const t = templates.find((x) => x.id === preset.templateId);
-      if (t) {
-        setVideoDuration(t.duration);
-        setVideoAspectRatio(t.aspectRatio);
-      }
-    },
-    [shortDramaPresets, setTemplateId, setPrompt, setVideoDuration, setVideoAspectRatio, setCharacters, setSelectedOrder, templates]
-  );
-
-  const isCatHaremTemplate = templateId === 'cat-harem';
-  const isShortDramaTemplate = templateId === 'short-drama';
-  const isShortDramaFlow = isShortDramaTemplate || isCatHaremTemplate;
-  /** 人类短剧（非猫猫后宫）：支持「模糊创意 → 剧本摘要 + 正文」 */
-  const isHumanShortDrama = isShortDramaTemplate && !isCatHaremTemplate;
   const isCustomMode = templateId === 'custom';
   const isViralDanceTemplate = templateId === 'viral-dance';
-
-  const handleExpandShortDrama = useCallback(async () => {
-    if (!prompt.trim()) {
-      setDramaExpandError(t('generate.enterDramaIdeaFirstError'));
-      return;
-    }
-    setDramaExpandLoading(true);
-    setDramaExpandError(null);
-    try {
-      const result = await expandShortDramaFromIdea(prompt.trim());
-      setDramaExpanded(result);
-      setPrompt(formatLocalizedDramaOutlineForPrompt(result, dramaOutlineLabels));
-      setHasPolishedPrompt(false);
-    } catch (e) {
-      setDramaExpandError(e instanceof Error ? e.message : t('generate.dramaExpandFailedError'));
-    } finally {
-      setDramaExpandLoading(false);
-    }
-  }, [prompt, setPrompt, setHasPolishedPrompt]);
 
   const handleOneClickMatch = useCallback(async () => {
     if (!verifiedFolderId || !accessToken) return;
@@ -399,7 +312,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     } finally {
       setMatchLoading(false);
     }
-  }, [verifiedFolderId, accessToken, keywords, folderHints, search, setHasMatchedMaterials]);
+  }, [verifiedFolderId, accessToken, keywords, folderHints, search, setHasMatchedMaterials, t]);
 
   /** 与 Boss 展示一致：从资源管理器勾选的文件并入已选顺序（用于默认模板 / Drive 检索流） */
   const handleToggleFromExplorer = useCallback(
@@ -494,17 +407,30 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const hasValidPrompt = multiShotEnabled
     ? shotsValid
     : hasPolishedPrompt || prompt.trim().length > 0;
-  const shortDramaCharsFilled =
-    !isShortDramaFlow ||
-    (characters.length > 0 &&
-      selectedOrder.length >= characters.length &&
-      selectedOrder.slice(0, characters.length).every((f) => f && !f.id.startsWith('empty-')));
-  const materialOk = isShortDramaFlow
-    ? shortDramaCharsFilled
-    : isViralDanceTemplate
-      ? selectedOrder.length >= 1  // @图片1 必填
-      : !hasMatchedMaterials || selectedOrder.length >= 1;
+  const materialOk = isViralDanceTemplate
+    ? selectedOrder.length >= 1  // @图片1 必填
+    : !hasMatchedMaterials || selectedOrder.length >= 1;
   const canStartGenerate = hasValidPrompt && materialOk;
+  const durationOptions = getStudioTemplateDurationOptions(templateId, multiShotEnabled);
+  const aspectRatioOptions = getStudioTemplateAspectRatioOptions(templateId, multiShotEnabled);
+
+  useEffect(() => {
+    const nextDurationOptions = getStudioTemplateDurationOptions(templateId, multiShotEnabled);
+    const nextAspectRatioOptions = getStudioTemplateAspectRatioOptions(templateId, multiShotEnabled);
+    if (!nextDurationOptions.includes(videoDuration)) {
+      setVideoDuration(nextDurationOptions[0] ?? 8);
+    }
+    if (!nextAspectRatioOptions.includes(videoAspectRatio)) {
+      setVideoAspectRatio(nextAspectRatioOptions[0] ?? '9:16');
+    }
+  }, [
+    templateId,
+    multiShotEnabled,
+    videoDuration,
+    videoAspectRatio,
+    setVideoDuration,
+    setVideoAspectRatio,
+  ]);
 
   return (
     <div className="max-w-6xl p-6 space-y-6">
@@ -584,82 +510,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             aspectRatio={videoAspectRatio}
             onShotFramesChange={setShotFrames}
           />
-        ) : isShortDramaFlow ? (
-          <div className="space-y-3">
-            <p className="text-xs text-[var(--color-text-muted)]">
-              {isCatHaremTemplate ? (
-                <>{t('generate.catHaremHint')}</>
-              ) : (
-                <>
-                  {t('generate.shortDramaHint')}
-                </>
-              )}
-            </p>
-            {isHumanShortDrama && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleExpandShortDrama()}
-                  disabled={dramaExpandLoading || !prompt.trim()}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/35 hover:bg-[var(--color-primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {dramaExpandLoading ? t('generate.generating') : t('generate.generateDramaOutline')}
-                </button>
-                {dramaExpanded && (
-                  <span className="text-xs text-[var(--color-success)]">{t('generate.generatedThenPrompt')}</span>
-                )}
-              </div>
-            )}
-            {dramaExpandError && (
-              <p className="text-sm text-[var(--color-error)]">{dramaExpandError}</p>
-            )}
-            {dramaExpanded && isHumanShortDrama && (
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 text-left space-y-3 max-h-[min(70vh,480px)] overflow-y-auto">
-                <p className="text-sm font-semibold text-[var(--color-text)] border-b border-[var(--color-border)] pb-2">
-                  {t('generate.outlineTitle')}
-                </p>
-                <dl className="space-y-2.5 text-sm">
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.protagonist')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed">{dramaExpanded.summary.protagonist}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.storyGenre')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed">{dramaExpanded.summary.storyGenre}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.synopsis')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.synopsis}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.background')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.background}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.setting')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.setting}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{t('generate.oneLineStory')}</dt>
-                    <dd className="text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">{dramaExpanded.summary.oneLineStory}</dd>
-                  </div>
-                </dl>
-                <div className="pt-2 border-t border-[var(--color-border)]">
-                  <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1">{t('generate.scriptContentMerged')}</p>
-                  <p className="text-xs text-[var(--color-text-muted)] leading-relaxed line-clamp-4 whitespace-pre-wrap">
-                    {dramaExpanded.scriptContent}
-                  </p>
-                </div>
-              </div>
-            )}
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={isHumanShortDrama ? 14 : 5}
-              placeholder={isCatHaremTemplate ? t('generate.catHaremPlaceholder') : t('generate.shortDramaPlaceholder')}
-              className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none font-mono text-sm"
-            />
-          </div>
         ) : (
           <>
             <textarea
@@ -673,6 +523,38 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               }
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
             />
+            {isCustomMode && (
+              <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-[var(--color-text)]">{t('generate.quickInspirationTitle')}</p>
+                  <p className="text-[11px] text-[var(--color-text-muted)]">{t('generate.quickInspirationDesc')}</p>
+                </div>
+                <div className="space-y-2">
+                  {PROMPT_INSPIRATIONS.map((category) => (
+                    <div key={category.id} className="space-y-1.5">
+                      <p className="text-[11px] font-medium text-[var(--color-text-muted)]">
+                        {contentLocale === 'en' ? category.nameEn : category.nameZh}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {category.prompts.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setPrompt(item);
+                              setHasPolishedPrompt(false);
+                            }}
+                            className="max-w-full rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-left text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)]"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {isViralDanceTemplate && (
               <div className="rounded-xl border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 p-4 space-y-3 mt-3">
                 <div className="flex items-center gap-2">
@@ -705,7 +587,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             )}
           </>
         )}
-        {/* 写稿要点：短剧模式显示 drama-creator 方法论，否则显示 Veo 通用要点 */}
+        {/* 写稿要点 */}
         <div className="mt-3">
           <button
             type="button"
@@ -713,31 +595,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
           >
             <ChevronIcon className={`w-3.5 h-3.5 transition-transform ${tipsExpanded ? 'rotate-180' : ''}`} />
-            {isShortDramaTemplate || isCatHaremTemplate
-              ? isCatHaremTemplate
-                ? t('generate.catHaremTipsTitle')
-                : t('generate.shortDramaTipsTitle')
-              : isViralDanceTemplate
-                ? t('generate.viralDanceTipsTitle')
-                : t('generate.veoTipsTitle')}
+            {isViralDanceTemplate
+              ? t('generate.viralDanceTipsTitle')
+              : t('generate.veoTipsTitle')}
           </button>
           {tipsExpanded && (
             <div className="mt-2 p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-muted)] space-y-2">
-              {isShortDramaTemplate ? (
-                <>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipEmotionLabel')}:</strong> {t('generate.shortDramaTipEmotionBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipHookLabel')}:</strong> {t('generate.shortDramaTipHookBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipInfoLabel')}:</strong> {t('generate.shortDramaTipInfoBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipActionLabel')}:</strong> {t('generate.shortDramaTipActionBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.shortDramaTipFormatLabel')}:</strong> {t('generate.shortDramaTipFormatBody')}</p>
-                </>
-              ) : isCatHaremTemplate ? (
-                <>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipMappingLabel')}:</strong> {t('generate.catHaremTipMappingBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipScriptLabel')}:</strong> {t('generate.catHaremTipScriptBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.catHaremTipStyleLabel')}:</strong> {t('generate.catHaremTipStyleBody')}</p>
-                </>
-              ) : isViralDanceTemplate ? (
+              {isViralDanceTemplate ? (
                 <>
                   <p><strong className="text-[var(--color-text)]">{t('generate.viralTipMotionLabel')}:</strong> {t('generate.viralTipMotionBody')}</p>
                   <p><strong className="text-[var(--color-text)]">{t('generate.viralTipOrderLabel')}:</strong> {t('generate.viralTipOrderBody')}</p>
@@ -759,8 +623,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         </div>
       </section>
 
-      {/* Pipeline 模板选择 / 短剧剧情预设 / 自定义模式说明 */}
-      {templates.length > 0 && (
+      {/* Pipeline 模板选择 / 自定义模式说明 */}
+      {visibleTemplates.length > 0 && (
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           {isCustomMode ? (
             <div>
@@ -769,33 +633,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 {t('generate.customModeDesc')}
               </p>
             </div>
-          ) : isShortDramaFlow ? (
-            <>
-              <p className="text-sm font-medium text-[var(--color-text)] mb-2">{t('generate.shortDramaPresetTitle')}</p>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                {t('generate.shortDramaPresetDesc')}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {shortDramaPresets.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleShortDramaPresetChange(p.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      shortDramaPresetId === p.id
-                        ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/50'
-                        : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
-                    }`}
-                  >
-                    {p.nameZh}
-                    <span className="ml-1 text-xs opacity-80">— {p.description}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                {formatText('generate.shortDramaPresetMeta', { duration: videoDuration, aspectRatio: videoAspectRatio })}
-              </p>
-            </>
           ) : (
             <>
               <p className="text-sm font-medium text-[var(--color-text)] mb-2">{t('generate.pipelineTitle')}</p>
@@ -809,7 +646,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     onChange={(e) => {
                       const id = e.target.value;
                       setTemplateId(id);
-                      const t = templates.find((x) => x.id === id);
+                      const t = visibleTemplates.find((x) => x.id === id);
                       if (t) {
                         setVideoDuration(t.duration);
                         setVideoAspectRatio(t.aspectRatio);
@@ -818,7 +655,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     className="px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none min-w-[180px]"
                   >
                     <option value="">{t('generate.pipelineDefaultOption')}</option>
-                    {templates.map((t) => (
+                    {visibleTemplates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name} — {t.description}
                       </option>
@@ -864,8 +701,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onChange={(e) => setVideoAspectRatio(e.target.value)}
             className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
           >
-            <option value="16:9">{t('generate.landscape')}</option>
-            <option value="9:16">{t('generate.portrait')}</option>
+            {aspectRatioOptions.map((ratio) => (
+              <option key={ratio} value={ratio}>
+                {ratio === '16:9' ? t('generate.landscape') : ratio === '9:16' ? t('generate.portrait') : ratio}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex items-center gap-2">
@@ -875,7 +715,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             onChange={(e) => setVideoDuration(Number(e.target.value))}
             className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
           >
-            {[4, 5, 6, 7, 8, 10, 15, 30, 60].map((s) => (
+            {durationOptions.map((s) => (
               <option key={s} value={s}>
                 {s}s
               </option>
@@ -907,7 +747,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             disabled={polishLoading || !prompt.trim()}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {polishLoading ? t('generate.optimizing') : formatText('generate.optimizePromptWithTemplate', { template: templates.find((t) => t.id === templateId)?.name ?? t('generate.templateFallback') })}
+            {polishLoading ? t('generate.optimizing') : formatText('generate.optimizePromptWithTemplate', { template: visibleTemplates.find((t) => t.id === templateId)?.name ?? t('generate.templateFallback') })}
           </button>
         ) : (
           <div className="relative" ref={dropdownRef}>
@@ -947,7 +787,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             )}
           </div>
         )}
-        {!isShortDramaFlow && !isViralDanceTemplate && (
+        {!isViralDanceTemplate && (
           <>
             <button
               type="button"
@@ -1019,28 +859,9 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       {verifiedFolderId && (
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           <p className="text-sm font-medium text-[var(--color-text)] mb-2">
-            {isShortDramaFlow ? t('generate.shortDramaAssetsTitle') : isViralDanceTemplate ? t('generate.viralAssetsTitle') : t('generate.libraryAssetsTitle')}
+            {isViralDanceTemplate ? t('generate.viralAssetsTitle') : t('generate.libraryAssetsTitle')}
           </p>
-          {isShortDramaFlow ? (
-            characters.length > 0 ? (
-              <ShortDramaMaterialPicker
-                characters={characters}
-                selectedOrder={selectedOrder}
-                setSelectedOrder={setSelectedOrder}
-                accessToken={accessToken}
-                verifiedFolderId={verifiedFolderId ?? undefined}
-                verifiedFolderName={verifiedFolderName ?? undefined}
-                files={files}
-                filesLoading={loading}
-                onBrowseFiles={() => search([], verifiedFolderId ?? undefined)}
-                onLogin={() => login()}
-              />
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]">
-                {t('generate.identifyCharactersFirst')}
-              </p>
-            )
-          ) : isViralDanceTemplate ? (
+          {isViralDanceTemplate ? (
             <>
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
                 {formatText('generate.viralBindingHint', { folderName: verifiedFolderName ?? '' })}

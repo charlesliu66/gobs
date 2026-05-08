@@ -1,24 +1,28 @@
 /**
- * 功能模板选择：Viral 舞蹈、英雄宣传、短剧 等
- * 用户先选定功能，再进入该模板的 prompt 工作区
+ * 功能模板选择：快速单段、动作迁移、角色展示。
+ * 用户先选定功能，再进入该模板的 prompt 工作区。
  */
 import { useEffect, useState, useMemo } from 'react';
 import { getTemplates, type PromptTemplate } from '../api/promptPolish';
+import {
+  filterVisibleStudioTemplates,
+  getStudioTemplateDisplayMeta,
+} from '../config/studioTemplateOptions';
 
-const DURATION_ORDER = [8, 15, 30, 60];
+const DURATION_ORDER = [8, 15];
 
 const CUSTOM_TEMPLATE: PromptTemplate = {
   id: 'custom',
-  name: 'Custom',
-  nameZh: '自定义',
-  description: '自由发挥，无预设，仅用导演知识优化',
+  name: 'Quick Single',
+  nameZh: '快速单段',
+  description: '自由创意，快速验证画面方向，可选时长与画面比例',
   duration: 8,
   aspectRatio: '9:16',
   pipelineMode: 'single',
 };
 
 function sortTemplates(list: PromptTemplate[]): PromptTemplate[] {
-  const filtered = list.filter((t) => t.id !== 'cat-harem');
+  const filtered = filterVisibleStudioTemplates(list);
   return [...filtered].sort((a, b) => {
     const idxA = DURATION_ORDER.indexOf(a.duration);
     const idxB = DURATION_ORDER.indexOf(b.duration);
@@ -74,7 +78,7 @@ export function TemplatePicker({ onSelect }: TemplatePickerProps) {
             </span>
             <span className="mt-1 text-xs text-[var(--color-text-muted)]">{t.description}</span>
             <span className="mt-2 text-xs text-[var(--color-text-subtle)]">
-              {t.duration}秒 · {t.aspectRatio}
+              {getStudioTemplateDisplayMeta(t)}
             </span>
           </button>
         ))}

@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.169 - 2026-05-09
+**Advanced Studio template optimization Phase 1**
+**Studio / Templates:**
+- Reduced the Studio creation picker to three marketer-facing paths: Quick Single, Motion Transfer, and Character Showcase.
+- Removed active Short Drama / Cat Harem template configs, fallback presets, and short-drama UI branches while keeping the legacy presets endpoint compatibility-safe with an empty response.
+- Hid `cg-trailer` from Studio template APIs and frontend fallback data while retaining its config file for a later Production Wizard promo preset handoff.
+- Added Quick Single prompt inspirations plus template-specific duration/aspect choices: Quick Single 4/6/8/10s with 9:16/16:9/1:1, Motion Transfer 5/8/10s, and Character Showcase 9:16/16:9.
+**Tests / Build:**
+- Added backend template registry and frontend template-option/fallback tests, then reran frontend/backend TypeScript checks and targeted native Node tests.
+
 ## v0.168 - 2026-05-09
 **Campaign Source Asset readiness**
 **Campaign / Output Workbench / Asset Library:**

@@ -1,5 +1,7 @@
 # drama-creator 竖屏短剧方法论（集成参考）
 
+> Archived reference: `short-drama` / `cat-harem` were removed from active Advanced Studio templates in run `2026-05-09-advanced-studio-template-optimization`. This document is retained only as historical methodology for any future Production Wizard preset migration.
+
 本文件为 `short-drama` 模板提供理论支撑，能力来源于 [drama-creator](https://skills.sh/vangongwanxiaowan/screen-creative-skills/drama-creator) skill。
 
 ## 核心理论

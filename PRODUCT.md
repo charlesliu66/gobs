@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.168)*
+*Last updated: 2026-05-09 (v0.169)*
 
-**Latest update - v0.168**
-- Connected Campaign Creative output plans to Asset Library readiness so game source asset requirements can show matching candidates, selected assets, and missing-asset actions.
-- Added row-level choose/upload actions in the Campaign Output Workbench while keeping unsupported video/banner production honest.
-- Added deterministic source-readiness helpers so confirmed source assets only unblock the production items that require them; unrelated text/post outputs stay producible.
+**Latest update - v0.169**
+- Focused `/studio` creation on three marketer-facing modes: Quick Single, Motion Transfer, and Character Showcase.
+- Removed active Short Drama / Cat Harem configs, presets, frontend fallback data, and Studio UI branches; legacy preset calls now return an empty list.
+- Added Quick Single inspiration prompts and template-specific duration/aspect choices without touching protected video generation services.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -29,6 +29,7 @@
 - 鏀寔澶氬悗绔細Compass/VEO锛坄veo-2`锛夈€丏reamina銆並ling
 - 鐢熸垚瀹屾垚鍚庡彲鍦ㄣ€屽巻鍙层€嶉〉闈㈡煡鐪嬪拰涓嬭浇
 - 鏀寔灏侀潰甯ф埅鍙?
+- **Advanced Studio template cleanup (v0.169)**: `/studio` creation now starts from Quick Single, Motion Transfer, and Character Showcase only; Short Drama/Cat Harem are removed from active Studio, and `cg-trailer` is reserved for a future Production Wizard promo preset path.
 
 **浣跨敤鏂规硶锛?*
 1. 杩涘叆銆岀敓鎴愩€嶉〉闈?

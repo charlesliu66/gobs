@@ -5,7 +5,7 @@ import { useVideoGeneration } from '../hooks/useVideoGeneration';
 import { useNavigate } from 'react-router-dom';
 import { saveVideoToHistory } from '../utils/videoHistory';
 import { getVideoFileUrl } from '../utils/videoHistory';
-import { filterPlaceholders } from './ShortDramaMaterialPicker';
+import { filterPlaceholders } from '../utils/materialPlaceholders';
 import { generateUUID } from '../utils/uuid';
 import {
   checkDreaminaAuthStatus,
@@ -628,7 +628,7 @@ export function StepVideo() {
               ? '正在创建多镜头任务…'
             : submittingProvider === 'kling'
               ? templateId === 'viral-dance' && viralDanceReferenceVideoUrl?.trim()
-                ? '正在解析参考视频并提交可灵…（TikTok 首次可能需 30–120 秒）'
+                ? '正在解析参考视频并提交可灵…（首次解析可能需 30–120 秒）'
                 : '正在提交可灵任务…'
               : submittingProvider === 'dreamina'
                 ? '正在提交即梦任务…'
