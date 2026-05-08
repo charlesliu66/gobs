@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-08 (v0.166)*
+*Last updated: 2026-05-08 (v0.167)*
 
-**Latest update - v0.166**
-- Added the Phase 2A Campaign Output production adapter: supported caption, headline, hashtag, and Facebook post items now produce reviewable draft outputs after output-plan confirmation.
-- Extended output plan persistence so produced text drafts round-trip through `/api/campaign-output/plans` with owner scoping and validation.
-- Updated Campaign Creative distribution package creation so produced text outputs feed pending packages while account selection, media readiness, and final publish remain explicit.
+**Latest update - v0.167**
+- Streamlined Campaign Output Workbench so the primary action now saves the output plan and produces supported caption/post drafts in one click.
+- Kept existing output plans idempotent: repeated confirmation updates the saved plan without duplicating produced outputs.
+- Updated Chinese and English copy to remove the separate save-only mental model while keeping unsupported visual/video outputs honest and non-produced.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

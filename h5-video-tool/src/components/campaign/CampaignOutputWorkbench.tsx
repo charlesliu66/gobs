@@ -37,7 +37,6 @@ interface CampaignOutputWorkbenchProps {
   isCreating: boolean;
   errorMessage: string | null;
   copy: Copy;
-  onCreatePlan: () => void;
   onConfirmProduction: () => void;
   onOpenAssetLibrary: () => void;
   onOpenQuickFilm: () => void;
@@ -50,7 +49,6 @@ export function CampaignOutputWorkbench({
   isCreating,
   errorMessage,
   copy,
-  onCreatePlan,
   onConfirmProduction,
   onOpenAssetLibrary,
   onOpenQuickFilm,
@@ -137,8 +135,8 @@ export function CampaignOutputWorkbench({
       ) : null}
 
       <div className="mt-6 flex flex-wrap gap-3" data-section="confirmProduction">
-        <button type="button" onClick={createdPlan ? onConfirmProduction : onCreatePlan} className="btn-primary" disabled={isCreating}>
-          {createdPlan ? copy.confirmProduction : (isCreating ? copy.confirming : copy.createPlan)}
+        <button type="button" onClick={onConfirmProduction} className="btn-primary" disabled={isCreating}>
+          {isCreating ? copy.confirming : copy.confirmProduction}
         </button>
         <button type="button" onClick={onOpenAssetLibrary} className="btn-secondary">
           {copy.openAssetLibrary}

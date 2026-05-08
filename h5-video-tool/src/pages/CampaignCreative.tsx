@@ -494,39 +494,31 @@ export function CampaignCreative() {
     }
   };
 
-  const handleCreateOutputPlan = async () => {
-    if (!campaignOutputPlanDraft || outputPlanLoading) return;
-    setOutputPlanLoading(true);
-    setOutputPlanError(null);
-    try {
-      const createdPlan = await createCampaignOutputPlan(campaignOutputPlanDraft);
-      setCreatedOutputPlan(createdPlan);
-    } catch (error) {
-      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
-    } finally {
-      setOutputPlanLoading(false);
-    }
-  };
-
   const handleConfirmOutputProduction = async () => {
-    if (!createdOutputPlan || !brief || outputPlanLoading) return;
+    const planToProduce = createdOutputPlan ?? campaignOutputPlanDraft;
+    if (!planToProduce || !brief || outputPlanLoading) return;
     setOutputPlanLoading(true);
     setOutputPlanError(null);
     try {
       const producedPlan = produceSupportedCampaignOutputs({
-        plan: createdOutputPlan,
+        plan: planToProduce,
         mission,
         brief,
         strategy,
         variantPack,
         selectedVariantId,
       });
-      const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
-        status: producedPlan.status,
-        items: producedPlan.items,
-        sourceAssetRequirements: producedPlan.sourceAssetRequirements,
-        capabilityGaps: producedPlan.capabilityGaps,
-      });
+      let confirmedPlan: CampaignOutputPlan;
+      if (createdOutputPlan) {
+        confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
+          status: producedPlan.status,
+          items: producedPlan.items,
+          sourceAssetRequirements: producedPlan.sourceAssetRequirements,
+          capabilityGaps: producedPlan.capabilityGaps,
+        });
+      } else {
+        confirmedPlan = await createCampaignOutputPlan(producedPlan);
+      }
       setCreatedOutputPlan(confirmedPlan);
     } catch (error) {
       setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
@@ -627,7 +619,6 @@ export function CampaignCreative() {
             createdPlan={createdOutputPlan}
             isCreating={outputPlanLoading}
             errorMessage={outputPlanError}
-            onCreatePlan={handleCreateOutputPlan}
             onConfirmProduction={handleConfirmOutputProduction}
             onOpenAssetLibrary={() => navigate('/asset-library')}
             onOpenQuickFilm={() => navigate('/quickfilm')}

@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.167 - 2026-05-08
+**Campaign Output one-click production**
+**Campaign / Output Workbench:**
+- Streamlined the post-brief Output Workbench primary action so first confirmation produces supported text/post drafts and persists the produced plan in one step.
+- Preserved saved-plan idempotency by keeping subsequent confirmations on the update path, so already produced outputs are not duplicated.
+- Updated Workbench wiring and bilingual copy to remove the separate save-only step from the default Campaign Mission Control path.
+**Tests / Build:**
+- Added source-level integration and UI presence assertions for one-click production, then reran output-plan, production-adapter, distribution-bridge tests plus backend and frontend production builds.
+
 ## v0.166 - 2026-05-08
 **Campaign Output production adapters Phase 2A**
 **Campaign / Production / Distribution:**

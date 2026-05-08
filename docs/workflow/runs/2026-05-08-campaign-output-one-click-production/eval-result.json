@@ -1,0 +1,63 @@
+{
+  "runId": "2026-05-08-campaign-output-one-click-production",
+  "status": "go",
+  "commitUnderTest": "main@85101b6-plus-local-changes",
+  "checkedAt": "2026-05-08T04:57:36Z",
+  "results": [
+    {
+      "name": "workflow_guard_build",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-08-campaign-output-one-click-production --stage build",
+      "status": "pass"
+    },
+    {
+      "name": "campaignOutputWorkbenchIntegration",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputWorkbenchIntegration.test.ts",
+      "status": "pass",
+      "summary": "5/5"
+    },
+    {
+      "name": "campaignOutputWorkbenchPresence",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputWorkbenchPresence.test.ts",
+      "status": "pass",
+      "summary": "3/3"
+    },
+    {
+      "name": "campaignOutputProductionAdapter",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputProductionAdapter.test.ts",
+      "status": "pass",
+      "summary": "3/3"
+    },
+    {
+      "name": "campaignDistributionPackage",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignDistributionPackage.test.ts",
+      "status": "pass",
+      "summary": "5/5"
+    },
+    {
+      "name": "campaignOutputPlan",
+      "command": "node --import file:///.../tsx/dist/loader.mjs tests/campaignOutputPlan.test.ts",
+      "status": "pass",
+      "summary": "5/5"
+    },
+    {
+      "name": "backend_build",
+      "command": "npm run build",
+      "cwd": "h5-video-tool-api",
+      "status": "pass"
+    },
+    {
+      "name": "frontend_build",
+      "command": "npm run build",
+      "cwd": "h5-video-tool",
+      "status": "pass",
+      "notes": "Existing Vite dynamic/static import chunk warning only."
+    },
+    {
+      "name": "workflow_eval_script",
+      "command": "bash scripts/eval.sh 2026-05-08-campaign-output-one-click-production",
+      "status": "not_run",
+      "notes": "bash is not available in the local Windows shell."
+    }
+  ],
+  "blockingDefects": []
+}

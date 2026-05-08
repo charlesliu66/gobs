@@ -16,6 +16,19 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /buildCampaignDistributionCreateInputFromProductionItem/);
 });
 
+test('CampaignCreative confirms production from the draft plan on the first primary action', () => {
+  assert.match(pageSource, /const planToProduce = createdOutputPlan \?\? campaignOutputPlanDraft/);
+  assert.match(pageSource, /plan: planToProduce/);
+  assert.match(pageSource, /if \(createdOutputPlan\) \{/);
+  assert.match(pageSource, /updateCampaignOutputPlan\(createdOutputPlan\.id/);
+  assert.match(pageSource, /createCampaignOutputPlan\(producedPlan\)/);
+});
+
+test('CampaignCreative does not wire a separate save-only output plan action', () => {
+  assert.doesNotMatch(pageSource, /handleCreateOutputPlan/);
+  assert.doesNotMatch(pageSource, /onCreatePlan=\{/);
+});
+
 test('CampaignCreative keeps system plan and strategy controls secondary', () => {
   assert.match(pageSource, /advancedStrategyDetails/);
   assert.match(pageSource, /<details[^>]+data-section="advancedStrategyDetails"/);
