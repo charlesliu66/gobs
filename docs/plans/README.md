@@ -47,7 +47,7 @@
 - [2026-05-08-campaign-output-workbench-game-source-assets-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md>)
   - Defines the next Campaign Mission Control direction: after brief confirmation, users should see the campaign output plan, required game source assets, GOBS production capability, and capability gaps instead of internal System Plan reasoning.
 - [2026-05-08-campaign-output-workbench-game-source-assets-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md>)
-  - Implementation plan for the B-stage Output Workbench with C-ready data shapes, covering output plan types, backend persistence, frontend workbench UI, distribution package bridging, tests, run docs, and release sync.
+  - Implementation plan for the B-stage Output Workbench with C-ready data shapes, covering output plan types, backend persistence, frontend workbench UI, distribution package bridging, tests, run docs, and release sync. Phase 1 execution evidence lives in `docs/workflow/runs/2026-05-08-campaign-output-workbench-game-source-assets/`.
 - [2026-04-21-geelark-auto-power-plan.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-04-21-geelark-auto-power-plan.md>)
   - GeeLark 自动开关机的执行计划
 

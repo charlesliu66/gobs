@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.165 - 2026-05-08
+**Campaign Output Workbench Phase 1**
+**Campaign / Distribution / Source Assets:**
+- Added deterministic `CampaignOutputPlan` modeling and tests so confirmed briefs produce visible deliverables, concrete game source asset requirements, GOBS production capability statuses, and capability gaps.
+- Added backend `/api/campaign-output/plans` create/list/read/update persistence with server-owned user scoping, explicit validation, SQLite indexes, and payload round-trip tests.
+- Added the frontend Campaign Output Workbench component, output-plan API helpers, CampaignCreative integration, and bilingual copy so the default post-brief surface leads with planned outputs instead of internal system reasoning.
+- Added a distribution bridge from produced output items to pending distribution package drafts while keeping blocked/unsupported items non-publishable and preserving explicit account selection.
+**Tests / Build:**
+- Added frontend model, UI presence/integration, distribution bridge, and backend API tests; reran targeted suites plus backend and frontend production builds.
+
 ## v0.164 - 2026-05-08
 **Campaign Output Workbench plan hardening**
 **Docs / Product Planning:**

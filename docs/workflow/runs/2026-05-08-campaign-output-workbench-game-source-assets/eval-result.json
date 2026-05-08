@@ -1,0 +1,19 @@
+{
+  "runId": "2026-05-08-campaign-output-workbench-game-source-assets",
+  "status": "PASS",
+  "p0": 0,
+  "p1": 0,
+  "verifiedAt": "2026-05-08T03:31:00Z",
+  "evidence": [
+    "h5-video-tool-api: node --import tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts",
+    "h5-video-tool: ..\\h5-video-tool-api\\node_modules\\.bin\\tsx.cmd --test tests\\campaignOutputPlan.test.ts tests\\campaignDistributionPackage.test.ts",
+    "h5-video-tool: node --test tests\\campaignOutputWorkbenchPresence.test.ts tests\\campaignOutputWorkbenchIntegration.test.ts tests\\distributionPackageIntake.test.ts",
+    "h5-video-tool-api: npm run build",
+    "h5-video-tool: npm run build",
+    "workflow_guard stage build: PASS"
+  ],
+  "warnings": [
+    "Vite dynamic import/static import warning remains existing non-blocking behavior.",
+    "Browser smoke and staging/prod smoke are pending release sync."
+  ]
+}

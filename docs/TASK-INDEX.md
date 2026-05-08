@@ -4,6 +4,7 @@
 
 - `Campaign Output Workbench + Game Source Assets` is the next Campaign Mission Control direction after the completed Distribution Handoff MVP.
 - The default post-brief user surface should show deliverables, required game source assets, GOBS production capability, and capability gaps instead of internal System Plan reasoning.
+- Phase 1 implementation run is active at `docs/workflow/runs/2026-05-08-campaign-output-workbench-game-source-assets/`, covering deterministic output plans, owner-scoped persistence, Workbench UI, and distribution bridge.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`

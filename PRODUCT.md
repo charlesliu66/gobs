@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-08 (v0.164)*
+*Last updated: 2026-05-08 (v0.165)*
 
-**Latest update - v0.164**
-- Refined the Campaign Output Workbench + Game Source Assets design after OpenClaw review with explicit Phase 1 deterministic output mapping rules, including fallback, multi-platform, empty-asset, and fully matched source-asset behavior.
-- Split the implementation plan's largest UI task into component/API and CampaignCreative integration steps so Builder can land smaller, reviewable changes.
-- Added required edge-case tests, capability-gap consumption rules, Phase 2-4 follow-up plan boundaries, and verified the release script assumptions documented in the plan.
+**Latest update - v0.165**
+- Implemented the Phase 1 Campaign Output Workbench path: confirmed briefs now build deterministic output plans with deliverables, concrete game source asset requirements, GOBS capability statuses, and capability gaps.
+- Added owner-scoped backend persistence for campaign output plans at `/api/campaign-output/plans`, plus frontend API helpers and a Campaign Creative workbench panel ahead of downstream distribution package creation.
+- Added a produced-output-item to distribution-package bridge that only marks packages publishable when a real output asset exists; blocked items preserve source asset guidance and keep account selection explicit.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

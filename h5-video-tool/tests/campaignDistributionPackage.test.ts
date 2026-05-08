@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { DerivedCampaignKnowledgeContext } from '../src/api/campaignKnowledge.ts';
 import {
   buildCampaignDistributionCreateInput,
+  buildCampaignDistributionCreateInputFromProductionItem,
 } from '../src/components/campaign/distributionPackage.ts';
 import type {
   CampaignCreativeBrief,
@@ -152,4 +153,90 @@ test('buildCampaignDistributionCreateInput marks the package publishable when a 
   assert.equal(draft.assetReadiness.publishableAsset?.path, 'output/tester/reward-cut.mp4');
   assert.equal(draft.assetReadiness.publishableAsset?.source, 'server_path');
   assert.equal(draft.assets[0]?.status, 'ready');
+});
+
+test('buildCampaignDistributionCreateInputFromProductionItem maps produced output items to publishable packages', () => {
+  const draft = buildCampaignDistributionCreateInputFromProductionItem({
+    mission: 'Turn the produced hero clip into distribution prep.',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    variantPack: createVariantPack(),
+    selectedVariantId: 'variant_reward',
+    knowledgeContext: createKnowledgeContext(),
+    routedKnowledgePackIds: ['gold-market', 'gold-persona'],
+    generationSource: 'llm',
+    warnings: [],
+    productionItem: {
+      id: 'item_tiktok_short_video',
+      type: 'short_video',
+      quantity: 1,
+      platform: 'tiktok',
+      title: 'Produced hero clip',
+      contentBrief: 'Hero skill reveal with CTA.',
+      requiredSourceAssetIds: ['src_gameplay'],
+      productionCapability: 'supported_with_source_assets',
+      status: 'produced',
+      gobsCanProduce: true,
+      outputAssetIds: ['asset_hero_clip'],
+      distributionPackageIds: [],
+    },
+    outputAssets: [
+      {
+        assetId: 'asset_hero_clip',
+        type: 'video',
+        path: 'output/campaign/hero-clip.mp4',
+        source: 'server_path',
+      },
+    ],
+    sourceAssetRequirements: [],
+  });
+
+  assert.equal(draft.assetReadiness.state, 'publishable');
+  assert.equal(draft.assetReadiness.publishableAsset?.path, 'output/campaign/hero-clip.mp4');
+  assert.equal(draft.source.sourceId, 'item_tiktok_short_video');
+  assert.deepEqual(draft.publishIntent.platforms, ['tiktok']);
+});
+
+test('buildCampaignDistributionCreateInputFromProductionItem keeps blocked output items non-publishable with source guidance', () => {
+  const draft = buildCampaignDistributionCreateInputFromProductionItem({
+    mission: 'Prepare a blocked hero clip honestly.',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    variantPack: createVariantPack(),
+    selectedVariantId: 'variant_reward',
+    knowledgeContext: createKnowledgeContext(),
+    routedKnowledgePackIds: ['gold-market', 'gold-persona'],
+    generationSource: 'llm',
+    warnings: [],
+    productionItem: {
+      id: 'item_tiktok_short_video',
+      type: 'short_video',
+      quantity: 1,
+      platform: 'tiktok',
+      title: 'Blocked hero clip',
+      contentBrief: 'Hero skill reveal with CTA.',
+      requiredSourceAssetIds: ['src_gameplay'],
+      productionCapability: 'supported_with_source_assets',
+      status: 'blocked',
+      gobsCanProduce: false,
+      outputAssetIds: [],
+      distributionPackageIds: [],
+    },
+    outputAssets: [],
+    sourceAssetRequirements: [
+      {
+        id: 'src_gameplay',
+        assetType: 'gameplay_recording',
+        label: 'Gameplay recording',
+        neededForProductionItemIds: ['item_tiktok_short_video'],
+        status: 'missing',
+        matchedAssetIds: [],
+        guidance: 'Provide real gameplay footage before production.',
+      },
+    ],
+  });
+
+  assert.equal(draft.assetReadiness.state, 'needs_asset');
+  assert.match(draft.assetReadiness.reason ?? '', /gameplay footage/i);
+  assert.equal(draft.review.status, 'draft');
 });

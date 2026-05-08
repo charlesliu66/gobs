@@ -6,7 +6,9 @@ import {
   type DerivedCampaignKnowledgeContext,
 } from '../api/campaignCreative.ts';
 import { createCampaignDistributionPackage } from '../api/campaignDistribution.ts';
+import { createCampaignOutputPlan, updateCampaignOutputPlan } from '../api/campaignOutputPlan.ts';
 import { useLocale } from '../i18n/LocaleContext.tsx';
+import { CampaignOutputWorkbench } from '../components/campaign/CampaignOutputWorkbench';
 import { DistributionPackagePanel } from '../components/campaign/DistributionPackagePanel';
 import { GeneratedBriefReview } from '../components/campaign/GeneratedBriefReview';
 import { MissionComposer } from '../components/campaign/MissionComposer';
@@ -18,6 +20,7 @@ import {
   buildCampaignDistributionCreateInput,
   type CampaignDistributionPackage,
 } from '../components/campaign/distributionPackage.ts';
+import { buildCampaignOutputPlan, type CampaignOutputPlan } from '../components/campaign/outputPlan.ts';
 import type {
   CampaignCreativeBrief,
   CampaignCreativeFormState,
@@ -168,6 +171,9 @@ export function CampaignCreative() {
   const [distributionPackageLoading, setDistributionPackageLoading] = useState(false);
   const [distributionPackageError, setDistributionPackageError] = useState<string | null>(null);
   const [createdDistributionPackage, setCreatedDistributionPackage] = useState<CampaignDistributionPackage | null>(null);
+  const [outputPlanLoading, setOutputPlanLoading] = useState(false);
+  const [outputPlanError, setOutputPlanError] = useState<string | null>(null);
+  const [createdOutputPlan, setCreatedOutputPlan] = useState<CampaignOutputPlan | null>(null);
   const feedbackRecords: FeedbackRecord[] = [];
 
   const strategyNotice = missionBriefResult?.warnings[0] ?? null;
@@ -225,6 +231,18 @@ export function CampaignCreative() {
     });
   }, [brief, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
 
+  const campaignOutputPlanDraft = useMemo(() => {
+    if (!brief) return null;
+    return buildCampaignOutputPlan({
+      mission,
+      brief,
+      strategy,
+      variantPack,
+      selectedVariantId,
+      requestedPlatforms: ['tiktok', 'facebook'],
+    });
+  }, [brief, mission, selectedVariantId, strategy, variantPack]);
+
   const brainStatus = useMemo(() => {
     if (missionBriefLoading) {
       return {
@@ -254,6 +272,8 @@ export function CampaignCreative() {
   const resetDistributionPackageState = () => {
     setDistributionPackageError(null);
     setCreatedDistributionPackage(null);
+    setOutputPlanError(null);
+    setCreatedOutputPlan(null);
   };
 
   const handleMissionChange = (value: string) => {
@@ -447,6 +467,36 @@ export function CampaignCreative() {
     }
   };
 
+  const handleCreateOutputPlan = async () => {
+    if (!campaignOutputPlanDraft || outputPlanLoading) return;
+    setOutputPlanLoading(true);
+    setOutputPlanError(null);
+    try {
+      const createdPlan = await createCampaignOutputPlan(campaignOutputPlanDraft);
+      setCreatedOutputPlan(createdPlan);
+    } catch (error) {
+      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
+    } finally {
+      setOutputPlanLoading(false);
+    }
+  };
+
+  const handleConfirmOutputProduction = async () => {
+    if (!createdOutputPlan || outputPlanLoading) return;
+    setOutputPlanLoading(true);
+    setOutputPlanError(null);
+    try {
+      const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
+        status: 'confirmed',
+      });
+      setCreatedOutputPlan(confirmedPlan);
+    } catch (error) {
+      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
+    } finally {
+      setOutputPlanLoading(false);
+    }
+  };
+
   const handleOpenDistribution = () => {
     if (!createdDistributionPackage) return;
     navigate(`/distribute?package=${encodeURIComponent(createdDistributionPackage.id)}`);
@@ -534,6 +584,43 @@ export function CampaignCreative() {
         </div>
 
         <div className="grid content-start gap-6">
+          <CampaignOutputWorkbench
+            plan={campaignOutputPlanDraft}
+            createdPlan={createdOutputPlan}
+            isCreating={outputPlanLoading}
+            errorMessage={outputPlanError}
+            onCreatePlan={handleCreateOutputPlan}
+            onConfirmProduction={handleConfirmOutputProduction}
+            onOpenAssetLibrary={() => navigate('/asset-library')}
+            onOpenQuickFilm={() => navigate('/quickfilm')}
+            onCreateDistributionPackage={handleCreateDistributionPackage}
+            copy={{
+              emptyTitle: t('campaignCreative.outputWorkbench.emptyTitle'),
+              emptyBody: t('campaignCreative.outputWorkbench.emptyBody'),
+              title: t('campaignCreative.outputWorkbench.title'),
+              subtitle: t('campaignCreative.outputWorkbench.subtitle'),
+              badge: t('campaignCreative.outputWorkbench.badge'),
+              outputSummary: t('campaignCreative.outputWorkbench.outputSummary'),
+              productionList: t('campaignCreative.outputWorkbench.productionList'),
+              sourceAssetReadiness: t('campaignCreative.outputWorkbench.sourceAssetReadiness'),
+              capabilityGaps: t('campaignCreative.outputWorkbench.capabilityGaps'),
+              confirmProduction: t('campaignCreative.outputWorkbench.confirmProduction'),
+              confirming: t('campaignCreative.outputWorkbench.confirming'),
+              createPlan: t('campaignCreative.outputWorkbench.createPlan'),
+              createdPlan: t('campaignCreative.outputWorkbench.createdPlan'),
+              totalItems: t('campaignCreative.outputWorkbench.totalItems'),
+              gobsReady: t('campaignCreative.outputWorkbench.gobsReady'),
+              blocked: t('campaignCreative.outputWorkbench.blocked'),
+              requiredAssets: t('campaignCreative.outputWorkbench.requiredAssets'),
+              nextAction: t('campaignCreative.outputWorkbench.nextAction'),
+              openAssetLibrary: t('campaignCreative.outputWorkbench.openAssetLibrary'),
+              openQuickFilm: t('campaignCreative.outputWorkbench.openQuickFilm'),
+              createDistributionPackage: t('campaignCreative.outputWorkbench.createDistributionPackage'),
+              error: t('campaignCreative.outputWorkbench.error'),
+              gapWorkaround: t('campaignCreative.outputWorkbench.gapWorkaround'),
+            }}
+          />
+
           <CampaignPlanCard
             plan={campaignPlan}
             profile={campaignProfile}
@@ -689,7 +776,10 @@ export function CampaignCreative() {
             }}
           />
 
-          <details className="rounded-3xl border border-[var(--color-border)]/55 bg-[var(--color-surface-elevated)]">
+          <details
+            data-section="advancedStrategyDetails"
+            className="rounded-3xl border border-[var(--color-border)]/55 bg-[var(--color-surface-elevated)]"
+          >
             <summary className="cursor-pointer list-none px-6 py-5">
               <div className="text-lg font-semibold text-[var(--color-text)]">
                 {t('campaignCreative.tuning.title')}

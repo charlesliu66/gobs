@@ -5,6 +5,10 @@ import type {
   CampaignCreativeVariant,
   CampaignCreativeVariantPack,
 } from './model.ts';
+import type {
+  GameSourceAssetRequirement,
+  ProductionItem,
+} from './outputPlan.ts';
 
 export type CampaignDistributionPackageReviewStatus =
   | 'draft'
@@ -144,6 +148,21 @@ export interface BuildCampaignDistributionCreateInputArgs {
     url?: string;
     source: CampaignDistributionPackageAssetSource;
   };
+}
+
+export interface CampaignOutputAssetForDistribution {
+  assetId: string;
+  type: 'video' | 'image';
+  path?: string;
+  url?: string;
+  source: CampaignDistributionPackageAssetSource;
+}
+
+export interface BuildCampaignDistributionCreateInputFromProductionItemArgs
+  extends Omit<BuildCampaignDistributionCreateInputArgs, 'primaryAsset'> {
+  productionItem: ProductionItem;
+  outputAssets?: CampaignOutputAssetForDistribution[];
+  sourceAssetRequirements?: GameSourceAssetRequirement[];
 }
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
@@ -294,6 +313,65 @@ export function buildCampaignDistributionCreateInput(
     review: {
       status: publishableAsset ? 'needs_review' : 'draft',
       updatedAt: nowIso,
+    },
+  };
+}
+
+function sourceAssetReasonForProductionItem(
+  item: ProductionItem,
+  sourceAssetRequirements: GameSourceAssetRequirement[] | undefined,
+): string {
+  const related = (sourceAssetRequirements ?? []).filter((asset) =>
+    item.requiredSourceAssetIds.includes(asset.id) && asset.status !== 'available',
+  );
+  if (related.length === 0) {
+    return item.humanAction?.detail || 'Production output needs a real render before publishing.';
+  }
+  return related.map((asset) => asset.guidance || `${asset.label} is required.`).join(' ');
+}
+
+export function buildCampaignDistributionCreateInputFromProductionItem(
+  args: BuildCampaignDistributionCreateInputFromProductionItemArgs,
+): CampaignDistributionCreateInput {
+  const selectedOutputAsset = args.productionItem.status === 'produced'
+    ? args.outputAssets?.find((asset) =>
+        args.productionItem.outputAssetIds.includes(asset.assetId) && (asset.path?.trim() || asset.url?.trim())
+      )
+    : undefined;
+  const draft = buildCampaignDistributionCreateInput({
+    ...args,
+    primaryAsset: selectedOutputAsset
+      ? {
+          assetId: selectedOutputAsset.assetId,
+          type: selectedOutputAsset.type,
+          status: 'ready',
+          path: selectedOutputAsset.path,
+          url: selectedOutputAsset.url,
+          source: selectedOutputAsset.source,
+        }
+      : undefined,
+  });
+
+  return {
+    ...draft,
+    title: args.productionItem.title || draft.title,
+    source: {
+      ...draft.source,
+      sourceId: args.productionItem.id,
+    },
+    assetReadiness: selectedOutputAsset
+      ? draft.assetReadiness
+      : {
+          state: 'needs_asset',
+          reason: sourceAssetReasonForProductionItem(args.productionItem, args.sourceAssetRequirements),
+        },
+    review: {
+      ...draft.review,
+      status: selectedOutputAsset ? draft.review.status : 'draft',
+    },
+    publishIntent: {
+      ...draft.publishIntent,
+      platforms: uniqueStrings([args.productionItem.platform || args.brief.platform]),
     },
   };
 }
