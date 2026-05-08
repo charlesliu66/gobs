@@ -8,6 +8,39 @@
 
 **Tech Stack:** React + TypeScript in `h5-video-tool/`, Node.js + TypeScript + Express in `h5-video-tool-api/`, existing better-sqlite3 `assetDb.ts`, existing node test runner, existing Vite build.
 
+**Review incorporation notes:** OpenClaw review is accepted for this plan revision. The output-plan inference rules are now table-driven, the UI work is split into component/API and page-integration tasks, edge-case tests are required before implementation, capability gaps have an explicit consumption path, and the release scripts were verified in the current repo on 2026-05-08 (`scripts/deploy_all.py`, `scripts/mark_release_ready.py`, `.agents/skills/gobs-h5-smoke-test/scripts/smoke_http.ps1`).
+
+## Phase 1 Deterministic Output Mapping
+
+Builder should implement `buildCampaignOutputPlan` against this table before tuning UI details:
+
+| Input signal | Planned output | Source asset rule | Capability / gap rule |
+|---|---|---|---|
+| Any confirmed brief | 1 `caption_set`, 1 `headline_set`, 1 `hashtag_set` | No required source asset by default | `supported`; no capability gap |
+| TikTok platform or `mode=tiktok_content` | 2 `short_video` items | Require `gameplay_recording` and `game_logo`; add `character_art` for hero/character/skill language | `supported_with_source_assets`; blocked only by missing required source assets |
+| `mode=tiktok_ua` | 2 `tiktok_video` items | Require `gameplay_recording`, `game_logo`, `reward_icon`, and `store_badge` when UA/install language appears | `supported_with_source_assets`; high-priority gap only if adapter or quality path is unavailable |
+| Facebook platform or social-post intent | 3 `fb_post` items | Copy-only posts require no source asset; visual posts require `key_art` or `character_art` | `supported` for copy-only, `supported_with_source_assets` for visual posts |
+| Banner/store/event/key-art intent | 1 `banner` item | Require `key_art` and `game_logo`; add `event_banner` for event campaigns | `manual_recommended` in Phase 1 unless safe template adapter exists; otherwise gap is `generator_missing` or `quality_not_ready` |
+| Missing strategy | Minimal fallback plan from mission/brief only | Infer only from output type and brief fields | Add `review_risk` human action; do not expose internal reasoning |
+| Empty `assetNeeds` | Use output-type defaults | Do not create generic vague missing-asset rows | Gaps only for concrete blocked outputs |
+| All source requirements matched | Dependent items are `ready_to_produce` | Preserve matched asset IDs | No `source_asset_missing` gap |
+
+Use this function shape unless implementation context suggests a narrower compatible signature:
+
+```ts
+buildCampaignOutputPlan({
+  mission,
+  brief,
+  strategy,
+  variantPack,
+  selectedVariantId,
+  requestedPlatforms,
+  availableSourceAssets,
+})
+```
+
+`requestedPlatforms` lets Phase 1 support multi-platform campaigns without widening the persisted brief object. `availableSourceAssets` lets tests prove that fully matched source requirements do not create dead capability gaps.
+
 ---
 
 ### Task 1: Frontend Output Plan Types and Deterministic Builder
@@ -19,7 +52,15 @@
 
 **Step 1: Write the failing test**
 
-Create `h5-video-tool/tests/campaignOutputPlan.test.ts` with cases for:
+Create `h5-video-tool/tests/campaignOutputPlan.test.ts` with at least these cases:
+
+- Happy path: creates visible deliverables with source asset requirements and practical capability gaps.
+- Missing strategy: still creates a minimal plan from mission/brief and adds a `review_risk` human action.
+- Multi-platform brief: `requestedPlatforms: ['tiktok', 'facebook']` creates TikTok video items and Facebook post items.
+- Empty `assetNeeds`: uses output-type defaults and does not create vague generic missing-asset rows.
+- Fully matched source assets: when all requirements are available, dependent items become `ready_to_produce` and `capabilityGaps` has no `source_asset_missing`.
+
+Start with this happy-path case, then add the edge cases before implementation is considered complete:
 
 ```ts
 import test from 'node:test';
@@ -94,14 +135,7 @@ Implement `outputPlan.ts` with:
 - `CapabilityGap`
 - `buildCampaignOutputPlan(args)`
 
-Keep Phase 1 deterministic:
-
-- always include a caption/headline set as `supported`
-- include FB post items for content mode
-- include short video items as `supported_with_source_assets`
-- include banner items as `manual_recommended` unless enough source assets exist
-- create source requirements from strategy `assetNeeds`, visual cues, and campaign mode
-- create capability gaps for unsupported banner/video cases
+Keep Phase 1 deterministic by implementing the "Phase 1 Deterministic Output Mapping" table above. Do not let UI copy or model rationale become the source of truth for production items.
 
 **Step 4: Run test to verify it passes**
 
@@ -132,6 +166,7 @@ Create backend tests that mirror `campaignDistributionPackage.test.ts`:
 - `GET /api/campaign-output/plans` lists only current user's plans
 - `GET /api/campaign-output/plans/:id` blocks cross-user reads
 - `PATCH /api/campaign-output/plans/:id` updates status/items/source requirements while preserving owner
+- stored `capabilityGaps` and `sourceAssetRequirements` round-trip exactly enough for Workbench and verifier summaries
 - malformed status or item type returns 400
 
 **Step 2: Run test to verify it fails**
@@ -152,6 +187,7 @@ Use existing `assetDb.ts` and mirror the package repository style:
 - store full payload as `payload_json`
 - validate enum fields with explicit allowlists
 - use field-aware validation; do not add broad recursive data stripping
+- keep capability gaps inside the saved plan payload in Phase 1; do not create a separate analytics/dashboard table
 
 API:
 
@@ -184,12 +220,11 @@ git add h5-video-tool-api/src/services/campaignOutputPlan.ts h5-video-tool-api/s
 git commit -m "feat: persist campaign output plans"
 ```
 
-### Task 3: Campaign Creative Output Workbench UI
+### Task 3: Output Plan API Wrapper and Workbench Component
 
 **Files:**
 - Create: `h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx`
 - Create: `h5-video-tool/src/api/campaignOutputPlan.ts`
-- Modify: `h5-video-tool/src/pages/CampaignCreative.tsx`
 - Modify: `h5-video-tool/src/i18n/messages.ts`
 - Test: `h5-video-tool/tests/campaignOutputWorkbenchPresence.test.ts`
 
@@ -197,10 +232,9 @@ git commit -m "feat: persist campaign output plans"
 
 Add source presence tests for:
 
-- `CampaignCreative.tsx` imports `CampaignOutputWorkbench`
-- `CampaignCreative.tsx` does not show System Plan as the primary post-brief surface
 - `CampaignOutputWorkbench.tsx` includes sections for output summary, source asset readiness, capability gaps, and confirm production
 - i18n includes Chinese and English labels for `outputWorkbench`
+- `campaignOutputPlan.ts` exports create/list/read/update helpers and uses the `/api/campaign-output/plans` base path
 
 **Step 2: Run tests to verify failure**
 
@@ -242,17 +276,9 @@ Primary UI:
 - capability gaps as compact lower-priority list
 - next action area
 
-**Step 5: Wire CampaignCreative**
+Do not integrate this component into `CampaignCreative.tsx` yet. Keeping this task component-only makes the largest UI change easier to review.
 
-In `CampaignCreative.tsx`:
-
-- build `campaignOutputPlanDraft` from mission, brief, strategy, selected variant, knowledge context
-- show `CampaignOutputWorkbench` where `CampaignStrategyCard` currently dominates
-- move `CampaignStrategyCard` and `CampaignStrategyTuningPanel` into advanced details
-- keep `DistributionPackagePanel`, but make it the downstream action after output plan confirmation
-- keep `Fine-tune in Editor` as advanced action
-
-**Step 6: Run tests**
+**Step 5: Run tests**
 
 Run:
 
@@ -263,14 +289,66 @@ node --import tsx --test tests/campaignOutputPlan.test.ts
 
 Expected: PASS.
 
-**Step 7: Commit**
+**Step 6: Commit**
 
 ```bash
-git add h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx h5-video-tool/src/api/campaignOutputPlan.ts h5-video-tool/src/pages/CampaignCreative.tsx h5-video-tool/src/i18n/messages.ts h5-video-tool/tests/campaignOutputWorkbenchPresence.test.ts
-git commit -m "feat: show campaign output workbench"
+git add h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx h5-video-tool/src/api/campaignOutputPlan.ts h5-video-tool/src/i18n/messages.ts h5-video-tool/tests/campaignOutputWorkbenchPresence.test.ts
+git commit -m "feat: add campaign output workbench component"
 ```
 
-### Task 4: Distribution Package Bridge from Produced Items
+### Task 4: CampaignCreative Page Integration
+
+**Files:**
+- Modify: `h5-video-tool/src/pages/CampaignCreative.tsx`
+- Modify: `h5-video-tool/src/i18n/messages.ts`
+- Test: `h5-video-tool/tests/campaignOutputWorkbenchIntegration.test.ts`
+
+**Step 1: Write the failing tests**
+
+Add source presence tests for:
+
+- `CampaignCreative.tsx` imports `CampaignOutputWorkbench`.
+- `CampaignCreative.tsx` builds an output plan draft from mission, brief, strategy, selected variant, and routed knowledge context.
+- `CampaignCreative.tsx` does not show System Plan as the primary post-brief surface.
+- `CampaignStrategyCard` and `CampaignStrategyTuningPanel` are moved behind advanced/details language.
+- The default page still does not reintroduce Knowledge Brain pack selector, multi-project brain chooser, or the old expert brief form.
+
+**Step 2: Run tests to verify failure**
+
+Run: `node --test tests/campaignOutputWorkbenchIntegration.test.ts`
+
+Expected: FAIL before page wiring exists.
+
+**Step 3: Wire CampaignCreative**
+
+In `CampaignCreative.tsx`:
+
+- build `campaignOutputPlanDraft` from mission, brief, strategy, selected variant, knowledge context
+- show `CampaignOutputWorkbench` where `CampaignStrategyCard` currently dominates
+- move `CampaignStrategyCard` and `CampaignStrategyTuningPanel` into advanced details
+- keep `DistributionPackagePanel`, but make it the downstream action after output plan confirmation
+- keep `Fine-tune in Editor` as advanced action
+
+**Step 4: Run tests**
+
+Run:
+
+```bash
+node --test tests/campaignOutputWorkbenchPresence.test.ts
+node --test tests/campaignOutputWorkbenchIntegration.test.ts
+node --import tsx --test tests/campaignOutputPlan.test.ts
+```
+
+Expected: PASS.
+
+**Step 5: Commit**
+
+```bash
+git add h5-video-tool/src/pages/CampaignCreative.tsx h5-video-tool/src/i18n/messages.ts h5-video-tool/tests/campaignOutputWorkbenchIntegration.test.ts
+git commit -m "feat: integrate campaign output workbench"
+```
+
+### Task 5: Distribution Package Bridge from Produced Items
 
 **Files:**
 - Modify: `h5-video-tool/src/components/campaign/distributionPackage.ts`
@@ -324,7 +402,17 @@ git add h5-video-tool/src/components/campaign/distributionPackage.ts h5-video-to
 git commit -m "feat: bridge campaign outputs to distribution packages"
 ```
 
-### Task 5: Full Verification and Docs
+## Phase 2-4 Follow-Up Planning
+
+Do not expand this Phase 1 implementation into production adapters, Asset Library overhaul, or campaign autopilot. After Phase 1 verifies cleanly, create separate implementation plans before Builder touches those areas:
+
+- Phase 2: `docs/plans/2026-05-08-campaign-output-production-adapters-plan.md` for safe adapters from supported output items to existing generation/copy/package paths.
+- Phase 3: `docs/plans/2026-05-08-game-source-asset-library-readiness-plan.md` for source asset classification, matching, upload/selection, and game asset metadata.
+- Phase 4: `docs/plans/2026-05-08-campaign-run-autopilot-plan.md` for `CampaignRun` orchestration, only after B-stage workbench and asset readiness prove stable.
+
+These plans must keep the same guardrails: no AGENTS.md forbidden generation files, no fake analytics dashboard, no scheduling engine, no broad EditorWorkbench refactor, and no real automatic publishing without explicit release approval.
+
+### Task 6: Full Verification and Docs
 
 **Files:**
 - Modify: `PRODUCT.md`
@@ -380,7 +468,7 @@ Run:
 ```bash
 cd h5-video-tool
 node --import tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts
-node --test tests/campaignOutputWorkbenchPresence.test.ts tests/distributionPackageIntake.test.ts
+node --test tests/campaignOutputWorkbenchPresence.test.ts tests/campaignOutputWorkbenchIntegration.test.ts tests/distributionPackageIntake.test.ts
 npm run build
 ```
 
@@ -414,7 +502,7 @@ git add PRODUCT.md CHANGELOG.md docs/TASK-INDEX.md docs/plans/README.md docs/wor
 git commit -m "docs: plan campaign output workbench release"
 ```
 
-### Task 6: Release Sync
+### Task 7: Release Sync
 
 **Files:**
 - No code edits expected.

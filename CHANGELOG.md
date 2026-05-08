@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.164 - 2026-05-08
+**Campaign Output Workbench plan hardening**
+**Docs / Product Planning:**
+- Incorporated OpenClaw review into the Campaign Output Workbench design with a deterministic Phase 1 mapping table for deliverables, source asset requirements, fallback behavior, and capability-gap creation.
+- Split the Phase 1 UI implementation plan into separate component/API and CampaignCreative integration tasks, reducing Builder risk before runtime work starts.
+- Expanded required edge-case tests, clarified capability-gap consumption, documented Phase 2-4 follow-up plan boundaries, and verified release-script assumptions in the current repo.
+
 ## v0.163 - 2026-05-08
 **Campaign Output Workbench planning**
 **Docs / Product Planning:**

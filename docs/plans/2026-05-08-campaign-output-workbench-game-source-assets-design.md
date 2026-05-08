@@ -170,6 +170,23 @@ interface CapabilityGap {
 }
 ```
 
+## 4.5 Phase 1 Deterministic Mapping Rules
+
+Phase 1 should be deterministic enough that Builder and Verifier can reason about it without inspecting model rationale. The output planner should treat the following table as the source of truth unless a later plan explicitly changes it.
+
+| Input signal | Planned output | Source asset rule | Capability / gap rule |
+|---|---|---|---|
+| Any confirmed brief | 1 `caption_set`, 1 `headline_set`, 1 `hashtag_set` | No required source asset by default | `supported`; no capability gap |
+| `mode=tiktok_content` or platform includes TikTok | 2 `short_video` items | Require `gameplay_recording` and `game_logo`; add `character_art` when strategy mentions hero, character, skin, or skill | `supported_with_source_assets`; blocked only when required source assets are missing |
+| `mode=tiktok_ua` | 2 `tiktok_video` items | Require `gameplay_recording`, `game_logo`, `reward_icon`, and `store_badge` when UA or install language appears | `supported_with_source_assets`; add high-priority gap only if adapter or quality path is unavailable |
+| platform includes Facebook or content mode requests social posts | 3 `fb_post` items | Text-only posts require no source asset; image posts require `key_art` or `character_art` | `supported` for copy-only, `supported_with_source_assets` for visual posts |
+| Strategy `assetNeeds` or `visualCues` mention banner, store, event, key art, or hero visual | 1 `banner` item | Require `key_art` and `game_logo`; add `event_banner` for event campaigns | `manual_recommended` in Phase 1 unless a safe template adapter already exists; otherwise create `generator_missing` or `quality_not_ready` gap |
+| Strategy is missing or rejected | Minimal fallback: caption/headline/hashtag plus 1 short-video placeholder | Infer from brief objective, audience, platform, and mission only | Add `review_risk` human action; do not invent unsupported reasoning |
+| `assetNeeds` is empty | Still infer requirements from output type | Do not create vague "missing asset" rows | Capability gaps should only reflect real blocked outputs |
+| All source requirements are available or matched | Items depending on them become `ready_to_produce` | Preserve matched asset IDs on requirements | No `source_asset_missing` capability gap |
+
+For multi-platform briefs, Phase 1 should normalize the requested platform list before building items. If the existing brief shape only has one `platform`, the builder may accept an additional `requestedPlatforms` argument rather than broadening the persisted brief contract in the first implementation pass.
+
 ## 5. Relationship to Existing Distribution Packages
 
 The existing `CampaignDistributionPackage` remains the handoff object for publish preparation. The new output plan sits one step earlier:
@@ -212,6 +229,22 @@ The default Campaign page after brief confirmation should show:
    - final publish confirmation remains explicit
 
 Advanced strategy details should collapse into a secondary section. The old System Plan language should stop being the primary promise on the page.
+
+## 6.5 Capability Gap Consumption
+
+Capability gaps should not become decorative data. Phase 1 should store them on `CampaignOutputPlan.capabilityGaps` and expose them in three practical places:
+
+1. Campaign Output Workbench: operators see the blocked output, the workaround, and the exact source asset or production capability that is missing.
+2. Workflow verifier summaries: Builder/Verifier can report recurring gaps without creating an analytics dashboard.
+3. Future capability backlog: after enough real campaigns, repeated gaps can be promoted into a product/engineering backlog.
+
+Priority hints should stay simple:
+
+- `high`: blocks a default deliverable such as short video, TikTok UA video, banner set, or a repeated game-source-asset need across multiple campaigns.
+- `medium`: blocks an optional platform format or a useful but non-default production path.
+- `low`: rare external/manual item with a clear workaround.
+
+Phase 1 must not create fake analytics or usage charts. The gap list is a planning and operations signal, not a performance dashboard.
 
 ## 7. Phased Delivery
 
@@ -256,6 +289,16 @@ Acceptance:
 - supported production jobs advance without repeated user clicks
 - blocked jobs remain explainable
 - final publish still requires explicit confirmation unless a future release explicitly approves real autopublish
+
+## 7.5 Follow-Up Plan Boundaries for Phase 2-4
+
+The current implementation plan should cover Phase 1 only. Later phases need separate plans before Builder starts:
+
+- Phase 2 plan: production adapters for supported output items, staying behind service boundaries and not touching AGENTS.md forbidden generation files.
+- Phase 3 plan: Asset Library metadata, source asset classification, selection/upload UX, and matching rules.
+- Phase 4 plan: `CampaignRun` orchestration toward autopilot C, with explicit release approval before any real automatic publishing.
+
+This keeps the current MVP small enough to ship while preserving the product direction that every blocked game-marketing asset becomes a capability GOBS should eventually learn to produce.
 
 ## 8. Guardrails
 
