@@ -3,7 +3,7 @@
 ## 1) Validation Scope
 - Spec file: `docs/workflow/runs/2026-05-09-advanced-studio-template-optimization/planner-spec.md`
 - Build report file: `docs/workflow/runs/2026-05-09-advanced-studio-template-optimization/builder-report.md`
-- Version or commit under test: main@6c0c513 + local working tree for this run
+- Version or commit under test: local verified tree committed as `aab3fa3` (`feat: optimize advanced studio templates`)
 
 ## 2) Coverage Checklist
 - Happy path: PASS - active template registry and frontend options expose the three intended Studio paths.
@@ -42,4 +42,4 @@
 ## 7) Final Verification Verdict
 - Gate 3 status: GO.
 - Gate 4 blocking defects (P0/P1): 0.
-- Release recommendation: GO for commit/push. Staging release can follow standard release guard; prod remains gated by the normal explicit approval rule.
+- Release recommendation: GO for commit/push. Staging deploy was attempted after push but blocked by missing local deploy credential config (`SERVER_PASSWORD` / `.env`); prod remains gated by the normal explicit approval rule.
