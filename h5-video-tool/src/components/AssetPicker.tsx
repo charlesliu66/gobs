@@ -11,6 +11,18 @@ interface AssetPickerProps {
   multi?: boolean;
   /** 只显示特定类型：'image' | 'video' | 'all'（默认 all） */
   filterType?: 'image' | 'video' | 'all';
+  /** 初始搜索关键词 */
+  initialQuery?: string;
+  /** 初始选中的资产 ID */
+  initialSelectedIds?: string[];
+  /** 弹窗标题 */
+  title?: string;
+  /** 弹窗副标题 */
+  subtitle?: string;
+  /** 搜索框占位文案 */
+  searchPlaceholder?: string;
+  /** 确认按钮文案 */
+  confirmLabel?: string;
   /** 选中完成回调 */
   onSelect: (assets: LibraryAsset[]) => void;
   /** 关闭弹窗 */
@@ -23,11 +35,22 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
-export function AssetPicker({ multi = false, filterType = 'all', onSelect, onClose }: AssetPickerProps) {
-  const [query, setQuery] = useState('');
+export function AssetPicker({
+  multi = false,
+  filterType = 'all',
+  initialQuery = '',
+  initialSelectedIds = [],
+  title = '从资产库选择',
+  subtitle,
+  searchPlaceholder = '搜索关键词…',
+  confirmLabel,
+  onSelect,
+  onClose,
+}: AssetPickerProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelectedIds));
 
   const loadAssets = useCallback(async (q: string) => {
     setLoading(true);
@@ -57,8 +80,9 @@ export function AssetPicker({ multi = false, filterType = 'all', onSelect, onClo
   }, [filterType]);
 
   useEffect(() => {
-    void loadAssets('');
-  }, [loadAssets]);
+    setQuery(initialQuery);
+    void loadAssets(initialQuery);
+  }, [initialQuery, loadAssets]);
 
   const handleSearch = useCallback(() => {
     void loadAssets(query);
@@ -92,10 +116,9 @@ export function AssetPicker({ multi = false, filterType = 'all', onSelect, onClo
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] flex-shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-[var(--color-text)]">从资产库选择</h2>
+            <h2 className="text-base font-semibold text-[var(--color-text)]">{title}</h2>
             <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              {filterType === 'image' ? '仅显示图片' : filterType === 'video' ? '仅显示视频' : '全部类型'}
-              {multi ? ' · 可多选' : ' · 单选'}
+              {subtitle ?? `${filterType === 'image' ? '仅显示图片' : filterType === 'video' ? '仅显示视频' : '全部类型'}${multi ? ' · 可多选' : ' · 单选'}`}
             </p>
           </div>
           <button
@@ -114,7 +137,7 @@ export function AssetPicker({ multi = false, filterType = 'all', onSelect, onClo
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-            placeholder="搜索关键词…"
+            placeholder={searchPlaceholder}
             className="flex-1 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] transition"
           />
           <button
@@ -218,7 +241,7 @@ export function AssetPicker({ multi = false, filterType = 'all', onSelect, onClo
               disabled={selected.size === 0}
               className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition"
             >
-              确认选择（{selected.size}）
+              {confirmLabel ?? `确认选择（${selected.size}）`}
             </button>
           </div>
         </div>

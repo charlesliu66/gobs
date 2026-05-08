@@ -112,6 +112,17 @@ export interface AvailableSourceAsset {
   assetId: string;
   assetType: string;
   tags?: string[];
+  matchStrength?: 'candidate' | 'confirmed';
+}
+
+export interface SourceAssetLibraryRecord {
+  id: string;
+  filename?: string;
+  mime_type?: string;
+  mimetype?: string;
+  ai_category?: string;
+  ai_description?: string | null;
+  tags?: Array<{ key?: string; value?: string }>;
 }
 
 export interface BuildCampaignOutputPlanArgs {
@@ -146,6 +157,8 @@ const SOURCE_ASSET_LABELS: Record<string, string> = {
   store_badge: 'Store badge',
   brand_guideline: 'Brand guideline',
 };
+
+const VIDEO_SOURCE_ASSET_TYPES = new Set(['gameplay_recording', 'hero_skill_clip']);
 
 function slugify(value: string): string {
   return value
@@ -237,13 +250,14 @@ function buildSourceRequirements(
   const requirements = new Map<string, GameSourceAssetRequirement>();
   [...requiredTypes].forEach((assetType) => {
     const matched = availableSourceAssets.filter((asset) => asset.assetType === assetType);
+    const hasConfirmedMatch = matched.some((asset) => asset.matchStrength !== 'candidate');
     requirements.set(assetType, {
       id: sourceRequirementId(assetType),
       assetType,
       label: SOURCE_ASSET_LABELS[assetType] ?? assetType,
       neededForProductionItemIds: [],
-      status: matched.length > 0 ? 'available' : 'missing',
-      matchedAssetIds: matched.map((asset) => asset.assetId),
+      status: hasConfirmedMatch ? 'available' : matched.length > 0 ? 'needs_selection' : 'missing',
+      matchedAssetIds: uniqueStrings(matched.map((asset) => asset.assetId)),
       guidance: sourceGuidance(assetType),
       rightsNote: 'Use only approved game-owned or licensed source assets.',
     });
@@ -336,12 +350,15 @@ function buildCapabilityGaps(
   [...requirements.values()]
     .filter((requirement) => requirement.status !== 'available')
     .forEach((requirement) => {
+      const hasCandidates = requirement.status === 'needs_selection' && requirement.matchedAssetIds.length > 0;
       gaps.push({
         id: `gap_missing_${slugify(requirement.assetType)}`,
         gapType: 'source_asset_missing',
-        title: `${requirement.label} is missing`,
+        title: hasCandidates ? `${requirement.label} needs selection` : `${requirement.label} is missing`,
         affectedProductionItemIds: requirement.neededForProductionItemIds,
-        currentWorkaround: requirement.guidance,
+        currentWorkaround: hasCandidates
+          ? `Choose an approved Asset Library candidate for ${requirement.label}.`
+          : requirement.guidance,
         priorityHint: requirement.neededForProductionItemIds.some((itemIdValue) =>
           items.some((item) => item.id === itemIdValue && /video|banner/.test(item.type))
         ) ? 'high' : 'medium',
@@ -361,6 +378,167 @@ function buildCapabilityGaps(
       });
     });
   return gaps;
+}
+
+function sourceAssetSearchText(asset: SourceAssetLibraryRecord): string {
+  return [
+    asset.filename,
+    asset.ai_category,
+    asset.ai_description,
+    ...(asset.tags ?? []).flatMap((tag) => [tag.key, tag.value]),
+  ].join(' ').toLowerCase();
+}
+
+export function inferSourceAssetTypesForLibraryAsset(asset: SourceAssetLibraryRecord): string[] {
+  const text = sourceAssetSearchText(asset);
+  const mime = (asset.mimetype ?? asset.mime_type ?? '').toLowerCase();
+  const types = new Set<string>();
+  const isVideo = mime.startsWith('video/');
+  const isImage = mime.startsWith('image/');
+
+  if (isVideo && /gameplay|recording|battle|combat|clip|screen ?record|实机|录屏|战斗|玩法|视频片段/.test(text)) {
+    types.add('gameplay_recording');
+  }
+  if (isVideo && /hero|character|skill|ultimate|ability|英雄|角色|技能|大招/.test(text)) {
+    types.add('hero_skill_clip');
+  }
+  if (isImage && /logo|brand mark|app icon|游戏logo|标志|图标/.test(text)) {
+    types.add('game_logo');
+  }
+  if (isImage && /key ?art|kv|poster|cover|splash|hero visual|主视觉|宣传图|海报|封面/.test(text)) {
+    types.add('key_art');
+  }
+  if (isImage && /character|hero|skin|unit|角色|英雄|皮肤/.test(text)) {
+    types.add('character_art');
+  }
+  if (isImage && /reward|coin|gem|chest|loot|奖励|金币|宝石|宝箱/.test(text)) {
+    types.add('reward_icon');
+  }
+  if (isImage && /store badge|app store|google play|download badge|install badge|商店徽章|下载/.test(text)) {
+    types.add('store_badge');
+  }
+  if (isImage && /event banner|event|activity|banner|活动|横幅/.test(text)) {
+    types.add('event_banner');
+  }
+  if (isImage && /ui|screenshot|interface|screen|界面|截图|ui素材/.test(text)) {
+    types.add('ui_screenshot');
+  }
+
+  return [...types];
+}
+
+export function sourceAssetFilterType(assetType: string): 'image' | 'video' | 'all' {
+  if (VIDEO_SOURCE_ASSET_TYPES.has(assetType)) return 'video';
+  return 'image';
+}
+
+export function buildAvailableSourceAssetsFromLibraryAssets(
+  assets: SourceAssetLibraryRecord[],
+): AvailableSourceAsset[] {
+  return assets.flatMap((asset) =>
+    inferSourceAssetTypesForLibraryAsset(asset).map((assetType) => ({
+      assetId: asset.id,
+      assetType,
+      tags: uniqueStrings([
+        asset.filename,
+        asset.ai_category,
+        asset.ai_description ?? undefined,
+        ...(asset.tags ?? []).map((tag) => tag.value),
+      ]),
+      matchStrength: 'candidate' as const,
+    })),
+  );
+}
+
+function updateItemForSourceReadiness(
+  item: ProductionItem,
+  requirements: GameSourceAssetRequirement[],
+): ProductionItem {
+  const status = itemStatusForRequirementIds(
+    item.requiredSourceAssetIds,
+    new Map(requirements.map((requirement) => [requirement.assetType, requirement])),
+  );
+  const gobsCanProduce = item.productionCapability === 'supported'
+    || (item.productionCapability === 'supported_with_source_assets' && status !== 'blocked');
+
+  let humanAction = item.humanAction;
+  if (status === 'blocked') {
+    humanAction = {
+      type: 'provide_source_asset',
+      label: 'Provide source assets',
+      detail: 'This deliverable needs approved game source assets before GOBS can produce it.',
+    };
+  } else if (item.productionCapability === 'manual_recommended') {
+    humanAction = {
+      type: 'external_production',
+      label: 'Use manual production',
+      detail: 'GOBS can plan this output, but Phase 1 recommends manual production or template support.',
+    };
+  } else if (item.status === 'blocked') {
+    humanAction = undefined;
+  }
+
+  return {
+    ...item,
+    status,
+    gobsCanProduce,
+    humanAction,
+  };
+}
+
+function rebuildPlanAfterSourceReadiness(plan: CampaignOutputPlan): CampaignOutputPlan {
+  const items = plan.items.map((item) =>
+    item.requiredSourceAssetIds.length > 0
+      ? updateItemForSourceReadiness(item, plan.sourceAssetRequirements)
+      : item,
+  );
+  const requirementMap = new Map(plan.sourceAssetRequirements.map((requirement) => [
+    requirement.assetType,
+    {
+      ...requirement,
+      neededForProductionItemIds: [] as string[],
+    },
+  ]));
+  attachRequirementUsage(items, requirementMap);
+
+  return {
+    ...plan,
+    items,
+    sourceAssetRequirements: [...requirementMap.values()],
+    capabilityGaps: buildCapabilityGaps(items, requirementMap),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function updateSourceAssetRequirementMatches(
+  plan: CampaignOutputPlan,
+  requirementId: string,
+  matchedAssetIds: string[],
+): CampaignOutputPlan {
+  const sourceAssetRequirements = plan.sourceAssetRequirements.map((requirement) => {
+    if (requirement.id !== requirementId) return requirement;
+    const nextMatchedAssetIds = uniqueStrings(matchedAssetIds);
+    return {
+      ...requirement,
+      matchedAssetIds: nextMatchedAssetIds,
+      status: nextMatchedAssetIds.length > 0 ? 'available' as const : 'missing' as const,
+    };
+  });
+  return rebuildPlanAfterSourceReadiness({
+    ...plan,
+    sourceAssetRequirements,
+  });
+}
+
+export function applySourceAssetSelectionOverrides(
+  plan: CampaignOutputPlan,
+  overrides: Record<string, string[]>,
+): CampaignOutputPlan {
+  return Object.entries(overrides).reduce(
+    (current, [requirementId, matchedAssetIds]) =>
+      updateSourceAssetRequirementMatches(current, requirementId, matchedAssetIds),
+    plan,
+  );
 }
 
 function resolveVariantTitle(args: ProduceSupportedCampaignOutputsArgs): string | undefined {

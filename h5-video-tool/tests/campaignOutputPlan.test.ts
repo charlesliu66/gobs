@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCampaignOutputPlan } from '../src/components/campaign/outputPlan.ts';
+import {
+  applySourceAssetSelectionOverrides,
+  buildAvailableSourceAssetsFromLibraryAssets,
+  buildCampaignOutputPlan,
+  inferSourceAssetTypesForLibraryAsset,
+  sourceAssetFilterType,
+  updateSourceAssetRequirementMatches,
+} from '../src/components/campaign/outputPlan.ts';
 import type {
   CampaignCreativeBrief,
   CampaignCreativeStrategy,
@@ -122,4 +129,75 @@ test('buildCampaignOutputPlan clears source-asset gaps when all requirements are
   assert.equal(plan.sourceAssetRequirements.every((asset) => asset.status === 'available'), true);
   assert.equal(plan.items.filter((item) => item.requiredSourceAssetIds.length > 0).every((item) => item.status === 'ready_to_produce'), true);
   assert.equal(plan.capabilityGaps.some((gap) => gap.gapType === 'source_asset_missing'), false);
+});
+
+test('buildAvailableSourceAssetsFromLibraryAssets maps Asset Library records into source asset candidates', () => {
+  const mapped = buildAvailableSourceAssetsFromLibraryAssets([
+    {
+      id: 'asset_logo',
+      filename: 'gold-and-glory-logo.png',
+      mimetype: 'image/png',
+      ai_category: 'UI素材',
+      ai_description: 'approved game logo',
+      tags: [{ key: 'purpose', value: 'logo' }],
+    },
+    {
+      id: 'asset_gameplay',
+      filename: 'battle-gameplay-recording.mp4',
+      mimetype: 'video/mp4',
+      ai_category: '视频片段',
+      ai_description: 'combat gameplay recording',
+      tags: [{ key: 'platform', value: 'TikTok' }],
+    },
+  ]);
+
+  assert.equal(mapped.some((asset) => asset.assetId === 'asset_logo' && asset.assetType === 'game_logo'), true);
+  assert.equal(mapped.some((asset) => asset.assetId === 'asset_gameplay' && asset.assetType === 'gameplay_recording'), true);
+  assert.equal(mapped.every((asset) => asset.matchStrength === 'candidate'), true);
+  assert.deepEqual(inferSourceAssetTypesForLibraryAsset({ id: 'asset_reward', filename: 'reward-chest-icon.png', mimetype: 'image/png' }), ['reward_icon']);
+  assert.equal(sourceAssetFilterType('gameplay_recording'), 'video');
+  assert.equal(sourceAssetFilterType('game_logo'), 'image');
+});
+
+test('Asset Library candidates require selection before source-blocked items are unblocked', () => {
+  const plan = buildCampaignOutputPlan({
+    mission: 'Produce the hero launch with candidate game assets',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    availableSourceAssets: buildAvailableSourceAssetsFromLibraryAssets([
+      { id: 'asset_gameplay', filename: 'battle-gameplay-recording.mp4', mimetype: 'video/mp4' },
+      { id: 'asset_logo', filename: 'gold-and-glory-logo.png', mimetype: 'image/png' },
+      { id: 'asset_character', filename: 'hero-character-art.png', mimetype: 'image/png' },
+    ]),
+  });
+
+  assert.equal(plan.sourceAssetRequirements.some((asset) => asset.status === 'needs_selection'), true);
+  assert.equal(plan.items.some((item) => item.requiredSourceAssetIds.length > 0 && item.status === 'blocked'), true);
+
+  const selectedPlan = applySourceAssetSelectionOverrides(plan, {
+    src_gameplay_recording: ['asset_gameplay'],
+    src_game_logo: ['asset_logo'],
+    src_character_art: ['asset_character'],
+  });
+
+  assert.equal(selectedPlan.sourceAssetRequirements.every((asset) => asset.status === 'available'), true);
+  assert.equal(selectedPlan.items.find((item) => item.type === 'short_video')?.status, 'ready_to_produce');
+  assert.equal(selectedPlan.items.find((item) => item.type === 'caption_set')?.status, 'ready_to_produce');
+  assert.equal(selectedPlan.capabilityGaps.some((gap) => gap.gapType === 'source_asset_missing'), false);
+});
+
+test('updateSourceAssetRequirementMatches only unblocks items affected by that requirement', () => {
+  const plan = buildCampaignOutputPlan({
+    mission: 'Produce a UA launch with missing source assets',
+    brief: createBrief({ mode: 'tiktok_ua' }),
+    strategy: createStrategy({ mode: 'tiktok_ua' }),
+  });
+
+  const withLogo = updateSourceAssetRequirementMatches(plan, 'src_game_logo', ['asset_logo']);
+
+  assert.equal(withLogo.sourceAssetRequirements.find((asset) => asset.id === 'src_game_logo')?.status, 'available');
+  assert.equal(withLogo.items.find((item) => item.type === 'caption_set')?.status, 'ready_to_produce');
+  assert.equal(withLogo.items.find((item) => item.type === 'tiktok_video')?.status, 'blocked');
+  assert.equal(withLogo.capabilityGaps.some((gap) => gap.id === 'gap_missing_game_logo'), false);
+  assert.equal(withLogo.capabilityGaps.some((gap) => gap.id === 'gap_missing_gameplay_recording'), true);
 });

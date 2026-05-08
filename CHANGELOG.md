@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.168 - 2026-05-09
+**Campaign Source Asset readiness**
+**Campaign / Output Workbench / Asset Library:**
+- Connected Campaign Creative output plans to existing Asset Library records so source-asset requirements can surface matching candidates instead of only showing generic missing-asset states.
+- Added row-level source asset actions in Output Workbench: matched asset references, choose-from-library flow, and upload/add routing for missing game source assets.
+- Added deterministic selection helpers so confirmed source assets only unblock the production items that require them while text/post outputs remain producible and distribution-safe.
+**Tests / Build:**
+- Added focused source-readiness and AssetPicker source tests, then reran Campaign Output, Workbench, production adapter, and distribution bridge regressions with Node's native test runner.
+
 ## v0.167 - 2026-05-08
 **Campaign Output one-click production**
 **Campaign / Output Workbench:**

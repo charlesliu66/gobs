@@ -27,6 +27,10 @@ test('CampaignOutputWorkbench exposes output, source asset, gap, and production 
   assert.match(source, /capabilityGaps/);
   assert.match(source, /confirmProduction/);
   assert.match(source, /producedOutputs/);
+  assert.match(source, /sourceAssetMatches/);
+  assert.match(source, /sourceAssetActions/);
+  assert.match(source, /onChooseSourceAsset/);
+  assert.match(source, /onUploadSourceAsset/);
   assert.match(source, /onClick=\{onConfirmProduction\}/);
   assert.doesNotMatch(source, /onCreatePlan/);
 });
@@ -40,6 +44,10 @@ test('campaign output workbench i18n exists in Chinese and English locale blocks
   assert.match(messages, /Source Asset Readiness/);
   assert.match(messages, /Produced Outputs/);
   assert.match(messages, /Confirm And Produce Supported Outputs/);
+  assert.match(messages, /Matched Assets/);
+  assert.match(messages, /Choose Asset/);
+  assert.match(messages, /Upload \/ Add Asset/);
+  assert.match(messages, /待确认候选/);
   assert.doesNotMatch(messages, /Save Output Plan/);
   assert.doesNotMatch(messages, /保存产出计划/);
 });

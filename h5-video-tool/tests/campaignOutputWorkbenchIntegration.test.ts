@@ -11,6 +11,8 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /CampaignOutputWorkbench/);
   assert.match(pageSource, /campaignOutputPlanDraft/);
   assert.match(pageSource, /buildCampaignOutputPlan/);
+  assert.match(pageSource, /buildAvailableSourceAssetsFromLibraryAssets/);
+  assert.match(pageSource, /applySourceAssetSelectionOverrides/);
   assert.match(pageSource, /produceSupportedCampaignOutputs/);
   assert.match(pageSource, /createCampaignOutputPlan/);
   assert.match(pageSource, /buildCampaignDistributionCreateInputFromProductionItem/);
@@ -27,6 +29,17 @@ test('CampaignCreative confirms production from the draft plan on the first prim
 test('CampaignCreative does not wire a separate save-only output plan action', () => {
   assert.doesNotMatch(pageSource, /handleCreateOutputPlan/);
   assert.doesNotMatch(pageSource, /onCreatePlan=\{/);
+});
+
+test('CampaignCreative wires source asset readiness through Asset Library and output plan patching', () => {
+  assert.match(pageSource, /listAssets\(\{ pageSize: '100' \}\)/);
+  assert.match(pageSource, /availableSourceAssets/);
+  assert.match(pageSource, /sourceAssetSelections/);
+  assert.match(pageSource, /updateSourceAssetRequirementMatches/);
+  assert.match(pageSource, /recordUsage\(assetId, `campaign-source-asset:\$\{requirement\.assetType\}`\)/);
+  assert.match(pageSource, /<AssetPicker/);
+  assert.match(pageSource, /onChooseSourceAsset=\{setAssetPickerRequirement\}/);
+  assert.match(pageSource, /sourceAssetFilterType\(assetPickerRequirement\.assetType\)/);
 });
 
 test('CampaignCreative keeps system plan and strategy controls secondary', () => {

@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-08 (v0.167)*
+*Last updated: 2026-05-09 (v0.168)*
 
-**Latest update - v0.167**
-- Streamlined Campaign Output Workbench so the primary action now saves the output plan and produces supported caption/post drafts in one click.
-- Kept existing output plans idempotent: repeated confirmation updates the saved plan without duplicating produced outputs.
-- Updated Chinese and English copy to remove the separate save-only mental model while keeping unsupported visual/video outputs honest and non-produced.
+**Latest update - v0.168**
+- Connected Campaign Creative output plans to Asset Library readiness so game source asset requirements can show matching candidates, selected assets, and missing-asset actions.
+- Added row-level choose/upload actions in the Campaign Output Workbench while keeping unsupported video/banner production honest.
+- Added deterministic source-readiness helpers so confirmed source assets only unblock the production items that require them; unrelated text/post outputs stay producible.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -2147,4 +2147,3 @@ ole="presentation"
 - 鍒濈増鍓緫宸ヤ綔鍙帮紙鏃堕棿杞淬€佹枃瀛楃増寮忋€丅GM銆丄gent锛?
 - 鍗虫ⅵ CLI 闆嗘垚銆並ling API 闆嗘垚
 - 鐢ㄩ噺鐩戞帶銆佸巻鍙茶褰曘€佺敾寤?
-

@@ -5,9 +5,11 @@ import {
   type CampaignMissionBriefResponse,
   type DerivedCampaignKnowledgeContext,
 } from '../api/campaignCreative.ts';
+import { listAssets, recordUsage, type LibraryAsset } from '../api/assetLibraryApi.ts';
 import { createCampaignDistributionPackage } from '../api/campaignDistribution.ts';
 import { createCampaignOutputPlan, updateCampaignOutputPlan } from '../api/campaignOutputPlan.ts';
 import { useLocale } from '../i18n/LocaleContext.tsx';
+import { AssetPicker } from '../components/AssetPicker';
 import { CampaignOutputWorkbench } from '../components/campaign/CampaignOutputWorkbench';
 import { DistributionPackagePanel } from '../components/campaign/DistributionPackagePanel';
 import { GeneratedBriefReview } from '../components/campaign/GeneratedBriefReview';
@@ -22,9 +24,14 @@ import {
   type CampaignDistributionPackage,
 } from '../components/campaign/distributionPackage.ts';
 import {
+  applySourceAssetSelectionOverrides,
+  buildAvailableSourceAssetsFromLibraryAssets,
   buildCampaignOutputPlan,
   produceSupportedCampaignOutputs,
+  sourceAssetFilterType,
+  updateSourceAssetRequirementMatches,
   type CampaignOutputPlan,
+  type GameSourceAssetRequirement,
 } from '../components/campaign/outputPlan.ts';
 import type {
   CampaignCreativeBrief,
@@ -74,6 +81,31 @@ function inferMissionMode(mission: string): CampaignCreativeMode {
   return /ua|user acquisition|cpi|install|download|conversion|转化|买量|下载|投放/i.test(mission)
     ? 'tiktok_ua'
     : 'tiktok_content';
+}
+
+function sourceAssetSearchQuery(requirement: GameSourceAssetRequirement): string {
+  switch (requirement.assetType) {
+    case 'gameplay_recording':
+      return 'gameplay recording combat';
+    case 'hero_skill_clip':
+      return 'hero skill gameplay';
+    case 'game_logo':
+      return 'logo app icon';
+    case 'character_art':
+      return 'character hero skin';
+    case 'key_art':
+      return 'key art poster cover';
+    case 'reward_icon':
+      return 'reward icon chest gem';
+    case 'store_badge':
+      return 'store badge download';
+    case 'event_banner':
+      return 'event banner';
+    case 'ui_screenshot':
+      return 'ui screenshot';
+    default:
+      return requirement.label;
+  }
 }
 
 function buildFormStateFromBrief(brief: CampaignCreativeBrief): CampaignCreativeFormState {
@@ -179,6 +211,9 @@ export function CampaignCreative() {
   const [outputPlanLoading, setOutputPlanLoading] = useState(false);
   const [outputPlanError, setOutputPlanError] = useState<string | null>(null);
   const [createdOutputPlan, setCreatedOutputPlan] = useState<CampaignOutputPlan | null>(null);
+  const [assetLibraryAssets, setAssetLibraryAssets] = useState<LibraryAsset[]>([]);
+  const [sourceAssetSelections, setSourceAssetSelections] = useState<Record<string, string[]>>({});
+  const [assetPickerRequirement, setAssetPickerRequirement] = useState<GameSourceAssetRequirement | null>(null);
   const feedbackRecords: FeedbackRecord[] = [];
 
   const strategyNotice = missionBriefResult?.warnings[0] ?? null;
@@ -204,6 +239,20 @@ export function CampaignCreative() {
       setModeTouched(true);
     }
   }, [modeTouched, routeState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listAssets({ pageSize: '100' })
+      .then((result) => {
+        if (!cancelled) setAssetLibraryAssets(result.assets);
+      })
+      .catch(() => {
+        if (!cancelled) setAssetLibraryAssets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const modeOptions = useMemo(
     () => [
@@ -258,17 +307,29 @@ export function CampaignCreative() {
 
   const activeDistributionPackageDraft = producedDistributionPackageDraft ?? distributionPackageDraft;
 
+  const availableSourceAssets = useMemo(
+    () => buildAvailableSourceAssetsFromLibraryAssets(assetLibraryAssets),
+    [assetLibraryAssets],
+  );
+
+  const assetNamesById = useMemo(
+    () => Object.fromEntries(assetLibraryAssets.map((asset) => [asset.id, asset.filename])),
+    [assetLibraryAssets],
+  );
+
   const campaignOutputPlanDraft = useMemo(() => {
     if (!brief) return null;
-    return buildCampaignOutputPlan({
+    const draft = buildCampaignOutputPlan({
       mission,
       brief,
       strategy,
       variantPack,
       selectedVariantId,
       requestedPlatforms: ['tiktok', 'facebook'],
+      availableSourceAssets,
     });
-  }, [brief, mission, selectedVariantId, strategy, variantPack]);
+    return applySourceAssetSelectionOverrides(draft, sourceAssetSelections);
+  }, [availableSourceAssets, brief, mission, selectedVariantId, sourceAssetSelections, strategy, variantPack]);
 
   const brainStatus = useMemo(() => {
     if (missionBriefLoading) {
@@ -494,6 +555,41 @@ export function CampaignCreative() {
     }
   };
 
+  const handleSelectSourceAssets = async (assets: LibraryAsset[]) => {
+    const requirement = assetPickerRequirement;
+    if (!requirement) return;
+    const matchedAssetIds = assets.map((asset) => asset.id);
+    setAssetPickerRequirement(null);
+    setSourceAssetSelections((current) => ({
+      ...current,
+      [requirement.id]: matchedAssetIds,
+    }));
+    void Promise.all(
+      matchedAssetIds.map((assetId) =>
+        recordUsage(assetId, `campaign-source-asset:${requirement.assetType}`).catch(() => undefined),
+      ),
+    );
+
+    if (!createdOutputPlan) return;
+    const nextPlan = updateSourceAssetRequirementMatches(createdOutputPlan, requirement.id, matchedAssetIds);
+    setCreatedOutputPlan(nextPlan);
+    setOutputPlanLoading(true);
+    setOutputPlanError(null);
+    try {
+      const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
+        status: nextPlan.status,
+        items: nextPlan.items,
+        sourceAssetRequirements: nextPlan.sourceAssetRequirements,
+        capabilityGaps: nextPlan.capabilityGaps,
+      });
+      setCreatedOutputPlan(confirmedPlan);
+    } catch (error) {
+      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
+    } finally {
+      setOutputPlanLoading(false);
+    }
+  };
+
   const handleConfirmOutputProduction = async () => {
     const planToProduce = createdOutputPlan ?? campaignOutputPlanDraft;
     if (!planToProduce || !brief || outputPlanLoading) return;
@@ -623,6 +719,17 @@ export function CampaignCreative() {
             onOpenAssetLibrary={() => navigate('/asset-library')}
             onOpenQuickFilm={() => navigate('/quickfilm')}
             onCreateDistributionPackage={handleCreateDistributionPackage}
+            onChooseSourceAsset={setAssetPickerRequirement}
+            onUploadSourceAsset={(requirement) =>
+              navigate('/asset-library', {
+                state: {
+                  fromCampaignCreative: true,
+                  sourceAssetRequirementId: requirement.id,
+                  sourceAssetType: requirement.assetType,
+                },
+              })
+            }
+            assetNamesById={assetNamesById}
             copy={{
               emptyTitle: t('campaignCreative.outputWorkbench.emptyTitle'),
               emptyBody: t('campaignCreative.outputWorkbench.emptyBody'),
@@ -648,6 +755,11 @@ export function CampaignCreative() {
               producedOutputs: t('campaignCreative.outputWorkbench.producedOutputs'),
               error: t('campaignCreative.outputWorkbench.error'),
               gapWorkaround: t('campaignCreative.outputWorkbench.gapWorkaround'),
+              matchedAssets: t('campaignCreative.outputWorkbench.matchedAssets'),
+              chooseAsset: t('campaignCreative.outputWorkbench.chooseAsset'),
+              uploadAsset: t('campaignCreative.outputWorkbench.uploadAsset'),
+              needsSelection: t('campaignCreative.outputWorkbench.needsSelection'),
+              missingAsset: t('campaignCreative.outputWorkbench.missingAsset'),
             }}
           />
 
@@ -846,6 +958,22 @@ export function CampaignCreative() {
           </details>
         </div>
       </section>
+
+      {assetPickerRequirement ? (
+        <AssetPicker
+          key={assetPickerRequirement.id}
+          multi
+          filterType={sourceAssetFilterType(assetPickerRequirement.assetType)}
+          initialQuery={sourceAssetSearchQuery(assetPickerRequirement)}
+          initialSelectedIds={assetPickerRequirement.matchedAssetIds}
+          title={t('campaignCreative.outputWorkbench.chooseAsset')}
+          subtitle={assetPickerRequirement.label}
+          searchPlaceholder={t('campaignCreative.outputWorkbench.assetSearchPlaceholder')}
+          confirmLabel={t('campaignCreative.outputWorkbench.confirmAssetSelection')}
+          onSelect={handleSelectSourceAssets}
+          onClose={() => setAssetPickerRequirement(null)}
+        />
+      ) : null}
     </div>
   );
 }

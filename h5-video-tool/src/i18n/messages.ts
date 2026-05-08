@@ -558,6 +558,13 @@ const ZH_CN: MessageTree = {
       producedOutputs: '已产出内容',
       error: '保存或生成失败',
       gapWorkaround: '当前建议',
+      matchedAssets: '已匹配素材',
+      chooseAsset: '选择素材',
+      uploadAsset: '上传/补充素材',
+      needsSelection: '待确认候选',
+      missingAsset: '缺素材',
+      assetSearchPlaceholder: '搜索素材库候选...',
+      confirmAssetSelection: '确认素材选择',
     },
     distributionPackage: {
       emptyTitle: 'Distribution Package 会出现在这里',
@@ -2130,6 +2137,13 @@ const EN: MessageTree = {
       producedOutputs: 'Produced Outputs',
       error: 'Failed to save or produce outputs',
       gapWorkaround: 'Current workaround',
+      matchedAssets: 'Matched Assets',
+      chooseAsset: 'Choose Asset',
+      uploadAsset: 'Upload / Add Asset',
+      needsSelection: 'Needs Selection',
+      missingAsset: 'Missing Asset',
+      assetSearchPlaceholder: 'Search Asset Library candidates...',
+      confirmAssetSelection: 'Confirm Asset Selection',
     },
     distributionPackage: {
       emptyTitle: 'The distribution package will appear here',
@@ -3145,7 +3159,6 @@ function lookup(tree: MessageTree, path: string): string | undefined {
 export function getMessage(locale: UiLocale, path: string): string {
   return lookup(MESSAGES[locale], path) ?? lookup(MESSAGES['zh-CN'], path) ?? path;
 }
-
 
 
 

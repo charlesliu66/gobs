@@ -29,6 +29,11 @@ type Copy = {
   producedOutputs: string;
   error: string;
   gapWorkaround: string;
+  matchedAssets: string;
+  chooseAsset: string;
+  uploadAsset: string;
+  needsSelection: string;
+  missingAsset: string;
 };
 
 interface CampaignOutputWorkbenchProps {
@@ -41,6 +46,9 @@ interface CampaignOutputWorkbenchProps {
   onOpenAssetLibrary: () => void;
   onOpenQuickFilm: () => void;
   onCreateDistributionPackage: () => void;
+  onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
+  onUploadSourceAsset: (asset: GameSourceAssetRequirement) => void;
+  assetNamesById?: Record<string, string>;
 }
 
 export function CampaignOutputWorkbench({
@@ -53,6 +61,9 @@ export function CampaignOutputWorkbench({
   onOpenAssetLibrary,
   onOpenQuickFilm,
   onCreateDistributionPackage,
+  onChooseSourceAsset,
+  onUploadSourceAsset,
+  assetNamesById = {},
 }: CampaignOutputWorkbenchProps) {
   const activePlan = createdPlan ?? plan;
   if (!activePlan) {
@@ -99,7 +110,14 @@ export function CampaignOutputWorkbench({
         <SectionTitle title={copy.sourceAssetReadiness} />
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {activePlan.sourceAssetRequirements.map((asset) => (
-            <SourceAssetCard key={asset.id} asset={asset} />
+            <SourceAssetCard
+              key={asset.id}
+              asset={asset}
+              copy={copy}
+              assetNamesById={assetNamesById}
+              onChooseSourceAsset={onChooseSourceAsset}
+              onUploadSourceAsset={onUploadSourceAsset}
+            />
           ))}
         </div>
       </div>
@@ -226,16 +244,51 @@ function ProductionItemCard({
   );
 }
 
-function SourceAssetCard({ asset }: { asset: GameSourceAssetRequirement }) {
+function SourceAssetCard({
+  asset,
+  copy,
+  assetNamesById,
+  onChooseSourceAsset,
+  onUploadSourceAsset,
+}: {
+  asset: GameSourceAssetRequirement;
+  copy: Copy;
+  assetNamesById: Record<string, string>;
+  onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
+  onUploadSourceAsset: (asset: GameSourceAssetRequirement) => void;
+}) {
+  const matchedNames = asset.matchedAssetIds.map((id) => assetNamesById[id] ?? id);
+  const statusLabel =
+    asset.status === 'needs_selection'
+      ? copy.needsSelection
+      : asset.status === 'missing' || asset.status === 'needs_upload'
+        ? copy.missingAsset
+        : asset.status;
   return (
-    <div className="rounded-2xl border border-[var(--color-border)]/45 bg-[var(--color-surface)] p-4">
+    <div className="rounded-2xl border border-[var(--color-border)]/45 bg-[var(--color-surface)] p-4" data-section="sourceAssetCard">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-semibold text-[var(--color-text)]">{asset.label}</div>
         <span className="rounded-full border border-[var(--color-border)]/50 px-3 py-1 text-xs uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
-          {asset.status}
+          {statusLabel}
         </span>
       </div>
       <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{asset.guidance}</p>
+      <div className="mt-3 rounded-xl border border-[var(--color-border)]/35 bg-black/10 px-3 py-2" data-section="sourceAssetMatches">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-subtle)]">
+          {copy.matchedAssets}
+        </div>
+        <div className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">
+          {matchedNames.length > 0 ? matchedNames.join(', ') : '-'}
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2" data-section="sourceAssetActions">
+        <button type="button" className="btn-secondary" onClick={() => onChooseSourceAsset(asset)}>
+          {copy.chooseAsset}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => onUploadSourceAsset(asset)}>
+          {copy.uploadAsset}
+        </button>
+      </div>
     </div>
   );
 }
