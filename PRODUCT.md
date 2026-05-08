@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-07 (v0.162)*
+*Last updated: 2026-05-08 (v0.163)*
 
-**Latest update - v0.162**
-- Added a repo-local `daily-review` skill so daily work recaps can be generated from git history, PRODUCT changelog entries, workflow run docs, and prior daily reports through a consistent agent workflow.
-- Archived the 2026-05-06 daily report under `docs/daily-reports/`, capturing shipped work, bug-fix ratio, repeated-issue patterns, verification discipline, and next-day TODOs for the GOBS/QAS mainline.
-- Kept this release documentation-only: no app runtime behavior, Campaign Creative flow, Distribution handoff contract, or publishing adapter logic changed.
+**Latest update - v0.163**
+- Defined the next Campaign Mission Control direction as a `Campaign Output Workbench`: after brief confirmation, the default user surface should show what GOBS will produce, which game source assets are required, what can be produced now, and which blocked items become capability gaps.
+- Added a C-ready design that keeps the current B-stage workbench explicit and user-confirmed while preparing for later autopilot campaign runs.
+- Added an implementation plan covering output plan types, backend persistence, frontend workbench UI, distribution-package bridging, source asset readiness, tests, run docs, and guarded release sync.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

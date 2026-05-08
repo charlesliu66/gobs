@@ -1,5 +1,13 @@
 # GOBS / QAS Task Index
 
+## 2026-05-08 Current Mainline Addendum
+
+- `Campaign Output Workbench + Game Source Assets` is the next Campaign Mission Control direction after the completed Distribution Handoff MVP.
+- The default post-brief user surface should show deliverables, required game source assets, GOBS production capability, and capability gaps instead of internal System Plan reasoning.
+- Source docs:
+  - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
+  - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
+
 > 最后更新：2026-05-07
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
 

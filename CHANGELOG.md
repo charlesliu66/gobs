@@ -2,6 +2,13 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.163 - 2026-05-08
+**Campaign Output Workbench planning**
+**Docs / Product Planning:**
+- Added `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`, defining the next Campaign Mission Control step as an output workbench focused on deliverables, game source asset readiness, GOBS production capability, and capability gaps.
+- Added `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`, breaking the approved direction into output-plan modeling, backend persistence, frontend workbench UI, distribution-package bridging, tests, run docs, and release sync.
+- Updated planning indexes so the current mainline points from the completed Distribution Handoff MVP toward B-stage output workbench execution with a C-stage autopilot path.
+
 ## v0.162 - 2026-05-07
 **Daily review workflow and report archive**
 **Docs / Workflow:**
