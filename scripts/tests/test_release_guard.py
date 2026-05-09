@@ -1,5 +1,5 @@
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from scripts.release_guard import (
     build_verified_release_payload,
@@ -26,7 +26,7 @@ class ReleaseGuardTests(unittest.TestCase):
             commit_sha='e3fa4e9b6c8d1234567890abcdef1234567890ab',
             commit_short='e3fa4e9',
             verified_by='wei.liu',
-            now=datetime(2026, 4, 23, 12, 0, 1, 2000, tzinfo=UTC),
+            now=datetime(2026, 4, 23, 12, 0, 1, 2000, tzinfo=timezone.utc),
         )
 
         self.assertEqual(payload['target'], 'staging')

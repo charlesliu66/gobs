@@ -14,6 +14,7 @@
 - Campaign to Studio production bridge is active at `docs/workflow/runs/2026-05-09-campaign-studio-production-bridge/`, connecting eligible Campaign Output video items to Advanced Studio and adding unified Asset Library reference slots.
 - Current optimization recommendation is recorded at `docs/plans/2026-05-09-gobs-current-state-optimization-recommendation.md`: prioritize `方案 C + 方案 A` (experience loop + safe reduction), and defer large state-management/component rewrites.
 - Campaign Production Loop closeout is active at `docs/workflow/runs/2026-05-09-campaign-production-loop-closeout/`, preserving Campaign -> Studio handoff context through video generation and syncing linked packages back into publishable Distribution drafts.
+- Release tooling hardening is active at `docs/workflow/runs/2026-05-09-release-tooling-hardening/`, fixing Python 3.10 release helper compatibility and making SSH/SFTP deploy scripts finish deterministically.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -65,7 +66,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-09-campaign-production-loop-closeout` | Campaign -> Studio -> Distribution closeout: stable handoff ids, Studio result package sync, and package-aware Result/Distribution CTAs | Verifier GO locally; eval PASS after independent Node release runtime; staging deployment and smoke validation next |
+| `2026-05-09-release-tooling-hardening` | Release tooling hardening: Python 3.10 UTC compatibility plus bounded SSH/SFTP deploy script cleanup after successful uploads | Verifier GO locally; eval PASS; staging deployment with hardened scripts next |
+| `2026-05-09-campaign-production-loop-closeout` | Campaign -> Studio -> Distribution closeout: stable handoff ids, Studio result package sync, and package-aware Result/Distribution CTAs | Pushed to main and deployed to staging/prod @ `2fedae1`; prod deployment state restored idle |
 | `2026-05-09-distribution-publish-history-filters` | Distribution Center follow-up: frontend-only publish history status/platform/search filters, date grouping, and reusable history component wiring | Verifier GO locally; commit/push and staging release sync next |
 | `2026-05-09-campaign-studio-production-bridge` | Campaign Output -> Advanced Studio bridge: video item handoff, prompt/template/source-asset seeding, unified Asset Library Studio slots, and prompt-only Studio quality presets | Pushed to main; staging/prod smoke passed; prod deployment state restored idle |
 | `2026-05-09-distribution-center-ops-mvp` | Distribution Center operator MVP: read-only Campaign Package context, direct caption hints, account group quick selection, platform copy cards, and richer pending package readiness cards | Committed/pushed to main and included in the later staging/prod release stream |

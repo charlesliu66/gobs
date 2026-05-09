@@ -1,5 +1,5 @@
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from scripts.set_deployment_state import (
     build_deployment_state_payload,
@@ -22,7 +22,7 @@ class SetDeploymentStateTests(unittest.TestCase):
         payload = build_deployment_state_payload(
             'deploying',
             updated_by='wei.liu',
-            now=datetime(2026, 4, 23, 6, 7, 8, 9000, tzinfo=UTC),
+            now=datetime(2026, 4, 23, 6, 7, 8, 9000, tzinfo=timezone.utc),
         )
 
         self.assertTrue(payload['active'])
@@ -38,7 +38,7 @@ class SetDeploymentStateTests(unittest.TestCase):
             updated_by='wei.liu',
             message_zh='',
             message_en='',
-            now=datetime(2026, 4, 23, 8, 30, 0, tzinfo=UTC),
+            now=datetime(2026, 4, 23, 8, 30, 0, tzinfo=timezone.utc),
         )
 
         self.assertFalse(payload['active'])

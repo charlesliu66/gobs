@@ -4,6 +4,8 @@ import datetime as dt
 from pathlib import PurePosixPath
 
 
+UTC = dt.timezone.utc
+
 RELEASE_BLOCKING_PREFIXES = (
     'h5-video-tool/',
     'h5-video-tool-api/',
@@ -26,7 +28,7 @@ IGNORED_RELEASE_PATH_PREFIXES = (
 
 
 def _to_iso8601_z(now: dt.datetime) -> str:
-    return now.astimezone(dt.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+    return now.astimezone(UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
 
 def _sha_matches(left: str, right: str) -> bool:
@@ -50,7 +52,7 @@ def build_verified_release_payload(
     verified_by: str,
     now: dt.datetime | None = None,
 ) -> dict[str, str]:
-    resolved_now = now or dt.datetime.now(dt.UTC)
+    resolved_now = now or dt.datetime.now(UTC)
     return {
         'target': target.strip().lower(),
         'commitSha': commit_sha.strip(),

@@ -4,12 +4,83 @@ from pathlib import Path
 
 from scripts.deploy_api import (
     DeployRuntimeError,
+    close_quietly,
+    configure_sftp_timeout,
     ensure_pm2_online,
     ensure_runtime_scripts_exist,
     get_remote_runtime_scripts_dir,
     get_runtime_script_paths,
     remote_parent,
+    run_remote_command,
 )
+
+
+class FakeChannel:
+    def __init__(self, *, stdout=None, stderr=None, exit_status=0, ready=True):
+        self.stdout = list(stdout or [])
+        self.stderr = list(stderr or [])
+        self.exit_status = exit_status
+        self.ready = ready
+        self.closed = False
+        self.timeout = None
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+
+    def recv_ready(self):
+        return bool(self.stdout)
+
+    def recv(self, _size):
+        return self.stdout.pop(0)
+
+    def recv_stderr_ready(self):
+        return bool(self.stderr)
+
+    def recv_stderr(self, _size):
+        return self.stderr.pop(0)
+
+    def exit_status_ready(self):
+        return self.ready
+
+    def recv_exit_status(self):
+        return self.exit_status
+
+    def close(self):
+        self.closed = True
+
+
+class FakeChannelFile:
+    def __init__(self, channel):
+        self.channel = channel
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class FakeClient:
+    def __init__(self, channel):
+        self.channel = channel
+        self.command = ''
+        self.timeout = None
+
+    def exec_command(self, command, timeout=None):
+        self.command = command
+        self.timeout = timeout
+        return FakeChannelFile(self.channel), FakeChannelFile(self.channel), FakeChannelFile(self.channel)
+
+
+class FakeSftp:
+    def __init__(self, channel):
+        self.channel = channel
+
+    def get_channel(self):
+        return self.channel
+
+
+class BrokenCloser:
+    def close(self):
+        raise RuntimeError('close failed')
 
 
 class DeployApiTests(unittest.TestCase):
@@ -79,6 +150,45 @@ class DeployApiTests(unittest.TestCase):
             ensure_pm2_online([], 'qas-api-prod')
 
         self.assertIn('qas-api-prod', str(ctx.exception))
+
+    def test_configure_sftp_timeout_sets_underlying_channel_timeout(self):
+        channel = FakeChannel()
+        configure_sftp_timeout(FakeSftp(channel), timeout_seconds=45)
+
+        self.assertEqual(channel.timeout, 45)
+
+    def test_close_quietly_swallows_close_errors(self):
+        close_quietly(BrokenCloser())
+
+    def test_run_remote_command_returns_stdout_when_command_succeeds(self):
+        channel = FakeChannel(stdout=[b'hello\n'])
+        client = FakeClient(channel)
+
+        output = run_remote_command(client, 'echo hello', timeout_seconds=3, poll_interval_seconds=0)
+
+        self.assertEqual(output, 'hello')
+        self.assertEqual(client.command, 'echo hello')
+        self.assertEqual(client.timeout, 3)
+
+    def test_run_remote_command_raises_with_stderr_when_command_fails(self):
+        channel = FakeChannel(stderr=[b'pm2 failed'], exit_status=1)
+        client = FakeClient(channel)
+
+        with self.assertRaises(DeployRuntimeError) as ctx:
+            run_remote_command(client, 'pm2 restart qas-api-prod', timeout_seconds=3, poll_interval_seconds=0)
+
+        self.assertIn('pm2 failed', str(ctx.exception))
+        self.assertIn('pm2 restart qas-api-prod', str(ctx.exception))
+
+    def test_run_remote_command_closes_channel_and_raises_when_command_times_out(self):
+        channel = FakeChannel(ready=False)
+        client = FakeClient(channel)
+
+        with self.assertRaises(DeployRuntimeError) as ctx:
+            run_remote_command(client, 'pm2 jlist', timeout_seconds=0.001, poll_interval_seconds=0)
+
+        self.assertTrue(channel.closed)
+        self.assertIn('远端命令超时', str(ctx.exception))
 
 
 if __name__ == '__main__':

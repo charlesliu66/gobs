@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.173)*
+*Last updated: 2026-05-09 (v0.174)*
 
-**Latest update - v0.173**
-- Campaign Output -> Advanced Studio handoff now carries stable output-plan, production-item, source-requirement, and optional distribution-package identifiers.
-- Studio generation can patch a linked Campaign Distribution Package into `publishable` state through existing package `assets` / `assetReadiness` fields when a real video result is produced.
-- Result and async Dreamina result links preserve `/distribute?package=<id>` so operators can continue publishing without rebuilding campaign context.
+**Latest update - v0.174**
+- Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
+- `deploy_api.py` and `deploy_frontend.py` now use bounded SSH/SFTP timeouts, visible upload progress, safer stderr/exit-code handling, and deterministic resource cleanup.
+- Deployment helper tests cover Python 3.10 timestamp compatibility, remote command timeout/failure handling, frontend upload cleanup, and existing release guard behavior.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

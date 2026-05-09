@@ -16,6 +16,8 @@ except ModuleNotFoundError:
     from deploy_config import DeployConfigError, build_target_config
 
 
+UTC = dt.timezone.utc
+
 VALID_PHASES = ('idle', 'preparing', 'deploying', 'verifying')
 DEFAULT_LEVEL_BY_PHASE = {
     'idle': 'info',
@@ -31,7 +33,7 @@ def get_remote_deployment_state_path(api_dir: str) -> str:
 
 
 def _to_iso8601_z(now: dt.datetime) -> str:
-    return now.astimezone(dt.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+    return now.astimezone(UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
 
 def build_deployment_state_payload(
@@ -47,7 +49,7 @@ def build_deployment_state_payload(
     if normalized_phase not in VALID_PHASES:
         raise ValueError(f'Unsupported deployment phase: {phase}')
 
-    resolved_now = now or dt.datetime.now(dt.UTC)
+    resolved_now = now or dt.datetime.now(UTC)
     resolved_allow_writes = normalized_phase != 'deploying' if allow_writes is None else allow_writes
     normalized_updated_by = updated_by.strip() or 'operator'
 

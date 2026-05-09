@@ -29,6 +29,7 @@ except ModuleNotFoundError:
 CURRENT_API_DIR = '/home/ubuntu/qas-h5/api'
 CURRENT_FRONTEND_DIR = '/home/ubuntu/qas-h5/frontend'
 CURRENT_NGINX_SITE = '/etc/nginx/sites-enabled/qas-h5'
+UTC = dt.timezone.utc
 LEGACY_DATA_PATHS = [
     'output',
     'editor-projects',
@@ -147,7 +148,7 @@ def main() -> None:
         staging_base = _remote_parent(staging.api_dir)
         prod_env_path = f'{prod.api_dir}/.env'
         staging_env_path = f'{staging.api_dir}/.env'
-        backup_stamp = dt.datetime.now(dt.UTC).strftime('%Y%m%d%H%M%S')
+        backup_stamp = dt.datetime.now(UTC).strftime('%Y%m%d%H%M%S')
 
         for remote_dir in [
             prod.api_dir,
