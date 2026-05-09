@@ -42,4 +42,4 @@
 ## 7) Final Verification Verdict
 - Gate 3 status: GO.
 - Gate 4 blocking defects (P0/P1): 0.
-- Release recommendation: GO for commit/push. Staging deploy was attempted after push but blocked by missing local deploy credential config (`SERVER_PASSWORD` / `.env`); prod remains gated by the normal explicit approval rule.
+- Release recommendation: GO for commit/push. Staging deploy was attempted after push and after local deploy credentials were configured, but `deploy_all.py --target staging --updated-by codex` is blocked by network/server reachability: SSH/SFTP connection to `43.134.186.196` timed out, and independent socket checks to ports `22`, `80`, and `8080` also timed out. Prod remains gated by the normal explicit approval rule.
