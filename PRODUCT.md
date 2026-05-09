@@ -3,13 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.176)*
+*Last updated: 2026-05-09 (v0.177)*
 
-**Latest update - v0.176**
-- Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
-- `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs, stream them through SSH to remote temporary files, and extract them with remote `tar`, bypassing the SFTP upload path that could hang after transfer completion while keeping bounded SSH/socket timeouts, progress logs, and deterministic cleanup.
-- `deploy_all.py` now promotes prod frontend files server-side from the already verified staging frontend directory, avoiding a second slow local-to-cloud frontend upload during prod promotion.
-- This release sits on top of the v0.175 Distribution Center step refinement, preserving the new four-step `/distribute` operator workspace while hardening the deploy path used to publish it.
+**Latest update - v0.177**
+- `/distribute` now includes a compact four-step readiness overview for asset, copy, accounts, and publish readiness.
+- Each readiness item jumps to a stable step anchor, helping operators fix the next incomplete section without changing the scroll-based workflow.
+- Readiness is derived from existing preflight/publish state, so Campaign Package intake, caption generation, account selection, GeeLark publish submission, latest batch tracking, and publish history behavior remain unchanged.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.177 - 2026-05-09
+**Distribution Center readiness navigation**
+**Distribution / Operator Flow:**
+- Added a compact four-step readiness overview above `/distribute`'s operator sections so marketers can see asset, copy, account, and publish readiness before scrolling.
+- Added stable jump anchors for the asset, video/copy, target accounts, and preflight/publish sections without converting the page into a forced wizard.
+- Kept readiness derived from existing preflight and publish state, preserving Campaign Package intake, caption generation, account selection, GeeLark publish submission, latest batch tracking, and publish history behavior.
+**Tests / Build:**
+- Added focused nav render/source coverage, reran targeted distribution tests, frontend production build, backend production build, standard eval, and diff hygiene checks.
+
 ## v0.176 - 2026-05-09
 **Release tooling SSH stream follow-up**
 **Deploy / Release Guard:**

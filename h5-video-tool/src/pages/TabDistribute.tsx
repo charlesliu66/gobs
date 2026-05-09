@@ -50,6 +50,7 @@ import { DistributeStepAsset } from '../components/distribute/DistributeStepAsse
 import { DistributeStepAccounts } from '../components/distribute/DistributeStepAccounts.tsx';
 import { DistributeStepCopy } from '../components/distribute/DistributeStepCopy.tsx';
 import { DistributeStepPublish } from '../components/distribute/DistributeStepPublish.tsx';
+import { DistributeStepReadinessNav, type DistributeStepReadinessItem } from '../components/distribute/DistributeStepReadinessNav.tsx';
 import { DistributePublishHistory } from '../components/distribute/DistributePublishHistory.tsx';
 import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
 import {
@@ -78,6 +79,12 @@ const CAPTION_LANGS: CaptionLanguage[] = ['DEFAULT', 'EN', 'CN', 'TH', 'ID'];
 const BATCH_POLL_MS = 8000;
 const DEFAULT_DRAFT_KEY = 'default';
 const EMPTY_DRAFT: CaptionDraft = { caption: '', hashtags: '' };
+const DISTRIBUTE_STEP_SECTION_IDS = {
+  asset: 'distribute-step-asset',
+  copy: 'distribute-step-copy',
+  accounts: 'distribute-step-accounts',
+  publish: 'distribute-step-publish',
+} as const;
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
@@ -631,6 +638,46 @@ export function TabDistribute() {
         : t('distribute.preflightOptional'),
     },
   ];
+  const publishDisabled = pushing || selectedIds.size === 0 || !selectedAsset;
+  const publishReadinessStatus = pushError ? 'attention' : publishDisabled ? 'blocked' : 'ready';
+  const readinessItems: DistributeStepReadinessItem[] = [
+    {
+      id: 'asset',
+      href: `#${DISTRIBUTE_STEP_SECTION_IDS.asset}`,
+      step: '01',
+      title: t('distribute.assetTitle'),
+      detail: preflightItems[0]?.value ?? t('common.none'),
+      status: preflightItems[0]?.ready ? 'ready' : 'blocked',
+    },
+    {
+      id: 'copy',
+      href: `#${DISTRIBUTE_STEP_SECTION_IDS.copy}`,
+      step: '02',
+      title: t('distribute.videoAndCaption'),
+      detail: hasAnyCopy ? t('distribute.preflightReady') : t('distribute.stepReadinessCopyAttention'),
+      status: hasAnyCopy ? 'ready' : 'attention',
+    },
+    {
+      id: 'accounts',
+      href: `#${DISTRIBUTE_STEP_SECTION_IDS.accounts}`,
+      step: '03',
+      title: t('distribute.targetAccounts'),
+      detail: preflightItems[1]?.value ?? t('distribute.selectedCountValue').replace('{count}', String(selectedIds.size)),
+      status: preflightItems[1]?.ready ? 'ready' : 'blocked',
+    },
+    {
+      id: 'publish',
+      href: `#${DISTRIBUTE_STEP_SECTION_IDS.publish}`,
+      step: '04',
+      title: t('distribute.stepReadinessPublish'),
+      detail: pushError
+        ? t('distribute.stepReadinessPublishError')
+        : publishDisabled
+          ? t('distribute.stepReadinessPublishBlocked')
+          : t('distribute.stepReadinessPublishReady'),
+      status: publishReadinessStatus,
+    },
+  ];
 
   return (
     <div className="max-w-6xl w-full space-y-6">
@@ -683,212 +730,231 @@ export function TabDistribute() {
         }}
       />
 
-      <DistributeStepAsset
-        assets={assetOptions}
-        selectedAsset={selectedAsset}
-        selectedAssetId={selectedAssetId}
-        loading={assetLoading}
-        error={assetError}
-        emptyAction={(
-          <Link
-            to="/studio"
-            className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
-          >
-            {t('distribute.goToStudio')}
-          </Link>
-        )}
+      <DistributeStepReadinessNav
+        items={readinessItems}
         labels={{
-          step: '01',
-          title: t('distribute.assetTitle'),
-          subtitle: t('distribute.assetSubtitle'),
-          loading: t('distribute.assetLoading'),
-          noVideo: t('distribute.noVideo'),
-          selected: t('common.selected'),
-          previewTitle: t('distribute.assetPreviewTitle'),
-          previewUnavailable: t('distribute.assetPreviewUnavailable'),
-          promptSeed: t('distribute.assetPromptSeed'),
+          title: t('distribute.stepReadinessTitle'),
+          completedSummary: t('distribute.stepReadinessCompleted'),
+          ready: t('distribute.stepReadinessReady'),
+          attention: t('distribute.stepReadinessAttention'),
+          blocked: t('distribute.stepReadinessBlocked'),
         }}
-        getAssetSourceLabel={(source) => assetSourceLabel(source, t)}
-        onSelectAsset={setSelectedAssetId}
       />
 
-      <DistributeStepCopy<CaptionLanguage>
-        hasSelectedAsset={Boolean(selectedAsset)}
-        captionHintValue={captionHint}
-        captionLanguages={CAPTION_LANGS}
-        activeCaptionLanguage={captionLang}
-        captionGenLoading={captionGenLoading}
-        captionGenError={captionGenError}
-        hasAnyCopy={hasAnyCopy}
-        canGenerateCaption={Boolean(buildCaptionGenerationSeed(resolvePromptSeed(selectedAsset, prompt, taskId), captionHint.trim()) || hasAnyCopy)}
-        pendingPackageDraft={pendingPackageDraft}
-        draftKeys={copyCardKeys}
-        defaultDraftKey={DEFAULT_DRAFT_KEY}
-        drafts={platformDrafts}
-        activeDraftKey={activeDraftKey}
-        accountCounts={copyCardAccountCounts}
-        noVideoAction={(
-          <Link
-            to="/studio"
-            className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
-          >
-            {t('distribute.goToStudio')}
-          </Link>
-        )}
-        statusIndicator={(
-          <RunningStatus
-            active={captionGenLoading}
-            label={t('distribute.generatingCaptionStatus')}
-            stallAfterSec={15}
-            scene="on-tour"
-          />
-        )}
-        labels={{
-          step: '02',
-          title: t('distribute.videoAndCaption'),
-          noVideo: t('distribute.noVideo'),
-          captionHintInput: t('distribute.captionHintInput'),
-          captionHintPlaceholder: t('distribute.captionHintPlaceholder'),
-          captionByPlatform: t('distribute.captionByPlatform'),
-          captionHint: t('distribute.captionHint'),
-          generatingCaption: t('distribute.generatingCaption'),
-          polishCaption: t('distribute.polishCaption'),
-          generateCaption: t('distribute.generateCaption'),
-          captionLanguageLabel,
-          campaignContext: {
-            title: t('distribute.packageContextTitle'),
-            subtitle: t('distribute.packageContextSubtitle'),
-            objective: t('distribute.campaignObjective'),
-            audience: t('distribute.targetAudience'),
-            cta: t('distribute.callToAction'),
-            market: t('distribute.market'),
-            tone: t('distribute.brandTone'),
-            sellingPoints: t('distribute.sellingPoints'),
-            avoidTerms: t('distribute.avoidTerms'),
-            empty: t('common.none'),
-          },
-          platformCopy: {
-            defaultDraft: t('distribute.defaultDraftLabel'),
-            activeDraft: t('distribute.activeDraft'),
-            accountCount: t('distribute.copyCardAccountCount'),
-            noAccounts: t('distribute.copyCardNoAccounts'),
-            caption: t('distribute.caption'),
-            captionPlaceholder: t('distribute.captionPlaceholder'),
-            hashtags: t('distribute.hashtags'),
-            hashtagsPlaceholder: t('distribute.hashtagsPlaceholder'),
-            inheritedFallback: t('distribute.copyCardInheritedFallback'),
-          },
-        }}
-        onCaptionHintChange={setCaptionHint}
-        onLanguageChange={(lang) => void handleLanguageChange(lang)}
-        onGenerateCaption={() => void handleGenerateCaption()}
-        onSetActiveDraft={setActiveDraftKey}
-        onUpdateDraft={updateDraft}
-      />
+      <div id={DISTRIBUTE_STEP_SECTION_IDS.asset} className="scroll-mt-6">
+        <DistributeStepAsset
+          assets={assetOptions}
+          selectedAsset={selectedAsset}
+          selectedAssetId={selectedAssetId}
+          loading={assetLoading}
+          error={assetError}
+          emptyAction={(
+            <Link
+              to="/studio"
+              className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+            >
+              {t('distribute.goToStudio')}
+            </Link>
+          )}
+          labels={{
+            step: '01',
+            title: t('distribute.assetTitle'),
+            subtitle: t('distribute.assetSubtitle'),
+            loading: t('distribute.assetLoading'),
+            noVideo: t('distribute.noVideo'),
+            selected: t('common.selected'),
+            previewTitle: t('distribute.assetPreviewTitle'),
+            previewUnavailable: t('distribute.assetPreviewUnavailable'),
+            promptSeed: t('distribute.assetPromptSeed'),
+          }}
+          getAssetSourceLabel={(source) => assetSourceLabel(source, t)}
+          onSelectAsset={setSelectedAssetId}
+        />
+      </div>
 
-      <DistributeStepAccounts
-        accounts={accounts}
-        accountsForPermission={accountsForPermission}
-        filteredAccounts={filteredAccounts}
-        selectedIds={selectedIds}
-        loading={loading}
-        error={error}
-        regions={regions}
-        platforms={platforms}
-        filterRegion={filterRegion}
-        filterPlatform={filterPlatform}
-        labels={{
-          step: '03',
-          title: t('distribute.targetAccounts'),
-          loadingAccounts: t('distribute.loadingAccounts'),
-          noAccountsTitle: t('distribute.noAccountsTitle'),
-          noAccountsHintLine1: t('distribute.noAccountsHintLine1'),
-          noAccountsHintLine2: t('distribute.noAccountsHintLine2'),
-          learnGeelark: t('distribute.learnGeelark'),
-          noPermissionTitle: t('distribute.noPermissionTitle'),
-          noPermissionHint: t('distribute.noPermissionHint'),
-          selectedCountLabel: t('distribute.selectedCountLabel'),
-          selectVisible: t('distribute.selectVisible'),
-          clearSelection: t('distribute.clearSelection'),
-          region: t('distribute.region'),
-          platform: t('distribute.platform'),
-          all: t('common.all'),
-          noMatchedAccounts: t('distribute.noMatchedAccounts'),
-          profileLink: t('distribute.profileLink'),
-          accountGroups: {
-            title: t('distribute.accountGroupsTitle'),
-            empty: t('distribute.accountGroupsEmpty'),
-            config: t('distribute.accountGroupsConfig'),
-            custom: t('distribute.accountGroupsCustom'),
-            selected: t('distribute.accountGroupsSelected'),
-            save: t('distribute.accountGroupsSave'),
-            savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
-            cancel: t('common.cancel'),
-            delete: t('common.delete'),
-            selectedCount: t('distribute.accountGroupsSelectedCount'),
-          },
-        }}
-        onSelectVisible={handleSelectVisible}
-        onClearSelection={handleClearSelection}
-        onFilterRegionChange={setFilterRegion}
-        onFilterPlatformChange={setFilterPlatform}
-        onApplyAccountGroup={handleApplyAccountGroup}
-        onToggleAccount={handleToggleAccount}
-      />
+      <div id={DISTRIBUTE_STEP_SECTION_IDS.copy} className="scroll-mt-6">
+        <DistributeStepCopy<CaptionLanguage>
+          hasSelectedAsset={Boolean(selectedAsset)}
+          captionHintValue={captionHint}
+          captionLanguages={CAPTION_LANGS}
+          activeCaptionLanguage={captionLang}
+          captionGenLoading={captionGenLoading}
+          captionGenError={captionGenError}
+          hasAnyCopy={hasAnyCopy}
+          canGenerateCaption={Boolean(buildCaptionGenerationSeed(resolvePromptSeed(selectedAsset, prompt, taskId), captionHint.trim()) || hasAnyCopy)}
+          pendingPackageDraft={pendingPackageDraft}
+          draftKeys={copyCardKeys}
+          defaultDraftKey={DEFAULT_DRAFT_KEY}
+          drafts={platformDrafts}
+          activeDraftKey={activeDraftKey}
+          accountCounts={copyCardAccountCounts}
+          noVideoAction={(
+            <Link
+              to="/studio"
+              className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+            >
+              {t('distribute.goToStudio')}
+            </Link>
+          )}
+          statusIndicator={(
+            <RunningStatus
+              active={captionGenLoading}
+              label={t('distribute.generatingCaptionStatus')}
+              stallAfterSec={15}
+              scene="on-tour"
+            />
+          )}
+          labels={{
+            step: '02',
+            title: t('distribute.videoAndCaption'),
+            noVideo: t('distribute.noVideo'),
+            captionHintInput: t('distribute.captionHintInput'),
+            captionHintPlaceholder: t('distribute.captionHintPlaceholder'),
+            captionByPlatform: t('distribute.captionByPlatform'),
+            captionHint: t('distribute.captionHint'),
+            generatingCaption: t('distribute.generatingCaption'),
+            polishCaption: t('distribute.polishCaption'),
+            generateCaption: t('distribute.generateCaption'),
+            captionLanguageLabel,
+            campaignContext: {
+              title: t('distribute.packageContextTitle'),
+              subtitle: t('distribute.packageContextSubtitle'),
+              objective: t('distribute.campaignObjective'),
+              audience: t('distribute.targetAudience'),
+              cta: t('distribute.callToAction'),
+              market: t('distribute.market'),
+              tone: t('distribute.brandTone'),
+              sellingPoints: t('distribute.sellingPoints'),
+              avoidTerms: t('distribute.avoidTerms'),
+              empty: t('common.none'),
+            },
+            platformCopy: {
+              defaultDraft: t('distribute.defaultDraftLabel'),
+              activeDraft: t('distribute.activeDraft'),
+              accountCount: t('distribute.copyCardAccountCount'),
+              noAccounts: t('distribute.copyCardNoAccounts'),
+              caption: t('distribute.caption'),
+              captionPlaceholder: t('distribute.captionPlaceholder'),
+              hashtags: t('distribute.hashtags'),
+              hashtagsPlaceholder: t('distribute.hashtagsPlaceholder'),
+              inheritedFallback: t('distribute.copyCardInheritedFallback'),
+            },
+          }}
+          onCaptionHintChange={setCaptionHint}
+          onLanguageChange={(lang) => void handleLanguageChange(lang)}
+          onGenerateCaption={() => void handleGenerateCaption()}
+          onSetActiveDraft={setActiveDraftKey}
+          onUpdateDraft={updateDraft}
+        />
+      </div>
 
-      <DistributeStepPublish
-        preflightItems={preflightItems}
-        needShareLink={needShareLink}
-        markAI={markAI}
-        pushing={pushing}
-        publishDisabled={pushing || selectedIds.size === 0 || !selectedAsset}
-        pushError={pushError}
-        showGroupedHint={selectedPlatformKeys.length > 1}
-        latestBatch={latestBatch}
-        batchRefreshing={batchRefreshing}
-        formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
-        labels={{
-          step: '04',
-          title: t('distribute.preflightTitle'),
-          subtitle: t('distribute.preflightSubtitle'),
-          ready: t('distribute.preflightReady'),
-          missing: t('distribute.preflightMissing'),
-          publishOptions: t('distribute.publishOptions'),
-          needShareLink: t('distribute.needShareLink'),
-          markAI: t('distribute.markAI'),
-          publish: t('distribute.publish'),
-          publishing: t('distribute.publishing'),
-          groupedByPlatform: t('distribute.publishGroupedByPlatform'),
-          latestBatch: {
-            title: t('distribute.latestBatchTitle'),
-            meta: t('distribute.latestBatchMeta'),
-            summaryTotal: t('distribute.batchSummaryTotal'),
-            summarySuccess: t('distribute.batchSummarySuccess'),
-            summaryFailed: t('distribute.batchSummaryFailed'),
-            summaryPending: t('distribute.batchSummaryPending'),
-            statusSubmitting: t('distribute.batchStatusSubmitting'),
-            statusSubmitFailed: t('distribute.batchStatusSubmitFailed'),
-            statusSubmitted: t('distribute.batchStatusSubmitted'),
-            hintSubmitting: t('distribute.latestBatchHintSubmitting'),
-            hintRunning: t('distribute.latestBatchHintRunning'),
-            hintDone: t('distribute.latestBatchHintDone'),
-            refresh: t('common.refresh'),
-            refreshing: t('distribute.batchRefreshing'),
-            close: t('common.close'),
-            unknown: t('common.unknown'),
+      <div id={DISTRIBUTE_STEP_SECTION_IDS.accounts} className="scroll-mt-6">
+        <DistributeStepAccounts
+          accounts={accounts}
+          accountsForPermission={accountsForPermission}
+          filteredAccounts={filteredAccounts}
+          selectedIds={selectedIds}
+          loading={loading}
+          error={error}
+          regions={regions}
+          platforms={platforms}
+          filterRegion={filterRegion}
+          filterPlatform={filterPlatform}
+          labels={{
+            step: '03',
+            title: t('distribute.targetAccounts'),
+            loadingAccounts: t('distribute.loadingAccounts'),
+            noAccountsTitle: t('distribute.noAccountsTitle'),
+            noAccountsHintLine1: t('distribute.noAccountsHintLine1'),
+            noAccountsHintLine2: t('distribute.noAccountsHintLine2'),
+            learnGeelark: t('distribute.learnGeelark'),
+            noPermissionTitle: t('distribute.noPermissionTitle'),
+            noPermissionHint: t('distribute.noPermissionHint'),
+            selectedCountLabel: t('distribute.selectedCountLabel'),
+            selectVisible: t('distribute.selectVisible'),
+            clearSelection: t('distribute.clearSelection'),
+            region: t('distribute.region'),
+            platform: t('distribute.platform'),
+            all: t('common.all'),
+            noMatchedAccounts: t('distribute.noMatchedAccounts'),
             profileLink: t('distribute.profileLink'),
-            reportPlanName: t('distribute.reportPlanName'),
-            taskId: t('distribute.batchTaskId'),
-            logs: t('distribute.batchLogs'),
-            shareLink: t('distribute.batchShareLink'),
-          },
-        }}
-        onNeedShareLinkChange={setNeedShareLink}
-        onMarkAIChange={setMarkAI}
-        onPublish={() => void handlePush()}
-        onRefreshBatch={(batch) => void refreshBatch(batch)}
-        onClearBatch={() => setLatestBatch(null)}
-      />
+            accountGroups: {
+              title: t('distribute.accountGroupsTitle'),
+              empty: t('distribute.accountGroupsEmpty'),
+              config: t('distribute.accountGroupsConfig'),
+              custom: t('distribute.accountGroupsCustom'),
+              selected: t('distribute.accountGroupsSelected'),
+              save: t('distribute.accountGroupsSave'),
+              savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
+              cancel: t('common.cancel'),
+              delete: t('common.delete'),
+              selectedCount: t('distribute.accountGroupsSelectedCount'),
+            },
+          }}
+          onSelectVisible={handleSelectVisible}
+          onClearSelection={handleClearSelection}
+          onFilterRegionChange={setFilterRegion}
+          onFilterPlatformChange={setFilterPlatform}
+          onApplyAccountGroup={handleApplyAccountGroup}
+          onToggleAccount={handleToggleAccount}
+        />
+      </div>
+
+      <div id={DISTRIBUTE_STEP_SECTION_IDS.publish} className="scroll-mt-6">
+        <DistributeStepPublish
+          preflightItems={preflightItems}
+          needShareLink={needShareLink}
+          markAI={markAI}
+          pushing={pushing}
+          publishDisabled={publishDisabled}
+          pushError={pushError}
+          showGroupedHint={selectedPlatformKeys.length > 1}
+          latestBatch={latestBatch}
+          batchRefreshing={batchRefreshing}
+          formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
+          labels={{
+            step: '04',
+            title: t('distribute.preflightTitle'),
+            subtitle: t('distribute.preflightSubtitle'),
+            ready: t('distribute.preflightReady'),
+            missing: t('distribute.preflightMissing'),
+            publishOptions: t('distribute.publishOptions'),
+            needShareLink: t('distribute.needShareLink'),
+            markAI: t('distribute.markAI'),
+            publish: t('distribute.publish'),
+            publishing: t('distribute.publishing'),
+            groupedByPlatform: t('distribute.publishGroupedByPlatform'),
+            latestBatch: {
+              title: t('distribute.latestBatchTitle'),
+              meta: t('distribute.latestBatchMeta'),
+              summaryTotal: t('distribute.batchSummaryTotal'),
+              summarySuccess: t('distribute.batchSummarySuccess'),
+              summaryFailed: t('distribute.batchSummaryFailed'),
+              summaryPending: t('distribute.batchSummaryPending'),
+              statusSubmitting: t('distribute.batchStatusSubmitting'),
+              statusSubmitFailed: t('distribute.batchStatusSubmitFailed'),
+              statusSubmitted: t('distribute.batchStatusSubmitted'),
+              hintSubmitting: t('distribute.latestBatchHintSubmitting'),
+              hintRunning: t('distribute.latestBatchHintRunning'),
+              hintDone: t('distribute.latestBatchHintDone'),
+              refresh: t('common.refresh'),
+              refreshing: t('distribute.batchRefreshing'),
+              close: t('common.close'),
+              unknown: t('common.unknown'),
+              profileLink: t('distribute.profileLink'),
+              reportPlanName: t('distribute.reportPlanName'),
+              taskId: t('distribute.batchTaskId'),
+              logs: t('distribute.batchLogs'),
+              shareLink: t('distribute.batchShareLink'),
+            },
+          }}
+          onNeedShareLinkChange={setNeedShareLink}
+          onMarkAIChange={setMarkAI}
+          onPublish={() => void handlePush()}
+          onRefreshBatch={(batch) => void refreshBatch(batch)}
+          onClearBatch={() => setLatestBatch(null)}
+        />
+      </div>
 
       <div className="mb-6 space-y-4">
         {historyError && <p className="text-sm text-[var(--color-error)]">{historyError}</p>}

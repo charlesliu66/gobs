@@ -15,10 +15,78 @@ test('TabDistribute composes the four operator step components', () => {
   assert.match(source, /DistributeStepCopy/);
   assert.match(source, /DistributeStepAccounts/);
   assert.match(source, /DistributeStepPublish/);
+  assert.match(source, /DistributeStepReadinessNav/);
+  assert.match(source, /DISTRIBUTE_STEP_SECTION_IDS/);
+  assert.match(source, /distribute-step-asset/);
+  assert.match(source, /distribute-step-copy/);
+  assert.match(source, /distribute-step-accounts/);
+  assert.match(source, /distribute-step-publish/);
+  assert.match(source, /preflightItems\[0\]\?\.ready/);
+  assert.match(source, /preflightItems\[1\]\?\.ready/);
   assert.match(source, /step: '01'/);
   assert.match(source, /step: '02'/);
   assert.match(source, /step: '03'/);
   assert.match(source, /step: '04'/);
+});
+
+test('distribution readiness nav renders step anchors and statuses', async () => {
+  const navModule = await import('../src/components/distribute/DistributeStepReadinessNav.tsx');
+
+  const html = renderToStaticMarkup(
+    React.createElement(navModule.DistributeStepReadinessNav, {
+      items: [
+        {
+          id: 'asset',
+          href: '#distribute-step-asset',
+          step: '01',
+          title: 'Publish Asset',
+          detail: 'Package video',
+          status: 'ready',
+        },
+        {
+          id: 'copy',
+          href: '#distribute-step-copy',
+          step: '02',
+          title: 'Video & Copy',
+          detail: 'No copy yet (can continue)',
+          status: 'attention',
+        },
+        {
+          id: 'accounts',
+          href: '#distribute-step-accounts',
+          step: '03',
+          title: 'Target Accounts',
+          detail: '0 accounts',
+          status: 'blocked',
+        },
+        {
+          id: 'publish',
+          href: '#distribute-step-publish',
+          step: '04',
+          title: 'Publish',
+          detail: 'Complete required steps first',
+          status: 'blocked',
+        },
+      ],
+      labels: {
+        title: 'Distribution Progress',
+        completedSummary: '{ready}/{total} ready',
+        ready: 'Ready',
+        attention: 'Can continue',
+        blocked: 'Needs action',
+      },
+    }),
+  );
+
+  assert.match(html, /Distribution Progress/);
+  assert.match(html, /1\/4 ready/);
+  assert.match(html, /href="#distribute-step-asset"/);
+  assert.match(html, /href="#distribute-step-copy"/);
+  assert.match(html, /href="#distribute-step-accounts"/);
+  assert.match(html, /href="#distribute-step-publish"/);
+  assert.match(html, /Ready/);
+  assert.match(html, /Can continue/);
+  assert.match(html, /Needs action/);
 });
 
 test('distribution step components render the core operator landmarks', async () => {
