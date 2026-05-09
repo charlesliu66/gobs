@@ -25,6 +25,8 @@
 | Frontend build | Full app compiles and bundles. | PASS | `npm run build` in `h5-video-tool/` |
 | Backend build | API compiles and build assets copy. | PASS | `npm run build` in `h5-video-tool-api/` |
 | Eval | Backend build, frontend build, TypeScript, and API health. | PASS | `eval-result.json` |
+| Staging deploy | `origin/main` commit `91aea90` deployed to staging. | PASS | `/api/system/version` returned `commitShort=91aea90`, `environment=staging`. |
+| Staging H5 smoke | `/`, `/campaign-creative`, `/studio`, `/distribute`, `/api/health`. | PASS | All H5 routes returned 200; API health returned 200. |
 
 ## 4) Failed Items (Defect List)
 | Defect ID | Severity (P0-P3) | Title | Repro Steps | Expected | Actual | Suggested Fix Order |
@@ -44,4 +46,4 @@
 ## 7) Final Verification Verdict
 - Gate 3 status: GO
 - Gate 4 blocking defects (P0/P1): 0
-- Release recommendation: GO for commit/push and staging candidate; prod still requires the normal staging verification gate.
+- Release recommendation: GO for prod candidate after staging verification; prod still requires explicit production release action.
