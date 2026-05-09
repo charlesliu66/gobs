@@ -42,4 +42,4 @@
 ## 7) Final Verification Verdict
 - Gate 3 status: GO.
 - Gate 4 blocking defects (P0/P1): 0.
-- Release recommendation: GO for commit/push. Staging deploy was attempted after push and after local deploy credentials were configured, but `deploy_all.py --target staging --updated-by codex` is blocked by network/server reachability: SSH/SFTP connection to `43.134.186.196` timed out, and independent socket checks to ports `22`, `80`, and `8080` also timed out. Prod remains gated by the normal explicit approval rule.
+- Release recommendation: GO for commit/push and staging validation. After VPN connectivity was restored, staging smoke passed at `37ac488`: version endpoint, environment marker, frontend asset manifest, key routes, and `/api/prompt/templates` all matched the expected Phase 1 result. `release-ready.json` was written for staging with `commitShort=37ac488`. Prod remains gated by the normal explicit approval rule; read-only prod smoke found current frontend/template behavior but an unhealthy version endpoint (`commitShort=unknown`) due to missing `build-info.json`.
