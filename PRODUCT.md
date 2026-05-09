@@ -9,6 +9,7 @@
 - `/distribute` now remembers recent Package / asset / account / copy / publish-option context in the current browser, so operators can explicitly restore a recent setup after refresh without auto-publishing.
 - Latest publish batches now expose next actions for reviewing the current batch or jumping to publish history, with compatible server-backed publish-history filters/pagination/CSV export and clearer failure guidance beside the raw error.
 - Campaign Studio generated videos now also write back to linked Output Plan items, preserving generated asset ids and package ids for later recovery.
+- GeeLark real-post verification now has a guarded dry-run-first script; live posting refuses to run unless an operator provides account/material/caption plus `--confirm REAL_GEELARK_POST`.
 - Legacy surface reduction is documented in `docs/plans/2026-05-09-legacy-surface-reduction-audit.md`; this release audits `sj-ui`, RiskSentiment/TiktokMatrix, and Platform surfaces without deleting routes.
 
 鐩稿叧娌荤悊鏂囨。锛?

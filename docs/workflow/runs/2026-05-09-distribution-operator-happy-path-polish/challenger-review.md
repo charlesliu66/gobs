@@ -7,7 +7,7 @@
 ## 2) Challenge Findings
 | ID | Area | Severity | Finding | Why it matters | Required action |
 |---|---|---|---|---|---|
-| C-001 | Scope control | must-fix | Backend history pagination/export was already present in the worktree, but live posting automation remains out of scope. | Shipping unidentified backend changes is worse than explicitly verifying the compatible carry-over, but live posting is still risky. | Allow route/API-wrapper history compatibility only; do not touch provider services or live posting scripts. |
+| C-001 | Scope control | must-fix | Backend history pagination/export and real GeeLark verification both need explicit safety boundaries. | Shipping unidentified backend changes is worse than explicitly verifying the compatible carry-over, and live posting is a real external side effect. | Allow route/API-wrapper history compatibility and a dry-run-first verifier only; do not touch provider services and do not run a live post without explicit confirmation. |
 | C-002 | Restore safety | must-fix | Recent config persistence can resurrect stale accounts/assets after permissions or assets change. | Operators may think a config is fully ready when only part of it restored. | Filter restored account ids against current permissions and let preflight show missing assets/accounts before publish. |
 | C-003 | Hidden automation | must-fix | Auto-restoring the last context on page load could surprise the operator. | Wrong package/account selection is a high-cost publishing mistake. | Recent contexts must require explicit "use again"; never auto-publish. |
 | C-004 | Legacy deletion | must-fix | `sj-ui` appears unused, but direct/external uses of route surfaces are not fully proven. | Deleting or hiding routes can break hidden workflows. | Deliver audit and recommendation only; deletion/isolation requires a follow-up run. |
@@ -15,7 +15,7 @@
 ## 3) Plan Improvement Requests
 - Request 1:
   - Planner section updated: `## 2) Scope`, `## 8) Delivery Artifacts`
-  - Result: Real posting verifier remains removed; compatible GeeLark history query/export carry-over is explicitly scoped and test-gated.
+  - Result: Protected real posting verifier is explicitly scoped and test-gated; live posting remains gated behind operator confirmation.
 - Request 2:
   - Planner section updated: `## 5) Risks`, `## 6) Acceptance Criteria`
   - Result: Recent context restore safety and explicit operator action are now acceptance criteria.
@@ -39,5 +39,5 @@
   - Follow-up gate: Run 2 follow-up planning.
 - Risk: GeeLark history query/export touches a backend route.
   - Why accepted now: The changes preserve the unfiltered default response, avoid provider-service edits, and are covered by helper/API tests.
-  - Boundary: No live posting, no provider-service edits, no scheduling/approval semantics.
+  - Boundary: No automatic live posting, no provider-service edits, no scheduling/approval semantics.
   - Follow-up gate: Verifier and staging smoke.

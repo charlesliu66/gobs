@@ -23,15 +23,16 @@
 | Recent publish configs are browser-local. | P3 | This is intentional low-risk refresh recovery. | UI copy says current browser; server-side persistence is future product work. | Next Distribution feedback cycle |
 | GeeLark history filters apply to fetched provider window. | P3 | No provider-native cursor was added. | Default `size` remains bounded and compatible. | When GeeLark exposes cursor/pagination |
 | Legacy surfaces are audited, not deleted. | P3 | Avoids hidden route/deep-link regressions. | Dedicated reduction run required for deletion/hiding. | Next safe-reduction run |
+| Real GeeLark post was not executed. | P3 | Posting requires operator-approved account, material, caption, and confirmation. | Guarded verifier is available and defaults to dry-run. | Operator-supervised GeeLark E2E |
 
 ## 5) Scope Compliance
-- Delivered in scope: Distribution happy path polish, local recent config restore, latest-batch/history actions, error guidance, compatible history query/export, Output Plan writeback, legacy audit, docs/tests/builds.
+- Delivered in scope: Distribution happy path polish, local recent config restore, latest-batch/history actions, error guidance, compatible history query/export, Output Plan writeback, protected real GeeLark verifier, legacy audit, docs/tests/builds.
 - Out-of-scope changes found: None.
 - Notes: Provider services and AGENTS-forbidden files were not changed.
 
 ## 6) Release Boundary
-- What is guaranteed: Existing publish submission payload remains unchanged; default history response remains compatible; recent config restore is explicit and local; Output Plan writeback is idempotent for the linked production item.
-- What is not guaranteed: No live social post was made; cross-device recent config persistence is not supported; legacy surfaces are not deleted.
+- What is guaranteed: Existing publish submission payload remains unchanged; default history response remains compatible; recent config restore is explicit and local; Output Plan writeback is idempotent for the linked production item; real posting cannot run through the verifier without explicit live confirmation.
+- What is not guaranteed: No live social post was made; history filters are bounded by the fetched provider window; cross-device recent config persistence is not supported; legacy surfaces are not deleted.
 - Environments validated: Local build/test/eval PASS. Staging/prod validation pending deployment.
 
 ## 7) Next Actions

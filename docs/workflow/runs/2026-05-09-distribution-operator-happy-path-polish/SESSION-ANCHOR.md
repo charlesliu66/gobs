@@ -2,7 +2,7 @@
 
 ## Run Summary
 - Run ID: 2026-05-09-distribution-operator-happy-path-polish
-- Goal: Polish the real Distribution Center operator happy path, document safe legacy-surface reduction, continue low-risk TabDistribute boundary extraction, and finish the already-started compatible GeeLark publish-history query/export carry-over without starting broad architecture governance.
+- Goal: Finish the remaining Distribution Center optimization gaps: slim TabDistribute orchestration, make Campaign Output Workbench asset references durably write back, move publish history filtering/paging/export toward the backend, and add a protected real GeeLark posting verification entry.
 - Owner: codex
 - Branch or commit context: main@bef6abc
 - Last updated: 2026-05-09T09:43:27Z
@@ -26,6 +26,7 @@
 - h5-video-tool/tests/
 - h5-video-tool-api/src/routes/geelark.ts
 - h5-video-tool-api/tests/
+- scripts/verify_geelark_real_publish.py
 - docs/plans/
 - docs/workflow/runs/2026-05-09-distribution-operator-happy-path-polish/
 - docs/TASK-INDEX.md
@@ -51,16 +52,15 @@
 - h5-video-tool-api/src/services/
 - h5-video-tool-api/src/config/
 - h5-video-tool-api/src/types/
-- scripts/verify_geelark_real_publish.py
 
 ## Out of Scope
 - No GeeLark provider service changes.
 - No provider service changes.
 - No Zustand/global state introduction.
 - No broad `ProductionWizard`, `EditorWorkbench`, or `TabGenerate` refactor.
-- No live social posting verifier or automated real GeeLark posting.
+- No automatic real social posting during build/eval/release. Live GeeLark posting requires explicit operator-provided account, material, caption, and confirmation token.
 - No `sj-ui`, RiskSentiment, TiktokMatrix, or Platform route deletion in this run.
-- No non-GeeLark publishing, scheduling, approvals, analytics, or live posting verification.
+- No non-GeeLark publishing, scheduling, approvals, or analytics.
 - No new secrets or hardcoded credentials.
 
 ## Progress Checklist

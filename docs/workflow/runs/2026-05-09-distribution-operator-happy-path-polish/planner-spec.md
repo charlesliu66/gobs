@@ -24,12 +24,15 @@
   - Preserve the existing default `/api/geelark/tasks` response shape.
   - Add optional status/platform/search/offset/limit filtering and CSV export for publish history.
   - Wire the existing history component to use server-backed query/paging/export when callbacks are provided.
+- Protected real GeeLark verification entry:
+  - Add a dry-run-first script for operator-supervised real publish verification.
+  - Require explicit account, material, caption, `--live`, and `--confirm REAL_GEELARK_POST` before any real post.
 - Tests and docs:
   - Add focused helper/render/source tests.
   - Update run reports, `PRODUCT.md`, `CHANGELOG.md`, `docs/TASK-INDEX.md`, and a legacy-surface audit doc.
 
 ### Out of Scope
-- No live GeeLark posting verifier.
+- No automatic live GeeLark posting during build, eval, staging smoke, or prod smoke.
 - No provider service modifications or AGENTS.md forbidden service files.
 - No global state library migration.
 - No broad `ProductionWizard`, `EditorWorkbench`, or `TabGenerate` refactor.
@@ -60,6 +63,7 @@
 - Use stable DOM ids and `scrollIntoView` for navigation; if the browser lacks DOM APIs, no-op.
 - Keep the legacy-surface work as documentation and source audit only.
 - Keep GeeLark changes route/API-wrapper only; do not edit provider services or trigger live posting.
+- Keep the real-post verifier safe by construction: dry-run default, explicit live confirmation token, and no secrets in source.
 
 ## 5) Risks
 | Risk | Trigger | Impact | Mitigation | Owner |
@@ -81,6 +85,7 @@
 | AC-05 | TabDistribute boundary extraction stays low-risk. | Source review + build | New helpers/components reduce inline orchestration without moving publish ownership or adding global state. |
 | AC-06 | GeeLark history query/export carry-over remains compatible. | API/helper tests + frontend source tests | Default history response still works; optional query/page/export is available without provider-service edits. |
 | AC-07 | Workflow gates and builds are clean. | `workflow_guard`, tests, frontend/backend build, `eval.sh` | P0/P1 verifier issues are zero or blockers are explicitly recorded. |
+| AC-08 | A protected real GeeLark publish verifier exists. | Python compile + backend guard test | Dry-run does not post; live mode refuses without `REAL_GEELARK_POST` confirmation. |
 
 ## 7) Test Matrix
 | Category | Cases |
@@ -91,10 +96,11 @@
 | Error guidance | Missing asset/account and generic errors render separate guidance text. |
 | Source regression | `TabDistribute` still composes asset/copy/accounts/publish steps and retains existing publish/history calls. |
 | History backend carry-over | Default `buildTaskHistoryResponse`, status/platform/search/page filters, CSV allowlist/export, frontend query builder. |
+| Real verifier | Dry-run payload preview and live mode blocked without explicit confirmation. |
 | Legacy audit | Source-scan evidence recorded for `sj-ui`, RiskSentiment/TiktokMatrix, and Platform surfaces. |
 | Regression | Existing distribution tests, frontend/backend builds, workflow guard, eval. |
 
 ## 8) Delivery Artifacts
-- Code changes: recent context utility, recent context panel, publish next-action wiring, error guidance copy, compatible history query/page/export carry-over.
+- Code changes: recent context utility, recent context panel, publish next-action wiring, error guidance copy, compatible history query/page/export carry-over, and guarded real GeeLark verifier.
 - Test evidence: focused Node tests plus frontend/backend builds and workflow eval.
 - Documents: run artifacts, legacy-surface audit doc, `PRODUCT.md`, `CHANGELOG.md`, and `docs/TASK-INDEX.md`.

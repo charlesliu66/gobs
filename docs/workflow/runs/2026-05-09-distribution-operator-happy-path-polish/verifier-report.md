@@ -24,6 +24,7 @@
 | History compatibility | Default response preserves raw `items`; advanced filter/page and CSV export work. | PASS | `geelarkTaskHistoryShape.test.ts` passed. |
 | Frontend history API | Query builder keeps default compact and serializes filter pagination options. | PASS | `geelarkApi.test.ts` passed. |
 | Campaign writeback | Studio-generated videos update both package and Output Plan references. | PASS | `campaignStudioPackagePatch.test.ts`, `campaignOutputPlan.test.ts`, and `campaignProductionLoopPresence.test.ts` passed. |
+| Real verifier guard | Dry-run payload preview and live mode missing-confirm rejection. | PASS | `geelarkRealPublishVerifier.test.ts` passed; `python3 -m py_compile scripts/verify_geelark_real_publish.py` passed. |
 | Build | Frontend and backend production builds. | PASS | `npm run build` passed in both app directories. |
 | Workflow | Scope guard and eval. | PASS | `workflow_guard --stage verify` PASS; `eval-result.json` PASS. |
 
@@ -40,7 +41,7 @@
 | Standard eval | Full build + backend TypeScript + health | PASS verdict | PASS | Local API was started with dummy Compass env for health only; no provider calls made. |
 
 ## 6) Regression Result
-- Full/targeted regression summary: 27 frontend focused tests, 11 backend focused tests, frontend build, backend build, workflow guard, and eval all passed.
+- Full/targeted regression summary: 27 frontend focused tests, 13 backend focused tests, frontend build, backend build, workflow guard, and eval all passed.
 - New regressions found: None.
 - Residual testing gap: No live GeeLark publish was attempted, by design.
 

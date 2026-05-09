@@ -11,6 +11,7 @@
 - Added clearer publish failure guidance while keeping the raw provider/preflight error visible for debugging.
 - Continued low-risk `TabDistribute` extraction through deterministic Distribution view-model helpers, keeping state ownership and GeeLark publish payloads unchanged.
 - Extended Campaign Studio video writeback so linked Output Plan items retain generated Studio asset ids and distribution package ids after refresh.
+- Added a guarded GeeLark real-publish verifier script that defaults to dry-run and refuses live posting unless an operator supplies account/material/caption plus `--confirm REAL_GEELARK_POST`.
 - Added the legacy-surface audit for `sj-ui`, RiskSentiment/TiktokMatrix, and Platform routes without deleting runtime surfaces.
 **Tests / Build:**
 - Added recent-context, Distribution view-model, publish-step, Campaign Studio package/output-plan, and backend output-plan persistence coverage; reran targeted frontend/backend tests and TypeScript checks.
