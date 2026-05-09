@@ -31,7 +31,7 @@
 ## 4) Technical Approach
 - Architecture decisions: Keep all fixes inside release scripts; do not add env vars, deployment services, or external dependencies.
 - Date compatibility: introduce a small module-local UTC fallback such as `UTC = getattr(dt, 'UTC', dt.timezone.utc)` and use it anywhere release scripts call `datetime.now()` or `astimezone()`.
-- SSH upload reliability: add explicit connect/channel timeouts, keepalive, progress logging, `finally` cleanup, and remote command stderr/exit-code handling. Artifact uploads should stream through SSH directly into remote `tar` to bypass the Paramiko SFTP completion hang observed during staging.
+- SSH upload reliability: add explicit connect/channel timeouts, keepalive, progress logging, `finally` cleanup, and remote command stderr/exit-code handling. Artifact uploads should stream through SSH to remote temporary files and extract with remote `tar` to bypass the Paramiko SFTP completion hang observed during staging.
 - API or interface changes: Preserve CLI flags and output JSON shapes; internal helper functions may be added for testability.
 - Migration or compatibility notes: No production runtime behavior should change; only the local release machine behavior changes.
 

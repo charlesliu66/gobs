@@ -148,15 +148,21 @@ def upload_and_extract_archive(
     remote_dir: str,
     remote_archive_name: str,
 ) -> None:
+    remote_archive_path = f'/tmp/{remote_archive_name}'
     size_mb = archive_path.stat().st_size / (1024 * 1024)
-    print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> ssh://{remote_archive_name}')
+    print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> ssh://{remote_archive_path}')
     stream_file_to_remote_command(
+        client,
+        f'cat > {shlex.quote(remote_archive_path)}',
+        archive_path,
+    )
+    run_remote_command(
         client,
         ' && '.join([
             f'mkdir -p {shlex.quote(remote_dir)}',
-            f'tar -xzf - -C {shlex.quote(remote_dir)}',
+            f'tar -xzf {shlex.quote(remote_archive_path)} -C {shlex.quote(remote_dir)}',
+            f'rm -f {shlex.quote(remote_archive_path)}',
         ]),
-        archive_path,
     )
 
 
@@ -168,11 +174,8 @@ def stream_file_to_remote_command(
     timeout_seconds: float = DEFAULT_UPLOAD_TIMEOUT_SECONDS,
     poll_interval_seconds: float = 0.05,
 ) -> str:
-    transport = client.get_transport()
-    if transport is None:
-        raise DeployRuntimeError('SSH transport is not available for streamed upload.')
-
-    channel = transport.open_session(timeout=timeout_seconds)
+    stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout_seconds)
+    channel = stdout.channel
     channel.settimeout(timeout_seconds)
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
@@ -202,7 +205,6 @@ def stream_file_to_remote_command(
             print(f'  upload {mark}% ({transferred}/{total} bytes)')
 
     try:
-        channel.exec_command(cmd)
         transferred = 0
         with file_path.open('rb') as handle:
             while True:
@@ -210,30 +212,16 @@ def stream_file_to_remote_command(
                 if not chunk:
                     break
 
-                offset = 0
-                while offset < len(chunk):
-                    drain_ready_output()
-                    if channel.exit_status_ready():
-                        raise DeployRuntimeError(f'远端命令提前退出，上传未完成: {cmd}')
-                    ensure_not_timed_out()
+                drain_ready_output()
+                if channel.exit_status_ready():
+                    raise DeployRuntimeError(f'远端命令提前退出，上传未完成: {cmd}')
+                ensure_not_timed_out()
+                stdin.write(chunk)
+                stdin.flush()
+                transferred += len(chunk)
+                print_progress(transferred)
 
-                    if not channel.send_ready():
-                        time.sleep(poll_interval_seconds)
-                        continue
-
-                    sent = channel.send(chunk[offset:])
-                    if sent <= 0:
-                        time.sleep(poll_interval_seconds)
-                        continue
-
-                    offset += sent
-                    transferred += sent
-                    print_progress(transferred)
-
-        try:
-            channel.shutdown_write()
-        except Exception:
-            pass
+        close_quietly(stdin)
 
         while True:
             drain_ready_output()
@@ -253,7 +241,9 @@ def stream_file_to_remote_command(
 
         return stdout_text
     finally:
-        close_quietly(channel)
+        close_quietly(stdin)
+        close_quietly(stderr)
+        close_quietly(stdout)
 
 
 def upload_file_to_remote_path(

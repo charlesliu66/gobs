@@ -57,19 +57,8 @@ class FakeChannel:
 class FakeStreamChannel(FakeChannel):
     def __init__(self, *, stdout=None, stderr=None, exit_status=0):
         super().__init__(stdout=stdout, stderr=stderr, exit_status=exit_status, ready=False)
-        self.command = ''
         self.sent = bytearray()
         self.shutdown = False
-
-    def exec_command(self, command):
-        self.command = command
-
-    def send_ready(self):
-        return True
-
-    def send(self, data):
-        self.sent.extend(data)
-        return len(data)
 
     def shutdown_write(self):
         self.shutdown = True
@@ -77,12 +66,23 @@ class FakeStreamChannel(FakeChannel):
 
 
 class FakeChannelFile:
-    def __init__(self, channel):
+    def __init__(self, channel, *, writable=False):
         self.channel = channel
+        self.writable = writable
         self.closed = False
+
+    def write(self, data):
+        if not self.writable:
+            raise AssertionError('not writable')
+        self.channel.sent.extend(data)
+
+    def flush(self):
+        pass
 
     def close(self):
         self.closed = True
+        if self.writable and hasattr(self.channel, 'shutdown_write'):
+            self.channel.shutdown_write()
 
 
 class FakeClient:
@@ -90,12 +90,18 @@ class FakeClient:
         self.channel = channel
         self.transport = transport
         self.command = ''
+        self.commands = []
         self.timeout = None
 
     def exec_command(self, command, timeout=None):
         self.command = command
+        self.commands.append(command)
         self.timeout = timeout
-        return FakeChannelFile(self.channel), FakeChannelFile(self.channel), FakeChannelFile(self.channel)
+        return (
+            FakeChannelFile(self.channel, writable=True),
+            FakeChannelFile(self.channel),
+            FakeChannelFile(self.channel),
+        )
 
     def get_transport(self):
         return self.transport
@@ -242,25 +248,23 @@ class DeployApiTests(unittest.TestCase):
             file_path = Path(temp_dir) / 'payload.bin'
             file_path.write_bytes(b'fake payload')
             channel = FakeStreamChannel(stdout=[b'ok\n'])
-            transport = FakeTransport(channel)
-            client = FakeClient(FakeChannel(), transport=transport)
+            client = FakeClient(channel)
 
             output = stream_file_to_remote_command(client, 'cat > /tmp/payload', file_path)
 
             self.assertEqual(output, 'ok')
-            self.assertEqual(channel.command, 'cat > /tmp/payload')
+            self.assertEqual(client.command, 'cat > /tmp/payload')
             self.assertEqual(channel.sent, b'fake payload')
             self.assertTrue(channel.shutdown)
-            self.assertTrue(channel.closed)
             self.assertEqual(channel.timeout, 600)
-            self.assertEqual(transport.open_session_timeout, 600)
+            self.assertEqual(client.timeout, 600)
 
     def test_upload_and_extract_archive_streams_archive_and_extracts_remote(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             archive_path = Path(temp_dir) / 'dist.tar.gz'
             archive_path.write_bytes(b'fake archive')
             channel = FakeStreamChannel()
-            client = FakeClient(FakeChannel(), transport=FakeTransport(channel))
+            client = FakeClient(channel)
 
             upload_and_extract_archive(
                 client=client,
@@ -270,20 +274,22 @@ class DeployApiTests(unittest.TestCase):
             )
 
             self.assertEqual(channel.sent, b'fake archive')
-            self.assertIn('tar -xzf - -C /remote/api', channel.command)
+            self.assertIn('cat > /tmp/api.tar.gz', client.commands[0])
+            self.assertIn('tar -xzf /tmp/api.tar.gz -C /remote/api', client.commands[1])
+            self.assertIn('rm -f /tmp/api.tar.gz', client.commands[1])
 
     def test_upload_file_to_remote_path_streams_file_to_cat_command(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             local_path = Path(temp_dir) / 'imagen_generate.py'
             local_path.write_text('print("ok")\n', encoding='utf-8')
             channel = FakeStreamChannel()
-            client = FakeClient(FakeChannel(), transport=FakeTransport(channel))
+            client = FakeClient(channel)
 
             upload_file_to_remote_path(client, local_path, '/remote/scripts/imagen_generate.py')
 
             self.assertEqual(channel.sent, b'print("ok")\n')
-            self.assertIn('mkdir -p /remote/scripts', channel.command)
-            self.assertIn('cat > /remote/scripts/imagen_generate.py', channel.command)
+            self.assertIn('mkdir -p /remote/scripts', client.command)
+            self.assertIn('cat > /remote/scripts/imagen_generate.py', client.command)
 
     def test_run_remote_command_returns_stdout_when_command_succeeds(self):
         channel = FakeChannel(stdout=[b'hello\n'])

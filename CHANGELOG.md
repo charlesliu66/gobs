@@ -5,7 +5,7 @@
 ## v0.176 - 2026-05-09
 **Release tooling SSH stream follow-up**
 **Deploy / Release Guard:**
-- Replaced the Paramiko SFTP artifact transfer path with SSH-streamed tarballs piped directly into remote `tar -xzf -`, avoiding the observed SFTP completion hang after 100% upload progress.
+- Replaced the Paramiko SFTP artifact transfer path with SSH-streamed tarballs written to remote temporary files and extracted by remote `tar`, avoiding the observed SFTP completion hang after 100% upload progress.
 - Kept deploy uploads bounded with explicit SSH channel/socket timeouts, visible archive progress logs, deterministic resource cleanup, and non-zero CLI exits on failure.
 **Tests / Build:**
 - Extended deploy API/frontend regression coverage for SSH-streamed uploads and reran the release/deploy Python test suite on Python 3.10.
@@ -23,7 +23,7 @@
 **Release tooling hardening**
 **Deploy / Release Guard:**
 - Replaced Python 3.11-only `datetime.UTC` usage in release/deployment timestamp helpers with Python 3.10-compatible UTC handling, including the dual-env initialization script.
-- Hardened `deploy_api.py` with tarball-based API artifact upload streamed through SSH directly into remote `tar`, SSH keepalive, bounded channel/socket timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
+- Hardened `deploy_api.py` with tarball-based API artifact upload streamed through SSH to a remote temporary file before extraction, SSH keepalive, bounded channel/socket timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
 - Hardened `deploy_frontend.py` with the same SSH-streamed tarball upload path, archive upload progress, resource cleanup in `finally`, and non-zero CLI exit behavior on failure.
 **Tests / Build:**
 - Added deploy frontend regression coverage and extended deploy API tests for tarball creation/extract, SSH-streamed file upload, remote command failures, and remote command timeout closure; reran the release/deploy Python test slice on the default Python 3.10 runtime.

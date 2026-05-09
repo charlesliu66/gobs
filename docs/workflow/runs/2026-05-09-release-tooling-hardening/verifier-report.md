@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | Remote command waits | Unit-level timeout loop | Channel closes when timeout expires | Pass | Real PM2/SSH upload behavior still needs staging observation. |
 | Frontend nested upload | Temp `dist/` with root and nested files | All files uploaded, resources closed | Pass | Unit test does not cover real network speed. |
-| Upload transfer shape | Staging deploy follow-up showed Paramiko SFTP could still hang after reporting 100% transfer. | Switched API/frontend artifact upload to SSH-streamed tarballs piped directly into remote `tar -xzf -`, with progress logs. | Pending live re-test | This is the key staging verifier item before prod. |
+| Upload transfer shape | Staging deploy follow-up showed Paramiko SFTP could still hang after reporting 100% transfer. | Switched API/frontend artifact upload to SSH-streamed tarballs written to remote temporary files and extracted by remote `tar`, with progress logs. | Pending live re-test | This is the key staging verifier item before prod. |
 
 ## 6) Regression Result
 - Full/targeted regression summary: All script unit tests pass, workflow verify guard passes, and eval returns PASS.
