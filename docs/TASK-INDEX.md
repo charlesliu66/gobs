@@ -10,6 +10,7 @@
 - Phase 3 source asset readiness run is active at `docs/workflow/runs/2026-05-09-campaign-source-asset-readiness/`, connecting Output Workbench source requirements to Asset Library candidates, row-level selection, and upload routing.
 - Advanced Studio template optimization Phase 1 is active at `docs/workflow/runs/2026-05-09-advanced-studio-template-optimization/`, reducing Studio creation to Quick Single, Motion Transfer, and Character Showcase while parking heavier AI image/BGM/model work for later phases.
 - Distribution Center operator MVP is active at `docs/workflow/runs/2026-05-09-distribution-center-ops-mvp/`, reducing duplicate Campaign inputs, adding account groups, and making platform copy/account mapping visible.
+- Distribution Center publish history follow-up is active at `docs/workflow/runs/2026-05-09-distribution-publish-history-filters/`, adding frontend-only history filters and date grouping without touching GeeLark publish APIs.
 - Campaign to Studio production bridge is active at `docs/workflow/runs/2026-05-09-campaign-studio-production-bridge/`, connecting eligible Campaign Output video items to Advanced Studio and adding unified Asset Library reference slots.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
@@ -17,7 +18,7 @@
   - `docs/plans/2026-05-08-campaign-output-production-adapters-design.md`
   - `docs/plans/2026-05-08-campaign-output-production-adapters-plan.md`
 
-> 最后更新：2026-05-07
+> 最后更新：2026-05-09
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
 
 ---
@@ -62,12 +63,13 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-09-distribution-publish-history-filters` | Distribution Center follow-up: frontend-only publish history status/platform/search filters, date grouping, and reusable history component wiring | Verifier GO locally; commit/push and staging release sync next |
 | `2026-05-09-campaign-studio-production-bridge` | Campaign Output -> Advanced Studio bridge: video item handoff, prompt/template/source-asset seeding, unified Asset Library Studio slots, and prompt-only Studio quality presets | Pushed to main; staging/prod smoke passed; prod deployment state restored idle |
-| `2026-05-09-distribution-center-ops-mvp` | Distribution Center operator MVP: read-only Campaign Package context, direct caption hints, account group quick selection, platform copy cards, and richer pending package readiness cards | Builder in progress |
+| `2026-05-09-distribution-center-ops-mvp` | Distribution Center operator MVP: read-only Campaign Package context, direct caption hints, account group quick selection, platform copy cards, and richer pending package readiness cards | Committed/pushed to main and included in the later staging/prod release stream |
 | `2026-05-09-advanced-studio-template-optimization` | Advanced Studio Phase 1: template cleanup, Motion Transfer / Character Showcase repositioning, Quick Single inspirations, and baseline duration/aspect options | Staging verified and marked release-ready @ `37ac488`; prod metadata-only repair completed and smoke passed for deployed code `37ac488` |
-| `2026-05-09-campaign-source-asset-readiness` | Campaign Output Workbench Phase 3: source asset candidates, row-level selection, and Asset Library upload routing for required game source assets | Committed/pushed to main; release sync pending |
-| `2026-05-08-campaign-output-one-click-production` | Campaign Output Workbench Phase 2B: one primary action saves the plan and produces supported text/post drafts before distribution handoff | Builder/Verifier complete locally; pending release sync |
-| `2026-05-07-campaign-to-distribution-handoff-mvp` | 下一步主线：把 mission-first generated brief、选中 campaign variant / CTA / routed knowledge context 送入待发布包并进入分发 | Gate 1 planner-spec 已按 `a94a7f5` mission-first 基线对齐，待 Challenger/Builder |
+| `2026-05-09-campaign-source-asset-readiness` | Campaign Output Workbench Phase 3: source asset candidates, row-level selection, and Asset Library upload routing for required game source assets | Committed/pushed to main and included in the later Campaign -> Studio release stream |
+| `2026-05-08-campaign-output-one-click-production` | Campaign Output Workbench Phase 2B: one primary action saves the plan and produces supported text/post drafts before distribution handoff | Builder/Verifier complete and included in later mainline releases |
+| `2026-05-07-campaign-to-distribution-handoff-mvp` | 下一步主线：把 mission-first generated brief、选中 campaign variant / CTA / routed knowledge context 送入待发布包并进入分发 | Completed; package persistence, Campaign package panel, and Distribution intake shipped |
 | `2026-05-07-campaign-mission-first-autopilot` | Mission-first Campaign Creative：mission 生成 Brief，后端自动路由 Gold and Glory Brain，隐藏主链路 pack 选择 | 已发布到 staging/prod @ `a94a7f5` |
 | `2026-05-07-gold-and-glory-canonical-brain-sync` | 把真实 fastpublishing 内容导入持久化 Gold and Glory Brain | 已发布到 staging/prod |
 | `2026-05-07-gold-and-glory-single-brain-phase0` | 收掉多项目 demo 心智，默认只服务 Gold and Glory | 已完成 |

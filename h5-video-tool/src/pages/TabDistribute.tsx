@@ -48,6 +48,7 @@ import {
 } from '../utils/geelarkPublishBatch';
 import { normalizeTaskHistoryItems, type DistributionTaskHistoryItem } from '../components/distribute/distributeSupport.ts';
 import { AccountGroupPicker } from '../components/distribute/AccountGroupPicker.tsx';
+import { DistributePublishHistory } from '../components/distribute/DistributePublishHistory.tsx';
 import { PlatformCopyCards } from '../components/distribute/PlatformCopyCards.tsx';
 import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
 import {
@@ -271,7 +272,8 @@ export function TabDistribute() {
     setHistoryError(null);
     try {
       const response = await fetchTaskHistory({ size: 20 }) as { items: unknown[]; history?: DistributionTaskHistoryItem[] };
-      setHistoryItems(Array.isArray(response.history) ? response.history : normalizeTaskHistoryItems(response.items));
+      const rawHistory = Array.isArray(response.history) ? response.history : response.items;
+      setHistoryItems(normalizeTaskHistoryItems(rawHistory));
     } catch (cause) {
       setHistoryError(cause instanceof Error ? cause.message : t('distribute.historyLoadFailed'));
       setHistoryItems([]);
@@ -1093,70 +1095,52 @@ export function TabDistribute() {
         />
       )}
 
-      <section className="mb-6 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="section-title">{t('distribute.historyTitle')}</h2>
-            <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.historySubtitle')}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadTaskHistory()}
-            disabled={historyLoading}
-            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-          >
-            {historyLoading ? t('distribute.batchRefreshing') : t('common.refresh')}
-          </button>
-        </div>
-
+      <div className="mb-6 space-y-4">
         {historyError && <p className="text-sm text-[var(--color-error)]">{historyError}</p>}
-        {!historyError && historyItems.length === 0 && !historyLoading && (
-          <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.historyEmpty')}</p>
-        )}
-
-        {historyItems.length > 0 && (
-          <div className="space-y-2">
-            {historyItems.map((item) => (
-              <div key={item.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-[var(--color-text)]">{item.planName || item.id}</p>
-                    <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)]">
-                      <span>{t('distribute.batchTaskId')}: {item.id}</span>
-                      {item.createdAt ? (
-                        <span>{formatDateTime(item.createdAt, uiLocale)}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text)]">
-                      {item.statusText || t('common.unknown')}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void handleLoadHistoryDetail(item.id)}
-                      className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
-                    >
-                      {historyDetailLoading && historyDetailId === item.id
-                        ? t('distribute.reportLoading')
-                        : t('distribute.historyInspect')}
-                    </button>
-                    {item.shareLink && (
-                      <a
-                        href={item.shareLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-[var(--color-primary)] hover:underline"
-                      >
-                        {t('distribute.batchShareLink')}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <DistributePublishHistory
+          title={t('distribute.historyTitle')}
+          items={historyItems}
+          activeTaskId={historyDetailId}
+          loading={historyLoading}
+          onSelectTask={(item) => void handleLoadHistoryDetail(item.taskId)}
+          selectLabel={(item) => (
+            historyDetailLoading && historyDetailId === item.taskId
+              ? t('distribute.reportLoading')
+              : t('distribute.historyInspect')
+          )}
+          formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
+          headerAction={(
+            <button
+              type="button"
+              onClick={() => void loadTaskHistory()}
+              disabled={historyLoading}
+              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+            >
+              {historyLoading ? t('distribute.batchRefreshing') : t('common.refresh')}
+            </button>
+          )}
+          labels={{
+            emptyTitle: t('distribute.historyEmpty'),
+            emptyHint: t('distribute.historyEmptyHint'),
+            filteredEmptyTitle: t('distribute.historyFilteredEmpty'),
+            filteredEmptyHint: t('distribute.historyFilteredEmptyHint'),
+            shareLink: t('distribute.batchShareLink'),
+            select: t('distribute.historyInspect'),
+            loading: t('distribute.historyLoading'),
+            statusAll: t('distribute.historyStatusAll'),
+            statusSuccess: t('distribute.historyStatusSuccess'),
+            statusFailed: t('distribute.historyStatusFailed'),
+            statusPending: t('distribute.historyStatusPending'),
+            allPlatforms: t('distribute.historyAllPlatforms'),
+            platformFilter: t('distribute.historyPlatformFilter'),
+            searchLabel: t('distribute.historySearchLabel'),
+            searchPlaceholder: t('distribute.historySearchPlaceholder'),
+            filteredSummary: t('distribute.historyFilteredSummary'),
+            taskLabel: t('distribute.batchTaskId'),
+            accountCount: t('distribute.historyAccountCount'),
+            unknownDate: t('distribute.historyUnknownDate'),
+          }}
+        />
 
         {historyDetail && (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -1190,7 +1174,7 @@ export function TabDistribute() {
             ) : null}
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }

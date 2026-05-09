@@ -35,10 +35,25 @@ export interface DistributionTaskHistoryItem {
   status?: number;
   statusText: string;
   serialName?: string;
+  platform?: string;
+  platforms?: string[];
+  accounts?: DistributionTaskHistoryAccount[];
+  accountCount?: number;
+  successCount?: number;
+  failedCount?: number;
   shareLink?: string;
+  shareLinks?: string[];
   resultImages: string[];
   failDesc?: string;
+  failReasons?: string[];
   createdAt: number;
+}
+
+export interface DistributionTaskHistoryAccount {
+  id?: string;
+  username?: string;
+  platform?: string;
+  region?: string;
 }
 
 export interface DistributionTaskHistorySummary {
@@ -46,6 +61,20 @@ export interface DistributionTaskHistorySummary {
   success: number;
   failed: number;
   pending: number;
+}
+
+export type DistributionTaskHistoryStatusFilter = 'all' | 'success' | 'failed' | 'pending';
+
+export interface DistributionTaskHistoryFilters {
+  status?: DistributionTaskHistoryStatusFilter;
+  platform?: string;
+  query?: string;
+}
+
+export interface DistributionTaskHistoryGroup {
+  id: string;
+  label: string;
+  items: DistributionTaskHistoryItem[];
 }
 
 export type DistributionPreflightStatus = 'complete' | 'attention' | 'blocked';
@@ -90,6 +119,21 @@ function readStringArray(value: unknown): string[] {
   return value
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     .map((item) => item.trim());
+}
+
+function readTaskHistoryAccountArray(value: unknown): DistributionTaskHistoryAccount[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const record = item as Record<string, unknown>;
+    const account: DistributionTaskHistoryAccount = {
+      id: trimString(record.id ?? record.accountId ?? record.envId),
+      username: trimString(record.username ?? record.userName ?? record.accountName ?? record.serialName),
+      platform: trimString(record.platform ?? record.appName),
+      region: trimString(record.region ?? record.country ?? record.market),
+    };
+    return account.id || account.username || account.platform || account.region ? [account] : [];
+  });
 }
 
 function normalizeTimestamp(value: unknown): number {
@@ -183,6 +227,32 @@ function readTaskHistoryField(record: Record<string, unknown>, keys: string[]): 
   return undefined;
 }
 
+function uniqueTrimmed(values: Array<string | undefined | null>): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function normalizeFilterToken(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function readTaskHistoryPlatforms(item: DistributionTaskHistoryItem): string[] {
+  return uniqueTrimmed([
+    item.platform,
+    ...(item.platforms ?? []),
+    ...(item.accounts ?? []).map((account) => account.platform),
+  ]);
+}
+
 export function normalizeTaskHistoryItems(items: unknown[]): DistributionTaskHistoryItem[] {
   if (!Array.isArray(items)) return [];
 
@@ -195,6 +265,9 @@ export function normalizeTaskHistoryItems(items: unknown[]): DistributionTaskHis
     const status = Number(record.status ?? record.taskStatus ?? record.task_status);
     const normalizedStatus = Number.isFinite(status) ? status : undefined;
     const providedStatusText = readTaskHistoryField(record, ['statusText', 'status_text']);
+    const accounts = readTaskHistoryAccountArray(record.accounts ?? record.accountList ?? record.items);
+    const shareLinks = readStringArray(record.shareLinks ?? record.share_links);
+    const failReasons = readStringArray(record.failReasons ?? record.fail_reasons);
 
     return [{
       id: taskId,
@@ -203,9 +276,17 @@ export function normalizeTaskHistoryItems(items: unknown[]): DistributionTaskHis
       status: normalizedStatus,
       statusText: providedStatusText ?? (normalizedStatus ? TASK_STATUS_TEXT[normalizedStatus] ?? `status:${normalizedStatus}` : 'unknown'),
       serialName: readTaskHistoryField(record, ['serialName', 'serial_name']),
-      shareLink: readTaskHistoryField(record, ['shareLink', 'shareUrl', 'share_url', 'postUrl', 'post_url', 'url', 'videoUrl']),
+      platform: readTaskHistoryField(record, ['platform', 'platformName', 'platform_name', 'appName']),
+      platforms: readStringArray(record.platforms),
+      accounts,
+      accountCount: Number(record.accountCount ?? record.account_count) || undefined,
+      successCount: Number(record.successCount ?? record.success_count) || undefined,
+      failedCount: Number(record.failedCount ?? record.failed_count) || undefined,
+      shareLink: readTaskHistoryField(record, ['shareLink', 'shareUrl', 'share_url', 'postUrl', 'post_url', 'url', 'videoUrl']) ?? shareLinks[0],
+      shareLinks,
       resultImages: readStringArray(record.resultImages ?? record.result_images ?? record.images),
-      failDesc: readTaskHistoryField(record, ['failDesc', 'fail_desc', 'failReason', 'fail_reason', 'msg']),
+      failDesc: readTaskHistoryField(record, ['failDesc', 'fail_desc', 'failReason', 'fail_reason', 'msg']) ?? failReasons[0],
+      failReasons,
       createdAt: normalizeTimestamp(
         record.scheduleAt ??
         record.schedule_at ??
@@ -216,6 +297,96 @@ export function normalizeTaskHistoryItems(items: unknown[]): DistributionTaskHis
       ),
     }];
   });
+}
+
+export function getTaskHistoryStatusBucket(
+  item: DistributionTaskHistoryItem,
+): Exclude<DistributionTaskHistoryStatusFilter, 'all'> {
+  const statusText = item.statusText.toLowerCase();
+  if (item.status === 3 || ['success', 'succeeded', 'complete', 'completed', 'done'].includes(statusText)) {
+    return 'success';
+  }
+  if (
+    item.status === 4 ||
+    item.status === 7 ||
+    ['failed', 'fail', 'canceled', 'cancelled', 'error'].includes(statusText)
+  ) {
+    return 'failed';
+  }
+  return 'pending';
+}
+
+export function getTaskHistoryPlatformOptions(items: DistributionTaskHistoryItem[]): string[] {
+  const options = uniqueTrimmed(items.flatMap((item) => readTaskHistoryPlatforms(item)));
+  return options.sort((left, right) => left.localeCompare(right));
+}
+
+export function filterTaskHistoryItems(
+  items: DistributionTaskHistoryItem[],
+  filters: DistributionTaskHistoryFilters,
+): DistributionTaskHistoryItem[] {
+  const status = filters.status ?? 'all';
+  const platform = normalizeFilterToken(filters.platform ?? '');
+  const query = normalizeFilterToken(filters.query ?? '');
+
+  return items.filter((item) => {
+    if (status !== 'all' && getTaskHistoryStatusBucket(item) !== status) return false;
+
+    const platforms = readTaskHistoryPlatforms(item);
+    if (platform && platform !== 'all' && !platforms.some((value) => normalizeFilterToken(value) === platform)) {
+      return false;
+    }
+
+    if (!query) return true;
+    const searchable = uniqueTrimmed([
+      item.planName,
+      item.taskId,
+      item.id,
+      item.statusText,
+      item.serialName,
+      item.failDesc,
+      ...platforms,
+      ...(item.accounts ?? []).flatMap((account) => [account.username, account.region, account.id]),
+    ]).join(' ').toLowerCase();
+    return searchable.includes(query);
+  });
+}
+
+function buildLocalDateKey(timestamp: number): string {
+  if (!timestamp) return 'unknown';
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function groupTaskHistoryItemsByDate(
+  items: DistributionTaskHistoryItem[],
+  formatDateLabel?: (timestamp: number) => string,
+  unknownLabel = 'Unknown date',
+): DistributionTaskHistoryGroup[] {
+  const groups = new Map<string, DistributionTaskHistoryGroup>();
+
+  for (const item of items) {
+    const id = buildLocalDateKey(item.createdAt);
+    const existing = groups.get(id);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+    groups.set(id, {
+      id,
+      label: item.createdAt ? formatDateLabel?.(item.createdAt) ?? new Date(item.createdAt).toLocaleDateString() : unknownLabel,
+      items: [item],
+    });
+  }
+
+  return [...groups.values()];
+}
+
+export function getTaskHistoryShareLink(item: DistributionTaskHistoryItem): string | undefined {
+  return item.shareLink ?? item.shareLinks?.find(Boolean);
 }
 
 export function summarizeTaskHistory(items: DistributionTaskHistoryItem[]): DistributionTaskHistorySummary {

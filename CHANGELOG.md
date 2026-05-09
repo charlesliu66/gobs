@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.172 - 2026-05-09
+**Distribution publish history filters**
+**Distribution / GeeLark History:**
+- Replaced the inline `/distribute` publish-history list with the reusable `DistributePublishHistory` component.
+- Added frontend-only status filters, platform-derived filtering, free-text search, date grouping, filtered-empty copy, and preserved task detail/share-link actions.
+- Kept GeeLark publish APIs, task-history API shape, scheduling, pagination, CSV export, and analytics out of scope.
+**Tests / Build:**
+- Added focused helper/render coverage for history filtering and grouping, then reran the targeted distribution test plus frontend/backend production builds.
+
 ## v0.171 - 2026-05-09
 **Campaign Output to Advanced Studio bridge**
 **Campaign / Studio / Asset Library:**

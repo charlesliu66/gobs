@@ -79,6 +79,9 @@ test('normalizeTaskHistoryItems reads tolerant GeeLark history payloads and pres
       planName: 'Morning Launch',
       status: 3,
       serial_name: 'Pixel Farm 01',
+      accounts: [
+        { id: 'acc-1', username: 'gold-th', platform: 'TikTok', region: 'TH' },
+      ],
       shareUrl: 'https://example.com/share/task-1',
       resultImages: ['https://example.com/result-1.jpg'],
       schedule_at: 1710000000,
@@ -98,9 +101,19 @@ test('normalizeTaskHistoryItems reads tolerant GeeLark history payloads and pres
     status: 3,
     statusText: 'success',
     serialName: 'Pixel Farm 01',
+    platform: undefined,
+    platforms: [],
+    accounts: [
+      { id: 'acc-1', username: 'gold-th', platform: 'TikTok', region: 'TH' },
+    ],
+    accountCount: undefined,
+    successCount: undefined,
+    failedCount: undefined,
     shareLink: 'https://example.com/share/task-1',
+    shareLinks: [],
     resultImages: ['https://example.com/result-1.jpg'],
     failDesc: undefined,
+    failReasons: [],
     createdAt: 1710000000000,
   });
   assert.equal(items?.[1]?.statusText, 'failed');
@@ -110,6 +123,70 @@ test('normalizeTaskHistoryItems reads tolerant GeeLark history payloads and pres
     success: 1,
     failed: 1,
     pending: 0,
+  });
+});
+
+test('task history filters by status, platform, and search then groups by date', async () => {
+  const support = await import('../src/components/distribute/distributeSupport.ts');
+
+  const filterTaskHistoryItems = (support as Record<string, unknown>).filterTaskHistoryItems as
+    | ((items: Array<Record<string, unknown>>, filters: Record<string, unknown>) => Array<Record<string, unknown>>)
+    | undefined;
+  const getTaskHistoryPlatformOptions = (support as Record<string, unknown>).getTaskHistoryPlatformOptions as
+    | ((items: Array<Record<string, unknown>>) => string[])
+    | undefined;
+  const groupTaskHistoryItemsByDate = (support as Record<string, unknown>).groupTaskHistoryItemsByDate as
+    | ((items: Array<Record<string, unknown>>, format?: (timestamp: number) => string) => Array<Record<string, unknown>>)
+    | undefined;
+
+  assert.equal(typeof filterTaskHistoryItems, 'function');
+  assert.equal(typeof getTaskHistoryPlatformOptions, 'function');
+  assert.equal(typeof groupTaskHistoryItemsByDate, 'function');
+
+  const items = [
+    {
+      id: 'task-1',
+      taskId: 'task-1',
+      planName: 'TH Morning Launch',
+      status: 3,
+      statusText: 'success',
+      accounts: [{ username: 'gold-th', platform: 'TikTok', region: 'TH' }],
+      resultImages: [],
+      createdAt: Date.UTC(2026, 4, 9, 2, 0, 0),
+    },
+    {
+      id: 'task-2',
+      taskId: 'task-2',
+      planName: 'ID Recovery',
+      status: 4,
+      statusText: 'failed',
+      accounts: [{ username: 'gold-id', platform: 'Instagram', region: 'ID' }],
+      resultImages: [],
+      createdAt: Date.UTC(2026, 4, 8, 2, 0, 0),
+    },
+    {
+      id: 'task-3',
+      taskId: 'task-3',
+      planName: 'No platform clue',
+      status: 2,
+      statusText: 'running',
+      resultImages: [],
+      createdAt: Date.UTC(2026, 4, 9, 3, 0, 0),
+    },
+  ];
+
+  assert.deepEqual(getTaskHistoryPlatformOptions?.(items), ['Instagram', 'TikTok']);
+  assert.deepEqual(filterTaskHistoryItems?.(items, { status: 'success' }).map((item) => item.id), ['task-1']);
+  assert.deepEqual(filterTaskHistoryItems?.(items, { platform: 'Instagram' }).map((item) => item.id), ['task-2']);
+  assert.deepEqual(filterTaskHistoryItems?.(items, { query: 'gold-th' }).map((item) => item.id), ['task-1']);
+  assert.deepEqual(filterTaskHistoryItems?.(items, { status: 'pending' }).map((item) => item.id), ['task-3']);
+
+  const groups = groupTaskHistoryItemsByDate?.(items, (timestamp) => `date:${new Date(timestamp).toISOString().slice(0, 10)}`);
+  assert.equal(groups?.length, 2);
+  assert.deepEqual(groups?.[0], {
+    id: '2026-05-09',
+    label: 'date:2026-05-09',
+    items: [items[0], items[2]],
   });
 });
 
@@ -205,17 +282,39 @@ test('DistributePublishHistory renders publish summaries and task links from per
           planName: 'Morning Launch',
           status: 3,
           statusText: 'success',
+          accounts: [{ username: 'gold-th', platform: 'TikTok', region: 'TH' }],
+          accountCount: 1,
           createdAt: 1710000000000,
-          shareLink: 'https://example.com/share/task-1',
+          shareLinks: ['https://example.com/share/task-1'],
+        },
+        {
+          id: 'task-2',
+          taskId: 'task-2',
+          planName: 'Evening Recovery',
+          status: 4,
+          statusText: 'failed',
+          createdAt: 1709913600000,
+          failDesc: 'GeeLark login expired',
         },
       ],
       formatTime: () => '2026-05-06 10:00',
+      labels: {
+        statusSuccess: 'Success',
+        statusFailed: 'Failed',
+        filteredSummary: 'Showing {visible} of {total}',
+      },
     }),
   );
 
   assert.match(html, /Morning Launch/);
+  assert.match(html, /Evening Recovery/);
+  assert.match(html, /Success/);
+  assert.match(html, /Failed/);
+  assert.match(html, /TikTok/);
+  assert.match(html, /Showing 2 of 2/);
   assert.match(html, /task-1/);
   assert.match(html, /example.com\/share\/task-1/);
+  assert.match(html, /GeeLark login expired/);
 });
 
 test('DistributePreflightChecklist highlights blocked publish prerequisites and reviewed options', async () => {

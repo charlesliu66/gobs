@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.171)*
+*Last updated: 2026-05-09 (v0.172)*
 
-**Latest update - v0.171**
-- Added a Campaign Output Workbench to Advanced Studio bridge for eligible video production items, carrying prompt, template, and matched source assets into Studio.
-- Added Studio Asset Library reference slots through a reusable `UnifiedAssetSelector`, while keeping the existing Drive-based material picker as fallback.
-- Added prompt-only Studio quality presets for Character Showcase, Motion Transfer, and BGM mood direction without touching protected generation services.
+**Latest update - v0.172**
+- Added frontend-only filters to `/distribute` publish history: status chips, platform-derived filtering, and text search across plan/task/account/status clues.
+- Grouped recent GeeLark publish history by date while preserving task detail inspection and share-link actions.
+- Kept GeeLark backend publish/task APIs unchanged; scheduling, pagination, CSV export, and analytics remain out of scope.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -228,7 +228,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
-- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量，发布前仍需显式勾选账号并确认。
+- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
