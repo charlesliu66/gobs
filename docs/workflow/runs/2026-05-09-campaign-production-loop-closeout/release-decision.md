@@ -7,14 +7,14 @@
 - Additional evidence: `docs/workflow/runs/2026-05-09-campaign-production-loop-closeout/eval-result.json`, targeted Node test output, frontend/backend TypeScript output, workflow guard output.
 
 ## 2) Delivery Decision
-- Decision: NO-GO for staging/prod release from this machine
-- Decision time: 2026-05-09T04:40:00Z
+- Decision: GO for standard `staging -> smoke -> prod` release
+- Decision time: 2026-05-09T05:35:00Z
 - Decision owner: codex
 
 ## 3) Blocking Issues
 | ID | Severity | Description | Owner | Required before release |
 |---|---|---|---|---|
-| D-001 | P1 | Frontend Vite production build is blocked locally because the current Node runtime rejects Rollup's native optional package with a code-signature/team-id mismatch. | Release owner | Repair/reinstall frontend toolchain or build from another verified machine, then rerun `npm run build` equivalent and `scripts/eval.sh`. |
+| None | - | No open P0/P1 blocking issues. | - | - |
 
 ## 4) Accepted Risks
 | Risk | Severity | Why accepted | Boundary/Workaround | Follow-up date |
@@ -28,11 +28,11 @@
 - Notes: No forbidden provider services, backend generation internals, real env files, new env vars, or global state libraries were changed.
 
 ## 6) Release Boundary
-- What is guaranteed: Targeted logic tests pass, frontend/backend TypeScript checks pass, backend build can run, and package-sync code uses existing package fields.
-- What is not guaranteed: Frontend production bundle from this machine, staging/prod behavior, long-running async job package sync after navigation away.
-- Environments validated: Local source-level and TypeScript validation only.
+- What is guaranteed: Targeted logic tests pass, frontend/backend TypeScript checks pass, frontend/backend production builds pass, eval returns `PASS`, and package-sync code uses existing package fields.
+- What is not guaranteed: Long-running async job package sync after navigation away; this remains an accepted follow-up risk.
+- Environments validated: Local source-level, production build, temporary local API health.
 
 ## 7) Next Actions
-1. Repair local frontend toolchain or switch to another verified release machine where `npm run build` succeeds.
-2. Rerun `bash scripts/eval.sh 2026-05-09-campaign-production-loop-closeout` and confirm no P0/P1 defects.
-3. Only after Verifier GO, proceed with staging deployment and smoke validation.
+1. Commit and push the release metadata update to `origin/main`.
+2. Deploy staging from the pushed commit and run H5/API smoke checks.
+3. If staging smoke passes, mark release-ready and promote the same commit to prod.

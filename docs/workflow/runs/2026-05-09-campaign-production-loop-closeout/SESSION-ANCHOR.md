@@ -4,8 +4,8 @@
 - Run ID: 2026-05-09-campaign-production-loop-closeout
 - Goal: Close the Campaign -> Studio -> Distribution production loop by preserving stable campaign/package/source context through Studio generation results and distribution intake.
 - Owner: codex
-- Branch or commit context: main@847d5a1
-- Last updated: 2026-05-09T04:23:36Z
+- Branch or commit context: main@9faf037
+- Last updated: 2026-05-09T05:35:00Z
 
 ## Acceptance Criteria Snapshot
 - AC-01: Campaign Studio handoff carries stable output plan, production item, optional distribution package, and source requirement identifiers.
@@ -55,7 +55,7 @@
 - [x] Planner approved
 - [x] Challenger approved
 - [x] Builder self-test recorded
-- [ ] Verifier P0/P1 count is zero
+- [x] Verifier P0/P1 count is zero
 - [x] Release decision written
 
 ## Escalation Rules

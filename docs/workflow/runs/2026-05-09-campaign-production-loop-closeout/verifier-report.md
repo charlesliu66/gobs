@@ -3,7 +3,7 @@
 ## 1) Validation Scope
 - Spec file: `docs/workflow/runs/2026-05-09-campaign-production-loop-closeout/planner-spec.md`
 - Build report file: `docs/workflow/runs/2026-05-09-campaign-production-loop-closeout/builder-report.md`
-- Version or commit under test: main@847d5a1 + local run changes
+- Version or commit under test: main@9faf037 plus release metadata update
 
 ## 2) Coverage Checklist
 - Happy path: Covered
@@ -25,13 +25,15 @@
 | Campaign package regression | Existing campaign distribution package builder tests still pass. | Pass | `campaignDistributionPackage.test.ts` passed. |
 | Frontend TypeScript | TypeScript project build. | Pass | `node node_modules/typescript/bin/tsc -b` passed. |
 | Backend TypeScript/build | Backend TypeScript no-emit and emit build. | Pass | `node node_modules/typescript/bin/tsc --noEmit` and `node node_modules/typescript/bin/tsc` passed. |
+| Frontend production build | Vite production bundle. | Pass | `PATH=/tmp/gobs-node-v22.15.0-darwin-arm64/bin:$PATH npm run build` passed after using an independent Node runtime. |
+| Eval script | Four-step eval script covering backend build, frontend build, backend TypeScript, and API health. | Pass | `PORT=3999 bash scripts/eval.sh 2026-05-09-campaign-production-loop-closeout` returned `PASS`; local API health returned 200. |
 | Workflow guard | Verify-stage scope guard. | Pass | `workflow_guard --stage verify` passed. |
 
 ## 4) Failed Items (Defect List)
 | Defect ID | Severity (P0-P3) | Title | Repro Steps | Expected | Actual | Suggested Fix Order |
 |---|---|---|---|---|---|---|
-| D-001 | P1 | Local frontend production build blocked by Rollup native optional package signature. | Run `node h5-video-tool/node_modules/vite/bin/vite.js build` on this machine. | Vite builds `dist/`. | Node refuses `@rollup/rollup-darwin-arm64/rollup.darwin-arm64.node` with code-signature/team-id mismatch. | 1 |
-| D-002 | P2 | Local API health check not running during eval. | Run `bash scripts/eval.sh 2026-05-09-campaign-production-loop-closeout` without starting the API. | API health skipped or returns 200 if server is running. | Eval records API health fail with code normalized to `0` in `eval-result.json`. | 2 |
+| D-001 | P1 | Local frontend production build blocked by Rollup native optional package signature. | Re-run production build with Codex App bundled Node. | Vite builds `dist/`. | Resolved by using a temporary independent Node v22.15.0 runtime for release builds. | Resolved |
+| D-002 | P2 | Local API health check not running during eval. | Run `bash scripts/eval.sh 2026-05-09-campaign-production-loop-closeout` without starting the API. | API health skipped or returns 200 if server is running. | Resolved by launching a temporary local API on `PORT=3999` with `/tmp` data for eval. | Resolved |
 
 ## 5) Stress and Stability Results
 | Scenario | Load/Duration | Metric | Result | Risk |
@@ -40,10 +42,10 @@
 | Async completion after navigation away | Not run | Package sync durability | Not covered | Accepted follow-up because this run covers active-page polling path. |
 
 ## 6) Regression Result
-- Full/targeted regression summary: Targeted Campaign/Studio/Distribution tests pass; frontend/backend TypeScript checks pass; workflow guard passes.
-- New regressions found: No code-level regression found in targeted coverage. Release remains blocked by local frontend build tooling.
+- Full/targeted regression summary: Targeted Campaign/Studio/Distribution tests pass; frontend/backend TypeScript checks pass; frontend/backend production builds pass; eval script returns `PASS`.
+- New regressions found: No code-level regression found in targeted coverage.
 
 ## 7) Final Verification Verdict
-- Gate 3 status: Fail for release / Pass for targeted code validation
-- Gate 4 blocking defects (P0/P1): 1
-- Release recommendation: NO-GO until frontend production build runs successfully on this machine or another verified release machine.
+- Gate 3 status: Pass
+- Gate 4 blocking defects (P0/P1): 0
+- Release recommendation: GO for standard staging deployment, then prod promotion after staging smoke passes.
