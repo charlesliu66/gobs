@@ -224,6 +224,12 @@ def stream_file_to_remote_command(
                 print_progress(transferred)
 
         close_quietly(stdin)
+        shutdown_write = getattr(channel, 'shutdown_write', None)
+        if callable(shutdown_write):
+            try:
+                shutdown_write()
+            except Exception:
+                pass
 
         while True:
             drain_ready_output()

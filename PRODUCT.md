@@ -7,6 +7,7 @@
 
 **Latest update - v0.179**
 - Release deployment scripts now force password-based Paramiko SSH connections to skip local SSH key/agent probing, preventing staging/prod deploy hangs or auth failures when `SERVER_PASSWORD` is the intended credential.
+- SSH-streamed artifact uploads now explicitly send EOF after closing stdin, letting remote `cat > /tmp/*.tar.gz` commands finish cleanly after 100% upload.
 - The fix covers API deploy, frontend deploy through the shared SSH helper, release-ready marking, deployment-state updates, prod promotion readiness reads, and dual-env initialization.
 
 **Previous update - v0.178**

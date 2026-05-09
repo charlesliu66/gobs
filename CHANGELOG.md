@@ -6,6 +6,7 @@
 **Release SSH auth hardening**
 **Deploy / Release Guard:**
 - Forced password-based Paramiko deployment connections to skip local SSH key and agent probing, fixing staging/prod deploy attempts that could fail or hang before uploading artifacts even when `SERVER_PASSWORD` was valid.
+- Explicitly sends EOF on streamed SSH artifact uploads after closing stdin, so remote `cat > /tmp/*.tar.gz` commands exit cleanly after reaching 100% upload.
 - Applied the same password-only auth behavior to API deploy, frontend deploy via the shared SSH helper, release-ready marking, deployment-state updates, prod promotion readiness reads, and dual-env initialization.
 **Tests / Build:**
 - Added regression coverage for password-only SSH connect parameters and reran the release/deploy Python test slice.
