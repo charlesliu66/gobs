@@ -21,7 +21,7 @@
 ## 4) Self-Test Results
 | Test type | Command/Method | Result | Evidence |
 |---|---|---|---|
-| Unit | `python3 -m unittest scripts.tests.test_init_dual_env_server scripts.tests.test_release_guard scripts.tests.test_set_deployment_state scripts.tests.test_deploy_api scripts.tests.test_deploy_frontend scripts.tests.test_deploy_all scripts.tests.test_deploy_config` | Pass | 39 tests passed on default Python 3.10. |
+| Unit | `python3 -m unittest discover scripts/tests` | Pass | 50 tests passed on default Python 3.10 after the SFTP socket-timeout/progress follow-up. |
 | Scope guard | `python3 scripts/workflow_guard.py --run-id 2026-05-09-release-tooling-hardening --stage build` | Pass | Guard checked script/test/doc/product changes with no findings. |
 
 ## 5) Known Risks and Uncertainties
@@ -35,6 +35,6 @@
 - If No, list deviations and reasons: N/A. The only scope expansion was explicitly recorded in `SESSION-ANCHOR.md` for `scripts/init_dual_env_server.py` after finding the same Python 3.10 UTC issue.
 
 ## 7) Change Summary
-- What changed: Release scripts now work on Python 3.10 without UTC shims and deploy scripts have finite SSH/SFTP waits plus cleanup.
+- What changed: Release scripts now work on Python 3.10 without UTC shims and deploy scripts have finite SSH/SFTP/socket waits, lighter SFTP confirmation waits, upload progress, and cleanup.
 - Why changed: The previous production deployment required a temporary `sitecustomize.py` shim and manual local process termination after remote deploy success.
 - What did not change: Product UI, Campaign/Studio/Distribution behavior, server env vars, provider integrations, and release guard policy.

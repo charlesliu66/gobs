@@ -32,8 +32,8 @@ class FakeSftp:
     def mkdir(self, remote_path):
         self.directories.add(remote_path)
 
-    def put(self, local_path, remote_path):
-        self.uploads.append((Path(local_path).name, remote_path))
+    def put(self, local_path, remote_path, **kwargs):
+        self.uploads.append((Path(local_path).name, remote_path, kwargs))
 
     def close(self):
         self.closed = True
@@ -82,8 +82,8 @@ class DeployFrontendTests(unittest.TestCase):
             self.assertEqual(
                 sftp.uploads,
                 [
-                    ('main.js', '/remote/frontend/assets/main.js'),
-                    ('index.html', '/remote/frontend/index.html'),
+                    ('main.js', '/remote/frontend/assets/main.js', {'confirm': False}),
+                    ('index.html', '/remote/frontend/index.html', {'confirm': False}),
                 ],
             )
 

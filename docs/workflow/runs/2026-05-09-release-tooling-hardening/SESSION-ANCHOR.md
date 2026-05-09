@@ -5,7 +5,7 @@
 - Goal: Harden release tooling so Python 3.10 deploy machines can mark/promote releases and Paramiko deploy scripts finish deterministically after successful uploads.
 - Owner: codex
 - Branch or commit context: main@2fedae1
-- Last updated: 2026-05-09T06:47:00Z
+- Last updated: 2026-05-09T06:58:00Z
 
 ## Acceptance Criteria Snapshot
 - AC-01: Python 3.10 can build release-ready and deployment-state timestamps without temporary datetime.UTC shims.

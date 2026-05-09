@@ -47,10 +47,15 @@ def configure_ssh_keepalive(
     client: paramiko.SSHClient,
     *,
     interval_seconds: int = DEFAULT_KEEPALIVE_SECONDS,
+    socket_timeout_seconds: int = DEFAULT_CHANNEL_TIMEOUT_SECONDS,
 ) -> None:
     transport = client.get_transport()
     if transport is not None:
         transport.set_keepalive(interval_seconds)
+        sock = getattr(transport, 'sock', None)
+        settimeout = getattr(sock, 'settimeout', None)
+        if callable(settimeout):
+            settimeout(socket_timeout_seconds)
 
 
 def configure_sftp_timeout(
@@ -213,7 +218,8 @@ def main() -> bool:
                 if item.is_dir():
                     upload_dir(item, remote_path)
                 else:
-                    sftp.put(str(item), remote_path)
+                    sftp.put(str(item), remote_path, confirm=False)
+                    print(f'  {item.relative_to(LOCAL_DIST)}')
 
         def upload_runtime_scripts(remote_dir: str) -> None:
             assert sftp is not None
@@ -221,7 +227,8 @@ def main() -> bool:
             ensure_runtime_scripts_exist(script_paths)
             remote_mkdir_p(remote_dir)
             for script_path in script_paths:
-                sftp.put(str(script_path), f'{remote_dir}/{script_path.name}')
+                sftp.put(str(script_path), f'{remote_dir}/{script_path.name}', confirm=False)
+                print(f'  runtime/{script_path.name}')
 
         print(f'正在上传后端产物到 {config.target}: {LOCAL_DIST} -> {config.api_dir}')
         upload_dir(LOCAL_DIST, config.api_dir)

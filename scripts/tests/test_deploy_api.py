@@ -5,6 +5,7 @@ from pathlib import Path
 from scripts.deploy_api import (
     DeployRuntimeError,
     close_quietly,
+    configure_ssh_keepalive,
     configure_sftp_timeout,
     ensure_pm2_online,
     ensure_runtime_scripts_exist,
@@ -76,6 +77,31 @@ class FakeSftp:
 
     def get_channel(self):
         return self.channel
+
+
+class FakeSock:
+    def __init__(self):
+        self.timeout = None
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+
+
+class FakeTransport:
+    def __init__(self):
+        self.keepalive = None
+        self.sock = FakeSock()
+
+    def set_keepalive(self, interval):
+        self.keepalive = interval
+
+
+class FakeTransportClient:
+    def __init__(self, transport):
+        self.transport = transport
+
+    def get_transport(self):
+        return self.transport
 
 
 class BrokenCloser:
@@ -156,6 +182,18 @@ class DeployApiTests(unittest.TestCase):
         configure_sftp_timeout(FakeSftp(channel), timeout_seconds=45)
 
         self.assertEqual(channel.timeout, 45)
+
+    def test_configure_ssh_keepalive_sets_transport_keepalive_and_socket_timeout(self):
+        transport = FakeTransport()
+
+        configure_ssh_keepalive(
+            FakeTransportClient(transport),
+            interval_seconds=15,
+            socket_timeout_seconds=90,
+        )
+
+        self.assertEqual(transport.keepalive, 15)
+        self.assertEqual(transport.sock.timeout, 90)
 
     def test_close_quietly_swallows_close_errors(self):
         close_quietly(BrokenCloser())

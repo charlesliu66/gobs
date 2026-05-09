@@ -66,7 +66,7 @@ def main() -> bool:
                 if item.is_dir():
                     upload_dir(item, remote_path)
                 else:
-                    sftp.put(str(item), remote_path)
+                    sftp.put(str(item), remote_path, confirm=False)
                     print(f'  {item.relative_to(LOCAL_DIST)}')
 
         print(f'正在上传前端产物到 {config.target}: {LOCAL_DIST} -> {config.frontend_dir}')
