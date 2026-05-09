@@ -12,6 +12,7 @@
 - Distribution Center operator MVP is active at `docs/workflow/runs/2026-05-09-distribution-center-ops-mvp/`, reducing duplicate Campaign inputs, adding account groups, and making platform copy/account mapping visible.
 - Distribution Center publish history follow-up is active at `docs/workflow/runs/2026-05-09-distribution-publish-history-filters/`, adding frontend-only history filters and date grouping without touching GeeLark publish APIs.
 - Campaign to Studio production bridge is active at `docs/workflow/runs/2026-05-09-campaign-studio-production-bridge/`, connecting eligible Campaign Output video items to Advanced Studio and adding unified Asset Library reference slots.
+- Current optimization recommendation is recorded at `docs/plans/2026-05-09-gobs-current-state-optimization-recommendation.md`: prioritize `方案 C + 方案 A` (experience loop + safe reduction), and defer large state-management/component rewrites.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -29,9 +30,9 @@
 - 当前产品北极星：`Campaign Creative Agent` 必须从 campaign brief 出发，产出创意素材或变体，并把它们送入分发。
 - 当前默认受众：市场和运营同学；专业剪辑、制片和深度调参能力保留在 `Advanced Studio`，不再定义默认体验。
 - 当前最值得继续推进的方向：
-  1. `Campaign Creative -> Distribution Handoff MVP`：把 mission-first generated brief、选中的 campaign variant / asset / CTA / routed knowledge context 送入待发布包。
-  2. `Human Feedback Loop Phase 0`：先记住人工判断，不假装短期已有投放效果监控。
-  3. `Gold and Glory Brain Refresh Workflow`：让后续 fastpublishing 更新能被稳定 diff、刷新和记录版本。
+  1. `Campaign -> Studio -> Distribution` 体验闭环：Studio 生成结果要能稳定回填到 Campaign Package / Distribution 上下文。
+  2. `Legacy Surface Reduction`：先审计并清理/隔离 `sj-ui`、`RiskSentiment/TiktokMatrix` 等非主线表面。
+  3. `Distribution Center Step Refinement`：继续拆 `TabDistribute`，但围绕真实运营步骤拆，不做纯技术大重构。
 
 ---
 

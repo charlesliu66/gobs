@@ -1,6 +1,6 @@
 # Plans Index
 
-> 最后更新：2026-05-07
+> 最后更新：2026-05-09
 > 用途：说明 `docs/plans/` 存什么、什么时候该放到这里，而不是放进 `workflow/runs/`。
 
 ---
@@ -24,6 +24,10 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-09-gobs-current-state-optimization-recommendation.md](./2026-05-09-gobs-current-state-optimization-recommendation.md)
+  - 基于 OpenClaw 项目现状评估和最新 Campaign/Studio/Distribution 优化结果，明确下一阶段采用 `方案 C + 方案 A`：先跑顺运营体验闭环，再做低风险减法，暂缓大规模状态管理/组件重构。
+- [2026-05-09-distribution-center-optimization.md](./2026-05-09-distribution-center-optimization.md)
+  - Distribution Center 专项优化方案；部分内容已由 operator MVP 和 publish history follow-up 落地，后续以当前状态优化建议为上层优先级。
 - [2026-05-07-campaign-to-distribution-handoff-mvp-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md>)
   - 基于 OpenClaw 代码/产品评估、当前北极星和 `a94a7f5` mission-first 基线，定义 `Mission -> Generated Brief Review -> Variant Pack -> Distribution Package -> 分发` 的下一步主线、产品形态、技术边界和分期路线。
 - [2026-05-06-campaign-creative-agent-next-phase-design.md](</C:/Users/wei.liu/Desktop/cursor_try/QAS/docs/plans/2026-05-06-campaign-creative-agent-next-phase-design.md>)

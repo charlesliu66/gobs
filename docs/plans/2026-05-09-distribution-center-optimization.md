@@ -3,6 +3,23 @@
 > Date: 2026-05-09
 > Owner: Charles
 > Purpose: 理顺分发中心逻辑，让市场运营用得顺。聚焦可用性，不做定时发布/审批流/数据回流等未来功能。
+> Status: 部分已落地。`2026-05-09-distribution-center-ops-mvp` 已完成只读 Campaign Package context、direct caption hint、账号组、平台文案卡和 pending package 信息增强；`2026-05-09-distribution-publish-history-filters` 已推进发布历史筛选。下一轮分发优化应参考 [GOBS Current State Optimization Recommendation](./2026-05-09-gobs-current-state-optimization-recommendation.md)，优先服务 `Campaign -> Studio -> Distribution` 体验闭环。
+
+## 0. 2026-05-09 更新判断
+
+本文件仍作为 Distribution Center 专项方案保留，但其中若干问题已经不再是“未落地状态”：
+
+- Campaign Package 路径的重复输入表单已改为只读上下文展示；当前保留的 `campaignObjective` 等字段主要用于 package context / caption generation，不应再简单视为重复输入。
+- 账号组快速选择已落地为 `AccountGroupPicker` + `accountGroups.ts`。
+- 平台文案卡片已落地为 `PlatformCopyCards`。
+- Pending Package 卡片的信息密度已增强。
+- 发布历史筛选已进入独立 follow-up run。
+
+后续本文件的重点应收敛为：
+
+1. 继续拆 `TabDistribute`，但只围绕真实步骤体验拆，不做纯技术拆分。
+2. 把 Studio 生成结果稳定回填到 Campaign/Distribution Package，而不是继续堆 localStorage 或 URL query。
+3. 避免把“跨页面业务关联”误解为“立刻引入全局状态库”。
 
 ## 一、背景与定位
 
