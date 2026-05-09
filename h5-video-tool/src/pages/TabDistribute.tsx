@@ -23,6 +23,7 @@ import {
   generateCaptionForPost,
   translateCaptionForPost,
   type CaptionByPlatformResult,
+  type CaptionCampaignContext,
 } from '../api/promptPolish';
 import {
   getLocalPlaybackSrc,
@@ -46,6 +47,8 @@ import {
   type TaskDetailLike,
 } from '../utils/geelarkPublishBatch';
 import { normalizeTaskHistoryItems, type DistributionTaskHistoryItem } from '../components/distribute/distributeSupport.ts';
+import { AccountGroupPicker } from '../components/distribute/AccountGroupPicker.tsx';
+import { PlatformCopyCards } from '../components/distribute/PlatformCopyCards.tsx';
 import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
 import {
   buildDistributeDraftFromPackage,
@@ -99,13 +102,7 @@ export function TabDistribute() {
   const [captionGenLoading, setCaptionGenLoading] = useState(false);
   const [captionGenError, setCaptionGenError] = useState<string | null>(null);
 
-  const [campaignObjective, setCampaignObjective] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
-  const [cta, setCta] = useState('');
-  const [market, setMarket] = useState('');
-  const [brandTone, setBrandTone] = useState('');
-  const [sellingPoints, setSellingPoints] = useState('');
-  const [avoidTerms, setAvoidTerms] = useState('');
+  const [captionHint, setCaptionHint] = useState('');
 
   const [needShareLink, setNeedShareLink] = useState(true);
   const [markAI, setMarkAI] = useState(false);
@@ -327,13 +324,7 @@ export function TabDistribute() {
     setCaptionLang('DEFAULT');
     setPlatformDrafts(nextDraftKeys.length > 0 ? nextDraft.platformDrafts : { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT });
     setActiveDraftKey(nextDraftKeys[0] ?? DEFAULT_DRAFT_KEY);
-    setCampaignObjective(nextDraft.formPrefill.campaignObjective);
-    setTargetAudience(nextDraft.formPrefill.targetAudience);
-    setCta(nextDraft.formPrefill.cta);
-    setMarket(nextDraft.formPrefill.market);
-    setBrandTone(nextDraft.formPrefill.brandTone);
-    setSellingPoints(nextDraft.formPrefill.sellingPoints);
-    setAvoidTerms(nextDraft.formPrefill.avoidTerms);
+    setCaptionHint('');
     setCaptionGenError(null);
     setPushError(null);
   }, []);
@@ -369,8 +360,10 @@ export function TabDistribute() {
 
   const handleGenerateCaption = async () => {
     const promptSeed = resolvePromptSeed(selectedAsset, prompt, taskId);
+    const hint = captionHint.trim();
+    const generationSeed = buildCaptionGenerationSeed(promptSeed, hint);
     const hasExisting = activeDraft.caption.trim().length > 0 || activeDraft.hashtags.trim().length > 0;
-    if (!promptSeed && !hasExisting) {
+    if (!generationSeed && !hasExisting) {
       setCaptionGenError(t('distribute.captionRequiresInput'));
       return;
     }
@@ -387,14 +380,14 @@ export function TabDistribute() {
       const language = captionLang === 'DEFAULT'
         ? replyLocaleToCaptionLanguage(
           resolveReplyLocale({
-            values: [promptSeed, activeDraft.caption, activeDraft.hashtags],
+            values: [generationSeed, activeDraft.caption, activeDraft.hashtags],
             fallbackContentLocale: contentLocale,
           }),
         )
         : captionLang;
 
       const result = await generateCaptionForPost(
-        promptSeed,
+        generationSeed,
         platformKeys.length > 0 ? platformKeys : undefined,
         {
           existingCaption: activeDraft.caption.trim() || undefined,
@@ -409,17 +402,7 @@ export function TabDistribute() {
             region: account.region,
             remark: account.remark,
           })),
-          campaignContext: {
-            campaignObjective: campaignObjective.trim() || undefined,
-            targetAudience: targetAudience.trim() || undefined,
-            callToAction: cta.trim() || undefined,
-            targetMarket: market.trim() || undefined,
-            complianceNotes: [brandTone.trim(), sellingPoints.trim()].filter(Boolean).join(' | ') || undefined,
-            bannedPhrases: avoidTerms
-              .split(/[\n,|]/)
-              .map((value) => value.trim())
-              .filter(Boolean),
-          },
+          campaignContext: buildCaptionCampaignContext(pendingPackageDraft),
         },
       );
 
@@ -485,6 +468,17 @@ export function TabDistribute() {
 
   const handleClearSelection = useCallback(() => {
     setSelectedIds(new Set());
+  }, []);
+
+  const handleApplyAccountGroup = useCallback((accountIds: string[], shouldSelect: boolean) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      accountIds.forEach((id) => {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
   }, []);
 
   const handleLoadHistoryDetail = useCallback(async (historyTaskId: string) => {
@@ -599,6 +593,14 @@ export function TabDistribute() {
   });
 
   const draftKeys = Object.keys(platformDrafts);
+  const copyCardKeys = useMemo(
+    () => buildCopyCardKeys(selectedPlatformKeys, draftKeys, DEFAULT_DRAFT_KEY),
+    [draftKeys, selectedPlatformKeys],
+  );
+  const copyCardAccountCounts = useMemo(
+    () => buildPlatformAccountCounts(selectedAccounts, copyCardKeys, DEFAULT_DRAFT_KEY),
+    [copyCardKeys, selectedAccounts],
+  );
   const hasAnyCopy = draftKeys.some((key) => {
     const draft = platformDrafts[key] ?? EMPTY_DRAFT;
     return draft.caption.trim().length > 0 || draft.hashtags.trim().length > 0;
@@ -657,6 +659,11 @@ export function TabDistribute() {
           openQuickFilm: t('distribute.pendingPackagesOpenQuickFilm'),
           assetState: t('distribute.pendingPackagesAssetState'),
           reviewStatus: t('distribute.pendingPackagesReviewStatus'),
+          packageAngle: t('distribute.pendingPackagesAngle'),
+          packageHook: t('distribute.pendingPackagesHook'),
+          packageTargets: t('distribute.pendingPackagesTargets'),
+          publishableBadge: t('distribute.pendingPackagesPublishableBadge'),
+          needsAssetBadge: t('distribute.pendingPackagesNeedsAssetBadge'),
           assetStateLabels: {
             publishable: t('distribute.pendingPackagesAssetStateLabels.publishable'),
             needsAsset: t('distribute.pendingPackagesAssetStateLabels.needsAsset'),
@@ -849,6 +856,26 @@ export function TabDistribute() {
               </div>
             )}
 
+            <div className="mb-4">
+              <AccountGroupPicker
+                accounts={accountsForPermission}
+                selectedIds={selectedIds}
+                onApplyGroup={handleApplyAccountGroup}
+                labels={{
+                  title: t('distribute.accountGroupsTitle'),
+                  empty: t('distribute.accountGroupsEmpty'),
+                  config: t('distribute.accountGroupsConfig'),
+                  custom: t('distribute.accountGroupsCustom'),
+                  selected: t('distribute.accountGroupsSelected'),
+                  save: t('distribute.accountGroupsSave'),
+                  savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
+                  cancel: t('common.cancel'),
+                  delete: t('common.delete'),
+                  selectedCount: t('distribute.accountGroupsSelectedCount'),
+                }}
+              />
+            </div>
+
             <div className="space-y-2">
               {filteredAccounts.length === 0 ? (
                 <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.noMatchedAccounts')}</p>
@@ -882,90 +909,46 @@ export function TabDistribute() {
         )}
       </section>
 
-      <section className="mb-6 space-y-4">
-        <h2 className="section-title">{t('distribute.campaignTitle')}</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.campaignObjective')}</span>
-            <input
-              type="text"
-              value={campaignObjective}
-              onChange={(event) => setCampaignObjective(event.target.value)}
-              placeholder={t('distribute.campaignObjectivePlaceholder')}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.targetAudience')}</span>
-            <input
-              type="text"
-              value={targetAudience}
-              onChange={(event) => setTargetAudience(event.target.value)}
-              placeholder={t('distribute.targetAudiencePlaceholder')}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.callToAction')}</span>
-            <input
-              type="text"
-              value={cta}
-              onChange={(event) => setCta(event.target.value)}
-              placeholder={t('distribute.callToActionPlaceholder')}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.market')}</span>
-            <input
-              type="text"
-              value={market}
-              onChange={(event) => setMarket(event.target.value)}
-              placeholder={t('distribute.marketPlaceholder')}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.brandTone')}</span>
-            <input
-              type="text"
-              value={brandTone}
-              onChange={(event) => setBrandTone(event.target.value)}
-              placeholder={t('distribute.brandTonePlaceholder')}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.sellingPoints')}</span>
-            <textarea
-              value={sellingPoints}
-              onChange={(event) => setSellingPoints(event.target.value)}
-              placeholder={t('distribute.sellingPointsPlaceholder')}
-              rows={2}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.avoidTerms')}</span>
-            <textarea
-              value={avoidTerms}
-              onChange={(event) => setAvoidTerms(event.target.value)}
-              placeholder={t('distribute.avoidTermsPlaceholder')}
-              rows={2}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-            />
-          </label>
-        </div>
-      </section>
-
       <section className="mb-6">
         <h2 className="section-title">{t('distribute.videoAndCaption')}</h2>
         {selectedAsset ? (
           <>
             <div className="space-y-4">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <label className="text-xs text-[var(--color-text-muted)]">{t('distribute.caption')}</label>
-                <div className="flex items-center gap-2">
+              {pendingPackageDraft ? (
+                <CampaignContextSummary
+                  draft={pendingPackageDraft}
+                  labels={{
+                    title: t('distribute.packageContextTitle'),
+                    subtitle: t('distribute.packageContextSubtitle'),
+                    objective: t('distribute.campaignObjective'),
+                    audience: t('distribute.targetAudience'),
+                    cta: t('distribute.callToAction'),
+                    market: t('distribute.market'),
+                    tone: t('distribute.brandTone'),
+                    sellingPoints: t('distribute.sellingPoints'),
+                    avoidTerms: t('distribute.avoidTerms'),
+                    empty: t('common.none'),
+                  }}
+                />
+              ) : (
+                <label className="space-y-1">
+                  <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.captionHintInput')}</span>
+                  <input
+                    type="text"
+                    value={captionHint}
+                    onChange={(event) => setCaptionHint(event.target.value)}
+                    placeholder={t('distribute.captionHintPlaceholder')}
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
+                  />
+                </label>
+              )}
+
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('distribute.captionByPlatform')}</h3>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t('distribute.captionHint')}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   {CAPTION_LANGS.map((lang) => (
                     <button
                       key={lang}
@@ -985,7 +968,7 @@ export function TabDistribute() {
                   <button
                     type="button"
                     onClick={() => void handleGenerateCaption()}
-                    disabled={captionGenLoading || (!resolvePromptSeed(selectedAsset, prompt, taskId) && !hasAnyCopy)}
+                    disabled={captionGenLoading || (!buildCaptionGenerationSeed(resolvePromptSeed(selectedAsset, prompt, taskId), captionHint.trim()) && !hasAnyCopy)}
                     className="text-xs text-[var(--color-primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {captionGenLoading
@@ -1004,87 +987,30 @@ export function TabDistribute() {
                 </div>
               </div>
 
-              <p className="mb-1 text-[10px] leading-snug text-[var(--color-text-subtle)]">
-                {t('distribute.captionHint')}
-              </p>
-
-              {draftKeys.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {draftKeys.map((draftKey) => (
-                    <button
-                      key={draftKey}
-                      type="button"
-                      onClick={() => setActiveDraftKey(draftKey)}
-                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                        activeDraftKey === draftKey
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                      }`}
-                    >
-                      {draftKey === DEFAULT_DRAFT_KEY ? t('distribute.defaultDraftLabel') : draftKey}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <textarea
-                value={activeDraft.caption}
-                onChange={(event) => updateDraft(activeDraftKey, { caption: event.target.value })}
-                placeholder={t('distribute.captionPlaceholder')}
-                rows={3}
-                className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
-              />
-
               {captionGenError && (
                 <p className="mt-1 text-xs text-[var(--color-error)]">{captionGenError}</p>
               )}
 
-              <div>
-                <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t('distribute.hashtags')}</label>
-                <input
-                  type="text"
-                  value={activeDraft.hashtags}
-                  onChange={(event) => updateDraft(activeDraftKey, { hashtags: event.target.value })}
-                  placeholder={t('distribute.hashtagsPlaceholder')}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none"
-                />
-              </div>
-
-              {draftKeys.length > 1 && (
-                <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                  <h4 className="text-xs font-medium text-[var(--color-text-muted)]">{t('distribute.captionByPlatform')}</h4>
-                  <div className="space-y-2">
-                    {draftKeys.map((draftKey) => {
-                      const draft = platformDrafts[draftKey] ?? EMPTY_DRAFT;
-                      return (
-                        <button
-                          key={draftKey}
-                          type="button"
-                          onClick={() => setActiveDraftKey(draftKey)}
-                          className={`w-full rounded border p-3 text-left ${
-                            activeDraftKey === draftKey
-                              ? 'border-[var(--color-primary)] bg-[var(--color-surface-elevated)]'
-                              : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface-hover)]'
-                          }`}
-                        >
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-medium uppercase text-[var(--color-primary)]">
-                              {draftKey === DEFAULT_DRAFT_KEY ? t('distribute.defaultDraftLabel') : draftKey}
-                            </span>
-                            {activeDraftKey === draftKey && (
-                              <span className="text-[10px] text-[var(--color-text-subtle)]">{t('distribute.activeDraft')}</span>
-                            )}
-                          </div>
-                          <p className="break-words text-xs text-[var(--color-text)]">{draft.caption || t('common.none')}</p>
-                          {draft.hashtags && (
-                            <p className="mt-1 text-xs text-[var(--color-text-muted)]">{draft.hashtags}</p>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <PlatformCopyCards
+                draftKeys={copyCardKeys}
+                defaultDraftKey={DEFAULT_DRAFT_KEY}
+                drafts={platformDrafts}
+                activeDraftKey={activeDraftKey}
+                accountCounts={copyCardAccountCounts}
+                onSetActiveDraft={setActiveDraftKey}
+                onUpdateDraft={updateDraft}
+                labels={{
+                  defaultDraft: t('distribute.defaultDraftLabel'),
+                  activeDraft: t('distribute.activeDraft'),
+                  accountCount: t('distribute.copyCardAccountCount'),
+                  noAccounts: t('distribute.copyCardNoAccounts'),
+                  caption: t('distribute.caption'),
+                  captionPlaceholder: t('distribute.captionPlaceholder'),
+                  hashtags: t('distribute.hashtags'),
+                  hashtagsPlaceholder: t('distribute.hashtagsPlaceholder'),
+                  inheritedFallback: t('distribute.copyCardInheritedFallback'),
+                }}
+              />
             </div>
           </>
         ) : (
@@ -1269,6 +1195,59 @@ export function TabDistribute() {
   );
 }
 
+interface CampaignContextSummaryLabels {
+  title: string;
+  subtitle: string;
+  objective: string;
+  audience: string;
+  cta: string;
+  market: string;
+  tone: string;
+  sellingPoints: string;
+  avoidTerms: string;
+  empty: string;
+}
+
+function CampaignContextSummary({
+  draft,
+  labels,
+}: {
+  draft: PendingDistributionDraft;
+  labels: CampaignContextSummaryLabels;
+}) {
+  const context = draft.captionContext;
+  const items = [
+    { key: 'objective', label: labels.objective, value: context.campaignObjective },
+    { key: 'audience', label: labels.audience, value: context.targetAudience },
+    { key: 'cta', label: labels.cta, value: context.callToAction },
+    { key: 'market', label: labels.market, value: context.targetMarket },
+    { key: 'tone', label: labels.tone, value: context.toneRules },
+    { key: 'sellingPoints', label: labels.sellingPoints, value: context.sellingPoints },
+    { key: 'avoidTerms', label: labels.avoidTerms, value: context.avoidTerms },
+  ].filter((item) => item.value.trim());
+
+  return (
+    <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-[var(--color-text)]">{labels.title}</h3>
+        <p className="mt-1 text-xs text-[var(--color-text-muted)]">{labels.subtitle}</p>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-[var(--color-text-muted)]">{labels.empty}</p>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2">
+          {items.map((item) => (
+            <div key={item.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">{item.label}</p>
+              <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[var(--color-text-muted)]">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getDisplayStatus(item: LatestPublishBatchItem, t: (key: string) => string): string {
   if (item.statusText === 'submitting') return t('distribute.batchStatusSubmitting');
   if (item.statusText === 'submit_failed') return t('distribute.batchStatusSubmitFailed');
@@ -1434,6 +1413,75 @@ function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }:
 
 function normalizePlatformKey(platform?: string | null): string {
   return platform?.trim().toLowerCase() || DEFAULT_DRAFT_KEY;
+}
+
+function buildCaptionGenerationSeed(promptSeed: string, captionHint: string): string {
+  const hint = captionHint.trim();
+  return [
+    promptSeed.trim(),
+    hint ? `Operator hint: ${hint}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
+function splitContextList(value: string): string[] {
+  return value
+    .split(/[\n,|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildCaptionCampaignContext(draft: PendingDistributionDraft | null): CaptionCampaignContext | undefined {
+  if (!draft) return undefined;
+  const context = draft.captionContext;
+  const complianceNotes = [
+    context.toneRules,
+    context.sellingPoints,
+    draft.campaignContext.marketTruth.join(' | '),
+    draft.campaignContext.visualCues.join(' | '),
+  ].map((item) => item.trim()).filter(Boolean).join(' | ');
+
+  return {
+    campaignObjective: context.campaignObjective.trim() || undefined,
+    targetAudience: context.targetAudience.trim() || undefined,
+    callToAction: context.callToAction.trim() || undefined,
+    targetMarket: context.targetMarket.trim() || undefined,
+    complianceNotes: complianceNotes || undefined,
+    bannedPhrases: uniqueStrings([
+      ...splitContextList(context.avoidTerms),
+      ...draft.campaignContext.forbiddenClaims,
+    ]),
+  };
+}
+
+function buildCopyCardKeys(
+  selectedPlatformKeys: string[],
+  draftKeys: string[],
+  defaultDraftKey: string,
+): string[] {
+  const keys = new Set<string>();
+  selectedPlatformKeys.forEach((key) => keys.add(key || defaultDraftKey));
+  draftKeys.forEach((key) => keys.add(key || defaultDraftKey));
+  if (keys.size === 0) keys.add(defaultDraftKey);
+  return [...keys];
+}
+
+function buildPlatformAccountCounts(
+  accounts: GeelarkAccount[],
+  draftKeys: string[],
+  defaultDraftKey: string,
+): Record<string, number> {
+  return Object.fromEntries(
+    draftKeys.map((key) => [
+      key,
+      key === defaultDraftKey
+        ? accounts.length
+        : accounts.filter((account) => normalizePlatformKey(account.platform) === key).length,
+    ]),
+  );
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function buildCurrentAssetOption(input: {

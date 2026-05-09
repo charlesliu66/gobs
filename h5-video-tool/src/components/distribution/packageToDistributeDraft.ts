@@ -18,12 +18,12 @@ export interface PendingDistributionDraft {
   } | null;
   selectedPlatformKeys: string[];
   platformDrafts: Record<string, { caption: string; hashtags: string }>;
-  formPrefill: {
+  captionContext: {
     campaignObjective: string;
     targetAudience: string;
-    cta: string;
-    market: string;
-    brandTone: string;
+    callToAction: string;
+    targetMarket: string;
+    toneRules: string;
     sellingPoints: string;
     avoidTerms: string;
   };
@@ -96,12 +96,12 @@ export function buildDistributeDraftFromPackage(pkg: CampaignDistributionPackage
     selectedAsset,
     selectedPlatformKeys,
     platformDrafts,
-    formPrefill: {
+    captionContext: {
       campaignObjective: pkg.campaign.objective ?? '',
       targetAudience: pkg.knowledgeContext.audienceTension[0] ?? pkg.variant.audience ?? '',
-      cta: pkg.variant.cta ?? '',
-      market: pkg.publishIntent.markets[0] ?? '',
-      brandTone: pkg.knowledgeContext.toneRules.join(' | '),
+      callToAction: pkg.variant.cta ?? '',
+      targetMarket: pkg.publishIntent.markets[0] ?? '',
+      toneRules: pkg.knowledgeContext.toneRules.join(' | '),
       sellingPoints: [pkg.variant.angle, ...pkg.knowledgeContext.approvedAngles].filter(Boolean).join('\n'),
       avoidTerms: pkg.knowledgeContext.forbiddenClaims.join('\n'),
     },

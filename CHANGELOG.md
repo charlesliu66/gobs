@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.170 - 2026-05-09
+**Distribution Center operator MVP**
+**Distribution / Campaign Package / GeeLark Accounts:**
+- Removed the duplicate editable Campaign Brief form from `/distribute`; Campaign Package context now appears as a read-only summary that still feeds caption generation.
+- Added a lightweight direct-publish caption hint and platform copy cards that show selected-account counts while preserving the existing platform-grouped publish payload.
+- Added permission-scoped account group quick selection from `group:` account remarks plus custom localStorage groups, with stale IDs filtered against currently permitted accounts.
+- Enriched pending package cards with angle, hook, target platform/market, publishability badges, and missing-asset next actions without changing GeeLark core routes/services.
+**Tests / Build:**
+- Reran frontend TypeScript checks after the MVP UI changes; full release verification evidence is recorded in the workflow run.
+
 ## v0.169 - 2026-05-09
 **Advanced Studio template optimization Phase 1**
 **Studio / Templates:**

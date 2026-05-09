@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.169)*
+*Last updated: 2026-05-09 (v0.170)*
 
-**Latest update - v0.169**
-- Focused `/studio` creation on three marketer-facing modes: Quick Single, Motion Transfer, and Character Showcase.
-- Removed active Short Drama / Cat Harem configs, presets, frontend fallback data, and Studio UI branches; legacy preset calls now return an empty list.
-- Added Quick Single inspiration prompts and template-specific duration/aspect choices without touching protected video generation services.
+**Latest update - v0.170**
+- Optimized `/distribute` for operator publishing by removing duplicate editable Campaign Brief fields while keeping package context as a read-only copy-generation summary.
+- Added lightweight direct-path caption hints, permission-scoped account group quick selection, and platform copy cards that show which selected accounts each draft maps to.
+- Enriched pending package cards with angle, hook, target platform/market, publishable state, and missing-asset next actions without changing GeeLark core publishing logic.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -227,7 +227,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
-- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片三路选资产，显式勾选账号、按平台维护文案草稿、发布前检查与近期发布历史。
+- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量，发布前仍需显式勾选账号并确认。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?

@@ -15,6 +15,11 @@ type Copy = {
   openQuickFilm: string;
   assetState: string;
   reviewStatus: string;
+  packageAngle: string;
+  packageHook: string;
+  packageTargets: string;
+  publishableBadge: string;
+  needsAssetBadge: string;
   assetStateLabels: {
     publishable: string;
     needsAsset: string;
@@ -82,6 +87,8 @@ export function PendingDistributionPackages({
         <div className="grid gap-3 lg:grid-cols-2">
           {packages.map((pkg) => {
             const isActive = pkg.id === activePackageId;
+            const isPublishable = pkg.assetReadiness.state === 'publishable';
+            const needsAsset = pkg.assetReadiness.state === 'needs_asset';
             return (
               <article
                 key={pkg.id}
@@ -93,7 +100,19 @@ export function PendingDistributionPackages({
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-[var(--color-text)]">{pkg.title}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-[var(--color-text)]">{pkg.title}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        isPublishable
+                          ? 'bg-emerald-500/15 text-emerald-200'
+                          : needsAsset
+                            ? 'bg-amber-500/15 text-amber-100'
+                            : 'bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)]'
+                      }`}
+                      >
+                        {isPublishable ? copy.publishableBadge : needsAsset ? copy.needsAssetBadge : resolveAssetStateLabel(pkg.assetReadiness.state, copy)}
+                      </span>
+                    </div>
                     <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
                       {pkg.campaign.mission || pkg.variant.hook}
                     </p>
@@ -107,6 +126,17 @@ export function PendingDistributionPackages({
                   </button>
                 </div>
 
+                <div className="mt-4 space-y-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-surface-elevated)]/70 p-3">
+                  <InfoLine label={copy.packageAngle} value={pkg.variant.angle} />
+                  <InfoLine label={copy.packageHook} value={pkg.variant.hook} />
+                  <InfoLine
+                    label={copy.packageTargets}
+                    value={[pkg.publishIntent.platforms.join(', '), pkg.publishIntent.markets.join(', ')]
+                      .filter(Boolean)
+                      .join(' · ') || '-'}
+                  />
+                </div>
+
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <InfoBlock
                     label={copy.assetState}
@@ -118,12 +148,8 @@ export function PendingDistributionPackages({
                   />
                 </div>
 
-                <div className="mt-3 text-xs text-[var(--color-text-muted)]">
-                  {pkg.publishIntent.platforms.join(', ') || '-'} · {pkg.publishIntent.markets.join(', ') || '-'}
-                </div>
-
                 {isActive && activeDraft && !activeDraft.publishSafety.canPublishDirectly ? (
-                  <div className="mt-4 rounded-2xl border border-dashed border-[var(--color-border)]/70 bg-[var(--color-surface-elevated)]/70 p-4">
+                  <div className="mt-4 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/10 p-4">
                     <div className="text-sm font-semibold text-[var(--color-text)]">{copy.nextActionsTitle}</div>
                     {activeDraft.publishSafety.reason ? (
                       <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
@@ -154,6 +180,15 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-[var(--color-border)]/50 bg-[var(--color-surface-elevated)] px-3 py-3">
       <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--color-text-subtle)]">{label}</div>
       <p className="mt-2 text-sm text-[var(--color-text)]">{value}</p>
+    </div>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 md:grid-cols-[7rem_minmax(0,1fr)]">
+      <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">{label}</span>
+      <span className="break-words text-xs leading-5 text-[var(--color-text-muted)]">{value || '-'}</span>
     </div>
   );
 }
