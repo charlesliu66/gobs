@@ -27,6 +27,8 @@
 | Eval | Backend build, frontend build, TypeScript, and API health. | PASS | `eval-result.json` |
 | Staging deploy | Latest pushed mainline deployed to staging and marked release-ready. | PASS | `/api/system/version` returned `environment=staging`; `release-ready.json` was updated by `codex`. |
 | Staging H5 smoke | `/`, `/campaign-creative`, `/studio`, `/distribute`, `/api/health`. | PASS | All H5 routes returned 200; API health returned 200. |
+| Prod deploy | Latest pushed mainline deployed to prod and deployment state restored idle. | PASS | `/api/system/version` returned `environment=prod`; `/api/health` returned 200. |
+| Prod H5 smoke | `/`, `/campaign-creative`, `/studio`, `/distribute`. | PASS | All H5 routes returned 200 and served the current frontend entry bundle. |
 
 ## 4) Failed Items (Defect List)
 | Defect ID | Severity (P0-P3) | Title | Repro Steps | Expected | Actual | Suggested Fix Order |
@@ -46,4 +48,4 @@
 ## 7) Final Verification Verdict
 - Gate 3 status: GO
 - Gate 4 blocking defects (P0/P1): 0
-- Release recommendation: GO for prod candidate after staging verification; prod still requires explicit production release action.
+- Release recommendation: GO complete; staging and prod smoke passed, with provider-specific follow-ups still out of scope.
