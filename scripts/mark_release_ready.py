@@ -23,7 +23,14 @@ def _write_remote_json(target: str, remote_path: str, payload: dict[str, Any]) -
     config = build_target_config(target)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(config.host, username=config.user, password=config.password, timeout=30)
+    client.connect(
+        config.host,
+        username=config.user,
+        password=config.password,
+        look_for_keys=False,
+        allow_agent=False,
+        timeout=30,
+    )
     sftp = client.open_sftp()
     try:
         remote_dir = str(PurePosixPath(remote_path).parent)

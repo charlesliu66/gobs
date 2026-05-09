@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.179 - 2026-05-09
+**Release SSH auth hardening**
+**Deploy / Release Guard:**
+- Forced password-based Paramiko deployment connections to skip local SSH key and agent probing, fixing staging/prod deploy attempts that could fail or hang before uploading artifacts even when `SERVER_PASSWORD` was valid.
+- Applied the same password-only auth behavior to API deploy, frontend deploy via the shared SSH helper, release-ready marking, deployment-state updates, prod promotion readiness reads, and dual-env initialization.
+**Tests / Build:**
+- Added regression coverage for password-only SSH connect parameters and reran the release/deploy Python test slice.
+
 ## v0.178 - 2026-05-09
 **Distribution operator happy path polish**
 **Distribution / Campaign Production Loop:**

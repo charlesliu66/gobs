@@ -2,9 +2,12 @@ import tempfile
 import tarfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from scripts.deploy_api import (
     DeployRuntimeError,
+    connect_ssh_client,
     create_directory_archive,
     close_quietly,
     configure_ssh_keepalive,
@@ -143,7 +146,39 @@ class BrokenCloser:
         raise RuntimeError('close failed')
 
 
+class FakeSSHClientForConnect:
+    def __init__(self):
+        self.policy = None
+        self.connect_kwargs = None
+        self.transport = FakeTransport()
+
+    def set_missing_host_key_policy(self, policy):
+        self.policy = policy
+
+    def connect(self, hostname, **kwargs):
+        kwargs['hostname'] = hostname
+        self.connect_kwargs = kwargs
+
+    def get_transport(self):
+        return self.transport
+
+
 class DeployApiTests(unittest.TestCase):
+    def test_connect_ssh_client_uses_password_only_auth(self):
+        fake_client = FakeSSHClientForConnect()
+        config = SimpleNamespace(host='example.com', user='ubuntu', password='secret')
+
+        with patch('scripts.deploy_api.paramiko.SSHClient', return_value=fake_client):
+            client = connect_ssh_client(config, timeout_seconds=7)
+
+        self.assertIs(client, fake_client)
+        self.assertEqual(fake_client.connect_kwargs['hostname'], 'example.com')
+        self.assertEqual(fake_client.connect_kwargs['username'], 'ubuntu')
+        self.assertEqual(fake_client.connect_kwargs['password'], 'secret')
+        self.assertFalse(fake_client.connect_kwargs['look_for_keys'])
+        self.assertFalse(fake_client.connect_kwargs['allow_agent'])
+        self.assertEqual(fake_client.connect_kwargs['timeout'], 7)
+
     def test_remote_runtime_scripts_dir_sits_next_to_api_dir(self):
         self.assertEqual(remote_parent('/home/ubuntu/qas-h5/prod/api'), '/home/ubuntu/qas-h5/prod')
         self.assertEqual(

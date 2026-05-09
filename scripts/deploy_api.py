@@ -70,6 +70,8 @@ def connect_ssh_client(config, *, timeout_seconds: int = DEFAULT_SSH_TIMEOUT_SEC
         config.host,
         username=config.user,
         password=config.password,
+        look_for_keys=False,
+        allow_agent=False,
         timeout=timeout_seconds,
         banner_timeout=timeout_seconds,
         auth_timeout=timeout_seconds,

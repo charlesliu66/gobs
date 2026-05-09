@@ -141,7 +141,14 @@ def main() -> None:
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(prod.host, username=prod.user, password=prod.password, timeout=30)
+    client.connect(
+        prod.host,
+        username=prod.user,
+        password=prod.password,
+        look_for_keys=False,
+        allow_agent=False,
+        timeout=30,
+    )
 
     try:
         prod_base = _remote_parent(prod.api_dir)

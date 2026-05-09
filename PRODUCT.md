@@ -3,9 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.178)*
+*Last updated: 2026-05-09 (v0.179)*
 
-**Latest update - v0.178**
+**Latest update - v0.179**
+- Release deployment scripts now force password-based Paramiko SSH connections to skip local SSH key/agent probing, preventing staging/prod deploy hangs or auth failures when `SERVER_PASSWORD` is the intended credential.
+- The fix covers API deploy, frontend deploy through the shared SSH helper, release-ready marking, deployment-state updates, prod promotion readiness reads, and dual-env initialization.
+
+**Previous update - v0.178**
 - `/distribute` now remembers recent Package / asset / account / copy / publish-option context in the current browser, so operators can explicitly restore a recent setup after refresh without auto-publishing.
 - Latest publish batches now expose next actions for reviewing the current batch or jumping to publish history, with compatible server-backed publish-history filters/pagination/CSV export and clearer failure guidance beside the raw error.
 - Campaign Studio generated videos now also write back to linked Output Plan items, preserving generated asset ids and package ids for later recovery.
