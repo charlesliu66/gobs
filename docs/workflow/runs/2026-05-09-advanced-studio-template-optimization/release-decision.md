@@ -20,7 +20,7 @@
 | ID | Severity | Description | Owner | Required before prod confidence |
 |---|---|---|---|---|
 | OBS-001 | P2 | This Mac's VPN path allowed SSH commands and HTTP checks but repeatedly stalled on Paramiko/SFTP and OpenSSH `scp` file uploads. Staging was recovered using server-side artifact sync and env restoration instead of local file upload. | Release owner | Prefer a cloud-side deploy runner or fix VPN upload stability before relying on local deploy uploads from this machine. |
-| OBS-002 | P2 | Prod routes and prompt template API appear to serve the current Studio Phase 1 behavior, but `/api/system/version` returns `commitShort=unknown` because prod is missing `api/build-info.json`. | Release owner | Sync prod build metadata or run a standard prod deployment after explicit prod approval. |
+| OBS-002 | Resolved | Prod routes and prompt template API served the current Studio Phase 1 behavior, but `/api/system/version` returned `commitShort=unknown` because prod was missing `api/build-info.json`. User approved a metadata-only maintenance action; prod `api/build-info.json` now points to deployed code commit `37ac488`, and prod smoke passed. | codex | No further action for this metadata issue. |
 
 ## 4) Accepted Risks
 | Risk | Severity | Why accepted | Boundary/Workaround | Follow-up date |
@@ -34,12 +34,10 @@
 - Notes: Protected service files and new provider/env work were not touched. Scope was updated before final guard to include prompt API cleanup, prompt-polish dead-code cleanup, utility extraction, and template registry tests that were required by the accepted ACs.
 
 ## 6) Release Boundary
-- What is guaranteed: Local code builds, tests, API health, commit, GitHub push, staging route smoke, staging frontend asset manifest, staging prompt template API, and staging release-ready marker all pass for `37ac488`.
-- What is not guaranteed: Prod release metadata accuracy until `build-info.json` is restored; Phase 2+ features such as AI image generation, BGM, transitions, and new model providers.
-- Environments validated: Local build/test/eval and staging smoke. Prod was inspected read-only; routes and prompt template API look current, but version metadata is not trustworthy.
+- What is guaranteed: Local code builds, tests, API health, commit, GitHub push, staging route smoke, staging frontend asset manifest, staging prompt template API, staging release-ready marker, and prod metadata smoke all pass for deployed code commit `37ac488`.
+- What is not guaranteed: Phase 2+ features such as AI image generation, BGM, transitions, and new model providers.
+- Environments validated: Local build/test/eval, staging smoke, and metadata-only prod smoke. Prod version metadata is now trustworthy for `37ac488`; note that later docs-only commits such as `f7f6191` are not code artifacts and are not represented in deployed runtime metadata.
 
 ## 7) Next Actions
-1. If prod should become the official release, explicitly approve prod promotion, then run the normal prod gate from the staging-verified `37ac488`.
-2. Fix prod version metadata (`api/build-info.json`) as part of the next prod release or an explicitly approved metadata-only prod maintenance action.
-3. Prefer `.venv/bin/python` on this Mac for release scripts; it uses Python 3.11 and avoids the Python 3.10 `datetime.UTC` incompatibility in `mark_release_ready.py`.
-4. Start a separate Phase 2 run for Unified Asset Selector and AI-generated reference image fallback.
+1. Prefer `.venv/bin/python` on this Mac for release scripts; it uses Python 3.11 and avoids the Python 3.10 `datetime.UTC` incompatibility in `mark_release_ready.py`.
+2. Start a separate Phase 2 run for Unified Asset Selector and AI-generated reference image fallback.
