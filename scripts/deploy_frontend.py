@@ -81,6 +81,9 @@ def main() -> bool:
     try:
         client = connect_ssh_client(config)
 
+        def open_upload_client() -> paramiko.SSHClient:
+            return connect_ssh_client(config)
+
         if source_config is not None:
             if source_config.host != config.host:
                 raise RuntimeError('source-target and target must be on the same host for server-side promotion.')
@@ -105,6 +108,7 @@ def main() -> bool:
                 archive_path=archive_path,
                 remote_dir=config.frontend_dir,
                 remote_archive_name=build_remote_archive_name('frontend', config.target),
+                connect_factory=open_upload_client,
             )
 
         print('前端部署完成')

@@ -19,6 +19,7 @@ from scripts.deploy_api import (
     run_remote_command,
     stream_file_to_remote_command,
     upload_and_extract_archive,
+    upload_archive_to_remote_path,
     upload_file_to_remote_path,
 )
 
@@ -95,6 +96,7 @@ class FakeClient:
         self.command = ''
         self.commands = []
         self.timeout = None
+        self.closed = False
 
     def exec_command(self, command, timeout=None):
         self.command = command
@@ -108,6 +110,9 @@ class FakeClient:
 
     def get_transport(self):
         return self.transport
+
+    def close(self):
+        self.closed = True
 
 
 class FakeSock:
@@ -312,6 +317,37 @@ class DeployApiTests(unittest.TestCase):
             self.assertIn('cat > /tmp/api.tar.gz', client.commands[0])
             self.assertIn('tar -xzf /tmp/api.tar.gz -C /remote/api', client.commands[1])
             self.assertIn('rm -f /tmp/api.tar.gz', client.commands[1])
+
+    def test_upload_archive_to_remote_path_chunks_large_archive_with_upload_factory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = Path(temp_dir) / 'dist.tar.gz'
+            archive_path.write_bytes(b'abcdefghijkl')
+            client = FakeClient(FakeChannel())
+            upload_clients = []
+
+            def connect_factory():
+                upload_client = FakeClient(FakeChannel())
+                upload_clients.append(upload_client)
+                return upload_client
+
+            with (
+                patch('scripts.deploy_api.CHUNKED_UPLOAD_THRESHOLD_BYTES', 4),
+                patch('scripts.deploy_api.REMOTE_UPLOAD_PART_SIZE_BYTES', 4),
+            ):
+                upload_archive_to_remote_path(
+                    client,
+                    archive_path,
+                    '/tmp/dist.tar.gz',
+                    connect_factory=connect_factory,
+                )
+
+            self.assertEqual(len(upload_clients), 3)
+            self.assertEqual(client.commands, [
+                'cat /tmp/dist.tar.gz.part-0000 /tmp/dist.tar.gz.part-0001 /tmp/dist.tar.gz.part-0002 > /tmp/dist.tar.gz && rm -f /tmp/dist.tar.gz.part-0000 /tmp/dist.tar.gz.part-0001 /tmp/dist.tar.gz.part-0002'
+            ])
+            for upload_client in upload_clients:
+                self.assertTrue(upload_client.closed)
+                self.assertIn('base64 -d > /tmp/dist.tar.gz.part-', upload_client.command)
 
     def test_upload_file_to_remote_path_streams_file_to_cat_command(self):
         with tempfile.TemporaryDirectory() as temp_dir:

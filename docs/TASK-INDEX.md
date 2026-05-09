@@ -18,6 +18,7 @@
 - Distribution Center Step Refinement is active at `docs/workflow/runs/2026-05-09-distribution-step-refinement/`, splitting `/distribute` into asset, copy, accounts, and preflight/publish operator sections while preserving GeeLark publish behavior.
 - Distribution Center Step Readiness Nav is active at `docs/workflow/runs/2026-05-09-distribution-step-readiness-nav/`, adding a compact four-step readiness overview and jump anchors without changing GeeLark publish behavior.
 - Distribution Operator Happy Path Polish is active at `docs/workflow/runs/2026-05-09-distribution-operator-happy-path-polish/`, adding recent config restore, latest-batch next actions, compatible publish-history query/pagination/export, clearer publish error guidance, refresh-safe Campaign Output Plan writeback, a guarded GeeLark real-publish verifier, and a legacy-surface reduction audit.
+- Release and Collaboration Governance is active at `docs/workflow/runs/2026-05-09-release-and-workflow-governance/`, implementing the Run 0 recommendation from the next optimization checklist: Dev Worker commit-only handoff, Release Owner pickup discipline, and safer large-archive upload fallback.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -70,6 +71,7 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-09-release-and-workflow-governance` | Run 0 release/collaboration stabilization: commit-only Dev Worker handoff checklist plus bounded large-archive upload fallback for deployment scripts | Builder/Verifier in progress; deployment intentionally deferred to Release Owner window |
 | `2026-05-09-distribution-step-readiness-nav` | Distribution Center readiness nav: compact four-step progress overview and jump anchors for asset/copy/accounts/publish | Verifier GO locally; eval PASS; commit/push and staging deployment next |
 | `2026-05-09-distribution-operator-happy-path-polish` | Distribution operator happy path: recent config restore, latest-batch next actions, compatible history query/export, clearer publish errors, Output Plan writeback, and legacy-surface audit | Builder/Verifier in progress |
 | `2026-05-09-distribution-step-refinement` | Distribution Center step refinement: split `/distribute` into four visible operator sections while keeping `TabDistribute` state/publish ownership intact | Verifier GO locally; eval PASS; commit/push and staging deployment next |

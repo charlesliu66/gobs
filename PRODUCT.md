@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.180)*
+*Last updated: 2026-05-09 (v0.181)*
 
-**Latest update - v0.180**
+**Latest update - v0.181**
+- Dev Worker -> Release Owner handoff is now documented for multi-window work: this development window can stop at a local commit, while a separate Release Owner window handles staging/prod deployment, smoke checks, release-ready marking, and idle restore.
+- Deployment artifact uploads now keep small archives on SSH stdin streaming and use bounded base64 part uploads with retry/cleanup plus optional fresh SSH sessions for larger archives.
+- API and frontend deployment scripts use the safer large-archive upload path without changing their CLI flags or prod frontend staging-to-prod promotion behavior.
+
+**Previous update - v0.180**
 - Development workflow skills now separate multi-window responsibilities: Dev Worker windows implement, verify, commit, push, and hand off; one Release Owner window handles staging/prod deployment, smoke, release-ready marking, and idle restore.
 - Release and smoke skills plus `AGENTS.md` now explicitly guard against parallel deployment-state, deployment-script, and `origin/main` SHA races.
 

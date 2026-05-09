@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.181 - 2026-05-09
+**Release collaboration governance**
+**Workflow / Deploy:**
+- Added a Dev Worker -> Release Owner handoff checklist for multi-window work, making commit-only development handoffs explicit and keeping staging/prod deployment serialized in one release window.
+- Hardened deploy artifact upload internals so small archives still stream over SSH, while larger archives can upload as bounded base64 parts with retry, cleanup, and optional fresh SSH sessions per part before server-side merge/extract.
+- Wired API and frontend local upload paths to use isolated upload connections for larger archives without changing deployment CLI flags or prod frontend server-side promotion behavior.
+**Tests / Build:**
+- Added regression coverage for chunked large-archive upload with an upload connection factory and reran the deploy API unit test slice.
+
 ## v0.180 - 2026-05-09
 **Multi-window development/release split**
 **Workflow / Skills:**

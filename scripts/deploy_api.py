@@ -13,6 +13,7 @@ import shlex
 import tarfile
 import time
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import paramiko
@@ -32,7 +33,8 @@ DEFAULT_KEEPALIVE_SECONDS = 30
 DEFAULT_UPLOAD_TIMEOUT_SECONDS = 600
 UPLOAD_CHUNK_SIZE_BYTES = 64 * 1024
 CHUNKED_UPLOAD_THRESHOLD_BYTES = 256 * 1024
-REMOTE_UPLOAD_PART_SIZE_BYTES = 32 * 1024
+REMOTE_UPLOAD_PART_SIZE_BYTES = 64 * 1024
+REMOTE_UPLOAD_PART_RETRIES = 3
 
 
 class DeployRuntimeError(RuntimeError):
@@ -152,11 +154,17 @@ def upload_and_extract_archive(
     archive_path: Path,
     remote_dir: str,
     remote_archive_name: str,
+    connect_factory: Callable[[], paramiko.SSHClient] | None = None,
 ) -> None:
     remote_archive_path = f'/tmp/{remote_archive_name}'
     size_mb = archive_path.stat().st_size / (1024 * 1024)
     print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> ssh://{remote_archive_path}')
-    upload_archive_to_remote_path(client, archive_path, remote_archive_path)
+    upload_archive_to_remote_path(
+        client,
+        archive_path,
+        remote_archive_path,
+        connect_factory=connect_factory,
+    )
     run_remote_command(
         client,
         ' && '.join([
@@ -171,6 +179,8 @@ def upload_archive_to_remote_path(
     client: paramiko.SSHClient,
     archive_path: Path,
     remote_archive_path: str,
+    *,
+    connect_factory: Callable[[], paramiko.SSHClient] | None = None,
 ) -> None:
     if archive_path.stat().st_size <= CHUNKED_UPLOAD_THRESHOLD_BYTES:
         stream_file_to_remote_command(
@@ -181,33 +191,84 @@ def upload_archive_to_remote_path(
         return
 
     part_paths: list[str] = []
-    with tempfile.TemporaryDirectory() as temp_dir:
-        chunk_dir = Path(temp_dir)
-        with archive_path.open('rb') as handle:
-            index = 0
-            while True:
-                chunk = handle.read(REMOTE_UPLOAD_PART_SIZE_BYTES)
-                if not chunk:
-                    break
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            chunk_dir = Path(temp_dir)
+            with archive_path.open('rb') as handle:
+                index = 0
+                while True:
+                    chunk = handle.read(REMOTE_UPLOAD_PART_SIZE_BYTES)
+                    if not chunk:
+                        break
 
-                local_part = chunk_dir / f'upload-part-{index:04d}'
-                local_part.write_bytes(chunk)
-                remote_part = f'{remote_archive_path}.part-{index:04d}'
-                part_paths.append(remote_part)
-                print(f'  chunk {index + 1} ({len(chunk)} bytes)')
-                write_remote_file_part_base64(client, local_part, remote_part)
-                index += 1
+                    local_part = chunk_dir / f'upload-part-{index:04d}'
+                    local_part.write_bytes(chunk)
+                    remote_part = f'{remote_archive_path}.part-{index:04d}'
+                    part_paths.append(remote_part)
+                    print(f'  chunk {index + 1} ({len(chunk)} bytes)')
+                    write_remote_file_part_base64_with_retries(
+                        client,
+                        local_part,
+                        remote_part,
+                        connect_factory=connect_factory,
+                    )
+                    index += 1
 
-    quoted_parts = ' '.join(shlex.quote(path) for path in part_paths)
-    quoted_cleanup = ' '.join(shlex.quote(path) for path in part_paths)
-    run_remote_command(
-        client,
-        ' && '.join([
-            f'cat {quoted_parts} > {shlex.quote(remote_archive_path)}',
-            f'rm -f {quoted_cleanup}',
-        ]),
-        timeout_seconds=300,
-    )
+        quoted_parts = ' '.join(shlex.quote(path) for path in part_paths)
+        quoted_cleanup = ' '.join(shlex.quote(path) for path in part_paths)
+        run_remote_command(
+            client,
+            ' && '.join([
+                f'cat {quoted_parts} > {shlex.quote(remote_archive_path)}',
+                f'rm -f {quoted_cleanup}',
+            ]),
+            timeout_seconds=300,
+        )
+    except Exception:
+        cleanup_remote_upload_parts(client, part_paths)
+        raise
+
+
+def write_remote_file_part_base64_with_retries(
+    client: paramiko.SSHClient,
+    local_part: Path,
+    remote_part: str,
+    *,
+    connect_factory: Callable[[], paramiko.SSHClient] | None = None,
+) -> None:
+    last_error: Exception | None = None
+    for attempt in range(1, REMOTE_UPLOAD_PART_RETRIES + 1):
+        upload_client: paramiko.SSHClient | None = None
+        try:
+            upload_client = connect_factory() if connect_factory is not None else client
+            write_remote_file_part_base64(upload_client, local_part, remote_part)
+            return
+        except Exception as exc:
+            last_error = exc
+            if attempt >= REMOTE_UPLOAD_PART_RETRIES:
+                break
+            print(f'  chunk retry {attempt}/{REMOTE_UPLOAD_PART_RETRIES - 1}: {remote_part}')
+            time.sleep(min(2 * attempt, 5))
+        finally:
+            if upload_client is not None and upload_client is not client:
+                close_quietly(upload_client)
+
+    if isinstance(last_error, DeployRuntimeError):
+        raise last_error
+    raise DeployRuntimeError(f'上传分片失败: {remote_part}\n{last_error}') from last_error
+
+
+def cleanup_remote_upload_parts(client: paramiko.SSHClient, part_paths: list[str]) -> None:
+    if not part_paths:
+        return
+    try:
+        run_remote_command(
+            client,
+            f"rm -f {' '.join(shlex.quote(path) for path in part_paths)}",
+            timeout_seconds=60,
+        )
+    except Exception:
+        pass
 
 
 def write_remote_file_part_base64(
@@ -388,6 +449,9 @@ def main() -> bool:
     try:
         client = connect_ssh_client(config)
 
+        def open_upload_client() -> paramiko.SSHClient:
+            return connect_ssh_client(config)
+
         def upload_runtime_scripts(remote_dir: str) -> None:
             script_paths = get_runtime_script_paths()
             ensure_runtime_scripts_exist(script_paths)
@@ -404,6 +468,7 @@ def main() -> bool:
                 archive_path=archive_path,
                 remote_dir=config.api_dir,
                 remote_archive_name=build_remote_archive_name('api', config.target),
+                connect_factory=open_upload_client,
             )
         runtime_scripts_dir = get_remote_runtime_scripts_dir(config.api_dir)
         print(f'Uploading backend runtime scripts: {LOCAL_RUNTIME_SCRIPT_DIR} -> {runtime_scripts_dir}')

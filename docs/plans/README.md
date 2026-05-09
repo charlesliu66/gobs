@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-09-next-optimization-execution-checklist.md](./2026-05-09-next-optimization-execution-checklist.md)
+  - 二轮优化后总执行清单：把 OpenClaw 最新评估、当前代码事实和最近发布实操结果收敛成 `发布稳定性 -> 减负清理 -> Distribution 最后一公里 -> 数据契约 -> 巨型组件治理` 的分阶段 checklist。
 - [2026-05-09-gobs-current-state-optimization-recommendation.md](./2026-05-09-gobs-current-state-optimization-recommendation.md)
   - 基于 OpenClaw 项目现状评估和最新 Campaign/Studio/Distribution 优化结果，明确下一阶段采用 `方案 C + 方案 A`：先跑顺运营体验闭环，再做低风险减法，暂缓大规模状态管理/组件重构。
 - [2026-05-09-distribution-center-optimization.md](./2026-05-09-distribution-center-optimization.md)

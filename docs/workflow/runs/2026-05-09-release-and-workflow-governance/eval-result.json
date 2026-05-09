@@ -1,0 +1,43 @@
+{
+  "runId": "2026-05-09-release-and-workflow-governance",
+  "stage": "commit-only",
+  "status": "pass",
+  "baseCommit": "9fcf80d",
+  "checks": [
+    {
+      "name": "workflow guard build",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-09-release-and-workflow-governance --stage build",
+      "status": "pass"
+    },
+    {
+      "name": "deploy helper syntax",
+      "command": "python -m py_compile scripts/deploy_api.py scripts/deploy_frontend.py",
+      "status": "pass"
+    },
+    {
+      "name": "workflow guard verify",
+      "command": "python scripts/workflow_guard.py --run-id 2026-05-09-release-and-workflow-governance --stage verify",
+      "status": "pass"
+    },
+    {
+      "name": "release/deploy unit tests",
+      "command": "python -m unittest scripts.tests.test_deploy_api scripts.tests.test_deploy_frontend scripts.tests.test_deploy_all scripts.tests.test_release_guard scripts.tests.test_set_deployment_state",
+      "status": "pass",
+      "tests": 40
+    },
+    {
+      "name": "diff hygiene",
+      "command": "git diff --check",
+      "status": "pass"
+    }
+  ],
+  "deployment": {
+    "staging": "not-run-by-dev-worker",
+    "prod": "not-run-by-dev-worker",
+    "reason": "User requested local commit only; Release Owner window will deploy."
+  },
+  "blockingDefects": {
+    "p0": 0,
+    "p1": 0
+  }
+}
