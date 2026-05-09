@@ -78,11 +78,11 @@ test('buildDistributeDraftFromPackage prefills distribution fields without auto-
       hashtags: '#GoldAndGlory #MobileRPG',
     },
   });
-  assert.equal(intake.formPrefill.campaignObjective, 'Drive installs');
-  assert.equal(intake.formPrefill.targetAudience, 'New players want proof before they install.');
-  assert.equal(intake.formPrefill.cta, 'Download Gold and Glory now');
-  assert.equal(intake.formPrefill.market, 'Global');
-  assert.equal(intake.formPrefill.avoidTerms, 'No guaranteed SSR.');
+  assert.equal(intake.captionContext.campaignObjective, 'Drive installs');
+  assert.equal(intake.captionContext.targetAudience, 'New players want proof before they install.');
+  assert.equal(intake.captionContext.callToAction, 'Download Gold and Glory now');
+  assert.equal(intake.captionContext.targetMarket, 'Global');
+  assert.equal(intake.captionContext.avoidTerms, 'No guaranteed SSR.');
   assert.equal(intake.publishSafety.canPublishDirectly, true);
   assert.equal(intake.publishSafety.keepAccountsExplicit, true);
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { useMaterials } from '../context/MaterialsContext';
 import { useVideoGeneration } from '../hooks/useVideoGeneration';
@@ -25,6 +25,11 @@ import {
   type MultishotJobStatusResponse,
 } from '../api/video';
 import { submitBatchJobs } from '../api/batchJobs';
+import { getCampaignDistributionPackage, updateCampaignDistributionPackage } from '../api/campaignDistribution';
+import {
+  buildStudioGeneratedPackageUpdate,
+  type StudioGeneratedVideoResult,
+} from './campaign/studioPackagePatch.ts';
 import { KlingJobCard } from './KlingJobCard';
 import { DreaminaJobCard } from './DreaminaJobCard';
 import { DreaminaMultimodalRefs } from './DreaminaMultimodalRefs';
@@ -78,6 +83,7 @@ export function StepVideo() {
     viralDanceReferenceVideoUrl,
     dreaminaMultimodalItems,
     setDreaminaMultimodalItems,
+    campaignStudioHandoff,
   } = useCreateFlow();
   const selectedOrder = filterPlaceholders(rawSelectedOrder);
   const { accessToken } = useMaterials();
@@ -118,6 +124,34 @@ export function StepVideo() {
   dreaminaJobsRef.current = dreaminaJobs;
   const promptRef = useRef(prompt);
   promptRef.current = prompt;
+
+  const resultRouteForTask = useCallback((taskId: string) => {
+    const params = new URLSearchParams({ taskId });
+    const packageId = campaignStudioHandoff?.distributionPackageId?.trim();
+    if (packageId) params.set('package', packageId);
+    return `/result?${params.toString()}`;
+  }, [campaignStudioHandoff?.distributionPackageId]);
+
+  const syncCampaignStudioPackage = useCallback(async (result: StudioGeneratedVideoResult) => {
+    const handoff = campaignStudioHandoff;
+    if (!handoff) return;
+    const packageId = handoff.distributionPackageId?.trim();
+    if (!packageId) return;
+
+    try {
+      const pkg = await getCampaignDistributionPackage(packageId);
+      const patch = buildStudioGeneratedPackageUpdate({
+        pkg,
+        handoff,
+        result,
+      });
+      if (patch) {
+        await updateCampaignDistributionPackage(packageId, patch);
+      }
+    } catch (error) {
+      console.warn('[campaign-studio] failed to sync generated video to package', error);
+    }
+  }, [campaignStudioHandoff]);
 
   useEffect(() => {
     try {
@@ -171,10 +205,11 @@ export function StepVideo() {
               prompt: promptRef.current?.trim() ?? '',
             });
             setVideoResult(playUrl, outTaskId, null);
+            await syncCampaignStudioPackage({ taskId: outTaskId, videoUrl: playUrl });
             clearError();
             setKlingJobs((prev) => prev.filter((j) => j.taskId !== job.taskId));
             if (activeBeforeSuccess <= 1) {
-              navigate(`/result?taskId=${encodeURIComponent(outTaskId)}`);
+              navigate(resultRouteForTask(outTaskId));
             }
           }
         } catch (e) {
@@ -189,7 +224,7 @@ export function StepVideo() {
     void tick();
     const id = setInterval(tick, KLING_POLL_MS);
     return () => clearInterval(id);
-  }, [klingJobs.length, navigate, setVideoResult, clearError]);
+  }, [klingJobs.length, navigate, resultRouteForTask, setVideoResult, clearError, syncCampaignStudioPackage]);
 
   useEffect(() => {
     const tick = async () => {
@@ -219,6 +254,11 @@ export function StepVideo() {
               taskId: s.taskId,
               videoPath: s.videoPath ?? '',
               prompt: promptText,
+              ...(s.videoPath?.trim() ? {} : { videoUrl: s.videoUrl }),
+            });
+            await syncCampaignStudioPackage({
+              taskId: s.taskId,
+              videoPath: s.videoPath,
               ...(s.videoPath?.trim() ? {} : { videoUrl: s.videoUrl }),
             });
             setDreaminaJobs((prev) =>
@@ -257,7 +297,7 @@ export function StepVideo() {
     void tick();
     const id = setInterval(tick, DREAMINA_POLL_MS);
     return () => clearInterval(id);
-  }, [dreaminaJobs.length]);
+  }, [dreaminaJobs.length, syncCampaignStudioPackage]);
 
   useEffect(() => {
     if (!multishotJob?.jobId) return;
@@ -319,9 +359,10 @@ export function StepVideo() {
       videoPath: multishotJob.finalVideoPath,
       prompt: shots.map((s) => s.prompt).join('\n---\n'),
     });
+    void syncCampaignStudioPackage({ taskId, videoPath: multishotJob.finalVideoPath });
     clearError();
-    navigate(`/result?taskId=${taskId}`);
-  }, [multishotJob, shots, setVideoResult, clearError, navigate]);
+    navigate(resultRouteForTask(taskId));
+  }, [multishotJob, shots, setVideoResult, clearError, navigate, resultRouteForTask, syncCampaignStudioPackage]);
 
   const hasMissingFrames =
     multiShotEnabled &&
@@ -472,8 +513,13 @@ export function StepVideo() {
             prompt: shots.map((s) => s.prompt).join('\n---\n'),
           });
         }
+        await syncCampaignStudioPackage({
+          taskId,
+          videoPath: res.outputPath,
+          videoUrl: res.outputPath ? undefined : res.videoUrl,
+        });
         clearError();
-        navigate(`/result?taskId=${taskId}`);
+        navigate(resultRouteForTask(taskId));
       }
     } else if (prompt?.trim()) {
       const useDreaminaSubmit =
@@ -582,8 +628,13 @@ export function StepVideo() {
           prompt: prompt.trim(),
           ...(res.videoPath?.trim() ? {} : { videoUrl: res.videoUrl }),
         });
+        await syncCampaignStudioPackage({
+          taskId: res.taskId,
+          videoPath: res.videoPath,
+          ...(res.videoPath?.trim() ? {} : { videoUrl: res.videoUrl }),
+        });
         clearError();
-        navigate(`/result?taskId=${res.taskId}`);
+        navigate(resultRouteForTask(res.taskId));
       }
     }
   };
@@ -777,6 +828,7 @@ export function StepVideo() {
                 failReason={j.failReason}
                 videoUrl={j.videoUrl}
                 promptSnippet={j.promptSnippet}
+                resultUrl={resultRouteForTask(j.taskId)}
                 onDismiss={() => setDreaminaJobs((prev) => prev.filter((x) => x.id !== j.id))}
               />
             ))}

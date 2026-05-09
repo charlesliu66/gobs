@@ -6,7 +6,10 @@ import { loadVideoHistory, getVideoFileUrl, getLocalPlaybackSrc } from '../utils
 export function Result() {
   const [searchParams] = useSearchParams();
   const taskId = searchParams.get('taskId');
-  const { videoUrl, taskId: contextTaskId, setVideoResult } = useCreateFlow();
+  const packageIdFromUrl = searchParams.get('package')?.trim() || null;
+  const { videoUrl, taskId: contextTaskId, setVideoResult, campaignStudioHandoff } = useCreateFlow();
+  const packageId = packageIdFromUrl ?? campaignStudioHandoff?.distributionPackageId?.trim() ?? null;
+  const distributeRoute = packageId ? `/distribute?package=${encodeURIComponent(packageId)}` : '/distribute';
 
   const navigate = useNavigate();
 
@@ -62,7 +65,7 @@ export function Result() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link
-                to="/distribute"
+                to={distributeRoute}
                 className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
               >
                 去分发
@@ -102,7 +105,7 @@ export function Result() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate('/distribute')}
+                  onClick={() => navigate(distributeRoute)}
                   className="flex items-center gap-3 p-4 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/60 hover:bg-[var(--color-primary)]/10 transition-all text-left group"
                 >
                   <span className="text-2xl">📲</span>

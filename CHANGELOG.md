@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.173 - 2026-05-09
+**Campaign Production Loop closeout**
+**Campaign / Studio / Distribution:**
+- Extended Campaign Output -> Advanced Studio handoff context with stable output-plan, production-item, source-requirement, and optional distribution-package identifiers.
+- Preserved Campaign Studio handoff context inside `CreateFlowContext` after router state is consumed, so generation results can still find the originating package.
+- Added package-safe Studio result sync: successful Studio videos patch linked Campaign Distribution Packages through existing `assets`, `assetReadiness`, and `review` fields, making them publishable without backend schema changes.
+- Updated Result and async Dreamina result links so distribution CTAs preserve `/distribute?package=<id>` when a Campaign package is linked.
+**Tests / Build:**
+- Added handoff, package-patch, and source-presence tests; corrected the stale Distribution intake test from `formPrefill` to `captionContext`; reran targeted Node tests and frontend/backend TypeScript checks. Full Vite build remains blocked on the local Rollup native optional package signature issue.
+
 ## v0.172 - 2026-05-09
 **Distribution publish history filters**
 **Distribution / GeeLark History:**

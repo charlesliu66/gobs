@@ -633,7 +633,11 @@ export function CampaignCreative() {
   const handleOpenProductionItemInStudio = (item: ProductionItem) => {
     const planToOpen = createdOutputPlan ?? campaignOutputPlanDraft;
     if (!planToOpen) return;
-    const handoff = buildCampaignStudioHandoff({ item, plan: planToOpen });
+    const handoff = buildCampaignStudioHandoff({
+      item,
+      plan: planToOpen,
+      distributionPackageId: createdDistributionPackage?.id,
+    });
     if (!handoff) return;
     navigate(`/studio?templateId=${encodeURIComponent(handoff.templateId)}`, {
       state: { campaignStudioHandoff: handoff },

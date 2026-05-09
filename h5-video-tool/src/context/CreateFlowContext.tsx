@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { DriveFile } from '../hooks/useGoogleDrive';
+import type { CampaignStudioHandoffState } from '../components/campaign/studioBridge.ts';
 
 export interface ShotItem {
   duration: number;
@@ -51,6 +52,8 @@ interface CreateFlowState {
   viralDanceReferenceVideoUrl: string;
   /** 即梦「全能参考」上传项（顺序对应 @图片n / @视频n / @音频n） */
   dreaminaMultimodalItems: DreaminaMultimodalItem[];
+  /** Campaign -> Studio handoff context kept alive after router state is consumed. */
+  campaignStudioHandoff: CampaignStudioHandoffState | null;
   /** 选中的 Veo 模型 */
   videoModel: string;
   /** Seedance 版本（如 'seedance2.0'） */
@@ -86,6 +89,8 @@ interface CreateFlowContextValue extends CreateFlowState {
   setCharacters: (v: string[]) => void;
   setViralDanceReferenceVideoUrl: (v: string) => void;
   setDreaminaMultimodalItems: (v: DreaminaMultimodalItem[] | ((prev: DreaminaMultimodalItem[]) => DreaminaMultimodalItem[])) => void;
+  setCampaignStudioHandoff: (v: CampaignStudioHandoffState | null) => void;
+  clearCampaignStudioHandoff: () => void;
   resetFlow: () => void;
 }
 
@@ -112,6 +117,7 @@ const initialState: CreateFlowState = {
   characters: [],
   viralDanceReferenceVideoUrl: '',
   dreaminaMultimodalItems: [],
+  campaignStudioHandoff: null,
 };
 
 const CreateFlowContext = createContext<CreateFlowContextValue | null>(null);
@@ -169,6 +175,8 @@ export function CreateFlowProvider({ children }: { children: ReactNode }) {
         ...s,
         dreaminaMultimodalItems: typeof v === 'function' ? v(s.dreaminaMultimodalItems) : v,
       })),
+    setCampaignStudioHandoff: (v) => setState((s) => ({ ...s, campaignStudioHandoff: v })),
+    clearCampaignStudioHandoff: () => setState((s) => ({ ...s, campaignStudioHandoff: null })),
     resetFlow,
   };
 

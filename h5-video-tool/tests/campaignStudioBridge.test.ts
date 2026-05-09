@@ -26,6 +26,7 @@ function productionItem(patch: Partial<ProductionItem> = {}): ProductionItem {
 
 const plan: CampaignOutputPlan = {
   id: 'plan_1',
+  campaignId: 'campaign_gold',
   gameId: 'gold-and-glory',
   mission: 'Launch a TikTok campaign for Gold and Glory returning players.',
   briefId: 'brief_1',
@@ -58,11 +59,21 @@ const plan: CampaignOutputPlan = {
 
 test('Campaign Studio bridge maps video production items to Studio handoff state', () => {
   const item = productionItem();
-  const handoff = buildCampaignStudioHandoff({ item, plan });
+  const handoff = buildCampaignStudioHandoff({
+    item,
+    plan,
+    distributionPackageId: 'pkg_reward',
+  });
 
   assert.equal(canOpenProductionItemInStudio(item), true);
   assert.equal(handoff?.templateId, 'boss-showcase');
+  assert.equal(handoff?.outputPlanId, 'plan_1');
+  assert.equal(handoff?.campaignId, 'campaign_gold');
+  assert.equal(handoff?.gameId, 'gold-and-glory');
+  assert.equal(handoff?.briefId, 'brief_1');
   assert.equal(handoff?.productionItemId, item.id);
+  assert.equal(handoff?.distributionPackageId, 'pkg_reward');
+  assert.deepEqual(handoff?.sourceAssetRequirementIds, ['src_character_art', 'src_key_art']);
   assert.match(handoff?.prompt ?? '', /Campaign mission/);
   assert.deepEqual(
     handoff?.sourceAssets.map((asset) => [asset.id, asset.semanticRole]),

@@ -78,6 +78,8 @@ export function Studio() {
     setPrompt,
     setDreaminaMultimodalItems,
     setViralDanceReferenceVideoUrl,
+    setCampaignStudioHandoff,
+    clearCampaignStudioHandoff,
   } = useCreateFlow();
   const location = useLocation();
   const navigate = useNavigate();
@@ -97,11 +99,11 @@ export function Studio() {
     setActiveTab(t);
   }, [tabFromUrl]);
 
-  const switchTab = (tab: 'create' | 'templates') => {
+  const switchTab = useCallback((tab: 'create' | 'templates') => {
     setActiveTab(tab);
     if (tab === 'create') setSearchParams({});
     else setSearchParams({ tab });
-  };
+  }, [setSearchParams]);
 
   useEffect(() => {
     if (!isStudioBridgeTemplateId(urlTemplateId)) return;
@@ -115,6 +117,7 @@ export function Studio() {
     const st = location.state as StudioLocationState;
     if (st?.campaignStudioHandoff) return;
     if (!st?.autoSelectCustom) return;
+    clearCampaignStudioHandoff();
     setTemplateId('custom');
     setVideoDuration(8);
     setVideoAspectRatio('9:16');
@@ -130,6 +133,7 @@ export function Studio() {
     setVideoDuration,
     setVideoAspectRatio,
     setPrompt,
+    clearCampaignStudioHandoff,
   ]);
 
   /** Campaign Output Workbench 进入 Studio：模板、prompt 和安全参考图一起带入 */
@@ -139,6 +143,7 @@ export function Studio() {
     if (!handoff?.fromCampaignOutput) return;
 
     setTemplateId(handoff.templateId);
+    setCampaignStudioHandoff(handoff);
     applyTemplateDefaults(handoff.templateId, { setVideoDuration, setVideoAspectRatio });
     setPrompt(handoff.prompt);
     setActiveTab('create');
@@ -174,6 +179,7 @@ export function Studio() {
     location.state,
     navigate,
     setDreaminaMultimodalItems,
+    setCampaignStudioHandoff,
     setPrompt,
     setTemplateId,
     setVideoAspectRatio,
@@ -184,6 +190,7 @@ export function Studio() {
   // 从素材库跳转过来时：自动进入创作模式并加载素材为参考图
   useEffect(() => {
     if (!urlAssetId) return;
+    clearCampaignStudioHandoff();
     setTemplateId('custom');
     setVideoDuration(8);
     setVideoAspectRatio('9:16');
@@ -216,15 +223,16 @@ export function Studio() {
     url.searchParams.delete('assetId');
     window.history.replaceState(null, '', url.toString());
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlAssetId]);
+  }, [urlAssetId, clearCampaignStudioHandoff]);
 
   const handleUseTemplate = useCallback(
     (template: { prompt: string; aspectRatio?: string }) => {
+      clearCampaignStudioHandoff();
       setPrompt(template.prompt);
       if (template.aspectRatio) setVideoAspectRatio(template.aspectRatio);
       switchTab('create');
     },
-    [setPrompt, setVideoAspectRatio],
+    [clearCampaignStudioHandoff, setPrompt, setVideoAspectRatio, switchTab],
   );
 
   const TABS = [

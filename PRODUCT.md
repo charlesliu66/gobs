@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.172)*
+*Last updated: 2026-05-09 (v0.173)*
 
-**Latest update - v0.172**
-- Added frontend-only filters to `/distribute` publish history: status chips, platform-derived filtering, and text search across plan/task/account/status clues.
-- Grouped recent GeeLark publish history by date while preserving task detail inspection and share-link actions.
-- Kept GeeLark backend publish/task APIs unchanged; scheduling, pagination, CSV export, and analytics remain out of scope.
+**Latest update - v0.173**
+- Campaign Output -> Advanced Studio handoff now carries stable output-plan, production-item, source-requirement, and optional distribution-package identifiers.
+- Studio generation can patch a linked Campaign Distribution Package into `publishable` state through existing package `assets` / `assetReadiness` fields when a real video result is produced.
+- Result and async Dreamina result links preserve `/distribute?package=<id>` so operators can continue publishing without rebuilding campaign context.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -31,6 +31,7 @@
 - 鏀寔灏侀潰甯ф埅鍙?
 - **Advanced Studio template cleanup (v0.169)**: `/studio` creation now starts from Quick Single, Motion Transfer, and Character Showcase only; Short Drama/Cat Harem are removed from active Studio, and `cg-trailer` is reserved for a future Production Wizard promo preset path.
 - **Campaign to Studio bridge (v0.171)**: Campaign Output video items can open `/studio` with the right creation mode, seeded production prompt, matched Asset Library image references, unified reference slots, and prompt-only quality presets for marketer production.
+- **Campaign Production Loop closeout (v0.173)**: Studio video results generated from a linked Campaign package can now update that package into a publishable Distribution draft and keep the Result page's Distribution CTA package-aware.
 
 **浣跨敤鏂规硶锛?*
 1. 杩涘叆銆岀敓鎴愩€嶉〉闈?
@@ -228,7 +229,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
-- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
+- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，Studio 生成结果可把已链接 Package 更新为可发布资产，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
@@ -256,6 +257,14 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.173 - 2026-05-09
+**Campaign Production Loop closeout**
+
+- **[campaign studio handoff] Added stable production-loop identifiers** (`h5-video-tool/src/components/campaign/studioBridge.ts`, `h5-video-tool/src/pages/CampaignCreative.tsx`): Campaign Output video items now carry output-plan, production-item, source-requirement, and optional distribution-package ids into Advanced Studio.
+- **[studio package sync] Made generated videos update linked packages** (`h5-video-tool/src/components/StepVideo.tsx`, `h5-video-tool/src/components/campaign/studioPackagePatch.ts`): successful Studio results can PATCH existing Campaign Distribution Packages into publishable state using existing package fields only.
+- **[result navigation] Preserved package-aware distribution CTAs** (`h5-video-tool/src/pages/Result.tsx`, `h5-video-tool/src/components/DreaminaJobCard.tsx`): result links route back to `/distribute?package=<id>` when Campaign package context is available.
+- **[tests] Added closeout coverage and corrected Distribution intake drift** (`h5-video-tool/tests/campaignStudioPackagePatch.test.ts`, `h5-video-tool/tests/campaignProductionLoopPresence.test.ts`, `h5-video-tool/tests/distributionPackageIntake.test.ts`): targeted Node tests and frontend/backend TypeScript checks pass; full Vite build is blocked by local Rollup native optional package signature/toolchain state.
 
 ### v0.166 - 2026-05-08
 **Campaign Output production adapters Phase 2A**

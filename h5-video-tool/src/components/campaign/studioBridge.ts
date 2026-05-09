@@ -18,8 +18,14 @@ export interface CampaignStudioHandoffSourceAsset {
 export interface CampaignStudioHandoffState {
   fromCampaignOutput: true;
   templateId: StudioBridgeTemplateId;
+  outputPlanId: string;
+  campaignId?: string;
+  gameId: string;
+  briefId: string;
   productionItemId: string;
   productionItemType: ProductionItemType;
+  distributionPackageId?: string;
+  sourceAssetRequirementIds: string[];
   title: string;
   mission: string;
   prompt: string;
@@ -85,6 +91,7 @@ export function buildStudioPromptForProductionItem(item: ProductionItem, mission
 export function buildCampaignStudioHandoff(input: {
   item: ProductionItem;
   plan: CampaignOutputPlan;
+  distributionPackageId?: string | null;
 }): CampaignStudioHandoffState | null {
   const templateId = templateForProductionItem(input.item);
   if (!templateId || !canOpenProductionItemInStudio(input.item)) return null;
@@ -92,8 +99,14 @@ export function buildCampaignStudioHandoff(input: {
   return {
     fromCampaignOutput: true,
     templateId,
+    outputPlanId: input.plan.id,
+    campaignId: input.plan.campaignId,
+    gameId: input.plan.gameId,
+    briefId: input.plan.briefId,
     productionItemId: input.item.id,
     productionItemType: input.item.type,
+    distributionPackageId: input.distributionPackageId?.trim() || undefined,
+    sourceAssetRequirementIds: [...input.item.requiredSourceAssetIds],
     title: input.item.title,
     mission: input.plan.mission,
     prompt: buildStudioPromptForProductionItem(input.item, input.plan.mission),

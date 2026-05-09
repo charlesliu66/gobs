@@ -128,7 +128,7 @@ export type CampaignDistributionCreateInput = Omit<
 >;
 
 export type CampaignDistributionUpdateInput = Partial<
-  Pick<CampaignDistributionPackage, 'title' | 'copy' | 'publishIntent' | 'assetReadiness' | 'review'>
+  Pick<CampaignDistributionPackage, 'title' | 'assets' | 'copy' | 'publishIntent' | 'assetReadiness' | 'review'>
 >;
 
 export interface BuildCampaignDistributionCreateInputArgs {

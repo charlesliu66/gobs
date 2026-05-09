@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-09-campaign-production-loop-closeout",
+  "timestamp": "2026-05-09T04:37:13Z",
+  "checks": {
+    "backend_build": { "status": "pass", "error": "" },
+    "frontend_build": { "status": "fail", "error": "npm run build failed" },
+    "typescript": { "status": "pass", "errors": [] },
+    "api_health": { "status": "fail", "code": 0 },
+    "smoke_tests": []
+  },
+  "verdict": "P1_WARN"
+}

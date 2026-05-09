@@ -12,6 +12,7 @@ type Props = {
   failReason?: string;
   videoUrl?: string;
   promptSnippet?: string;
+  resultUrl?: string;
   onDismiss?: () => void;
 };
 
@@ -24,6 +25,7 @@ export function DreaminaJobCard({
   failReason,
   videoUrl,
   promptSnippet,
+  resultUrl,
   onDismiss,
 }: Props) {
   const [playing, setPlaying] = useState(false);
@@ -104,7 +106,7 @@ export function DreaminaJobCard({
           </span>
           {done && (
             <Link
-              to={`/result?taskId=${encodeURIComponent(taskId)}`}
+              to={resultUrl ?? `/result?taskId=${encodeURIComponent(taskId)}`}
               className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/40 hover:underline"
             >
               在结果页打开
