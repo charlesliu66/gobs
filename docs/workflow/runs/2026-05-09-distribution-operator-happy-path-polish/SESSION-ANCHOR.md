@@ -60,7 +60,7 @@
 - No broad `ProductionWizard`, `EditorWorkbench`, or `TabGenerate` refactor.
 - No live social posting verifier or automated real GeeLark posting.
 - No `sj-ui`, RiskSentiment, TiktokMatrix, or Platform route deletion in this run.
-- No non-GeeLark publishing, scheduling, approvals, analytics, CSV export, or backend pagination.
+- No non-GeeLark publishing, scheduling, approvals, analytics, or live posting verification.
 - No new secrets or hardcoded credentials.
 
 ## Progress Checklist
@@ -71,7 +71,7 @@
 - [x] Release decision written
 
 ## Escalation Rules
-- Escalate if implementation requires backend GeeLark changes or provider-service edits.
+- Escalate if implementation requires provider-service edits.
 - Escalate if legacy-surface findings suggest runtime deletion instead of documentation/labeling.
 - Escalate if a new env var is required.
 - Escalate before prod release decision.

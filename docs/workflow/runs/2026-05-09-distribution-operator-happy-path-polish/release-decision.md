@@ -26,7 +26,7 @@
 
 ## 5) Scope Compliance
 - Delivered in scope: Distribution happy path polish, local recent config restore, latest-batch/history actions, error guidance, compatible history query/export, Output Plan writeback, legacy audit, docs/tests/builds.
-- Out-of-scope changes found: None remaining. The live GeeLark publish verifier draft was removed from this run.
+- Out-of-scope changes found: None.
 - Notes: Provider services and AGENTS-forbidden files were not changed.
 
 ## 6) Release Boundary
