@@ -63,6 +63,38 @@ class DeployFrontendTests(unittest.TestCase):
 
         connect.assert_not_called()
 
+    def test_main_promotes_prod_frontend_from_staging_without_local_dist(self):
+        missing_dist = Path('/tmp/gobs-missing-frontend-dist-for-test')
+        client = FakeClient()
+        prod_config = SimpleNamespace(
+            target='prod',
+            host='example.invalid',
+            frontend_dir='/remote/prod/frontend',
+        )
+        staging_config = SimpleNamespace(
+            target='staging',
+            host='example.invalid',
+            frontend_dir='/remote/staging/frontend',
+        )
+        promote = Mock()
+
+        def config_for(target):
+            return staging_config if target == 'staging' else prod_config
+
+        with patch.object(deploy_frontend, 'LOCAL_DIST', missing_dist), \
+            patch.object(deploy_frontend, 'build_target_config', side_effect=config_for), \
+            patch.object(deploy_frontend, 'connect_ssh_client', return_value=client), \
+            patch.object(deploy_frontend, 'promote_frontend_from_target', promote), \
+            patch('sys.argv', ['deploy_frontend.py', '--target', 'prod', '--source-target', 'staging']):
+            self.assertTrue(deploy_frontend.main())
+
+        self.assertTrue(client.closed)
+        promote.assert_called_once_with(
+            client,
+            source_dir='/remote/staging/frontend',
+            target_dir='/remote/prod/frontend',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

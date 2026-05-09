@@ -7,8 +7,9 @@
 **Deploy / Release Guard:**
 - Replaced the Paramiko SFTP artifact transfer path with SSH-streamed tarballs written to remote temporary files and extracted by remote `tar`, avoiding the observed SFTP completion hang after 100% upload progress.
 - Kept deploy uploads bounded with explicit SSH channel/socket timeouts, visible archive progress logs, deterministic resource cleanup, and non-zero CLI exits on failure.
+- Updated prod frontend deployment to promote the already verified staging frontend directory server-side, so prod no longer repeats the slow local-to-cloud frontend upload.
 **Tests / Build:**
-- Extended deploy API/frontend regression coverage for SSH-streamed uploads and reran the release/deploy Python test suite on Python 3.10.
+- Extended deploy API/frontend/deploy-all regression coverage for SSH-streamed uploads and staging-to-prod frontend promotion, then reran the release/deploy Python test suite on Python 3.10.
 
 ## v0.175 - 2026-05-09
 **Distribution Center step refinement**

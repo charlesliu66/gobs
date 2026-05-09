@@ -202,6 +202,13 @@ def _build_set_state_command(target: str, phase: str, updated_by: str) -> str:
     )
 
 
+def build_frontend_deploy_command(target: str) -> str:
+    command = f'python scripts/deploy_frontend.py --target {shlex.quote(target)}'
+    if target == 'prod':
+        command += ' --source-target staging'
+    return command
+
+
 def run_phase_transition(target: str, phase: str, updated_by: str) -> None:
     run_cmd(_build_set_state_command(target, phase, updated_by), cwd=str(ROOT))
 
@@ -293,7 +300,7 @@ def main() -> None:
             run_cmd('npm run build', cwd=str(ROOT / 'h5-video-tool'))
 
             print('\n=== 步骤 6: 上传前端 ===')
-            run_cmd(f'python scripts/deploy_frontend.py --target {config.target}', cwd=str(ROOT))
+            run_cmd(build_frontend_deploy_command(config.target), cwd=str(ROOT))
 
         print('\n=== 步骤 7: 验证版本一致性 ===')
         payload = wait_for_remote_version(

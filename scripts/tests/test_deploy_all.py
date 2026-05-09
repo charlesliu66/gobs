@@ -3,6 +3,7 @@ import unittest
 from scripts.deploy_all import (
     DeployGuardError,
     build_auto_phase_sequence,
+    build_frontend_deploy_command,
     ensure_head_on_origin_main,
     ensure_prod_promotion_is_ready,
     ensure_release_paths_clean,
@@ -81,6 +82,16 @@ class DeployAllHelperTests(unittest.TestCase):
     def test_build_auto_phase_sequence_returns_prod_sequence_only_for_prod(self):
         self.assertEqual(build_auto_phase_sequence('prod'), ['preparing', 'deploying', 'verifying'])
         self.assertEqual(build_auto_phase_sequence('staging'), [])
+
+    def test_build_frontend_deploy_command_promotes_prod_from_staging(self):
+        self.assertEqual(
+            build_frontend_deploy_command('prod'),
+            'python scripts/deploy_frontend.py --target prod --source-target staging',
+        )
+        self.assertEqual(
+            build_frontend_deploy_command('staging'),
+            'python scripts/deploy_frontend.py --target staging',
+        )
 
 
 if __name__ == '__main__':

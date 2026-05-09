@@ -24,6 +24,9 @@
 - Deploy SSH helpers:
   - Responsibilities: Connect with bounded timeouts, upload local `dist/` trees as streamed tarballs, run remote PM2 commands, and close SSH resources predictably.
   - Dependencies: `paramiko`, deploy target config, local build artifacts.
+- Deploy orchestration helper:
+  - Responsibilities: Preserve release gates while routing prod frontend promotion through the already verified staging frontend directory.
+  - Dependencies: `scripts/deploy_frontend.py`, staging release-ready guard.
 - Release guard / state scripts:
   - Responsibilities: Preserve existing release-ready and deployment-state file contracts while working on the current deploy machine.
   - Dependencies: `scripts/deploy_config.py`, remote shared-data layout.
@@ -31,7 +34,7 @@
 ## 4) Technical Approach
 - Architecture decisions: Keep all fixes inside release scripts; do not add env vars, deployment services, or external dependencies.
 - Date compatibility: introduce a small module-local UTC fallback such as `UTC = getattr(dt, 'UTC', dt.timezone.utc)` and use it anywhere release scripts call `datetime.now()` or `astimezone()`.
-- SSH upload reliability: add explicit connect/channel timeouts, keepalive, progress logging, `finally` cleanup, and remote command stderr/exit-code handling. Artifact uploads should stream through SSH to remote temporary files and extract with remote `tar` to bypass the Paramiko SFTP completion hang observed during staging.
+- SSH upload reliability: add explicit connect/channel timeouts, keepalive, progress logging, `finally` cleanup, and remote command stderr/exit-code handling. Artifact uploads should stream through SSH to remote temporary files and extract with remote `tar` to bypass the Paramiko SFTP completion hang observed during staging. Prod frontend promotion should reuse the already verified staging frontend directory server-side instead of uploading the same frontend tarball twice over the slow local-to-cloud link.
 - API or interface changes: Preserve CLI flags and output JSON shapes; internal helper functions may be added for testability.
 - Migration or compatibility notes: No production runtime behavior should change; only the local release machine behavior changes.
 

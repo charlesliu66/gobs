@@ -8,6 +8,7 @@
 **Latest update - v0.176**
 - Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
 - `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs, stream them through SSH to remote temporary files, and extract them with remote `tar`, bypassing the SFTP upload path that could hang after transfer completion while keeping bounded SSH/socket timeouts, progress logs, and deterministic cleanup.
+- `deploy_all.py` now promotes prod frontend files server-side from the already verified staging frontend directory, avoiding a second slow local-to-cloud frontend upload during prod promotion.
 - This release sits on top of the v0.175 Distribution Center step refinement, preserving the new four-step `/distribute` operator workspace while hardening the deploy path used to publish it.
 
 鐩稿叧娌荤悊鏂囨。锛?

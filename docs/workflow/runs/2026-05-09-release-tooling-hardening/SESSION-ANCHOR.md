@@ -16,6 +16,7 @@
 ## Editable Files (Builder Ownership)
 - scripts/deploy_api.py
 - scripts/deploy_frontend.py
+- scripts/deploy_all.py
 - scripts/release_guard.py
 - scripts/set_deployment_state.py
 - scripts/mark_release_ready.py
