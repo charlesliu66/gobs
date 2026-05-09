@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import shlex
 import tarfile
@@ -30,6 +31,8 @@ DEFAULT_CHANNEL_TIMEOUT_SECONDS = 120
 DEFAULT_KEEPALIVE_SECONDS = 30
 DEFAULT_UPLOAD_TIMEOUT_SECONDS = 600
 UPLOAD_CHUNK_SIZE_BYTES = 64 * 1024
+CHUNKED_UPLOAD_THRESHOLD_BYTES = 256 * 1024
+REMOTE_UPLOAD_PART_SIZE_BYTES = 32 * 1024
 
 
 class DeployRuntimeError(RuntimeError):
@@ -153,11 +156,7 @@ def upload_and_extract_archive(
     remote_archive_path = f'/tmp/{remote_archive_name}'
     size_mb = archive_path.stat().st_size / (1024 * 1024)
     print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> ssh://{remote_archive_path}')
-    stream_file_to_remote_command(
-        client,
-        f'cat > {shlex.quote(remote_archive_path)}',
-        archive_path,
-    )
+    upload_archive_to_remote_path(client, archive_path, remote_archive_path)
     run_remote_command(
         client,
         ' && '.join([
@@ -165,6 +164,66 @@ def upload_and_extract_archive(
             f'tar -xzf {shlex.quote(remote_archive_path)} -C {shlex.quote(remote_dir)}',
             f'rm -f {shlex.quote(remote_archive_path)}',
         ]),
+    )
+
+
+def upload_archive_to_remote_path(
+    client: paramiko.SSHClient,
+    archive_path: Path,
+    remote_archive_path: str,
+) -> None:
+    if archive_path.stat().st_size <= CHUNKED_UPLOAD_THRESHOLD_BYTES:
+        stream_file_to_remote_command(
+            client,
+            f'cat > {shlex.quote(remote_archive_path)}',
+            archive_path,
+        )
+        return
+
+    part_paths: list[str] = []
+    with tempfile.TemporaryDirectory() as temp_dir:
+        chunk_dir = Path(temp_dir)
+        with archive_path.open('rb') as handle:
+            index = 0
+            while True:
+                chunk = handle.read(REMOTE_UPLOAD_PART_SIZE_BYTES)
+                if not chunk:
+                    break
+
+                local_part = chunk_dir / f'upload-part-{index:04d}'
+                local_part.write_bytes(chunk)
+                remote_part = f'{remote_archive_path}.part-{index:04d}'
+                part_paths.append(remote_part)
+                print(f'  chunk {index + 1} ({len(chunk)} bytes)')
+                write_remote_file_part_base64(client, local_part, remote_part)
+                index += 1
+
+    quoted_parts = ' '.join(shlex.quote(path) for path in part_paths)
+    quoted_cleanup = ' '.join(shlex.quote(path) for path in part_paths)
+    run_remote_command(
+        client,
+        ' && '.join([
+            f'cat {quoted_parts} > {shlex.quote(remote_archive_path)}',
+            f'rm -f {quoted_cleanup}',
+        ]),
+        timeout_seconds=300,
+    )
+
+
+def write_remote_file_part_base64(
+    client: paramiko.SSHClient,
+    local_part: Path,
+    remote_part: str,
+) -> None:
+    encoded = base64.b64encode(local_part.read_bytes()).decode('ascii')
+    run_remote_command(
+        client,
+        '\n'.join([
+            f"base64 -d > {shlex.quote(remote_part)} <<'GOBS_UPLOAD_PART'",
+            encoded,
+            'GOBS_UPLOAD_PART',
+        ]),
+        timeout_seconds=120,
     )
 
 
