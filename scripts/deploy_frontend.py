@@ -17,9 +17,9 @@ try:
     from scripts.deploy_api import (
         build_remote_archive_name,
         close_quietly,
-        configure_sftp_timeout,
         connect_ssh_client,
         create_directory_archive,
+        open_sftp_client,
         upload_and_extract_archive,
     )
 except ModuleNotFoundError:
@@ -27,9 +27,9 @@ except ModuleNotFoundError:
     from deploy_api import (
         build_remote_archive_name,
         close_quietly,
-        configure_sftp_timeout,
         connect_ssh_client,
         create_directory_archive,
+        open_sftp_client,
         upload_and_extract_archive,
     )
 
@@ -57,8 +57,7 @@ def main() -> bool:
 
     try:
         client = connect_ssh_client(config)
-        sftp = client.open_sftp()
-        configure_sftp_timeout(sftp)
+        sftp = open_sftp_client(client)
 
         print(f'正在上传前端产物到 {config.target}: {LOCAL_DIST} -> {config.frontend_dir}')
         with tempfile.TemporaryDirectory() as temp_dir:

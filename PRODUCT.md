@@ -7,7 +7,7 @@
 
 **Latest update - v0.174**
 - Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
-- `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs for single-file SFTP transfer, use bounded SSH/SFTP/socket timeouts, safer stderr/exit-code handling, and deterministic resource cleanup.
+- `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs for single-file SFTP transfer, use larger SFTP windows plus bounded SSH/SFTP/socket timeouts, print archive upload progress, and clean up resources deterministically.
 - Deployment helper tests cover Python 3.10 timestamp compatibility, remote command timeout/failure handling, frontend upload cleanup, and existing release guard behavior.
 
 鐩稿叧娌荤悊鏂囨。锛?

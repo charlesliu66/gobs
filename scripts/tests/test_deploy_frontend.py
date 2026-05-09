@@ -56,10 +56,12 @@ class DeployFrontendTests(unittest.TestCase):
                 frontend_dir='/remote/frontend',
             )
             upload = Mock()
+            open_sftp = Mock(side_effect=lambda _client: (sftp.channel.settimeout(120), sftp)[1])
 
             with patch.object(deploy_frontend, 'LOCAL_DIST', dist), \
                 patch.object(deploy_frontend, 'build_target_config', return_value=config), \
                 patch.object(deploy_frontend, 'connect_ssh_client', return_value=client), \
+                patch.object(deploy_frontend, 'open_sftp_client', open_sftp), \
                 patch.object(
                     deploy_frontend,
                     'create_directory_archive',

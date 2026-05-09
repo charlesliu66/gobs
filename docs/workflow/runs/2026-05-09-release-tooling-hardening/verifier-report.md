@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | Remote command waits | Unit-level timeout loop | Channel closes when timeout expires | Pass | Real PM2/SFTP behavior still needs staging observation. |
 | Frontend nested upload | Temp `dist/` with root and nested files | All files uploaded, resources closed | Pass | Unit test does not cover real network speed. |
-| SFTP transfer shape | Staging deploy follow-up showed multi-file SFTP was structurally too slow for this connection. | Switched API/frontend artifact upload to tarball-based single-file SFTP plus remote extract. | Pending live re-test | This is the key staging verifier item before prod. |
+| SFTP transfer shape | Staging deploy follow-up showed multi-file SFTP was structurally too slow for this connection. | Switched API/frontend artifact upload to tarball-based single-file SFTP plus large-window SFTP and archive upload progress. | Pending live re-test | This is the key staging verifier item before prod. |
 
 ## 6) Regression Result
 - Full/targeted regression summary: All script unit tests pass, workflow verify guard passes, and eval returns PASS.

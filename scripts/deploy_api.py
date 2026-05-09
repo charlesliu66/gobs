@@ -28,6 +28,8 @@ RUNTIME_SCRIPT_NAMES = ('imagen_generate.py',)
 DEFAULT_SSH_TIMEOUT_SECONDS = 30
 DEFAULT_CHANNEL_TIMEOUT_SECONDS = 120
 DEFAULT_KEEPALIVE_SECONDS = 30
+SFTP_WINDOW_SIZE = 64 * 1024 * 1024
+SFTP_MAX_PACKET_SIZE = 256 * 1024
 
 
 class DeployRuntimeError(RuntimeError):
@@ -83,6 +85,21 @@ def connect_ssh_client(config, *, timeout_seconds: int = DEFAULT_SSH_TIMEOUT_SEC
     )
     configure_ssh_keepalive(client)
     return client
+
+
+def open_sftp_client(client: paramiko.SSHClient) -> paramiko.SFTPClient:
+    transport = client.get_transport()
+    if transport is None:
+        raise DeployRuntimeError('SSH transport is not available for SFTP upload.')
+    sftp = paramiko.SFTPClient.from_transport(
+        transport,
+        window_size=SFTP_WINDOW_SIZE,
+        max_packet_size=SFTP_MAX_PACKET_SIZE,
+    )
+    if sftp is None:
+        raise DeployRuntimeError('Unable to open SFTP client.')
+    configure_sftp_timeout(sftp)
+    return sftp
 
 
 def run_remote_command(
@@ -159,7 +176,18 @@ def upload_and_extract_archive(
     remote_archive_path = f'/tmp/{remote_archive_name}'
     size_mb = archive_path.stat().st_size / (1024 * 1024)
     print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> {remote_archive_path}')
-    sftp.put(str(archive_path), remote_archive_path, confirm=False)
+    progress_marks: set[int] = set()
+
+    def progress(transferred: int, total: int) -> None:
+        if total <= 0:
+            return
+        percent = int(transferred * 100 / total)
+        mark = min(100, (percent // 25) * 25)
+        if mark and mark not in progress_marks:
+            progress_marks.add(mark)
+            print(f'  upload {mark}% ({transferred}/{total} bytes)')
+
+    sftp.put(str(archive_path), remote_archive_path, callback=progress, confirm=False)
     run_remote_command(
         client,
         ' && '.join([
@@ -229,8 +257,7 @@ def main() -> bool:
 
     try:
         client = connect_ssh_client(config)
-        sftp = client.open_sftp()
-        configure_sftp_timeout(sftp)
+        sftp = open_sftp_client(client)
 
         def remote_mkdir(remote_path: str) -> None:
             assert sftp is not None

@@ -238,7 +238,10 @@ class DeployApiTests(unittest.TestCase):
                 remote_archive_name='api.tar.gz',
             )
 
-            self.assertEqual(sftp.uploads, [('dist.tar.gz', '/tmp/api.tar.gz', {'confirm': False})])
+            self.assertEqual(sftp.uploads[0][0], 'dist.tar.gz')
+            self.assertEqual(sftp.uploads[0][1], '/tmp/api.tar.gz')
+            self.assertFalse(sftp.uploads[0][2]['confirm'])
+            self.assertTrue(callable(sftp.uploads[0][2]['callback']))
             self.assertIn('tar -xzf /tmp/api.tar.gz -C /remote/api', client.command)
             self.assertIn('rm -f /tmp/api.tar.gz', client.command)
 
