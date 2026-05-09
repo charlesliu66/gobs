@@ -8,14 +8,15 @@ from scripts.deploy_api import (
     create_directory_archive,
     close_quietly,
     configure_ssh_keepalive,
-    configure_sftp_timeout,
     ensure_pm2_online,
     ensure_runtime_scripts_exist,
     get_remote_runtime_scripts_dir,
     get_runtime_script_paths,
     remote_parent,
     run_remote_command,
+    stream_file_to_remote_command,
     upload_and_extract_archive,
+    upload_file_to_remote_path,
 )
 
 
@@ -53,6 +54,28 @@ class FakeChannel:
         self.closed = True
 
 
+class FakeStreamChannel(FakeChannel):
+    def __init__(self, *, stdout=None, stderr=None, exit_status=0):
+        super().__init__(stdout=stdout, stderr=stderr, exit_status=exit_status, ready=False)
+        self.command = ''
+        self.sent = bytearray()
+        self.shutdown = False
+
+    def exec_command(self, command):
+        self.command = command
+
+    def send_ready(self):
+        return True
+
+    def send(self, data):
+        self.sent.extend(data)
+        return len(data)
+
+    def shutdown_write(self):
+        self.shutdown = True
+        self.ready = True
+
+
 class FakeChannelFile:
     def __init__(self, channel):
         self.channel = channel
@@ -63,8 +86,9 @@ class FakeChannelFile:
 
 
 class FakeClient:
-    def __init__(self, channel):
+    def __init__(self, channel, transport=None):
         self.channel = channel
+        self.transport = transport
         self.command = ''
         self.timeout = None
 
@@ -73,17 +97,8 @@ class FakeClient:
         self.timeout = timeout
         return FakeChannelFile(self.channel), FakeChannelFile(self.channel), FakeChannelFile(self.channel)
 
-
-class FakeSftp:
-    def __init__(self, channel):
-        self.channel = channel
-        self.uploads = []
-
-    def get_channel(self):
-        return self.channel
-
-    def put(self, local_path, remote_path, **kwargs):
-        self.uploads.append((Path(local_path).name, remote_path, kwargs))
+    def get_transport(self):
+        return self.transport
 
 
 class FakeSock:
@@ -95,12 +110,18 @@ class FakeSock:
 
 
 class FakeTransport:
-    def __init__(self):
+    def __init__(self, channel=None):
         self.keepalive = None
         self.sock = FakeSock()
+        self.channel = channel
+        self.open_session_timeout = None
 
     def set_keepalive(self, interval):
         self.keepalive = interval
+
+    def open_session(self, timeout=None):
+        self.open_session_timeout = timeout
+        return self.channel
 
 
 class FakeTransportClient:
@@ -184,12 +205,6 @@ class DeployApiTests(unittest.TestCase):
 
         self.assertIn('qas-api-prod', str(ctx.exception))
 
-    def test_configure_sftp_timeout_sets_underlying_channel_timeout(self):
-        channel = FakeChannel()
-        configure_sftp_timeout(FakeSftp(channel), timeout_seconds=45)
-
-        self.assertEqual(channel.timeout, 45)
-
     def test_configure_ssh_keepalive_sets_transport_keepalive_and_socket_timeout(self):
         transport = FakeTransport()
 
@@ -222,28 +237,53 @@ class DeployApiTests(unittest.TestCase):
                     ['config', 'config/env.js', 'index.js'],
                 )
 
-    def test_upload_and_extract_archive_uploads_single_archive_and_extracts_remote(self):
+    def test_stream_file_to_remote_command_sends_file_bytes_and_closes_stdin(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = Path(temp_dir) / 'payload.bin'
+            file_path.write_bytes(b'fake payload')
+            channel = FakeStreamChannel(stdout=[b'ok\n'])
+            transport = FakeTransport(channel)
+            client = FakeClient(FakeChannel(), transport=transport)
+
+            output = stream_file_to_remote_command(client, 'cat > /tmp/payload', file_path)
+
+            self.assertEqual(output, 'ok')
+            self.assertEqual(channel.command, 'cat > /tmp/payload')
+            self.assertEqual(channel.sent, b'fake payload')
+            self.assertTrue(channel.shutdown)
+            self.assertTrue(channel.closed)
+            self.assertEqual(channel.timeout, 600)
+            self.assertEqual(transport.open_session_timeout, 600)
+
+    def test_upload_and_extract_archive_streams_archive_and_extracts_remote(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             archive_path = Path(temp_dir) / 'dist.tar.gz'
             archive_path.write_bytes(b'fake archive')
-            channel = FakeChannel()
-            client = FakeClient(channel)
-            sftp = FakeSftp(channel)
+            channel = FakeStreamChannel()
+            client = FakeClient(FakeChannel(), transport=FakeTransport(channel))
 
             upload_and_extract_archive(
                 client=client,
-                sftp=sftp,
                 archive_path=archive_path,
                 remote_dir='/remote/api',
                 remote_archive_name='api.tar.gz',
             )
 
-            self.assertEqual(sftp.uploads[0][0], 'dist.tar.gz')
-            self.assertEqual(sftp.uploads[0][1], '/tmp/api.tar.gz')
-            self.assertFalse(sftp.uploads[0][2]['confirm'])
-            self.assertTrue(callable(sftp.uploads[0][2]['callback']))
-            self.assertIn('tar -xzf /tmp/api.tar.gz -C /remote/api', client.command)
-            self.assertIn('rm -f /tmp/api.tar.gz', client.command)
+            self.assertEqual(channel.sent, b'fake archive')
+            self.assertIn('tar -xzf - -C /remote/api', channel.command)
+
+    def test_upload_file_to_remote_path_streams_file_to_cat_command(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = Path(temp_dir) / 'imagen_generate.py'
+            local_path.write_text('print("ok")\n', encoding='utf-8')
+            channel = FakeStreamChannel()
+            client = FakeClient(FakeChannel(), transport=FakeTransport(channel))
+
+            upload_file_to_remote_path(client, local_path, '/remote/scripts/imagen_generate.py')
+
+            self.assertEqual(channel.sent, b'print("ok")\n')
+            self.assertIn('mkdir -p /remote/scripts', channel.command)
+            self.assertIn('cat > /remote/scripts/imagen_generate.py', channel.command)
 
     def test_run_remote_command_returns_stdout_when_command_succeeds(self):
         channel = FakeChannel(stdout=[b'hello\n'])

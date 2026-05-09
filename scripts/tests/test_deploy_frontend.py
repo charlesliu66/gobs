@@ -7,33 +7,9 @@ from unittest.mock import Mock, patch
 import scripts.deploy_frontend as deploy_frontend
 
 
-class FakeChannel:
-    def __init__(self):
-        self.timeout = None
-
-    def settimeout(self, timeout):
-        self.timeout = timeout
-
-
-class FakeSftp:
-    def __init__(self):
-        self.channel = FakeChannel()
-        self.closed = False
-
-    def get_channel(self):
-        return self.channel
-
-    def close(self):
-        self.closed = True
-
-
 class FakeClient:
-    def __init__(self, sftp):
-        self.sftp = sftp
+    def __init__(self):
         self.closed = False
-
-    def open_sftp(self):
-        return self.sftp
 
     def close(self):
         self.closed = True
@@ -46,8 +22,7 @@ class DeployFrontendTests(unittest.TestCase):
             (dist / 'assets').mkdir()
             (dist / 'index.html').write_text('<html></html>\n', encoding='utf-8')
             (dist / 'assets' / 'main.js').write_text('console.log("ok")\n', encoding='utf-8')
-            sftp = FakeSftp()
-            client = FakeClient(sftp)
+            client = FakeClient()
             config = SimpleNamespace(
                 target='staging',
                 host='example.invalid',
@@ -56,12 +31,10 @@ class DeployFrontendTests(unittest.TestCase):
                 frontend_dir='/remote/frontend',
             )
             upload = Mock()
-            open_sftp = Mock(side_effect=lambda _client: (sftp.channel.settimeout(120), sftp)[1])
 
             with patch.object(deploy_frontend, 'LOCAL_DIST', dist), \
                 patch.object(deploy_frontend, 'build_target_config', return_value=config), \
                 patch.object(deploy_frontend, 'connect_ssh_client', return_value=client), \
-                patch.object(deploy_frontend, 'open_sftp_client', open_sftp), \
                 patch.object(
                     deploy_frontend,
                     'create_directory_archive',
@@ -71,12 +44,9 @@ class DeployFrontendTests(unittest.TestCase):
                 patch('sys.argv', ['deploy_frontend.py']):
                 self.assertTrue(deploy_frontend.main())
 
-            self.assertTrue(sftp.closed)
             self.assertTrue(client.closed)
-            self.assertEqual(sftp.channel.timeout, 120)
             upload.assert_called_once()
             self.assertEqual(upload.call_args.kwargs['client'], client)
-            self.assertEqual(upload.call_args.kwargs['sftp'], sftp)
             self.assertEqual(upload.call_args.kwargs['remote_dir'], '/remote/frontend')
             self.assertTrue(str(upload.call_args.kwargs['archive_path']).endswith('frontend-dist.tar.gz'))
 

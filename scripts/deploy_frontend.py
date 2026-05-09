@@ -19,7 +19,6 @@ try:
         close_quietly,
         connect_ssh_client,
         create_directory_archive,
-        open_sftp_client,
         upload_and_extract_archive,
     )
 except ModuleNotFoundError:
@@ -29,7 +28,6 @@ except ModuleNotFoundError:
         close_quietly,
         connect_ssh_client,
         create_directory_archive,
-        open_sftp_client,
         upload_and_extract_archive,
     )
 
@@ -53,11 +51,9 @@ def main() -> bool:
         return False
 
     client: paramiko.SSHClient | None = None
-    sftp: paramiko.SFTPClient | None = None
 
     try:
         client = connect_ssh_client(config)
-        sftp = open_sftp_client(client)
 
         print(f'正在上传前端产物到 {config.target}: {LOCAL_DIST} -> {config.frontend_dir}')
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -65,7 +61,6 @@ def main() -> bool:
             create_directory_archive(LOCAL_DIST, archive_path)
             upload_and_extract_archive(
                 client=client,
-                sftp=sftp,
                 archive_path=archive_path,
                 remote_dir=config.frontend_dir,
                 remote_archive_name=build_remote_archive_name('frontend', config.target),
@@ -77,7 +72,6 @@ def main() -> bool:
         print(f'[ERROR] 前端部署失败: {exc}')
         return False
     finally:
-        close_quietly(sftp)
         close_quietly(client)
 
 

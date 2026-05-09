@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.175)*
+*Last updated: 2026-05-09 (v0.176)*
 
-**Latest update - v0.175**
-- `/distribute` is now organized as a four-step operator workspace: asset, video/copy, target accounts, and preflight/publish confirmation.
-- The new `DistributeStepAsset`, `DistributeStepCopy`, `DistributeStepAccounts`, and `DistributeStepPublish` components are presentational and callback-driven, while `TabDistribute` still owns package hydration, account/caption/publish APIs, latest-batch polling, and history loading.
-- Campaign Package intake, direct caption hints, account groups, platform copy cards, latest batch tracking, and filtered publish history remain behavior-compatible; the run only changes the frontend structure and operator scan path.
+**Latest update - v0.176**
+- Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
+- `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs and stream them through SSH directly into remote `tar`, bypassing the SFTP upload path that could hang after transfer completion while keeping bounded SSH/socket timeouts, progress logs, and deterministic cleanup.
+- This release sits on top of the v0.175 Distribution Center step refinement, preserving the new four-step `/distribute` operator workspace while hardening the deploy path used to publish it.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?

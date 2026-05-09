@@ -28,8 +28,8 @@ RUNTIME_SCRIPT_NAMES = ('imagen_generate.py',)
 DEFAULT_SSH_TIMEOUT_SECONDS = 30
 DEFAULT_CHANNEL_TIMEOUT_SECONDS = 120
 DEFAULT_KEEPALIVE_SECONDS = 30
-SFTP_WINDOW_SIZE = 64 * 1024 * 1024
-SFTP_MAX_PACKET_SIZE = 256 * 1024
+DEFAULT_UPLOAD_TIMEOUT_SECONDS = 600
+UPLOAD_CHUNK_SIZE_BYTES = 64 * 1024
 
 
 class DeployRuntimeError(RuntimeError):
@@ -63,15 +63,6 @@ def configure_ssh_keepalive(
             settimeout(socket_timeout_seconds)
 
 
-def configure_sftp_timeout(
-    sftp: paramiko.SFTPClient,
-    *,
-    timeout_seconds: int = DEFAULT_CHANNEL_TIMEOUT_SECONDS,
-) -> None:
-    channel = sftp.get_channel()
-    channel.settimeout(timeout_seconds)
-
-
 def connect_ssh_client(config, *, timeout_seconds: int = DEFAULT_SSH_TIMEOUT_SECONDS) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -85,21 +76,6 @@ def connect_ssh_client(config, *, timeout_seconds: int = DEFAULT_SSH_TIMEOUT_SEC
     )
     configure_ssh_keepalive(client)
     return client
-
-
-def open_sftp_client(client: paramiko.SSHClient) -> paramiko.SFTPClient:
-    transport = client.get_transport()
-    if transport is None:
-        raise DeployRuntimeError('SSH transport is not available for SFTP upload.')
-    sftp = paramiko.SFTPClient.from_transport(
-        transport,
-        window_size=SFTP_WINDOW_SIZE,
-        max_packet_size=SFTP_MAX_PACKET_SIZE,
-    )
-    if sftp is None:
-        raise DeployRuntimeError('Unable to open SFTP client.')
-    configure_sftp_timeout(sftp)
-    return sftp
 
 
 def run_remote_command(
@@ -168,17 +144,55 @@ def build_remote_archive_name(kind: str, target: str) -> str:
 def upload_and_extract_archive(
     *,
     client: paramiko.SSHClient,
-    sftp: paramiko.SFTPClient,
     archive_path: Path,
     remote_dir: str,
     remote_archive_name: str,
 ) -> None:
-    remote_archive_path = f'/tmp/{remote_archive_name}'
     size_mb = archive_path.stat().st_size / (1024 * 1024)
-    print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> {remote_archive_path}')
+    print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> ssh://{remote_archive_name}')
+    stream_file_to_remote_command(
+        client,
+        ' && '.join([
+            f'mkdir -p {shlex.quote(remote_dir)}',
+            f'tar -xzf - -C {shlex.quote(remote_dir)}',
+        ]),
+        archive_path,
+    )
+
+
+def stream_file_to_remote_command(
+    client: paramiko.SSHClient,
+    cmd: str,
+    file_path: Path,
+    *,
+    timeout_seconds: float = DEFAULT_UPLOAD_TIMEOUT_SECONDS,
+    poll_interval_seconds: float = 0.05,
+) -> str:
+    transport = client.get_transport()
+    if transport is None:
+        raise DeployRuntimeError('SSH transport is not available for streamed upload.')
+
+    channel = transport.open_session(timeout=timeout_seconds)
+    channel.settimeout(timeout_seconds)
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+    deadline = time.monotonic() + timeout_seconds
+    total = file_path.stat().st_size
     progress_marks: set[int] = set()
 
-    def progress(transferred: int, total: int) -> None:
+    def drain_ready_output() -> None:
+        while channel.recv_ready():
+            stdout_chunks.append(channel.recv(65536))
+        while channel.recv_stderr_ready():
+            stderr_chunks.append(channel.recv_stderr(65536))
+
+    def ensure_not_timed_out() -> None:
+        if time.monotonic() < deadline:
+            return
+        close_quietly(channel)
+        raise DeployRuntimeError(f'远端上传命令超时 ({timeout_seconds:.0f}s): {cmd}')
+
+    def print_progress(transferred: int) -> None:
         if total <= 0:
             return
         percent = int(transferred * 100 / total)
@@ -187,14 +201,75 @@ def upload_and_extract_archive(
             progress_marks.add(mark)
             print(f'  upload {mark}% ({transferred}/{total} bytes)')
 
-    sftp.put(str(archive_path), remote_archive_path, callback=progress, confirm=False)
-    run_remote_command(
+    try:
+        channel.exec_command(cmd)
+        transferred = 0
+        with file_path.open('rb') as handle:
+            while True:
+                chunk = handle.read(UPLOAD_CHUNK_SIZE_BYTES)
+                if not chunk:
+                    break
+
+                offset = 0
+                while offset < len(chunk):
+                    drain_ready_output()
+                    if channel.exit_status_ready():
+                        raise DeployRuntimeError(f'远端命令提前退出，上传未完成: {cmd}')
+                    ensure_not_timed_out()
+
+                    if not channel.send_ready():
+                        time.sleep(poll_interval_seconds)
+                        continue
+
+                    sent = channel.send(chunk[offset:])
+                    if sent <= 0:
+                        time.sleep(poll_interval_seconds)
+                        continue
+
+                    offset += sent
+                    transferred += sent
+                    print_progress(transferred)
+
+        try:
+            channel.shutdown_write()
+        except Exception:
+            pass
+
+        while True:
+            drain_ready_output()
+            if channel.exit_status_ready():
+                break
+            ensure_not_timed_out()
+            time.sleep(poll_interval_seconds)
+
+        drain_ready_output()
+        exit_code = channel.recv_exit_status()
+        stdout_text = b''.join(stdout_chunks).decode('utf-8', errors='replace').strip()
+        stderr_text = b''.join(stderr_chunks).decode('utf-8', errors='replace').strip()
+
+        if exit_code != 0:
+            detail = stderr_text or stdout_text or '(no remote output)'
+            raise DeployRuntimeError(f'远端命令失败 ({exit_code}): {cmd}\n{detail}')
+
+        return stdout_text
+    finally:
+        close_quietly(channel)
+
+
+def upload_file_to_remote_path(
+    client: paramiko.SSHClient,
+    local_path: Path,
+    remote_path: str,
+) -> None:
+    remote_dir = remote_parent(remote_path)
+    stream_file_to_remote_command(
         client,
         ' && '.join([
             f'mkdir -p {shlex.quote(remote_dir)}',
-            f'tar -xzf {shlex.quote(remote_archive_path)} -C {shlex.quote(remote_dir)}',
-            f'rm -f {shlex.quote(remote_archive_path)}',
+            f'cat > {shlex.quote(remote_path)}',
+            f'chmod 0644 {shlex.quote(remote_path)}',
         ]),
+        local_path,
     )
 
 
@@ -253,34 +328,14 @@ def main() -> bool:
         return False
 
     client: paramiko.SSHClient | None = None
-    sftp: paramiko.SFTPClient | None = None
-
     try:
         client = connect_ssh_client(config)
-        sftp = open_sftp_client(client)
-
-        def remote_mkdir(remote_path: str) -> None:
-            assert sftp is not None
-            try:
-                sftp.stat(remote_path)
-            except FileNotFoundError:
-                sftp.mkdir(remote_path)
-
-        def remote_mkdir_p(remote_path: str) -> None:
-            current = ''
-            for part in remote_path.strip('/').split('/'):
-                if not part:
-                    continue
-                current = f'{current}/{part}'
-                remote_mkdir(current)
 
         def upload_runtime_scripts(remote_dir: str) -> None:
-            assert sftp is not None
             script_paths = get_runtime_script_paths()
             ensure_runtime_scripts_exist(script_paths)
-            remote_mkdir_p(remote_dir)
             for script_path in script_paths:
-                sftp.put(str(script_path), f'{remote_dir}/{script_path.name}', confirm=False)
+                upload_file_to_remote_path(client, script_path, f'{remote_dir}/{script_path.name}')
                 print(f'  runtime/{script_path.name}')
 
         print(f'正在上传后端产物到 {config.target}: {LOCAL_DIST} -> {config.api_dir}')
@@ -289,7 +344,6 @@ def main() -> bool:
             create_directory_archive(LOCAL_DIST, archive_path)
             upload_and_extract_archive(
                 client=client,
-                sftp=sftp,
                 archive_path=archive_path,
                 remote_dir=config.api_dir,
                 remote_archive_name=build_remote_archive_name('api', config.target),
@@ -313,7 +367,6 @@ def main() -> bool:
         print(f'[ERROR] {exc}')
         return False
     finally:
-        close_quietly(sftp)
         close_quietly(client)
 
 

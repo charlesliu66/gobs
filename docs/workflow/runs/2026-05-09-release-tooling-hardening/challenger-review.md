@@ -14,7 +14,7 @@
 ## 3) Plan Improvement Requests
 - Request 1:
   - Planner section updated: `## 4) Technical Approach`
-  - Result: Plan now specifies Python 3.10 UTC fallback and bounded SSH/SFTP behavior without CLI contract changes.
+  - Result: Plan now specifies Python 3.10 UTC fallback and bounded SSH upload behavior without CLI contract changes.
 - Request 2:
   - Planner section updated: `## 7) Test Matrix`
   - Result: Plan now requires both unit tests and a real staging deployment observation.

@@ -9,7 +9,7 @@
 
 ## Acceptance Criteria Snapshot
 - AC-01: Python 3.10 can build release-ready and deployment-state timestamps without temporary datetime.UTC shims.
-- AC-02: deploy_api.py and deploy_frontend.py close SSH/SFTP resources deterministically and do not hang after successful uploads or PM2 restarts.
+- AC-02: deploy_api.py and deploy_frontend.py close SSH resources deterministically and do not hang after successful uploads or PM2 restarts.
 - AC-03: Existing deploy guard, release guard, and deployment-state tests pass with added regression coverage for the compatibility and resource-close behavior.
 - AC-04: Run docs, PRODUCT.md, CHANGELOG.md, and TASK-INDEX.md record the release tooling hardening.
 

@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.176 - 2026-05-09
+**Release tooling SSH stream follow-up**
+**Deploy / Release Guard:**
+- Replaced the Paramiko SFTP artifact transfer path with SSH-streamed tarballs piped directly into remote `tar -xzf -`, avoiding the observed SFTP completion hang after 100% upload progress.
+- Kept deploy uploads bounded with explicit SSH channel/socket timeouts, visible archive progress logs, deterministic resource cleanup, and non-zero CLI exits on failure.
+**Tests / Build:**
+- Extended deploy API/frontend regression coverage for SSH-streamed uploads and reran the release/deploy Python test suite on Python 3.10.
+
 ## v0.175 - 2026-05-09
 **Distribution Center step refinement**
 **Distribution / Operator Flow:**
@@ -15,10 +23,10 @@
 **Release tooling hardening**
 **Deploy / Release Guard:**
 - Replaced Python 3.11-only `datetime.UTC` usage in release/deployment timestamp helpers with Python 3.10-compatible UTC handling, including the dual-env initialization script.
-- Hardened `deploy_api.py` with tarball-based API artifact upload plus SSH keepalive, larger SFTP windows, bounded channel/socket timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
-- Hardened `deploy_frontend.py` with tarball-based single-file SFTP upload, shared large-window SSH/SFTP/socket timeout configuration, archive upload progress, resource cleanup in `finally`, and non-zero CLI exit behavior on failure.
+- Hardened `deploy_api.py` with tarball-based API artifact upload streamed through SSH directly into remote `tar`, SSH keepalive, bounded channel/socket timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
+- Hardened `deploy_frontend.py` with the same SSH-streamed tarball upload path, archive upload progress, resource cleanup in `finally`, and non-zero CLI exit behavior on failure.
 **Tests / Build:**
-- Added deploy frontend regression coverage and extended deploy API tests for tarball creation/extract, SFTP timeout configuration, remote command failures, and remote command timeout closure; reran the release/deploy Python test slice on the default Python 3.10 runtime.
+- Added deploy frontend regression coverage and extended deploy API tests for tarball creation/extract, SSH-streamed file upload, remote command failures, and remote command timeout closure; reran the release/deploy Python test slice on the default Python 3.10 runtime.
 
 ## v0.173 - 2026-05-09
 **Campaign Production Loop closeout**
