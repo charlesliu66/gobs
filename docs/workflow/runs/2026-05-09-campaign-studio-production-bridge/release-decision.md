@@ -33,6 +33,6 @@
 - Environments validated: Local build/eval and staging quick smoke.
 
 ## 7) Next Actions
-1. Promote `91aea90` to prod when ready.
+1. Promote the staging release-ready SHA to prod when ready.
 2. Run prod smoke checks after promotion.
 3. If prod passes, restore deployment state to idle.

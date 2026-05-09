@@ -25,7 +25,7 @@
 | Frontend build | Full app compiles and bundles. | PASS | `npm run build` in `h5-video-tool/` |
 | Backend build | API compiles and build assets copy. | PASS | `npm run build` in `h5-video-tool-api/` |
 | Eval | Backend build, frontend build, TypeScript, and API health. | PASS | `eval-result.json` |
-| Staging deploy | `origin/main` commit `91aea90` deployed to staging. | PASS | `/api/system/version` returned `commitShort=91aea90`, `environment=staging`. |
+| Staging deploy | Latest pushed mainline deployed to staging and marked release-ready. | PASS | `/api/system/version` returned `environment=staging`; `release-ready.json` was updated by `codex`. |
 | Staging H5 smoke | `/`, `/campaign-creative`, `/studio`, `/distribute`, `/api/health`. | PASS | All H5 routes returned 200; API health returned 200. |
 
 ## 4) Failed Items (Defect List)
