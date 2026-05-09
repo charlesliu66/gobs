@@ -43,13 +43,14 @@ import {
   mergeTaskDetailError,
   mergeTaskDetailIntoBatch,
   type LatestPublishBatch,
-  type LatestPublishBatchItem,
   type TaskDetailLike,
 } from '../utils/geelarkPublishBatch';
 import { normalizeTaskHistoryItems, type DistributionTaskHistoryItem } from '../components/distribute/distributeSupport.ts';
-import { AccountGroupPicker } from '../components/distribute/AccountGroupPicker.tsx';
+import { DistributeStepAsset } from '../components/distribute/DistributeStepAsset.tsx';
+import { DistributeStepAccounts } from '../components/distribute/DistributeStepAccounts.tsx';
+import { DistributeStepCopy } from '../components/distribute/DistributeStepCopy.tsx';
+import { DistributeStepPublish } from '../components/distribute/DistributeStepPublish.tsx';
 import { DistributePublishHistory } from '../components/distribute/DistributePublishHistory.tsx';
-import { PlatformCopyCards } from '../components/distribute/PlatformCopyCards.tsx';
 import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
 import {
   buildDistributeDraftFromPackage,
@@ -682,418 +683,212 @@ export function TabDistribute() {
         }}
       />
 
-      <section className="mb-6 space-y-4">
-        <div>
-          <h2 className="section-title">{t('distribute.assetTitle')}</h2>
-          <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.assetSubtitle')}</p>
-        </div>
-
-        {assetLoading && (
-          <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.assetLoading')}</p>
+      <DistributeStepAsset
+        assets={assetOptions}
+        selectedAsset={selectedAsset}
+        selectedAssetId={selectedAssetId}
+        loading={assetLoading}
+        error={assetError}
+        emptyAction={(
+          <Link
+            to="/studio"
+            className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            {t('distribute.goToStudio')}
+          </Link>
         )}
-        {assetError && (
-          <p className="text-sm text-[var(--color-error)]">{assetError}</p>
+        labels={{
+          step: '01',
+          title: t('distribute.assetTitle'),
+          subtitle: t('distribute.assetSubtitle'),
+          loading: t('distribute.assetLoading'),
+          noVideo: t('distribute.noVideo'),
+          selected: t('common.selected'),
+          previewTitle: t('distribute.assetPreviewTitle'),
+          previewUnavailable: t('distribute.assetPreviewUnavailable'),
+          promptSeed: t('distribute.assetPromptSeed'),
+        }}
+        getAssetSourceLabel={(source) => assetSourceLabel(source, t)}
+        onSelectAsset={setSelectedAssetId}
+      />
+
+      <DistributeStepCopy<CaptionLanguage>
+        hasSelectedAsset={Boolean(selectedAsset)}
+        captionHintValue={captionHint}
+        captionLanguages={CAPTION_LANGS}
+        activeCaptionLanguage={captionLang}
+        captionGenLoading={captionGenLoading}
+        captionGenError={captionGenError}
+        hasAnyCopy={hasAnyCopy}
+        canGenerateCaption={Boolean(buildCaptionGenerationSeed(resolvePromptSeed(selectedAsset, prompt, taskId), captionHint.trim()) || hasAnyCopy)}
+        pendingPackageDraft={pendingPackageDraft}
+        draftKeys={copyCardKeys}
+        defaultDraftKey={DEFAULT_DRAFT_KEY}
+        drafts={platformDrafts}
+        activeDraftKey={activeDraftKey}
+        accountCounts={copyCardAccountCounts}
+        noVideoAction={(
+          <Link
+            to="/studio"
+            className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            {t('distribute.goToStudio')}
+          </Link>
         )}
-
-        {assetOptions.length === 0 ? (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-8 text-center">
-            <p className="mb-4 text-[var(--color-text-muted)]">{t('distribute.noVideo')}</p>
-            <Link
-              to="/studio"
-              className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
-            >
-              {t('distribute.goToStudio')}
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-              <div className="space-y-2">
-                {assetOptions.map((asset) => {
-                  const isActive = selectedAssetId === asset.id;
-                  return (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      onClick={() => setSelectedAssetId(asset.id)}
-                      className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
-                        isActive
-                          ? 'border-[var(--color-primary)] bg-[var(--color-surface)]'
-                          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-[var(--color-surface-elevated)] px-2 py-0.5 text-[10px] uppercase text-[var(--color-text-muted)]">
-                              {assetSourceLabel(asset.source, t)}
-                            </span>
-                            {asset.taskId && (
-                              <span className="text-[10px] text-[var(--color-text-subtle)]">#{asset.taskId}</span>
-                            )}
-                          </div>
-                          <p className="text-sm font-medium text-[var(--color-text)]">{asset.title}</p>
-                          {asset.subtitle && (
-                            <p className="text-xs text-[var(--color-text-muted)]">{asset.subtitle}</p>
-                          )}
-                        </div>
-                        {isActive && (
-                          <span className="text-xs font-medium text-[var(--color-primary)]">{t('common.selected')}</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-              <h3 className="text-sm font-medium text-[var(--color-text)]">{t('distribute.assetPreviewTitle')}</h3>
-              {selectedAsset?.videoUrl ? (
-                <div className="aspect-video overflow-hidden rounded-lg border border-[var(--color-border)] bg-black">
-                  <video src={selectedAsset.videoUrl} controls className="h-full w-full object-contain" />
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                  {t('distribute.assetPreviewUnavailable')}
-                </div>
-              )}
-              {selectedAsset?.prompt && (
-                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-                  <p className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">
-                    {t('distribute.assetPromptSeed')}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-muted)]">{selectedAsset.prompt}</p>
-                </div>
-              )}
-            </div>
-          </div>
+        statusIndicator={(
+          <RunningStatus
+            active={captionGenLoading}
+            label={t('distribute.generatingCaptionStatus')}
+            stallAfterSec={15}
+            scene="on-tour"
+          />
         )}
-      </section>
+        labels={{
+          step: '02',
+          title: t('distribute.videoAndCaption'),
+          noVideo: t('distribute.noVideo'),
+          captionHintInput: t('distribute.captionHintInput'),
+          captionHintPlaceholder: t('distribute.captionHintPlaceholder'),
+          captionByPlatform: t('distribute.captionByPlatform'),
+          captionHint: t('distribute.captionHint'),
+          generatingCaption: t('distribute.generatingCaption'),
+          polishCaption: t('distribute.polishCaption'),
+          generateCaption: t('distribute.generateCaption'),
+          captionLanguageLabel,
+          campaignContext: {
+            title: t('distribute.packageContextTitle'),
+            subtitle: t('distribute.packageContextSubtitle'),
+            objective: t('distribute.campaignObjective'),
+            audience: t('distribute.targetAudience'),
+            cta: t('distribute.callToAction'),
+            market: t('distribute.market'),
+            tone: t('distribute.brandTone'),
+            sellingPoints: t('distribute.sellingPoints'),
+            avoidTerms: t('distribute.avoidTerms'),
+            empty: t('common.none'),
+          },
+          platformCopy: {
+            defaultDraft: t('distribute.defaultDraftLabel'),
+            activeDraft: t('distribute.activeDraft'),
+            accountCount: t('distribute.copyCardAccountCount'),
+            noAccounts: t('distribute.copyCardNoAccounts'),
+            caption: t('distribute.caption'),
+            captionPlaceholder: t('distribute.captionPlaceholder'),
+            hashtags: t('distribute.hashtags'),
+            hashtagsPlaceholder: t('distribute.hashtagsPlaceholder'),
+            inheritedFallback: t('distribute.copyCardInheritedFallback'),
+          },
+        }}
+        onCaptionHintChange={setCaptionHint}
+        onLanguageChange={(lang) => void handleLanguageChange(lang)}
+        onGenerateCaption={() => void handleGenerateCaption()}
+        onSetActiveDraft={setActiveDraftKey}
+        onUpdateDraft={updateDraft}
+      />
 
-      <section className="mb-6">
-        <h2 className="section-title">{t('distribute.targetAccounts')}</h2>
-        {loading ? (
-          <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.loadingAccounts')}</p>
-        ) : error ? (
-          <p className="text-sm text-[var(--color-error)]">{error}</p>
-        ) : accounts.length === 0 ? (
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-6 text-center space-y-3">
-            <p className="text-2xl">棣冩懀</p>
-            <p className="text-sm font-medium text-[var(--color-text)]">{t('distribute.noAccountsTitle')}</p>
-            <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-              {t('distribute.noAccountsHintLine1')}<br />
-              {t('distribute.noAccountsHintLine2')}
-            </p>
-            <a
-              href="https://geelark.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"
-            >
-              {t('distribute.learnGeelark')} 閳?
-            </a>
-          </div>
-        ) : accountsForPermission.length === 0 ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 text-center space-y-2">
-            <p className="text-sm font-medium text-[var(--color-text)]">{t('distribute.noPermissionTitle')}</p>
-            <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.noPermissionHint')}</p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-[var(--color-text-muted)]">
-                {t('distribute.selectedCountLabel')} {selectedIds.size}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleSelectVisible(filteredAccounts)}
-                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
-                >
-                  {t('distribute.selectVisible')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearSelection}
-                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-                >
-                  {t('distribute.clearSelection')}
-                </button>
-              </div>
-            </div>
+      <DistributeStepAccounts
+        accounts={accounts}
+        accountsForPermission={accountsForPermission}
+        filteredAccounts={filteredAccounts}
+        selectedIds={selectedIds}
+        loading={loading}
+        error={error}
+        regions={regions}
+        platforms={platforms}
+        filterRegion={filterRegion}
+        filterPlatform={filterPlatform}
+        labels={{
+          step: '03',
+          title: t('distribute.targetAccounts'),
+          loadingAccounts: t('distribute.loadingAccounts'),
+          noAccountsTitle: t('distribute.noAccountsTitle'),
+          noAccountsHintLine1: t('distribute.noAccountsHintLine1'),
+          noAccountsHintLine2: t('distribute.noAccountsHintLine2'),
+          learnGeelark: t('distribute.learnGeelark'),
+          noPermissionTitle: t('distribute.noPermissionTitle'),
+          noPermissionHint: t('distribute.noPermissionHint'),
+          selectedCountLabel: t('distribute.selectedCountLabel'),
+          selectVisible: t('distribute.selectVisible'),
+          clearSelection: t('distribute.clearSelection'),
+          region: t('distribute.region'),
+          platform: t('distribute.platform'),
+          all: t('common.all'),
+          noMatchedAccounts: t('distribute.noMatchedAccounts'),
+          profileLink: t('distribute.profileLink'),
+          accountGroups: {
+            title: t('distribute.accountGroupsTitle'),
+            empty: t('distribute.accountGroupsEmpty'),
+            config: t('distribute.accountGroupsConfig'),
+            custom: t('distribute.accountGroupsCustom'),
+            selected: t('distribute.accountGroupsSelected'),
+            save: t('distribute.accountGroupsSave'),
+            savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
+            cancel: t('common.cancel'),
+            delete: t('common.delete'),
+            selectedCount: t('distribute.accountGroupsSelectedCount'),
+          },
+        }}
+        onSelectVisible={handleSelectVisible}
+        onClearSelection={handleClearSelection}
+        onFilterRegionChange={setFilterRegion}
+        onFilterPlatformChange={setFilterPlatform}
+        onApplyAccountGroup={handleApplyAccountGroup}
+        onToggleAccount={handleToggleAccount}
+      />
 
-            {(regions.length > 0 || platforms.length > 0) && (
-              <div className="mb-4 flex flex-wrap gap-3">
-                {regions.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.region')}</span>
-                    <select
-                      value={filterRegion}
-                      onChange={(event) => setFilterRegion(event.target.value)}
-                      className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-                    >
-                      <option value="">{t('common.all')}</option>
-                      {regions.map((region) => (
-                        <option key={region} value={region}>{region}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {platforms.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.platform')}</span>
-                    <select
-                      value={filterPlatform}
-                      onChange={(event) => setFilterPlatform(event.target.value)}
-                      className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-                    >
-                      <option value="">{t('common.all')}</option>
-                      {platforms.map((platform) => (
-                        <option key={platform} value={platform}>{platform}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <AccountGroupPicker
-                accounts={accountsForPermission}
-                selectedIds={selectedIds}
-                onApplyGroup={handleApplyAccountGroup}
-                labels={{
-                  title: t('distribute.accountGroupsTitle'),
-                  empty: t('distribute.accountGroupsEmpty'),
-                  config: t('distribute.accountGroupsConfig'),
-                  custom: t('distribute.accountGroupsCustom'),
-                  selected: t('distribute.accountGroupsSelected'),
-                  save: t('distribute.accountGroupsSave'),
-                  savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
-                  cancel: t('common.cancel'),
-                  delete: t('common.delete'),
-                  selectedCount: t('distribute.accountGroupsSelectedCount'),
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              {filteredAccounts.length === 0 ? (
-                <p className="text-sm text-[var(--color-text-muted)]">{t('distribute.noMatchedAccounts')}</p>
-              ) : (
-                filteredAccounts.map((account) => (
-                  <label key={account.id} className="flex cursor-pointer items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(account.id)}
-                      onChange={() => handleToggleAccount(account.id)}
-                      className="rounded border-[var(--color-border)]"
-                    />
-                    <span className="text-sm font-medium text-[var(--color-text)]">{account.username}</span>
-                    {account.remark && <span className="text-xs text-[var(--color-text-muted)]">({account.remark})</span>}
-                    {account.profileUrl && (
-                      <a
-                        href={account.profileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(event) => event.stopPropagation()}
-                        className="text-xs text-[var(--color-primary)] hover:underline"
-                      >
-                        {t('distribute.profileLink')}
-                      </a>
-                    )}
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="mb-6">
-        <h2 className="section-title">{t('distribute.videoAndCaption')}</h2>
-        {selectedAsset ? (
-          <>
-            <div className="space-y-4">
-              {pendingPackageDraft ? (
-                <CampaignContextSummary
-                  draft={pendingPackageDraft}
-                  labels={{
-                    title: t('distribute.packageContextTitle'),
-                    subtitle: t('distribute.packageContextSubtitle'),
-                    objective: t('distribute.campaignObjective'),
-                    audience: t('distribute.targetAudience'),
-                    cta: t('distribute.callToAction'),
-                    market: t('distribute.market'),
-                    tone: t('distribute.brandTone'),
-                    sellingPoints: t('distribute.sellingPoints'),
-                    avoidTerms: t('distribute.avoidTerms'),
-                    empty: t('common.none'),
-                  }}
-                />
-              ) : (
-                <label className="space-y-1">
-                  <span className="text-xs text-[var(--color-text-muted)]">{t('distribute.captionHintInput')}</span>
-                  <input
-                    type="text"
-                    value={captionHint}
-                    onChange={(event) => setCaptionHint(event.target.value)}
-                    placeholder={t('distribute.captionHintPlaceholder')}
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-border-focus)] focus:outline-none"
-                  />
-                </label>
-              )}
-
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('distribute.captionByPlatform')}</h3>
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t('distribute.captionHint')}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {CAPTION_LANGS.map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => void handleLanguageChange(lang)}
-                      disabled={captionGenLoading}
-                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
-                        captionLang === lang
-                          ? 'bg-[var(--color-primary)] text-white'
-                          : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                      }`}
-                    >
-                      {captionLanguageLabel(lang)}
-                    </button>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerateCaption()}
-                    disabled={captionGenLoading || (!buildCaptionGenerationSeed(resolvePromptSeed(selectedAsset, prompt, taskId), captionHint.trim()) && !hasAnyCopy)}
-                    className="text-xs text-[var(--color-primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {captionGenLoading
-                      ? t('distribute.generatingCaption')
-                      : hasAnyCopy
-                        ? t('distribute.polishCaption')
-                        : t('distribute.generateCaption')}
-                  </button>
-
-                  <RunningStatus
-                    active={captionGenLoading}
-                    label={t('distribute.generatingCaptionStatus')}
-                    stallAfterSec={15}
-                    scene="on-tour"
-                  />
-                </div>
-              </div>
-
-              {captionGenError && (
-                <p className="mt-1 text-xs text-[var(--color-error)]">{captionGenError}</p>
-              )}
-
-              <PlatformCopyCards
-                draftKeys={copyCardKeys}
-                defaultDraftKey={DEFAULT_DRAFT_KEY}
-                drafts={platformDrafts}
-                activeDraftKey={activeDraftKey}
-                accountCounts={copyCardAccountCounts}
-                onSetActiveDraft={setActiveDraftKey}
-                onUpdateDraft={updateDraft}
-                labels={{
-                  defaultDraft: t('distribute.defaultDraftLabel'),
-                  activeDraft: t('distribute.activeDraft'),
-                  accountCount: t('distribute.copyCardAccountCount'),
-                  noAccounts: t('distribute.copyCardNoAccounts'),
-                  caption: t('distribute.caption'),
-                  captionPlaceholder: t('distribute.captionPlaceholder'),
-                  hashtags: t('distribute.hashtags'),
-                  hashtagsPlaceholder: t('distribute.hashtagsPlaceholder'),
-                  inheritedFallback: t('distribute.copyCardInheritedFallback'),
-                }}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-8 text-center">
-            <p className="mb-4 text-[var(--color-text-muted)]">{t('distribute.noVideo')}</p>
-            <Link
-              to="/studio"
-              className="inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
-            >
-              {t('distribute.goToStudio')}
-            </Link>
-          </div>
-        )}
-      </section>
-
-      <section className="mb-6 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-        <div>
-          <h2 className="section-title">{t('distribute.preflightTitle')}</h2>
-          <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.preflightSubtitle')}</p>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {preflightItems.map((item) => (
-            <div key={item.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-xs text-[var(--color-text-muted)]">{item.label}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] ${item.ready ? 'bg-emerald-500/15 text-emerald-200' : 'bg-amber-500/15 text-amber-100'}`}>
-                  {item.ready ? t('distribute.preflightReady') : t('distribute.preflightMissing')}
-                </span>
-              </div>
-              <p className="text-sm text-[var(--color-text)]">{item.value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs text-[var(--color-text-muted)]">{t('distribute.publishOptions')}</p>
-          <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">
-            <input
-              type="checkbox"
-              checked={needShareLink}
-              onChange={(event) => setNeedShareLink(event.target.checked)}
-            />
-            {t('distribute.needShareLink')}
-          </label>
-          <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">
-            <input
-              type="checkbox"
-              checked={markAI}
-              onChange={(event) => setMarkAI(event.target.checked)}
-            />
-            {t('distribute.markAI')}
-          </label>
-        </div>
-      </section>
-
-      <section className="mb-6 space-y-3">
-        <button
-          type="button"
-          onClick={() => void handlePush()}
-          disabled={pushing || selectedIds.size === 0 || !selectedAsset}
-          className="rounded-lg bg-[var(--color-primary)] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pushing ? t('distribute.publishing') : t('distribute.publish')}
-        </button>
-        {pushError && <p className="text-sm text-[var(--color-error)]">{pushError}</p>}
-        {selectedPlatformKeys.length > 1 && (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {t('distribute.publishGroupedByPlatform')}
-          </p>
-        )}
-      </section>
-
-      {latestBatch && (
-        <BatchStatusPanel
-          batch={latestBatch}
-          refreshing={batchRefreshing}
-          onRefresh={() => void refreshBatch(latestBatch)}
-          onClear={() => setLatestBatch(null)}
-          formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
-        />
-      )}
+      <DistributeStepPublish
+        preflightItems={preflightItems}
+        needShareLink={needShareLink}
+        markAI={markAI}
+        pushing={pushing}
+        publishDisabled={pushing || selectedIds.size === 0 || !selectedAsset}
+        pushError={pushError}
+        showGroupedHint={selectedPlatformKeys.length > 1}
+        latestBatch={latestBatch}
+        batchRefreshing={batchRefreshing}
+        formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
+        labels={{
+          step: '04',
+          title: t('distribute.preflightTitle'),
+          subtitle: t('distribute.preflightSubtitle'),
+          ready: t('distribute.preflightReady'),
+          missing: t('distribute.preflightMissing'),
+          publishOptions: t('distribute.publishOptions'),
+          needShareLink: t('distribute.needShareLink'),
+          markAI: t('distribute.markAI'),
+          publish: t('distribute.publish'),
+          publishing: t('distribute.publishing'),
+          groupedByPlatform: t('distribute.publishGroupedByPlatform'),
+          latestBatch: {
+            title: t('distribute.latestBatchTitle'),
+            meta: t('distribute.latestBatchMeta'),
+            summaryTotal: t('distribute.batchSummaryTotal'),
+            summarySuccess: t('distribute.batchSummarySuccess'),
+            summaryFailed: t('distribute.batchSummaryFailed'),
+            summaryPending: t('distribute.batchSummaryPending'),
+            statusSubmitting: t('distribute.batchStatusSubmitting'),
+            statusSubmitFailed: t('distribute.batchStatusSubmitFailed'),
+            statusSubmitted: t('distribute.batchStatusSubmitted'),
+            hintSubmitting: t('distribute.latestBatchHintSubmitting'),
+            hintRunning: t('distribute.latestBatchHintRunning'),
+            hintDone: t('distribute.latestBatchHintDone'),
+            refresh: t('common.refresh'),
+            refreshing: t('distribute.batchRefreshing'),
+            close: t('common.close'),
+            unknown: t('common.unknown'),
+            profileLink: t('distribute.profileLink'),
+            reportPlanName: t('distribute.reportPlanName'),
+            taskId: t('distribute.batchTaskId'),
+            logs: t('distribute.batchLogs'),
+            shareLink: t('distribute.batchShareLink'),
+          },
+        }}
+        onNeedShareLinkChange={setNeedShareLink}
+        onMarkAIChange={setMarkAI}
+        onPublish={() => void handlePush()}
+        onRefreshBatch={(batch) => void refreshBatch(batch)}
+        onClearBatch={() => setLatestBatch(null)}
+      />
 
       <div className="mb-6 space-y-4">
         {historyError && <p className="text-sm text-[var(--color-error)]">{historyError}</p>}
@@ -1176,222 +971,6 @@ export function TabDistribute() {
         )}
       </div>
     </div>
-  );
-}
-
-interface CampaignContextSummaryLabels {
-  title: string;
-  subtitle: string;
-  objective: string;
-  audience: string;
-  cta: string;
-  market: string;
-  tone: string;
-  sellingPoints: string;
-  avoidTerms: string;
-  empty: string;
-}
-
-function CampaignContextSummary({
-  draft,
-  labels,
-}: {
-  draft: PendingDistributionDraft;
-  labels: CampaignContextSummaryLabels;
-}) {
-  const context = draft.captionContext;
-  const items = [
-    { key: 'objective', label: labels.objective, value: context.campaignObjective },
-    { key: 'audience', label: labels.audience, value: context.targetAudience },
-    { key: 'cta', label: labels.cta, value: context.callToAction },
-    { key: 'market', label: labels.market, value: context.targetMarket },
-    { key: 'tone', label: labels.tone, value: context.toneRules },
-    { key: 'sellingPoints', label: labels.sellingPoints, value: context.sellingPoints },
-    { key: 'avoidTerms', label: labels.avoidTerms, value: context.avoidTerms },
-  ].filter((item) => item.value.trim());
-
-  return (
-    <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-[var(--color-text)]">{labels.title}</h3>
-        <p className="mt-1 text-xs text-[var(--color-text-muted)]">{labels.subtitle}</p>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-xs text-[var(--color-text-muted)]">{labels.empty}</p>
-      ) : (
-        <div className="grid gap-2 md:grid-cols-2">
-          {items.map((item) => (
-            <div key={item.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">{item.label}</p>
-              <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[var(--color-text-muted)]">{item.value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function getDisplayStatus(item: LatestPublishBatchItem, t: (key: string) => string): string {
-  if (item.statusText === 'submitting') return t('distribute.batchStatusSubmitting');
-  if (item.statusText === 'submit_failed') return t('distribute.batchStatusSubmitFailed');
-  if (item.statusText === 'submitted') return t('distribute.batchStatusSubmitted');
-  if (item.detail?.statusText) return item.detail.statusText;
-  return item.statusText || t('common.unknown');
-}
-
-function getStatusTone(item: LatestPublishBatchItem): string {
-  if (item.statusText === 'submitting') return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
-  if (item.submitError) return 'border-red-500/30 bg-red-500/10 text-red-200';
-  const status = Number(item.detail?.status ?? 0);
-  if (status === 3) return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
-  if (status === 4 || status === 7) return 'border-red-500/30 bg-red-500/10 text-red-200';
-  if (status === 2) return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
-  return 'border-amber-500/30 bg-amber-500/10 text-amber-100';
-}
-
-interface BatchStatusPanelProps {
-  batch: LatestPublishBatch;
-  refreshing: boolean;
-  onRefresh: () => void;
-  onClear: () => void;
-  formatTime: (timestamp: number) => string;
-}
-
-function BatchStatusPanel({ batch, refreshing, onRefresh, onClear, formatTime }: BatchStatusPanelProps) {
-  const { t } = useLocale();
-  const successCount = batch.items.filter((item) => Number(item.detail?.status ?? 0) === 3).length;
-  const failedCount = batch.items.filter((item) => item.submitError || [4, 7].includes(Number(item.detail?.status ?? 0))).length;
-  const pendingCount = batch.phase === 'submitting' ? batch.items.length : getPendingTaskIds(batch).length;
-  const summaryText = `${t('distribute.batchSummaryTotal')} ${batch.items.length} 路 ${t('distribute.batchSummarySuccess')} ${successCount} 路 ${t('distribute.batchSummaryFailed')} ${failedCount} 路 ${t('distribute.batchSummaryPending')} ${pendingCount}`;
-
-  return (
-    <section className="mb-6 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="section-title">{t('distribute.latestBatchTitle')}</h2>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {t('distribute.latestBatchMeta')} {formatTime(batch.createdAt)}
-          </p>
-          <p className="text-xs text-[var(--color-text-muted)]">{summaryText}</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing || batch.phase === 'submitting'}
-            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-          >
-            {refreshing ? t('distribute.batchRefreshing') : t('common.refresh')}
-          </button>
-          <button
-            type="button"
-            onClick={onClear}
-            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
-          >
-            {t('common.close')}
-          </button>
-        </div>
-      </div>
-
-      <p className="text-xs text-[var(--color-text-subtle)]">
-        {batch.phase === 'submitting'
-          ? t('distribute.latestBatchHintSubmitting')
-          : pendingCount > 0
-            ? t('distribute.latestBatchHintRunning')
-            : t('distribute.latestBatchHintDone')}
-      </p>
-
-      <div className="space-y-3">
-        {batch.items.map((item) => (
-          <article
-            key={`${item.accountId}:${item.taskId ?? 'missing-task'}`}
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-[var(--color-text)]">{item.username}</span>
-                  {item.platform && (
-                    <span className="rounded bg-[var(--color-surface-elevated)] px-2 py-0.5 text-[10px] uppercase text-[var(--color-text-muted)]">
-                      {item.platform}
-                    </span>
-                  )}
-                  {item.region && (
-                    <span className="text-[10px] text-[var(--color-text-muted)]">{item.region}</span>
-                  )}
-                  {item.profileUrl && (
-                    <a
-                      href={item.profileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-[var(--color-primary)] hover:underline"
-                    >
-                      {t('distribute.profileLink')}
-                    </a>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)]">
-                  <span>{t('distribute.reportPlanName')}: {batch.planName ?? '-'}</span>
-                  <span>{t('distribute.batchTaskId')}: {item.taskId ?? '-'}</span>
-                </div>
-              </div>
-
-              <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusTone(item)}`}>
-                {getDisplayStatus(item, t)}
-              </span>
-            </div>
-
-            {(item.detailError || item.submitError || item.detail?.failDesc) && (
-              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-200">
-                {item.detail?.failDesc || item.detailError || item.submitError}
-              </div>
-            )}
-
-            {item.detail?.shareLink && (
-              <div className="mt-3">
-                <a
-                  href={item.detail.shareLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-[var(--color-primary)] hover:underline"
-                >
-                  {t('distribute.batchShareLink')}
-                </a>
-              </div>
-            )}
-
-            {item.detail?.resultImages && item.detail.resultImages.length > 0 && (
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {item.detail.resultImages.map((img, index) => (
-                  <img
-                    key={`${item.accountId}:${index}`}
-                    src={img}
-                    alt={`${item.username}-result-${index + 1}`}
-                    className="max-h-64 w-full rounded-lg border border-[var(--color-border)] bg-black object-contain"
-                  />
-                ))}
-              </div>
-            )}
-
-            {item.detail?.logs && item.detail.logs.length > 0 && (
-              <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2">
-                <p className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-subtle)]">
-                  {t('distribute.batchLogs')}
-                </p>
-                <div className="space-y-1 text-xs text-[var(--color-text-muted)]">
-                  {item.detail.logs.slice(-3).map((line, index) => (
-                    <p key={`${item.accountId}:log:${index}`} className="break-words">{line}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 

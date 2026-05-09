@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import {
   buildAccountGroups,
@@ -7,6 +7,8 @@ import {
   type AccountGroup,
   type AccountGroupAccount,
 } from '../../utils/accountGroups.ts';
+
+void React;
 
 interface AccountGroupPickerLabels {
   title: string;

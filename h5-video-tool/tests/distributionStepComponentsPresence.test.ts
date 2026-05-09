@@ -1,0 +1,269 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+test('TabDistribute composes the four operator step components', () => {
+  const source = readFileSync(resolve(__dirname, '../src/pages/TabDistribute.tsx'), 'utf-8');
+
+  assert.match(source, /DistributeStepAsset/);
+  assert.match(source, /DistributeStepCopy/);
+  assert.match(source, /DistributeStepAccounts/);
+  assert.match(source, /DistributeStepPublish/);
+  assert.match(source, /step: '01'/);
+  assert.match(source, /step: '02'/);
+  assert.match(source, /step: '03'/);
+  assert.match(source, /step: '04'/);
+});
+
+test('distribution step components render the core operator landmarks', async () => {
+  const [
+    assetModule,
+    copyModule,
+    accountsModule,
+    publishModule,
+  ] = await Promise.all([
+    import('../src/components/distribute/DistributeStepAsset.tsx'),
+    import('../src/components/distribute/DistributeStepCopy.tsx'),
+    import('../src/components/distribute/DistributeStepAccounts.tsx'),
+    import('../src/components/distribute/DistributeStepPublish.tsx'),
+  ]);
+
+  const assetHtml = renderToStaticMarkup(
+    React.createElement(assetModule.DistributeStepAsset, {
+      assets: [{
+        id: 'asset-1',
+        source: 'package',
+        title: 'Package video',
+        subtitle: 'Campaign draft',
+        prompt: 'gold prompt',
+        videoUrl: '/demo.mp4',
+        taskId: 'task-1',
+      }],
+      selectedAsset: {
+        id: 'asset-1',
+        source: 'package',
+        title: 'Package video',
+        videoUrl: '/demo.mp4',
+      },
+      selectedAssetId: 'asset-1',
+      loading: false,
+      error: null,
+      emptyAction: React.createElement('a', { href: '/studio' }, 'Go Studio'),
+      labels: {
+        step: '01',
+        title: 'Choose asset',
+        subtitle: 'Pick a package or quick asset',
+        loading: 'Loading',
+        noVideo: 'No video',
+        selected: 'Selected',
+        previewTitle: 'Preview',
+        previewUnavailable: 'No preview',
+        promptSeed: 'Prompt seed',
+      },
+      getAssetSourceLabel: () => 'Package',
+      onSelectAsset: () => undefined,
+    }),
+  );
+
+  const copyHtml = renderToStaticMarkup(
+    React.createElement(copyModule.DistributeStepCopy, {
+      hasSelectedAsset: true,
+      captionHintValue: 'soft launch',
+      captionLanguages: ['DEFAULT', 'EN'],
+      activeCaptionLanguage: 'DEFAULT',
+      captionGenLoading: false,
+      captionGenError: null,
+      hasAnyCopy: true,
+      canGenerateCaption: true,
+      pendingPackageDraft: null,
+      draftKeys: ['default'],
+      defaultDraftKey: 'default',
+      drafts: { default: { caption: 'Launch copy', hashtags: '#gold' } },
+      activeDraftKey: 'default',
+      accountCounts: { default: 1 },
+      noVideoAction: React.createElement('a', { href: '/studio' }, 'Go Studio'),
+      statusIndicator: null,
+      labels: {
+        step: '02',
+        title: 'Copy',
+        noVideo: 'No video',
+        captionHintInput: 'Caption hint',
+        captionHintPlaceholder: 'Add hint',
+        captionByPlatform: 'Copy by platform',
+        captionHint: 'Tune copy per platform',
+        generatingCaption: 'Generating',
+        polishCaption: 'Polish',
+        generateCaption: 'Generate',
+        captionLanguageLabel: (language: string) => language,
+        campaignContext: {
+          title: 'Campaign context',
+          subtitle: 'Inherited',
+          objective: 'Objective',
+          audience: 'Audience',
+          cta: 'CTA',
+          market: 'Market',
+          tone: 'Tone',
+          sellingPoints: 'Selling points',
+          avoidTerms: 'Avoid',
+          empty: 'None',
+        },
+        platformCopy: {
+          defaultDraft: 'Default',
+          activeDraft: 'Active',
+          accountCount: '{count} account',
+          noAccounts: 'No accounts',
+          caption: 'Caption',
+          captionPlaceholder: 'Caption...',
+          hashtags: 'Hashtags',
+          hashtagsPlaceholder: '#tag',
+          inheritedFallback: 'Using default',
+        },
+      },
+      onCaptionHintChange: () => undefined,
+      onLanguageChange: () => undefined,
+      onGenerateCaption: () => undefined,
+      onSetActiveDraft: () => undefined,
+      onUpdateDraft: () => undefined,
+    }),
+  );
+
+  const accountsHtml = renderToStaticMarkup(
+    React.createElement(accountsModule.DistributeStepAccounts, {
+      accounts: [{ id: 'acc-1', username: 'gold-th', platform: 'TikTok', region: 'TH', remark: 'group:TH' }],
+      accountsForPermission: [{ id: 'acc-1', username: 'gold-th', platform: 'TikTok', region: 'TH', remark: 'group:TH' }],
+      filteredAccounts: [{ id: 'acc-1', username: 'gold-th', platform: 'TikTok', region: 'TH', remark: 'group:TH' }],
+      selectedIds: new Set(['acc-1']),
+      loading: false,
+      error: null,
+      regions: ['TH'],
+      platforms: ['TikTok'],
+      filterRegion: '',
+      filterPlatform: '',
+      labels: {
+        step: '03',
+        title: 'Accounts',
+        loadingAccounts: 'Loading accounts',
+        noAccountsTitle: 'No accounts',
+        noAccountsHintLine1: 'Connect GeeLark',
+        noAccountsHintLine2: 'Then retry',
+        learnGeelark: 'Learn GeeLark',
+        noPermissionTitle: 'No permission',
+        noPermissionHint: 'Ask admin',
+        selectedCountLabel: 'Selected',
+        selectVisible: 'Select visible',
+        clearSelection: 'Clear',
+        region: 'Region',
+        platform: 'Platform',
+        all: 'All',
+        noMatchedAccounts: 'No matched accounts',
+        profileLink: 'Profile',
+        accountGroups: {
+          title: 'Account groups',
+          empty: 'No groups',
+          config: 'Config',
+          custom: 'Custom',
+          selected: 'Selected',
+          save: 'Save',
+          savePlaceholder: 'Group name',
+          cancel: 'Cancel',
+          delete: 'Delete',
+          selectedCount: '{count} selected',
+        },
+      },
+      onSelectVisible: () => undefined,
+      onClearSelection: () => undefined,
+      onFilterRegionChange: () => undefined,
+      onFilterPlatformChange: () => undefined,
+      onApplyAccountGroup: () => undefined,
+      onToggleAccount: () => undefined,
+    }),
+  );
+
+  const publishHtml = renderToStaticMarkup(
+    React.createElement(publishModule.DistributeStepPublish, {
+      preflightItems: [
+        { key: 'asset', label: 'Asset', ready: true, value: 'Package video' },
+        { key: 'accounts', label: 'Accounts', ready: true, value: '1 selected' },
+        { key: 'copy', label: 'Copy', ready: true, value: 'Ready' },
+      ],
+      needShareLink: true,
+      markAI: false,
+      pushing: false,
+      publishDisabled: false,
+      pushError: null,
+      showGroupedHint: true,
+      latestBatch: {
+        createdAt: 1710000000000,
+        phase: 'tracking',
+        planName: 'Launch',
+        items: [{
+          accountId: 'acc-1',
+          username: 'gold-th',
+          platform: 'TikTok',
+          statusText: 'submitted',
+          taskId: 'task-1',
+          detailLoading: false,
+        }],
+      },
+      batchRefreshing: false,
+      formatTime: () => '2026-05-09 10:00',
+      labels: {
+        step: '04',
+        title: 'Confirm & publish',
+        subtitle: 'Review before publish',
+        ready: 'Ready',
+        missing: 'Missing',
+        publishOptions: 'Publish options',
+        needShareLink: 'Need share link',
+        markAI: 'Mark AI',
+        publish: 'Publish',
+        publishing: 'Publishing',
+        groupedByPlatform: 'Grouped by platform',
+        latestBatch: {
+          title: 'Latest batch',
+          meta: 'Created',
+          summaryTotal: 'Total',
+          summarySuccess: 'Success',
+          summaryFailed: 'Failed',
+          summaryPending: 'Pending',
+          statusSubmitting: 'Submitting',
+          statusSubmitFailed: 'Submit failed',
+          statusSubmitted: 'Submitted',
+          hintSubmitting: 'Submitting',
+          hintRunning: 'Running',
+          hintDone: 'Done',
+          refresh: 'Refresh',
+          refreshing: 'Refreshing',
+          close: 'Close',
+          unknown: 'Unknown',
+          profileLink: 'Profile',
+          reportPlanName: 'Plan',
+          taskId: 'Task',
+          logs: 'Logs',
+          shareLink: 'Share link',
+        },
+      },
+      onNeedShareLinkChange: () => undefined,
+      onMarkAIChange: () => undefined,
+      onPublish: () => undefined,
+      onRefreshBatch: () => undefined,
+      onClearBatch: () => undefined,
+    }),
+  );
+
+  assert.match(assetHtml, /Choose asset/);
+  assert.match(assetHtml, /Package video/);
+  assert.match(copyHtml, /Copy by platform/);
+  assert.match(copyHtml, /Launch copy/);
+  assert.match(accountsHtml, /Account groups/);
+  assert.match(accountsHtml, /gold-th/);
+  assert.match(publishHtml, /Confirm &amp; publish/);
+  assert.match(publishHtml, /Latest batch/);
+  assert.match(publishHtml, /Submitted/);
+});

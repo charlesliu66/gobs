@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.174)*
+*Last updated: 2026-05-09 (v0.175)*
 
-**Latest update - v0.174**
-- Release scripts now generate release-ready and deployment-state timestamps on the default Python 3.10 runtime without temporary `datetime.UTC` shims.
-- `deploy_api.py` and `deploy_frontend.py` now package build outputs into tarballs for single-file SFTP transfer, use larger SFTP windows plus bounded SSH/SFTP/socket timeouts, print archive upload progress, and clean up resources deterministically.
-- Deployment helper tests cover Python 3.10 timestamp compatibility, remote command timeout/failure handling, frontend upload cleanup, and existing release guard behavior.
+**Latest update - v0.175**
+- `/distribute` is now organized as a four-step operator workspace: asset, video/copy, target accounts, and preflight/publish confirmation.
+- The new `DistributeStepAsset`, `DistributeStepCopy`, `DistributeStepAccounts`, and `DistributeStepPublish` components are presentational and callback-driven, while `TabDistribute` still owns package hydration, account/caption/publish APIs, latest-batch polling, and history loading.
+- Campaign Package intake, direct caption hints, account groups, platform copy cards, latest batch tracking, and filtered publish history remain behavior-compatible; the run only changes the frontend structure and operator scan path.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -229,7 +229,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
-- **视频分发** (`/distribute`)：面向市场同学的资产优先发布工作台，支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，Studio 生成结果可把已链接 Package 更新为可发布资产，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
+- **视频分发** (`/distribute`)：面向市场同学的四步资产优先发布工作台，按 01 素材、02 视频文案、03 目标账号、04 预检发布确认组织页面；支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，Studio 生成结果可把已链接 Package 更新为可发布资产，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
@@ -257,6 +257,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.175 - 2026-05-09
+**Distribution Center step refinement**
+
+- **[distribution steps] Split `/distribute` into four operator sections** (`h5-video-tool/src/pages/TabDistribute.tsx`, `h5-video-tool/src/components/distribute/DistributeStep*.tsx`): asset, video/copy, target accounts, and preflight/publish confirmation now appear as explicit one-page workflow sections.
+- **[state ownership] Preserved existing publish semantics**: package hydration, account loading, caption generation, GeeLark publish submission, latest-batch polling, and publish history loading still live in `TabDistribute`; the new step components are presentational callback surfaces.
+- **[tests/build] Added step component coverage and visual verification** (`h5-video-tool/tests/distributionStepComponentsPresence.test.ts`): targeted distribution tests, frontend build, backend build-equivalent checks, and Playwright `/distribute` visual check pass locally.
 
 ### v0.173 - 2026-05-09
 **Campaign Production Loop closeout**

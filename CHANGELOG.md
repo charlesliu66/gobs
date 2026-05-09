@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.175 - 2026-05-09
+**Distribution Center step refinement**
+**Distribution / Operator Flow:**
+- Split `/distribute` into four visible operator sections: asset selection, video/copy, target accounts, and preflight/publish confirmation.
+- Extracted `DistributeStepAsset`, `DistributeStepCopy`, `DistributeStepAccounts`, and `DistributeStepPublish` as presentational callback-driven components while keeping package hydration, account loading, caption generation, publish submission, batch polling, and history loading in `TabDistribute`.
+- Preserved Campaign Package intake, direct caption hints, account-group quick selection, platform copy cards, latest publish batch tracking, and filtered publish history without touching GeeLark backend routes/services.
+**Tests / Build:**
+- Added distribution step presence/render coverage, reran targeted distribution tests, frontend production build, backend TypeScript/build-equivalent checks, and local Playwright visual verification for `/distribute`.
+
 ## v0.174 - 2026-05-09
 **Release tooling hardening**
 **Deploy / Release Guard:**
