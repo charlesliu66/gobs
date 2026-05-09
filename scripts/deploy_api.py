@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
+import tarfile
 import time
+import tempfile
 from pathlib import Path
 
 import paramiko
@@ -133,6 +136,40 @@ def run_remote_command(
         close_quietly(stdout)
 
 
+def create_directory_archive(source_dir: Path, archive_path: Path) -> None:
+    with tarfile.open(archive_path, 'w:gz') as archive:
+        for item in sorted(source_dir.rglob('*'), key=lambda path: path.as_posix()):
+            archive.add(item, arcname=str(item.relative_to(source_dir)), recursive=False)
+
+
+def build_remote_archive_name(kind: str, target: str) -> str:
+    safe_kind = ''.join(ch for ch in kind if ch.isalnum() or ch in ('-', '_')) or 'deploy'
+    safe_target = ''.join(ch for ch in target if ch.isalnum() or ch in ('-', '_')) or 'target'
+    return f'qas-{safe_kind}-{safe_target}-{int(time.time())}.tar.gz'
+
+
+def upload_and_extract_archive(
+    *,
+    client: paramiko.SSHClient,
+    sftp: paramiko.SFTPClient,
+    archive_path: Path,
+    remote_dir: str,
+    remote_archive_name: str,
+) -> None:
+    remote_archive_path = f'/tmp/{remote_archive_name}'
+    size_mb = archive_path.stat().st_size / (1024 * 1024)
+    print(f'  archive {archive_path.name} ({size_mb:.2f} MB) -> {remote_archive_path}')
+    sftp.put(str(archive_path), remote_archive_path, confirm=False)
+    run_remote_command(
+        client,
+        ' && '.join([
+            f'mkdir -p {shlex.quote(remote_dir)}',
+            f'tar -xzf {shlex.quote(remote_archive_path)} -C {shlex.quote(remote_dir)}',
+            f'rm -f {shlex.quote(remote_archive_path)}',
+        ]),
+    )
+
+
 def remote_parent(remote_path: str) -> str:
     normalized = remote_path.rstrip('/')
     if not normalized or normalized == '/':
@@ -210,17 +247,6 @@ def main() -> bool:
                 current = f'{current}/{part}'
                 remote_mkdir(current)
 
-        def upload_dir(local_dir: Path, remote_dir: str) -> None:
-            assert sftp is not None
-            remote_mkdir(remote_dir)
-            for item in sorted(local_dir.iterdir(), key=lambda path: path.name):
-                remote_path = f'{remote_dir}/{item.name}'
-                if item.is_dir():
-                    upload_dir(item, remote_path)
-                else:
-                    sftp.put(str(item), remote_path, confirm=False)
-                    print(f'  {item.relative_to(LOCAL_DIST)}')
-
         def upload_runtime_scripts(remote_dir: str) -> None:
             assert sftp is not None
             script_paths = get_runtime_script_paths()
@@ -231,7 +257,16 @@ def main() -> bool:
                 print(f'  runtime/{script_path.name}')
 
         print(f'正在上传后端产物到 {config.target}: {LOCAL_DIST} -> {config.api_dir}')
-        upload_dir(LOCAL_DIST, config.api_dir)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = Path(temp_dir) / 'api-dist.tar.gz'
+            create_directory_archive(LOCAL_DIST, archive_path)
+            upload_and_extract_archive(
+                client=client,
+                sftp=sftp,
+                archive_path=archive_path,
+                remote_dir=config.api_dir,
+                remote_archive_name=build_remote_archive_name('api', config.target),
+            )
         runtime_scripts_dir = get_remote_runtime_scripts_dir(config.api_dir)
         print(f'Uploading backend runtime scripts: {LOCAL_RUNTIME_SCRIPT_DIR} -> {runtime_scripts_dir}')
         upload_runtime_scripts(runtime_scripts_dir)

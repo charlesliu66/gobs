@@ -7,16 +7,31 @@
 from __future__ import annotations
 
 import argparse
+import tempfile
 from pathlib import Path
 
 import paramiko
 
 try:
     from scripts.deploy_config import DeployConfigError, build_target_config
-    from scripts.deploy_api import close_quietly, configure_sftp_timeout, connect_ssh_client
+    from scripts.deploy_api import (
+        build_remote_archive_name,
+        close_quietly,
+        configure_sftp_timeout,
+        connect_ssh_client,
+        create_directory_archive,
+        upload_and_extract_archive,
+    )
 except ModuleNotFoundError:
     from deploy_config import DeployConfigError, build_target_config
-    from deploy_api import close_quietly, configure_sftp_timeout, connect_ssh_client
+    from deploy_api import (
+        build_remote_archive_name,
+        close_quietly,
+        configure_sftp_timeout,
+        connect_ssh_client,
+        create_directory_archive,
+        upload_and_extract_archive,
+    )
 
 LOCAL_DIST = Path(__file__).parent.parent / 'h5-video-tool' / 'dist'
 
@@ -45,32 +60,17 @@ def main() -> bool:
         sftp = client.open_sftp()
         configure_sftp_timeout(sftp)
 
-        def remote_exists(remote_path: str) -> bool:
-            assert sftp is not None
-            try:
-                sftp.stat(remote_path)
-                return True
-            except FileNotFoundError:
-                return False
-
-        def remote_mkdir(remote_path: str) -> None:
-            assert sftp is not None
-            if not remote_exists(remote_path):
-                sftp.mkdir(remote_path)
-
-        def upload_dir(local_dir: Path, remote_dir: str) -> None:
-            assert sftp is not None
-            remote_mkdir(remote_dir)
-            for item in sorted(local_dir.iterdir(), key=lambda path: path.name):
-                remote_path = f'{remote_dir}/{item.name}'
-                if item.is_dir():
-                    upload_dir(item, remote_path)
-                else:
-                    sftp.put(str(item), remote_path, confirm=False)
-                    print(f'  {item.relative_to(LOCAL_DIST)}')
-
         print(f'正在上传前端产物到 {config.target}: {LOCAL_DIST} -> {config.frontend_dir}')
-        upload_dir(LOCAL_DIST, config.frontend_dir)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = Path(temp_dir) / 'frontend-dist.tar.gz'
+            create_directory_archive(LOCAL_DIST, archive_path)
+            upload_and_extract_archive(
+                client=client,
+                sftp=sftp,
+                archive_path=archive_path,
+                remote_dir=config.frontend_dir,
+                remote_archive_name=build_remote_archive_name('frontend', config.target),
+            )
 
         print('前端部署完成')
         return True

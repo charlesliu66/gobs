@@ -20,7 +20,7 @@
 |---|---|---|---|
 | Python 3.10 UTC compatibility | Release-ready and deployment-state timestamp helpers no longer require Python 3.11 `datetime.UTC`. | Pass | `python3 -m unittest discover scripts/tests` passed on Python 3.10; `grep -R "datetime.UTC\\|dt.UTC\\|from datetime import UTC" scripts` returned no matches. |
 | Deploy API remote command handling | Remote command stdout/stderr drain, timeout close, non-zero exit-code error, and SFTP channel timeout are covered. | Pass | `scripts.tests.test_deploy_api` passed. |
-| Deploy frontend cleanup | Frontend deploy uploads nested dist files, sets SFTP timeout, and closes SFTP/client resources. | Pass | `scripts.tests.test_deploy_frontend` passed. |
+| Deploy frontend cleanup | Frontend deploy packages nested dist files, sets SFTP timeout, delegates single-archive upload/extract, and closes SFTP/client resources. | Pass | `scripts.tests.test_deploy_frontend` passed. |
 | Release/deploy guards | Existing deploy-all, deploy-config, release-guard, deployment-state, and dual-env tests still pass. | Pass | `python3 -m unittest discover scripts/tests` ran 50 tests successfully. |
 | Mechanical eval | Backend build, frontend build, TypeScript check, and local API health. | Pass | `bash scripts/eval.sh 2026-05-09-release-tooling-hardening` returned `PASS` with API health 200. |
 | Scope guard | Verify-stage run scope. | Pass | `workflow_guard --stage verify` passed with no findings. |
@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | Remote command waits | Unit-level timeout loop | Channel closes when timeout expires | Pass | Real PM2/SFTP behavior still needs staging observation. |
 | Frontend nested upload | Temp `dist/` with root and nested files | All files uploaded, resources closed | Pass | Unit test does not cover real network speed. |
-| SFTP visibility | Staging deploy follow-up after first attempt showed backend SFTP still waiting without file-level progress. | Added socket timeout, `confirm=False`, and per-file backend upload progress. | Pending live re-test | This is the key staging verifier item before prod. |
+| SFTP transfer shape | Staging deploy follow-up showed multi-file SFTP was structurally too slow for this connection. | Switched API/frontend artifact upload to tarball-based single-file SFTP plus remote extract. | Pending live re-test | This is the key staging verifier item before prod. |
 
 ## 6) Regression Result
 - Full/targeted regression summary: All script unit tests pass, workflow verify guard passes, and eval returns PASS.

@@ -1,9 +1,11 @@
 import tempfile
+import tarfile
 import unittest
 from pathlib import Path
 
 from scripts.deploy_api import (
     DeployRuntimeError,
+    create_directory_archive,
     close_quietly,
     configure_ssh_keepalive,
     configure_sftp_timeout,
@@ -13,6 +15,7 @@ from scripts.deploy_api import (
     get_runtime_script_paths,
     remote_parent,
     run_remote_command,
+    upload_and_extract_archive,
 )
 
 
@@ -74,9 +77,13 @@ class FakeClient:
 class FakeSftp:
     def __init__(self, channel):
         self.channel = channel
+        self.uploads = []
 
     def get_channel(self):
         return self.channel
+
+    def put(self, local_path, remote_path, **kwargs):
+        self.uploads.append((Path(local_path).name, remote_path, kwargs))
 
 
 class FakeSock:
@@ -197,6 +204,43 @@ class DeployApiTests(unittest.TestCase):
 
     def test_close_quietly_swallows_close_errors(self):
         close_quietly(BrokenCloser())
+
+    def test_create_directory_archive_preserves_relative_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / 'dist'
+            root.mkdir()
+            (root / 'index.js').write_text('console.log("ok")\n', encoding='utf-8')
+            (root / 'config').mkdir()
+            (root / 'config' / 'env.js').write_text('export default {}\n', encoding='utf-8')
+            archive_path = Path(temp_dir) / 'dist.tar.gz'
+
+            create_directory_archive(root, archive_path)
+
+            with tarfile.open(archive_path, 'r:gz') as archive:
+                self.assertEqual(
+                    sorted(archive.getnames()),
+                    ['config', 'config/env.js', 'index.js'],
+                )
+
+    def test_upload_and_extract_archive_uploads_single_archive_and_extracts_remote(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = Path(temp_dir) / 'dist.tar.gz'
+            archive_path.write_bytes(b'fake archive')
+            channel = FakeChannel()
+            client = FakeClient(channel)
+            sftp = FakeSftp(channel)
+
+            upload_and_extract_archive(
+                client=client,
+                sftp=sftp,
+                archive_path=archive_path,
+                remote_dir='/remote/api',
+                remote_archive_name='api.tar.gz',
+            )
+
+            self.assertEqual(sftp.uploads, [('dist.tar.gz', '/tmp/api.tar.gz', {'confirm': False})])
+            self.assertIn('tar -xzf /tmp/api.tar.gz -C /remote/api', client.command)
+            self.assertIn('rm -f /tmp/api.tar.gz', client.command)
 
     def test_run_remote_command_returns_stdout_when_command_succeeds(self):
         channel = FakeChannel(stdout=[b'hello\n'])

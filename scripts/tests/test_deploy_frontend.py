@@ -18,22 +18,10 @@ class FakeChannel:
 class FakeSftp:
     def __init__(self):
         self.channel = FakeChannel()
-        self.directories = set()
-        self.uploads = []
         self.closed = False
 
     def get_channel(self):
         return self.channel
-
-    def stat(self, remote_path):
-        if remote_path not in self.directories:
-            raise FileNotFoundError(remote_path)
-
-    def mkdir(self, remote_path):
-        self.directories.add(remote_path)
-
-    def put(self, local_path, remote_path, **kwargs):
-        self.uploads.append((Path(local_path).name, remote_path, kwargs))
 
     def close(self):
         self.closed = True
@@ -67,25 +55,28 @@ class DeployFrontendTests(unittest.TestCase):
                 password='secret',
                 frontend_dir='/remote/frontend',
             )
+            upload = Mock()
 
             with patch.object(deploy_frontend, 'LOCAL_DIST', dist), \
                 patch.object(deploy_frontend, 'build_target_config', return_value=config), \
                 patch.object(deploy_frontend, 'connect_ssh_client', return_value=client), \
+                patch.object(
+                    deploy_frontend,
+                    'create_directory_archive',
+                    side_effect=lambda _source, archive: archive.write_bytes(b'archive'),
+                ), \
+                patch.object(deploy_frontend, 'upload_and_extract_archive', upload), \
                 patch('sys.argv', ['deploy_frontend.py']):
                 self.assertTrue(deploy_frontend.main())
 
             self.assertTrue(sftp.closed)
             self.assertTrue(client.closed)
             self.assertEqual(sftp.channel.timeout, 120)
-            self.assertIn('/remote/frontend', sftp.directories)
-            self.assertIn('/remote/frontend/assets', sftp.directories)
-            self.assertEqual(
-                sftp.uploads,
-                [
-                    ('main.js', '/remote/frontend/assets/main.js', {'confirm': False}),
-                    ('index.html', '/remote/frontend/index.html', {'confirm': False}),
-                ],
-            )
+            upload.assert_called_once()
+            self.assertEqual(upload.call_args.kwargs['client'], client)
+            self.assertEqual(upload.call_args.kwargs['sftp'], sftp)
+            self.assertEqual(upload.call_args.kwargs['remote_dir'], '/remote/frontend')
+            self.assertTrue(str(upload.call_args.kwargs['archive_path']).endswith('frontend-dist.tar.gz'))
 
     def test_main_rejects_missing_dist_without_connecting(self):
         missing_dist = Path('/tmp/gobs-missing-frontend-dist-for-test')

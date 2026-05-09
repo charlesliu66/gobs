@@ -6,10 +6,10 @@
 **Release tooling hardening**
 **Deploy / Release Guard:**
 - Replaced Python 3.11-only `datetime.UTC` usage in release/deployment timestamp helpers with Python 3.10-compatible UTC handling, including the dual-env initialization script.
-- Hardened `deploy_api.py` remote command execution with SSH keepalive, bounded channel timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
-- Hardened `deploy_frontend.py` with shared SSH/SFTP/socket timeout configuration, lighter SFTP confirmation waits, recursive upload progress, resource cleanup in `finally`, and non-zero CLI exit behavior on failure.
+- Hardened `deploy_api.py` with tarball-based API artifact upload plus SSH keepalive, bounded channel/socket timeouts, stdout/stderr draining, non-zero exit-code errors, and deterministic cleanup.
+- Hardened `deploy_frontend.py` with tarball-based single-file SFTP upload, shared SSH/SFTP/socket timeout configuration, resource cleanup in `finally`, and non-zero CLI exit behavior on failure.
 **Tests / Build:**
-- Added deploy frontend regression coverage and extended deploy API tests for SFTP timeout configuration, remote command failures, and remote command timeout closure; reran the release/deploy Python test slice on the default Python 3.10 runtime.
+- Added deploy frontend regression coverage and extended deploy API tests for tarball creation/extract, SFTP timeout configuration, remote command failures, and remote command timeout closure; reran the release/deploy Python test slice on the default Python 3.10 runtime.
 
 ## v0.173 - 2026-05-09
 **Campaign Production Loop closeout**

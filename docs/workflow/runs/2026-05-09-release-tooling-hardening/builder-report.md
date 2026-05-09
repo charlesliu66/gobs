@@ -9,7 +9,7 @@
 | AC ID | What was implemented | Files changed | Notes |
 |---|---|---|---|
 | AC-01 | Replaced Python 3.11-only `dt.UTC` usage with `dt.timezone.utc` compatibility in release/state timestamp helpers and the dual-env init script. | `scripts/release_guard.py`, `scripts/set_deployment_state.py`, `scripts/init_dual_env_server.py`, tests | `mark_release_ready.py` benefits through `build_verified_release_payload()`. |
-| AC-02 | Added bounded SSH/SFTP behavior: SSH connect/auth/banner timeouts, transport keepalive, SFTP channel timeout, remote command stdout/stderr draining, remote command timeout/failure errors, deterministic cleanup, and non-zero CLI exits on failure. | `scripts/deploy_api.py`, `scripts/deploy_frontend.py` | Frontend deploy now prints recursive upload progress so long uploads are visible. |
+| AC-02 | Added tarball-based build artifact upload plus bounded SSH/SFTP behavior: SSH connect/auth/banner timeouts, transport keepalive, socket/channel timeout, remote command stdout/stderr draining, remote command timeout/failure errors, deterministic cleanup, and non-zero CLI exits on failure. | `scripts/deploy_api.py`, `scripts/deploy_frontend.py` | API/frontend deploy now upload a single archive and extract remotely instead of doing many small SFTP writes. |
 | AC-03 | Added/updated regression coverage for Python 3.10 timestamp imports, SFTP timeout configuration, remote command timeout/failure paths, frontend upload cleanup, and existing release gates. | `scripts/tests/test_deploy_api.py`, `scripts/tests/test_deploy_frontend.py`, `scripts/tests/test_release_guard.py`, `scripts/tests/test_set_deployment_state.py` | Targeted release/deploy unittest slice passes on default `python3` 3.10. |
 | AC-04 | Recorded the run and product history. | `docs/TASK-INDEX.md`, `PRODUCT.md`, `CHANGELOG.md`, run docs | Release evidence still pending Verifier and staging deployment observation. |
 
@@ -35,6 +35,6 @@
 - If No, list deviations and reasons: N/A. The only scope expansion was explicitly recorded in `SESSION-ANCHOR.md` for `scripts/init_dual_env_server.py` after finding the same Python 3.10 UTC issue.
 
 ## 7) Change Summary
-- What changed: Release scripts now work on Python 3.10 without UTC shims and deploy scripts have finite SSH/SFTP/socket waits, lighter SFTP confirmation waits, upload progress, and cleanup.
+- What changed: Release scripts now work on Python 3.10 without UTC shims and deploy scripts have tarball upload, finite SSH/SFTP/socket waits, and cleanup.
 - Why changed: The previous production deployment required a temporary `sitecustomize.py` shim and manual local process termination after remote deploy success.
 - What did not change: Product UI, Campaign/Studio/Distribution behavior, server env vars, provider integrations, and release guard policy.
