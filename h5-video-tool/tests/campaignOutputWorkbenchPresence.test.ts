@@ -29,6 +29,10 @@ test('CampaignOutputWorkbench exposes output, source asset, gap, and production 
   assert.match(source, /producedOutputs/);
   assert.match(source, /sourceAssetMatches/);
   assert.match(source, /sourceAssetActions/);
+  assert.match(source, /studioBridgeActions/);
+  assert.match(source, /openInStudio/);
+  assert.match(source, /onOpenInStudio/);
+  assert.match(source, /canOpenProductionItemInStudio/);
   assert.match(source, /onChooseSourceAsset/);
   assert.match(source, /onUploadSourceAsset/);
   assert.match(source, /onClick=\{onConfirmProduction\}/);

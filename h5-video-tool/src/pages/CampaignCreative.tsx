@@ -11,6 +11,7 @@ import { createCampaignOutputPlan, updateCampaignOutputPlan } from '../api/campa
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import { AssetPicker } from '../components/AssetPicker';
 import { CampaignOutputWorkbench } from '../components/campaign/CampaignOutputWorkbench';
+import { buildCampaignStudioHandoff } from '../components/campaign/studioBridge.ts';
 import { DistributionPackagePanel } from '../components/campaign/DistributionPackagePanel';
 import { GeneratedBriefReview } from '../components/campaign/GeneratedBriefReview';
 import { MissionComposer } from '../components/campaign/MissionComposer';
@@ -32,6 +33,7 @@ import {
   updateSourceAssetRequirementMatches,
   type CampaignOutputPlan,
   type GameSourceAssetRequirement,
+  type ProductionItem,
 } from '../components/campaign/outputPlan.ts';
 import type {
   CampaignCreativeBrief,
@@ -628,6 +630,16 @@ export function CampaignCreative() {
     navigate(`/distribute?package=${encodeURIComponent(createdDistributionPackage.id)}`);
   };
 
+  const handleOpenProductionItemInStudio = (item: ProductionItem) => {
+    const planToOpen = createdOutputPlan ?? campaignOutputPlanDraft;
+    if (!planToOpen) return;
+    const handoff = buildCampaignStudioHandoff({ item, plan: planToOpen });
+    if (!handoff) return;
+    navigate(`/studio?templateId=${encodeURIComponent(handoff.templateId)}`, {
+      state: { campaignStudioHandoff: handoff },
+    });
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-7 pb-12 pt-3">
       <section className="relative overflow-hidden rounded-[2rem] border border-[#d5b56a]/20 bg-[linear-gradient(135deg,#10182c_0%,#1f2441_52%,#111827_100%)] px-6 py-8 shadow-[0_30px_100px_rgba(0,0,0,0.28)] sm:px-8 sm:py-10">
@@ -718,6 +730,7 @@ export function CampaignCreative() {
             onConfirmProduction={handleConfirmOutputProduction}
             onOpenAssetLibrary={() => navigate('/asset-library')}
             onOpenQuickFilm={() => navigate('/quickfilm')}
+            onOpenInStudio={handleOpenProductionItemInStudio}
             onCreateDistributionPackage={handleCreateDistributionPackage}
             onChooseSourceAsset={setAssetPickerRequirement}
             onUploadSourceAsset={(requirement) =>
@@ -751,6 +764,7 @@ export function CampaignCreative() {
               nextAction: t('campaignCreative.outputWorkbench.nextAction'),
               openAssetLibrary: t('campaignCreative.outputWorkbench.openAssetLibrary'),
               openQuickFilm: t('campaignCreative.outputWorkbench.openQuickFilm'),
+              openInStudio: uiLocale === 'en' ? 'Open in Advanced Studio' : '送入 Advanced Studio',
               createDistributionPackage: t('campaignCreative.outputWorkbench.createDistributionPackage'),
               producedOutputs: t('campaignCreative.outputWorkbench.producedOutputs'),
               error: t('campaignCreative.outputWorkbench.error'),

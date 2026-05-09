@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.171 - 2026-05-09
+**Campaign Output to Advanced Studio bridge**
+**Campaign / Studio / Asset Library:**
+- Added an "Open in Advanced Studio" handoff for eligible Campaign Output video items, carrying the production prompt, target Studio template, and matched game source asset IDs through React Router state.
+- Added a Studio handoff consumer that preselects Quick Single or Character Showcase, seeds the prompt, and safely imports matched Asset Library images as Dreamina multimodal references without touching protected generation services.
+- Added a reusable `UnifiedAssetSelector` foundation in Studio so Quick Single, Motion Transfer, and Character Showcase can pull structured reference slots from Asset Library while keeping legacy Drive selection available.
+- Added Studio quality prompt presets for Character Showcase subtypes, Motion Transfer direction, and BGM mood hints as prompt guidance only.
+**Tests / Build:**
+- Added bridge/preset/source-presence tests and reran targeted Node tests plus the frontend production build.
+
 ## v0.170 - 2026-05-09
 **Distribution Center operator MVP**
 **Distribution / Campaign Package / GeeLark Accounts:**

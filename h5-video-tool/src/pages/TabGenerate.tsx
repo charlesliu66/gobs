@@ -17,8 +17,9 @@ import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
 import { AssetPicker } from '../components/AssetPicker';
+import { UnifiedAssetSelector, type UnifiedAssetSlot } from '../components/UnifiedAssetSelector';
 import { RunningStatus } from '../components/RunningStatus';
-import { recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
+import { buildAssetFileUrl, recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import {
   filterVisibleStudioTemplates,
@@ -28,6 +29,12 @@ import {
   isValidStudioDuration,
 } from '../config/studioTemplateOptions';
 import { PROMPT_INSPIRATIONS } from '../config/promptInspirations';
+import {
+  getStudioQualityPresetGroups,
+  localizedPresetLabel,
+  localizedPresetPrompt,
+  type StudioPresetLocale,
+} from '../config/studioQualityPresets';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -55,6 +62,100 @@ const LOCALIZED_PROMPT_STYLE_KEYS = [
   { id: 'formal', labelKey: 'generate.styleFormal' },
   { id: 'story', labelKey: 'generate.styleStory' },
 ] as const;
+
+function assetFileUrl(asset: LibraryAsset): string {
+  return asset.file_url || buildAssetFileUrl(asset.id);
+}
+
+function absoluteAssetUrl(asset: LibraryAsset): string {
+  return new URL(assetFileUrl(asset), window.location.origin).toString();
+}
+
+function readBlobAsBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = String(reader.result ?? '');
+      resolve(dataUrl.split(',')[1] ?? dataUrl);
+    };
+    reader.onerror = () => reject(new Error('Failed to read asset file'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): UnifiedAssetSlot[] {
+  const isEn = locale === 'en';
+  if (templateId === 'viral-dance') {
+    return [
+      {
+        id: 'viral-character',
+        title: isEn ? 'Character image' : '角色图',
+        description: isEn ? 'Maps to @image1 for the moving subject.' : '对应 @图片1，作为动作迁移的主体角色。',
+        mediaType: 'image',
+        semanticRole: 'role',
+        initialQuery: 'character hero',
+        required: true,
+      },
+      {
+        id: 'viral-scene',
+        title: isEn ? 'Optional scene' : '可选场景',
+        description: isEn ? 'Maps to @image2 for the environment or mood.' : '对应 @图片2，可补充场景或氛围。',
+        mediaType: 'image',
+        semanticRole: 'scene',
+        initialQuery: 'scene background',
+      },
+      {
+        id: 'viral-motion',
+        title: isEn ? 'Reference motion video' : '参考动作视频',
+        description: isEn ? 'Sets the Motion Transfer reference video URL.' : '填入 Motion Transfer 的参考视频直链。',
+        mediaType: 'video',
+        initialQuery: 'motion dance gameplay',
+      },
+    ];
+  }
+  if (templateId === 'boss-showcase') {
+    return [
+      {
+        id: 'showcase-character',
+        title: isEn ? 'Hero or boss art' : '角色 / Boss 图',
+        description: isEn ? 'Primary approved character reference.' : '主角色参考图，优先使用已授权素材。',
+        mediaType: 'image',
+        semanticRole: 'role',
+        initialQuery: 'character boss hero',
+        required: true,
+      },
+      {
+        id: 'showcase-scene',
+        title: isEn ? 'Scene mood' : '场景氛围',
+        description: isEn ? 'Key art, gameplay frame, or environment mood.' : '主视觉、玩法截图或环境氛围参考。',
+        mediaType: 'image',
+        semanticRole: 'scene',
+        initialQuery: 'key art scene gameplay',
+      },
+    ];
+  }
+  if (templateId === 'custom') {
+    return [
+      {
+        id: 'quick-primary-reference',
+        title: isEn ? 'Primary reference' : '主参考图',
+        description: isEn ? 'Game character, key art, or product visual.' : '角色、主视觉或产品素材的主参考图。',
+        mediaType: 'image',
+        semanticRole: 'role',
+        initialQuery: 'character key art',
+      },
+      {
+        id: 'quick-scene-reference',
+        title: isEn ? 'Scene or mood reference' : '场景 / 氛围参考',
+        description: isEn ? 'Optional image for background, setting, or mood.' : '可选，用于补充背景、场景或画面情绪。',
+        mediaType: 'image',
+        semanticRole: 'scene',
+        initialQuery: 'scene mood background',
+      },
+    ];
+  }
+  return [];
+}
 
 interface TabGenerateProps {
   onBrowseTemplates?: () => void;
@@ -110,6 +211,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setMultiShotEnabled,
     viralDanceReferenceVideoUrl,
     setViralDanceReferenceVideoUrl,
+    dreaminaMultimodalItems,
     setDreaminaMultimodalItems,
   } = useCreateFlow();
 
@@ -149,6 +251,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   /** TASK-D: 资产选择器状态 */
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [assetPickerMode, setAssetPickerMode] = useState<'image' | 'video'>('image');
+  const [unifiedSlotAssets, setUnifiedSlotAssets] = useState<Record<string, LibraryAsset | null>>({});
+  const [unifiedAssetError, setUnifiedAssetError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -193,6 +297,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setShotFrames({});
     setMultiShotEnabled(false);
     setDreaminaMultimodalItems([]);
+    setUnifiedSlotAssets({});
+    setUnifiedAssetError(null);
     if (templateId !== 'viral-dance') setViralDanceReferenceVideoUrl('');
   }, [
     templateId,
@@ -350,13 +456,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       if (assets.length === 0) return;
       const asset = assets[0];
       const mime = asset.mimetype ?? asset.mime_type ?? '';
-      const fileUrl = asset.file_url ?? '';
+      const fileUrl = assetFileUrl(asset);
       // 记录素材使用，更新「最近使用」
       for (const a of assets) void recordUsage(a.id, 'generate');
 
       if (mime.startsWith('video/') || assetPickerMode === 'video') {
         // 视频参考：直接设置 URL（用于 viralDanceReferenceVideoUrl）
-        setViralDanceReferenceVideoUrl(fileUrl);
+        setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
       } else {
         // 图片参考：fetch → base64 → dreaminaMultimodalItems
         try {
@@ -399,6 +505,67 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     [assetPickerMode, setViralDanceReferenceVideoUrl, setDreaminaMultimodalItems],
   );
 
+  const presetLocale: StudioPresetLocale = contentLocale === 'en' ? 'en' : 'zh';
+  const unifiedAssetSlots = getUnifiedAssetSlots(templateId, presetLocale);
+  const qualityPresetGroups = getStudioQualityPresetGroups(templateId, presetLocale);
+
+  const handleAppendPresetPrompt = useCallback(
+    (hint: string) => {
+      setPrompt(prompt.trim() ? `${prompt.trim()}\n\n${hint}` : hint);
+      setHasPolishedPrompt(false);
+    },
+    [prompt, setHasPolishedPrompt, setPrompt],
+  );
+
+  const handleUnifiedAssetSelect = useCallback(
+    async (slot: UnifiedAssetSlot, asset: LibraryAsset | null) => {
+      const itemId = `studio-slot-${slot.id}`;
+      setUnifiedAssetError(null);
+      setUnifiedSlotAssets((current) => ({ ...current, [slot.id]: asset }));
+
+      if (!asset) {
+        setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== itemId));
+        if (slot.mediaType === 'video') setViralDanceReferenceVideoUrl('');
+        return;
+      }
+
+      if (slot.mediaType === 'video') {
+        setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
+        void recordUsage(asset.id, `studio-unified-slot:${slot.id}`);
+        return;
+      }
+
+      try {
+        const resp = await fetch(assetFileUrl(asset));
+        const blob = await resp.blob();
+        if (!blob.type.startsWith('image/')) {
+          throw new Error('Selected asset is not an image');
+        }
+        const base64 = await readBlobAsBase64(blob);
+        setDreaminaMultimodalItems((prev) => [
+          ...prev.filter((item) => item.id !== itemId),
+          {
+            id: itemId,
+            kind: 'image',
+            base64,
+            mimeType: blob.type || asset.mimetype || asset.mime_type || 'image/jpeg',
+            fileName: asset.filename,
+            semanticRole: slot.semanticRole,
+          },
+        ]);
+        void recordUsage(asset.id, `studio-unified-slot:${slot.id}`);
+      } catch {
+        setUnifiedAssetError(
+          contentLocale === 'en'
+            ? 'Asset selected, but Studio could not load it as a reference. Try another file or use the legacy picker.'
+            : '素材已选择，但 Studio 无法把它加载为参考图。可以换一个文件，或使用原有素材选择入口。',
+        );
+        setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== itemId));
+      }
+    },
+    [contentLocale, setDreaminaMultimodalItems, setViralDanceReferenceVideoUrl],
+  );
+
   const maxDuration = currentTemplate?.duration ?? videoDuration;
   const totalShotsDuration = shots.reduce((s, shot) => s + shot.duration, 0);
   const shotsValid = shots.length >= 1 && shots.every((shot) => shot.prompt.trim().length > 0) && totalShotsDuration <= maxDuration;
@@ -407,8 +574,9 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const hasValidPrompt = multiShotEnabled
     ? shotsValid
     : hasPolishedPrompt || prompt.trim().length > 0;
+  const hasUnifiedReferenceImage = dreaminaMultimodalItems.some((item) => item.kind === 'image');
   const materialOk = isViralDanceTemplate
-    ? selectedOrder.length >= 1  // @图片1 必填
+    ? selectedOrder.length >= 1 || hasUnifiedReferenceImage  // @图片1 必填；Asset Library refs can satisfy Dreamina flow
     : !hasMatchedMaterials || selectedOrder.length >= 1;
   const canStartGenerate = hasValidPrompt && materialOk;
   const durationOptions = getStudioTemplateDurationOptions(templateId, multiShotEnabled);
@@ -621,7 +789,65 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             </div>
           )}
         </div>
+
+        {qualityPresetGroups.length > 0 && (
+          <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3" data-section="studioQualityPresets">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-text)]">
+                {contentLocale === 'en' ? 'Quality presets' : '质量预设'}
+              </p>
+              <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">
+                {contentLocale === 'en'
+                  ? 'Append production-ready direction without changing provider settings.'
+                  : '把制片方向追加到 prompt，不改底层生成参数。'}
+              </p>
+            </div>
+            <div className="mt-3 space-y-3">
+              {qualityPresetGroups.map((group) => (
+                <div key={group.id} className="space-y-1.5" data-preset-group={group.id}>
+                  <p className="text-[11px] font-medium text-[var(--color-text-muted)]">{group.title}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.presets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleAppendPresetPrompt(localizedPresetPrompt(preset, presetLocale))}
+                        className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-left text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)]"
+                      >
+                        {localizedPresetLabel(preset, presetLocale)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
+
+      {unifiedAssetSlots.length > 0 && (
+        <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4" data-section="unifiedAssetSelector">
+          <div className="mb-3">
+            <p className="text-sm font-medium text-[var(--color-text)]">
+              {contentLocale === 'en' ? 'Studio source assets' : 'Studio 源素材'}
+            </p>
+            <p className="text-xs leading-5 text-[var(--color-text-muted)]">
+              {contentLocale === 'en'
+                ? 'Use approved Asset Library files as structured Studio references. Legacy Drive selection remains available below.'
+                : '直接把素材中台的已授权文件装配成 Studio 参考位；下方 Google Drive 旧流程仍保留。'}
+            </p>
+          </div>
+          <UnifiedAssetSelector
+            slots={unifiedAssetSlots}
+            selectedAssets={unifiedSlotAssets}
+            locale={presetLocale}
+            onSelectAsset={(slot, asset) => void handleUnifiedAssetSelect(slot, asset)}
+          />
+          {unifiedAssetError ? (
+            <p className="mt-3 text-sm text-[var(--color-error)]">{unifiedAssetError}</p>
+          ) : null}
+        </section>
+      )}
 
       {/* Pipeline 模板选择 / 自定义模式说明 */}
       {visibleTemplates.length > 0 && (

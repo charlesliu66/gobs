@@ -3,6 +3,7 @@ import type {
   GameSourceAssetRequirement,
   ProductionItem,
 } from './outputPlan.ts';
+import { canOpenProductionItemInStudio } from './studioBridge.ts';
 
 type Copy = {
   emptyTitle: string;
@@ -25,6 +26,7 @@ type Copy = {
   nextAction: string;
   openAssetLibrary: string;
   openQuickFilm: string;
+  openInStudio: string;
   createDistributionPackage: string;
   producedOutputs: string;
   error: string;
@@ -45,6 +47,7 @@ interface CampaignOutputWorkbenchProps {
   onConfirmProduction: () => void;
   onOpenAssetLibrary: () => void;
   onOpenQuickFilm: () => void;
+  onOpenInStudio?: (item: ProductionItem) => void;
   onCreateDistributionPackage: () => void;
   onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onUploadSourceAsset: (asset: GameSourceAssetRequirement) => void;
@@ -60,6 +63,7 @@ export function CampaignOutputWorkbench({
   onConfirmProduction,
   onOpenAssetLibrary,
   onOpenQuickFilm,
+  onOpenInStudio,
   onCreateDistributionPackage,
   onChooseSourceAsset,
   onUploadSourceAsset,
@@ -101,6 +105,7 @@ export function CampaignOutputWorkbench({
               item={item}
               requirements={activePlan.sourceAssetRequirements}
               copy={copy}
+              onOpenInStudio={onOpenInStudio}
             />
           ))}
         </div>
@@ -197,12 +202,15 @@ function ProductionItemCard({
   item,
   requirements,
   copy,
+  onOpenInStudio,
 }: {
   item: ProductionItem;
   requirements: GameSourceAssetRequirement[];
   copy: Copy;
+  onOpenInStudio?: (item: ProductionItem) => void;
 }) {
   const itemRequirements = requirements.filter((asset) => item.requiredSourceAssetIds.includes(asset.id));
+  const studioReady = canOpenProductionItemInStudio(item);
   return (
     <article className="rounded-2xl border border-[var(--color-border)]/45 bg-[var(--color-surface)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -220,6 +228,13 @@ function ProductionItemCard({
         <InfoLine label={copy.requiredAssets} value={itemRequirements.map((asset) => asset.label).join(', ') || '-'} />
         <InfoLine label={copy.nextAction} value={item.humanAction?.label ?? (item.gobsCanProduce ? copy.confirmProduction : '-')} />
       </div>
+      {studioReady && onOpenInStudio ? (
+        <div className="mt-4 flex flex-wrap gap-2" data-section="studioBridgeActions">
+          <button type="button" className="btn-secondary" data-action="openInStudio" onClick={() => onOpenInStudio(item)}>
+            {copy.openInStudio}
+          </button>
+        </div>
+      ) : null}
       {(item.producedOutputs?.length ?? 0) > 0 ? (
         <div className="mt-4 rounded-2xl border border-[#d5b56a]/20 bg-[#d5b56a]/8 p-4" data-section="producedOutputs">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#e6c66e]">

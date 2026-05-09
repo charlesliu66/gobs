@@ -10,6 +10,7 @@
 - Phase 3 source asset readiness run is active at `docs/workflow/runs/2026-05-09-campaign-source-asset-readiness/`, connecting Output Workbench source requirements to Asset Library candidates, row-level selection, and upload routing.
 - Advanced Studio template optimization Phase 1 is active at `docs/workflow/runs/2026-05-09-advanced-studio-template-optimization/`, reducing Studio creation to Quick Single, Motion Transfer, and Character Showcase while parking heavier AI image/BGM/model work for later phases.
 - Distribution Center operator MVP is active at `docs/workflow/runs/2026-05-09-distribution-center-ops-mvp/`, reducing duplicate Campaign inputs, adding account groups, and making platform copy/account mapping visible.
+- Campaign to Studio production bridge is active at `docs/workflow/runs/2026-05-09-campaign-studio-production-bridge/`, connecting eligible Campaign Output video items to Advanced Studio and adding unified Asset Library reference slots.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -61,6 +62,7 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-09-campaign-studio-production-bridge` | Campaign Output -> Advanced Studio bridge: video item handoff, prompt/template/source-asset seeding, unified Asset Library Studio slots, and prompt-only Studio quality presets | Local verifier GO; ready for commit/push and staging candidate |
 | `2026-05-09-distribution-center-ops-mvp` | Distribution Center operator MVP: read-only Campaign Package context, direct caption hints, account group quick selection, platform copy cards, and richer pending package readiness cards | Builder in progress |
 | `2026-05-09-advanced-studio-template-optimization` | Advanced Studio Phase 1: template cleanup, Motion Transfer / Character Showcase repositioning, Quick Single inspirations, and baseline duration/aspect options | Staging verified and marked release-ready @ `37ac488`; prod metadata-only repair completed and smoke passed for deployed code `37ac488` |
 | `2026-05-09-campaign-source-asset-readiness` | Campaign Output Workbench Phase 3: source asset candidates, row-level selection, and Asset Library upload routing for required game source assets | Committed/pushed to main; release sync pending |

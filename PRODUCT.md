@@ -3,12 +3,12 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.170)*
+*Last updated: 2026-05-09 (v0.171)*
 
-**Latest update - v0.170**
-- Optimized `/distribute` for operator publishing by removing duplicate editable Campaign Brief fields while keeping package context as a read-only copy-generation summary.
-- Added lightweight direct-path caption hints, permission-scoped account group quick selection, and platform copy cards that show which selected accounts each draft maps to.
-- Enriched pending package cards with angle, hook, target platform/market, publishable state, and missing-asset next actions without changing GeeLark core publishing logic.
+**Latest update - v0.171**
+- Added a Campaign Output Workbench to Advanced Studio bridge for eligible video production items, carrying prompt, template, and matched source assets into Studio.
+- Added Studio Asset Library reference slots through a reusable `UnifiedAssetSelector`, while keeping the existing Drive-based material picker as fallback.
+- Added prompt-only Studio quality presets for Character Showcase, Motion Transfer, and BGM mood direction without touching protected generation services.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -30,6 +30,7 @@
 - 鐢熸垚瀹屾垚鍚庡彲鍦ㄣ€屽巻鍙层€嶉〉闈㈡煡鐪嬪拰涓嬭浇
 - 鏀寔灏侀潰甯ф埅鍙?
 - **Advanced Studio template cleanup (v0.169)**: `/studio` creation now starts from Quick Single, Motion Transfer, and Character Showcase only; Short Drama/Cat Harem are removed from active Studio, and `cg-trailer` is reserved for a future Production Wizard promo preset path.
+- **Campaign to Studio bridge (v0.171)**: Campaign Output video items can open `/studio` with the right creation mode, seeded production prompt, matched Asset Library image references, unified reference slots, and prompt-only quality presets for marketer production.
 
 **浣跨敤鏂规硶锛?*
 1. 杩涘叆銆岀敓鎴愩€嶉〉闈?
