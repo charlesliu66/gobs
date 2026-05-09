@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildStudioGeneratedOutputPlanUpdate,
   buildStudioGeneratedPackageUpdate,
   sanitizeStudioGeneratedAssetId,
 } from '../src/components/campaign/studioPackagePatch.ts';
 import type { CampaignDistributionPackage } from '../src/components/campaign/distributionPackage.ts';
+import type { CampaignOutputPlan } from '../src/components/campaign/outputPlan.ts';
 import type { CampaignStudioHandoffState } from '../src/components/campaign/studioBridge.ts';
 
 function createPackage(): CampaignDistributionPackage {
@@ -76,6 +78,56 @@ function createPackage(): CampaignDistributionPackage {
   };
 }
 
+function createOutputPlan(): CampaignOutputPlan {
+  return {
+    id: 'plan_1',
+    campaignId: 'campaign_gold',
+    gameId: 'gold_and_glory',
+    ownerId: 'tester',
+    createdBy: 'tester',
+    updatedBy: 'tester',
+    mission: 'Launch reward-first UA creative.',
+    briefId: 'brief_gold',
+    status: 'producing',
+    createdAt: '2026-05-09T00:00:00.000Z',
+    updatedAt: '2026-05-09T00:00:00.000Z',
+    sourceAssetRequirements: [],
+    capabilityGaps: [],
+    items: [
+      {
+        id: 'item_tiktok_short_video',
+        type: 'tiktok_video',
+        quantity: 1,
+        platform: 'tiktok',
+        title: 'Reward clip',
+        contentBrief: 'Open on the gold reward before the logo.',
+        requiredSourceAssetIds: [],
+        productionCapability: 'supported',
+        status: 'producing',
+        gobsCanProduce: true,
+        outputAssetIds: [],
+        distributionPackageIds: [],
+        producedOutputs: [],
+      },
+      {
+        id: 'item_caption',
+        type: 'caption_set',
+        quantity: 1,
+        platform: 'cross_platform',
+        title: 'Caption set',
+        contentBrief: 'Download now',
+        requiredSourceAssetIds: [],
+        productionCapability: 'supported',
+        status: 'ready_to_produce',
+        gobsCanProduce: true,
+        outputAssetIds: [],
+        distributionPackageIds: [],
+        producedOutputs: [],
+      },
+    ],
+  };
+}
+
 const handoff: CampaignStudioHandoffState = {
   fromCampaignOutput: true,
   templateId: 'custom',
@@ -143,4 +195,41 @@ test('buildStudioGeneratedPackageUpdate refuses mismatched package links', () =>
   });
 
   assert.equal(patch, null);
+});
+
+test('buildStudioGeneratedOutputPlanUpdate marks the linked production item produced', () => {
+  const patch = buildStudioGeneratedOutputPlanUpdate({
+    plan: createOutputPlan(),
+    handoff,
+    result: {
+      taskId: 'dreamina/task:abc 123',
+      videoPath: 'output/tester/reward-cut.mp4',
+    },
+  });
+
+  assert.ok(patch);
+  assert.equal(patch.status, 'ready_for_distribution');
+  assert.deepEqual(patch.items[0]?.outputAssetIds, ['dreamina_task_abc_123']);
+  assert.deepEqual(patch.items[0]?.distributionPackageIds, ['pkg_reward']);
+  assert.equal(patch.items[0]?.status, 'produced');
+  assert.equal(patch.items[1]?.status, 'ready_to_produce');
+});
+
+test('buildStudioGeneratedOutputPlanUpdate refuses mismatched plan links and missing media', () => {
+  assert.equal(
+    buildStudioGeneratedOutputPlanUpdate({
+      plan: { ...createOutputPlan(), id: 'plan_other' },
+      handoff,
+      result: { taskId: 'dreamina-123', videoPath: 'output/tester/reward-cut.mp4' },
+    }),
+    null,
+  );
+  assert.equal(
+    buildStudioGeneratedOutputPlanUpdate({
+      plan: createOutputPlan(),
+      handoff,
+      result: { taskId: 'dreamina-123' },
+    }),
+    null,
+  );
 });

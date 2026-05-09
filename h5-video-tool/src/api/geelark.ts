@@ -1,5 +1,6 @@
-import { apiGet, apiPost } from './client';
+import { apiDownload, apiGet, apiPost } from './client';
 import type { PublishBatchResponse } from '../utils/geelarkPublishBatch';
+import type { DistributionTaskHistoryStatusFilter } from '../components/distribute/distributeSupport.ts';
 
 export interface GeelarkAccount {
   id: string;
@@ -92,20 +93,65 @@ export interface TaskHistoryItem {
 
 export interface TaskHistoryResponse {
   items: TaskHistoryItem[];
+  history?: TaskHistoryItem[];
+  page?: TaskHistoryPageInfo;
+  filters?: TaskHistoryFilters;
 }
 
 export interface FetchTaskHistoryOptions {
   size?: number;
+  limit?: number;
+  offset?: number;
+  status?: DistributionTaskHistoryStatusFilter;
+  platform?: string;
+  query?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface TaskHistoryPageInfo {
+  limit: number;
+  offset: number;
+  returned: number;
+  filtered: number;
+  available: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}
+
+export interface TaskHistoryFilters {
+  status?: DistributionTaskHistoryStatusFilter;
+  platform?: string;
+  q?: string;
+  from?: string;
+  to?: string;
 }
 
 export function buildTaskHistoryQuery(options?: FetchTaskHistoryOptions): string {
-  const size = options?.size;
-  if (!size) return '';
+  if (!options) return '';
   const q = new URLSearchParams();
-  q.set('size', String(Math.min(Math.max(size, 1), 100)));
-  return `?${q.toString()}`;
+  const appendNumber = (key: string, value: number | undefined) => {
+    if (!value) return;
+    q.set(key, String(Math.min(Math.max(Math.trunc(value), key === 'offset' ? 0 : 1), 100)));
+  };
+  appendNumber('size', options.size);
+  appendNumber('limit', options.limit);
+  appendNumber('offset', options.offset);
+  if (options.status && options.status !== 'all') q.set('status', options.status);
+  if (options.platform?.trim() && options.platform !== 'all') q.set('platform', options.platform.trim());
+  if (options.query?.trim()) q.set('q', options.query.trim());
+  if (options.from?.trim()) q.set('from', options.from.trim());
+  if (options.to?.trim()) q.set('to', options.to.trim());
+  const query = q.toString();
+  return query ? `?${query}` : '';
 }
 
 export async function fetchTaskHistory(options?: FetchTaskHistoryOptions): Promise<TaskHistoryResponse> {
   return apiGet<TaskHistoryResponse>(`/api/geelark/tasks${buildTaskHistoryQuery(options)}`);
+}
+
+export async function exportTaskHistoryCsv(options?: FetchTaskHistoryOptions): Promise<void> {
+  const query = buildTaskHistoryQuery(options);
+  const separator = query ? '&' : '?';
+  await apiDownload(`/api/geelark/tasks${query}${separator}format=csv`, 'geelark-task-history.csv');
 }

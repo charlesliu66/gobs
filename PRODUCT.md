@@ -3,12 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.177)*
+*Last updated: 2026-05-09 (v0.178)*
 
-**Latest update - v0.177**
-- `/distribute` now includes a compact four-step readiness overview for asset, copy, accounts, and publish readiness.
-- Each readiness item jumps to a stable step anchor, helping operators fix the next incomplete section without changing the scroll-based workflow.
-- Readiness is derived from existing preflight/publish state, so Campaign Package intake, caption generation, account selection, GeeLark publish submission, latest batch tracking, and publish history behavior remain unchanged.
+**Latest update - v0.178**
+- `/distribute` now remembers recent Package / asset / account / copy / publish-option context in the current browser, so operators can explicitly restore a recent setup after refresh without auto-publishing.
+- Latest publish batches now expose next actions for reviewing the current batch or jumping to publish history, with compatible server-backed publish-history filters/pagination/CSV export and clearer failure guidance beside the raw error.
+- Campaign Studio generated videos now also write back to linked Output Plan items, preserving generated asset ids and package ids for later recovery.
+- Legacy surface reduction is documented in `docs/plans/2026-05-09-legacy-surface-reduction-audit.md`; this release audits `sj-ui`, RiskSentiment/TiktokMatrix, and Platform surfaces without deleting routes.
 
 鐩稿叧娌荤悊鏂囨。锛?
 - [CHANGELOG.md](./CHANGELOG.md) 鈥?杩戞湡鐗堟湰娴佹按锛屽悗缁€愭浠?PRODUCT.md 鎷嗗嚭銆?
@@ -229,7 +230,7 @@
 
 ### 8. 骞冲彴杩愯惀涓績
 
-- **视频分发** (`/distribute`)：面向市场同学的四步资产优先发布工作台，按 01 素材、02 视频文案、03 目标账号、04 预检发布确认组织页面；支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，Studio 生成结果可把已链接 Package 更新为可发布资产，直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；近期发布历史支持状态筛选、平台线索筛选、文本搜索和日期分组；发布前仍需显式勾选账号并确认。
+- **视频分发** (`/distribute`)：面向市场同学的四步资产优先发布工作台，按 01 素材、02 视频文案、03 目标账号、04 预检发布确认组织页面；支持从当前创作、我的成片、服务端成片和 Campaign Package 选择资产；Package 路径继承只读 campaign 上下文，Studio 生成结果可把已链接 Package 和 Output Plan 更新为可恢复的发布资产引用；直接路径支持一句话文案 hint，账号组可快速选择，平台文案卡会明确显示对应账号数量；最近使用配置可在当前浏览器显式恢复，近期发布历史支持状态筛选、平台线索筛选、文本搜索、分页和 CSV 导出，发布后可跳转当前批次或历史；发布前仍需显式勾选账号并确认。
 - **鑸嗘儏鐩戞祴**锛坄/risk-sentiment`锛夛細鐩戞帶绀惧獟鑸嗘儏
 - **杩愯惀妗嗘灦**锛坄/platform-framework`锛夛細骞冲彴绛栫暐妗嗘灦
 - **瀛︿範瀹為獙瀹?*锛坄/platform-learning-lab`锛夛細鍐呭瀛︿範搴?
@@ -257,6 +258,15 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.178 - 2026-05-09
+**Distribution operator happy path polish**
+
+- **[distribution recovery] Added recent publish configuration restore** (`h5-video-tool/src/components/distribute/distributionRecentContext.ts`, `h5-video-tool/src/components/distribute/DistributeRecentContextPanel.tsx`, `h5-video-tool/src/pages/TabDistribute.tsx`): recent Package, asset, account, copy, and publish-option context is saved locally and restored only after the operator clicks "use again".
+- **[publish review] Added latest-batch next actions and clearer error guidance** (`h5-video-tool/src/components/distribute/DistributeStepPublish.tsx`, `h5-video-tool/src/i18n/messages.ts`): operators can review the current batch, jump to publish history, and see actionable hints without losing the raw failure message.
+- **[publish history] Added compatible server-backed query/export** (`h5-video-tool-api/src/routes/geelark.ts`, `h5-video-tool/src/api/geelark.ts`, `h5-video-tool/src/components/distribute/DistributePublishHistory.tsx`): optional status/platform/search/pagination and CSV export preserve the default history response for existing consumers.
+- **[campaign output writeback] Persisted Studio-generated asset references on Output Plans** (`h5-video-tool/src/components/StepVideo.tsx`, `h5-video-tool/src/components/campaign/studioPackagePatch.ts`): linked Campaign Output items keep generated Studio asset ids and package ids for refresh-safe recovery.
+- **[legacy reduction] Added safe audit doc** (`docs/plans/2026-05-09-legacy-surface-reduction-audit.md`): `sj-ui`, RiskSentiment/TiktokMatrix, and Platform surfaces are classified for a follow-up reduction run without deleting active routes now.
 
 ### v0.175 - 2026-05-09
 **Distribution Center step refinement**

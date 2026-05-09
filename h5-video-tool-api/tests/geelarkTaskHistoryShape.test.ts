@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildTaskHistoryCsv,
   buildTaskHistoryResponse,
   normalizeTaskHistoryEntry,
 } from '../src/routes/geelark.ts';
@@ -104,4 +105,67 @@ test('buildTaskHistoryResponse keeps compatibility items while adding normalized
       failReasons: [],
     },
   ]);
+});
+
+test('buildTaskHistoryResponse filters and pages normalized history while keeping raw items aligned', () => {
+  const rawItems = [
+    {
+      id: 'task-1',
+      planName: 'gold launch',
+      status: 3,
+      createTime: 1_714_972_800,
+      accountList: [{ username: 'brand_tt', platform: 'TikTok', region: 'ID' }],
+    },
+    {
+      id: 'task-2',
+      planName: 'facebook launch',
+      status: 4,
+      createTime: 1_714_972_900,
+      accountList: [{ username: 'brand_fb', platform: 'Facebook', region: 'US' }],
+    },
+    {
+      id: 'task-3',
+      planName: 'gold follow-up',
+      status: 2,
+      createTime: 1_714_973_000,
+      accountList: [{ username: 'brand_tt_two', platform: 'TikTok', region: 'TH' }],
+    },
+  ];
+
+  const response = buildTaskHistoryResponse(rawItems, {
+    filters: { status: 'all', platform: 'TikTok', q: 'gold' },
+    limit: 1,
+    offset: 1,
+  });
+
+  assert.deepEqual(response.items, [rawItems[2]]);
+  assert.deepEqual(response.history.map((item) => item.id), ['task-3']);
+  assert.deepEqual(response.page, {
+    limit: 1,
+    offset: 1,
+    returned: 1,
+    filtered: 2,
+    available: 3,
+    hasMore: false,
+    nextOffset: undefined,
+  });
+  assert.equal(response.filters?.platform, 'TikTok');
+});
+
+test('buildTaskHistoryCsv exports operator fields and escapes formulas', () => {
+  const csv = buildTaskHistoryCsv([
+    normalizeTaskHistoryEntry({
+      id: '=cmd',
+      planName: 'launch',
+      status: 3,
+      createTime: 1_714_972_800,
+      accountList: [{ username: 'brand_tt', platform: 'TikTok' }],
+      shareLink: 'https://share.example/post',
+    }),
+  ]);
+
+  assert.match(csv, /^"task_id","plan_name","status"/);
+  assert.match(csv, /"'=cmd","launch","success"/);
+  assert.match(csv, /"TikTok"/);
+  assert.match(csv, /"https:\/\/share\.example\/post"/);
 });

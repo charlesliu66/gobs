@@ -19,7 +19,9 @@ test('StepVideo syncs generated Campaign Studio videos back to linked distributi
   const stepVideoSource = source('src/components/StepVideo.tsx');
 
   assert.match(stepVideoSource, /buildStudioGeneratedPackageUpdate/);
+  assert.match(stepVideoSource, /buildStudioGeneratedOutputPlanUpdate/);
   assert.match(stepVideoSource, /updateCampaignDistributionPackage/);
+  assert.match(stepVideoSource, /updateCampaignOutputPlan/);
   assert.match(stepVideoSource, /syncCampaignStudioPackage/);
   assert.match(stepVideoSource, /resultRouteForTask/);
 });

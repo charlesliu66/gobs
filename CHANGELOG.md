@@ -2,6 +2,19 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.178 - 2026-05-09
+**Distribution operator happy path polish**
+**Distribution / Campaign Production Loop:**
+- Added browser-local recent publish configurations on `/distribute`, letting operators explicitly restore recent Package, asset, account, copy, and publish-option context after refresh without auto-publishing.
+- Added latest-batch next actions so operators can review the current batch summary or jump directly to publish history after a publish attempt.
+- Added compatible GeeLark publish-history status/platform/search pagination and CSV export support while preserving the default `items/history` response shape.
+- Added clearer publish failure guidance while keeping the raw provider/preflight error visible for debugging.
+- Continued low-risk `TabDistribute` extraction through deterministic Distribution view-model helpers, keeping state ownership and GeeLark publish payloads unchanged.
+- Extended Campaign Studio video writeback so linked Output Plan items retain generated Studio asset ids and distribution package ids after refresh.
+- Added the legacy-surface audit for `sj-ui`, RiskSentiment/TiktokMatrix, and Platform routes without deleting runtime surfaces.
+**Tests / Build:**
+- Added recent-context, Distribution view-model, publish-step, Campaign Studio package/output-plan, and backend output-plan persistence coverage; reran targeted frontend/backend tests and TypeScript checks.
+
 ## v0.177 - 2026-05-09
 **Distribution Center readiness navigation**
 **Distribution / Operator Flow:**

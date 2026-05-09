@@ -32,6 +32,26 @@ interface DistributePublishHistoryLabels {
   taskLabel: string;
   accountCount: string;
   unknownDate: string;
+  exportCsv: string;
+  previousPage: string;
+  nextPage: string;
+  pageSummary: string;
+}
+
+export interface DistributePublishHistoryQuery {
+  status: DistributionTaskHistoryStatusFilter;
+  platform: string;
+  query: string;
+}
+
+export interface DistributePublishHistoryPageInfo {
+  limit: number;
+  offset: number;
+  returned: number;
+  filtered: number;
+  available: number;
+  hasMore: boolean;
+  nextOffset?: number;
 }
 
 interface DistributePublishHistoryProps {
@@ -43,6 +63,10 @@ interface DistributePublishHistoryProps {
   selectLabel?: (item: DistributionTaskHistoryItem) => string;
   formatTime?: (timestamp: number) => string;
   headerAction?: React.ReactNode;
+  pageInfo?: DistributePublishHistoryPageInfo | null;
+  onQueryChange?: (query: DistributePublishHistoryQuery) => void;
+  onPageChange?: (offset: number) => void;
+  onExportCsv?: (query: DistributePublishHistoryQuery) => void;
   labels?: Partial<DistributePublishHistoryLabels>;
 }
 
@@ -66,6 +90,10 @@ const DEFAULT_LABELS: DistributePublishHistoryLabels = {
   taskLabel: 'Task',
   accountCount: '{count} accounts',
   unknownDate: 'Unknown date',
+  exportCsv: 'Export CSV',
+  previousPage: 'Previous',
+  nextPage: 'Next',
+  pageSummary: '{start}-{end} of {total}',
 };
 
 function formatHistoryTime(timestamp: number, formatTime?: (timestamp: number) => string): string {
@@ -101,28 +129,51 @@ export function DistributePublishHistory({
   selectLabel,
   formatTime,
   headerAction,
+  pageInfo,
+  onQueryChange,
+  onPageChange,
+  onExportCsv,
   labels,
 }: DistributePublishHistoryProps) {
   const copy = { ...DEFAULT_LABELS, ...labels };
   const [statusFilter, setStatusFilter] = useState<DistributionTaskHistoryStatusFilter>('all');
   const [platformFilter, setPlatformFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const serverBacked = Boolean(onQueryChange);
 
   const platformOptions = useMemo(() => getTaskHistoryPlatformOptions(items), [items]);
-  const effectivePlatformFilter = platformFilter === 'all' || platformOptions.includes(platformFilter)
+  const effectivePlatformFilter = serverBacked || platformFilter === 'all' || platformOptions.includes(platformFilter)
     ? platformFilter
     : 'all';
-  const filteredItems = useMemo(() => filterTaskHistoryItems(items, {
+  const visiblePlatformOptions = effectivePlatformFilter !== 'all' && !platformOptions.includes(effectivePlatformFilter)
+    ? [effectivePlatformFilter, ...platformOptions]
+    : platformOptions;
+  const locallyFilteredItems = useMemo(() => filterTaskHistoryItems(items, {
     status: statusFilter,
     platform: effectivePlatformFilter,
     query,
   }), [effectivePlatformFilter, items, query, statusFilter]);
+  const filteredItems = serverBacked ? items : locallyFilteredItems;
   const groups = useMemo(() => groupTaskHistoryItemsByDate(
     filteredItems,
     (timestamp) => new Date(timestamp).toLocaleDateString(),
     copy.unknownDate,
   ), [copy.unknownDate, filteredItems]);
   const summary = summarizeTaskHistory(filteredItems);
+  const currentQuery: DistributePublishHistoryQuery = {
+    status: statusFilter,
+    platform: effectivePlatformFilter,
+    query,
+  };
+  const pageStart = pageInfo && pageInfo.filtered > 0 ? pageInfo.offset + 1 : 0;
+  const pageEnd = pageInfo ? pageInfo.offset + pageInfo.returned : 0;
+  const pageSummary = pageInfo
+    ? interpolate(copy.pageSummary, { start: pageStart, end: pageEnd, total: pageInfo.filtered })
+    : null;
+
+  const emitQueryChange = (next: DistributePublishHistoryQuery) => {
+    onQueryChange?.(next);
+  };
 
   return (
     <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
@@ -136,6 +187,15 @@ export function DistributePublishHistory({
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           {headerAction}
+          {onExportCsv ? (
+            <button
+              type="button"
+              onClick={() => onExportCsv(currentQuery)}
+              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+            >
+              {copy.exportCsv}
+            </button>
+          ) : null}
           {STATUS_FILTERS.map((status) => {
             const active = statusFilter === status;
             const label = status === 'all'
@@ -149,7 +209,10 @@ export function DistributePublishHistory({
               <button
                 key={status}
                 type="button"
-                onClick={() => setStatusFilter(status)}
+                onClick={() => {
+                  setStatusFilter(status);
+                  emitQueryChange({ ...currentQuery, status });
+                }}
                 className={`rounded-full border px-3 py-1 text-xs ${
                   active
                     ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
@@ -168,11 +231,15 @@ export function DistributePublishHistory({
           <span>{copy.platformFilter}</span>
           <select
             value={effectivePlatformFilter}
-            onChange={(event) => setPlatformFilter(event.target.value)}
+            onChange={(event) => {
+              const nextPlatform = event.target.value;
+              setPlatformFilter(nextPlatform);
+              emitQueryChange({ ...currentQuery, platform: nextPlatform });
+            }}
             className="min-h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
           >
             <option value="all">{copy.allPlatforms}</option>
-            {platformOptions.map((platform) => (
+            {visiblePlatformOptions.map((platform) => (
               <option key={platform} value={platform}>{platform}</option>
             ))}
           </select>
@@ -182,7 +249,11 @@ export function DistributePublishHistory({
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
+              emitQueryChange({ ...currentQuery, query: nextQuery });
+            }}
             placeholder={copy.searchPlaceholder}
             className="min-h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)]"
           />
@@ -271,6 +342,29 @@ export function DistributePublishHistory({
               })}
             </div>
           ))}
+          {pageInfo && onPageChange ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <span className="text-xs text-[var(--color-text-muted)]">{pageSummary}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={pageInfo.offset <= 0 || loading}
+                  onClick={() => onPageChange(Math.max(0, pageInfo.offset - pageInfo.limit))}
+                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+                >
+                  {copy.previousPage}
+                </button>
+                <button
+                  type="button"
+                  disabled={!pageInfo.hasMore || loading}
+                  onClick={() => onPageChange(pageInfo.nextOffset ?? pageInfo.offset + pageInfo.limit)}
+                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+                >
+                  {copy.nextPage}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

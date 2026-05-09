@@ -3,6 +3,7 @@ import type {
   CampaignDistributionPackageAsset,
   CampaignDistributionUpdateInput,
 } from './distributionPackage.ts';
+import type { CampaignOutputPlan } from './outputPlan.ts';
 import type { CampaignStudioHandoffState } from './studioBridge.ts';
 
 export interface StudioGeneratedVideoResult {
@@ -75,5 +76,50 @@ export function buildStudioGeneratedPackageUpdate(input: {
       notes: input.pkg.review.notes,
       updatedAt: new Date().toISOString(),
     },
+  };
+}
+
+export function buildStudioGeneratedOutputPlanUpdate(input: {
+  plan: CampaignOutputPlan;
+  handoff: CampaignStudioHandoffState;
+  result: StudioGeneratedVideoResult;
+}): Pick<CampaignOutputPlan, 'status' | 'items' | 'sourceAssetRequirements' | 'capabilityGaps'> | null {
+  const linkedPlanId = input.handoff.outputPlanId?.trim();
+  if (!linkedPlanId || linkedPlanId !== input.plan.id) return null;
+
+  const videoPath = input.result.videoPath?.trim() || undefined;
+  const videoUrl = input.result.videoUrl?.trim() || undefined;
+  if (!videoPath && !videoUrl) return null;
+
+  const assetId = sanitizeStudioGeneratedAssetId(input.result.taskId);
+  let touched = false;
+  const items = input.plan.items.map((item) => {
+    if (item.id !== input.handoff.productionItemId) return item;
+    touched = true;
+    const outputAssetIds = [assetId, ...item.outputAssetIds.filter((id) => id !== assetId)];
+    const packageId = input.handoff.distributionPackageId?.trim();
+    const distributionPackageIds = packageId
+      ? [packageId, ...item.distributionPackageIds.filter((id) => id !== packageId)]
+      : item.distributionPackageIds;
+
+    return {
+      ...item,
+      status: 'produced' as const,
+      outputAssetIds,
+      distributionPackageIds,
+      humanAction: {
+        type: 'confirm' as const,
+        label: 'Review produced video',
+        detail: 'Studio generated this production item. Review the linked package before distribution.',
+      },
+    };
+  });
+
+  if (!touched) return null;
+  return {
+    status: 'ready_for_distribution',
+    items,
+    sourceAssetRequirements: input.plan.sourceAssetRequirements,
+    capabilityGaps: input.plan.capabilityGaps,
   };
 }

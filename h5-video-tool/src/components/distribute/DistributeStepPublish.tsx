@@ -28,6 +28,9 @@ interface LatestBatchLabels {
   hintSubmitting: string;
   hintRunning: string;
   hintDone: string;
+  nextActions: string;
+  reviewCurrentBatch: string;
+  viewHistory: string;
   refresh: string;
   refreshing: string;
   close: string;
@@ -61,6 +64,7 @@ interface DistributeStepPublishProps {
   pushing: boolean;
   publishDisabled: boolean;
   pushError: string | null;
+  pushErrorGuidance: string | null;
   showGroupedHint: boolean;
   latestBatch: LatestPublishBatch | null;
   batchRefreshing: boolean;
@@ -71,6 +75,8 @@ interface DistributeStepPublishProps {
   onPublish: () => void;
   onRefreshBatch: (batch: LatestPublishBatch) => void;
   onClearBatch: () => void;
+  onReviewCurrentBatch: () => void;
+  onViewHistory: () => void;
 }
 
 export function DistributeStepPublish({
@@ -80,6 +86,7 @@ export function DistributeStepPublish({
   pushing,
   publishDisabled,
   pushError,
+  pushErrorGuidance,
   showGroupedHint,
   latestBatch,
   batchRefreshing,
@@ -90,6 +97,8 @@ export function DistributeStepPublish({
   onPublish,
   onRefreshBatch,
   onClearBatch,
+  onReviewCurrentBatch,
+  onViewHistory,
 }: DistributeStepPublishProps) {
   return (
     <section className="mb-6 space-y-4 border-b border-[var(--color-border)] pb-6">
@@ -146,7 +155,14 @@ export function DistributeStepPublish({
         >
           {pushing ? labels.publishing : labels.publish}
         </button>
-        {pushError && <p className="text-sm text-[var(--color-error)]">{pushError}</p>}
+        {pushError && (
+          <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+            <p className="text-sm text-[var(--color-error)]">{pushError}</p>
+            {pushErrorGuidance && (
+              <p className="mt-1 text-xs text-red-200">{pushErrorGuidance}</p>
+            )}
+          </div>
+        )}
         {showGroupedHint && (
           <p className="text-xs text-[var(--color-text-muted)]">
             {labels.groupedByPlatform}
@@ -162,6 +178,8 @@ export function DistributeStepPublish({
           formatTime={formatTime}
           onRefresh={() => onRefreshBatch(latestBatch)}
           onClear={onClearBatch}
+          onReviewCurrentBatch={onReviewCurrentBatch}
+          onViewHistory={onViewHistory}
         />
       )}
     </section>
@@ -193,6 +211,8 @@ function LatestBatchPanel({
   formatTime,
   onRefresh,
   onClear,
+  onReviewCurrentBatch,
+  onViewHistory,
 }: {
   batch: LatestPublishBatch;
   refreshing: boolean;
@@ -200,6 +220,8 @@ function LatestBatchPanel({
   formatTime: (timestamp: number) => string;
   onRefresh: () => void;
   onClear: () => void;
+  onReviewCurrentBatch: () => void;
+  onViewHistory: () => void;
 }) {
   const successCount = batch.items.filter((item) => Number(item.detail?.status ?? 0) === 3).length;
   const failedCount = batch.items.filter((item) => item.submitError || [4, 7].includes(Number(item.detail?.status ?? 0))).length;
@@ -243,6 +265,24 @@ function LatestBatchPanel({
             ? labels.hintRunning
             : labels.hintDone}
       </p>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2">
+        <span className="text-xs text-[var(--color-text-muted)]">{labels.nextActions}</span>
+        <button
+          type="button"
+          onClick={onReviewCurrentBatch}
+          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+        >
+          {labels.reviewCurrentBatch}
+        </button>
+        <button
+          type="button"
+          onClick={onViewHistory}
+          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+        >
+          {labels.viewHistory}
+        </button>
+      </div>
 
       <div className="space-y-3">
         {batch.items.map((item) => (

@@ -17,11 +17,13 @@
 - Release tooling hardening is active at `docs/workflow/runs/2026-05-09-release-tooling-hardening/`, fixing Python 3.10 release helper compatibility and making SSH/SFTP deploy scripts finish deterministically.
 - Distribution Center Step Refinement is active at `docs/workflow/runs/2026-05-09-distribution-step-refinement/`, splitting `/distribute` into asset, copy, accounts, and preflight/publish operator sections while preserving GeeLark publish behavior.
 - Distribution Center Step Readiness Nav is active at `docs/workflow/runs/2026-05-09-distribution-step-readiness-nav/`, adding a compact four-step readiness overview and jump anchors without changing GeeLark publish behavior.
+- Distribution Operator Happy Path Polish is active at `docs/workflow/runs/2026-05-09-distribution-operator-happy-path-polish/`, adding recent config restore, latest-batch next actions, compatible publish-history query/pagination/export, clearer publish error guidance, refresh-safe Campaign Output Plan writeback, and a legacy-surface reduction audit.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
   - `docs/plans/2026-05-08-campaign-output-production-adapters-design.md`
   - `docs/plans/2026-05-08-campaign-output-production-adapters-plan.md`
+  - `docs/plans/2026-05-09-legacy-surface-reduction-audit.md`
 
 > 最后更新：2026-05-09
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
@@ -69,6 +71,7 @@
 | Run | 作用 | 状态 |
 |---|---|---|
 | `2026-05-09-distribution-step-readiness-nav` | Distribution Center readiness nav: compact four-step progress overview and jump anchors for asset/copy/accounts/publish | Verifier GO locally; eval PASS; commit/push and staging deployment next |
+| `2026-05-09-distribution-operator-happy-path-polish` | Distribution operator happy path: recent config restore, latest-batch next actions, compatible history query/export, clearer publish errors, Output Plan writeback, and legacy-surface audit | Builder/Verifier in progress |
 | `2026-05-09-distribution-step-refinement` | Distribution Center step refinement: split `/distribute` into four visible operator sections while keeping `TabDistribute` state/publish ownership intact | Verifier GO locally; eval PASS; commit/push and staging deployment next |
 | `2026-05-09-release-tooling-hardening` | Release tooling hardening: Python 3.10 UTC compatibility plus bounded SSH/SFTP deploy script cleanup after successful uploads | Verifier GO locally; eval PASS; staging deployment with hardened scripts next |
 | `2026-05-09-campaign-production-loop-closeout` | Campaign -> Studio -> Distribution closeout: stable handoff ids, Studio result package sync, and package-aware Result/Distribution CTAs | Pushed to main and deployed to staging/prod @ `2fedae1`; prod deployment state restored idle |

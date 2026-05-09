@@ -10,19 +10,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 test('TabDistribute composes the four operator step components', () => {
   const source = readFileSync(resolve(__dirname, '../src/pages/TabDistribute.tsx'), 'utf-8');
+  const viewModelSource = readFileSync(resolve(__dirname, '../src/components/distribute/distributePageViewModel.ts'), 'utf-8');
 
   assert.match(source, /DistributeStepAsset/);
   assert.match(source, /DistributeStepCopy/);
   assert.match(source, /DistributeStepAccounts/);
   assert.match(source, /DistributeStepPublish/);
   assert.match(source, /DistributeStepReadinessNav/);
+  assert.match(source, /DEFAULT_DISTRIBUTE_STEP_SECTION_IDS as DISTRIBUTE_STEP_SECTION_IDS/);
   assert.match(source, /DISTRIBUTE_STEP_SECTION_IDS/);
-  assert.match(source, /distribute-step-asset/);
-  assert.match(source, /distribute-step-copy/);
-  assert.match(source, /distribute-step-accounts/);
-  assert.match(source, /distribute-step-publish/);
-  assert.match(source, /preflightItems\[0\]\?\.ready/);
-  assert.match(source, /preflightItems\[1\]\?\.ready/);
+  assert.match(viewModelSource, /distribute-step-asset/);
+  assert.match(viewModelSource, /distribute-step-copy/);
+  assert.match(viewModelSource, /distribute-step-accounts/);
+  assert.match(viewModelSource, /distribute-step-publish/);
+  assert.match(viewModelSource, /distribute-step-history/);
+  assert.match(source, /DistributeRecentContextPanel/);
+  assert.match(source, /buildDistributeStepViewModel/);
   assert.match(source, /step: '01'/);
   assert.match(source, /step: '02'/);
   assert.match(source, /step: '03'/);
@@ -265,6 +268,7 @@ test('distribution step components render the core operator landmarks', async ()
       pushing: false,
       publishDisabled: false,
       pushError: null,
+      pushErrorGuidance: null,
       showGroupedHint: true,
       latestBatch: {
         createdAt: 1710000000000,
@@ -306,6 +310,9 @@ test('distribution step components render the core operator landmarks', async ()
           hintSubmitting: 'Submitting',
           hintRunning: 'Running',
           hintDone: 'Done',
+          nextActions: 'Next',
+          reviewCurrentBatch: 'Review current batch',
+          viewHistory: 'View history',
           refresh: 'Refresh',
           refreshing: 'Refreshing',
           close: 'Close',
@@ -322,6 +329,8 @@ test('distribution step components render the core operator landmarks', async ()
       onPublish: () => undefined,
       onRefreshBatch: () => undefined,
       onClearBatch: () => undefined,
+      onReviewCurrentBatch: () => undefined,
+      onViewHistory: () => undefined,
     }),
   );
 
@@ -333,5 +342,6 @@ test('distribution step components render the core operator landmarks', async ()
   assert.match(accountsHtml, /gold-th/);
   assert.match(publishHtml, /Confirm &amp; publish/);
   assert.match(publishHtml, /Latest batch/);
+  assert.match(publishHtml, /View history/);
   assert.match(publishHtml, /Submitted/);
 });

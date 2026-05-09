@@ -36,6 +36,32 @@ export interface GeelarkTaskHistoryEntry {
   failReasons: string[];
 }
 
+export type GeelarkTaskHistoryStatusFilter = 'all' | 'success' | 'failed' | 'pending';
+
+export interface GeelarkTaskHistoryPageInfo {
+  limit: number;
+  offset: number;
+  returned: number;
+  filtered: number;
+  available: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}
+
+export interface GeelarkTaskHistoryFilters {
+  status: GeelarkTaskHistoryStatusFilter;
+  platform?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface GeelarkTaskHistoryBuildOptions {
+  filters?: Partial<GeelarkTaskHistoryFilters>;
+  limit?: number;
+  offset?: number;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -170,6 +196,79 @@ function countAccountsWithStatus(accounts: Record<string, unknown>[], status: nu
   return accounts.filter((account) => readNumber(account.status) === status).length;
 }
 
+function normalizeHistoryTimestamp(value: number | undefined): number {
+  if (!value || !Number.isFinite(value)) return 0;
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+}
+
+function historyStatusBucket(item: GeelarkTaskHistoryEntry): Exclude<GeelarkTaskHistoryStatusFilter, 'all'> {
+  const statusText = item.statusText.toLowerCase();
+  if (item.status === 3 || ['success', 'succeeded', 'complete', 'completed', 'done'].includes(statusText)) {
+    return 'success';
+  }
+  if (
+    item.status === 4 ||
+    item.status === 7 ||
+    ['failed', 'fail', 'canceled', 'cancelled', 'error'].includes(statusText)
+  ) {
+    return 'failed';
+  }
+  return 'pending';
+}
+
+function taskHistoryPlatforms(item: GeelarkTaskHistoryEntry): string[] {
+  return uniqueStrings([
+    ...item.accounts.map((account) => account.platform),
+  ], 10);
+}
+
+function normalizeSearchToken(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function parseDateBoundary(value: string | undefined, endOfDay = false): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return normalizeHistoryTimestamp(numeric);
+  }
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? `${trimmed}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+    : trimmed;
+  const parsed = Date.parse(iso);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function matchesTaskHistoryFilters(item: GeelarkTaskHistoryEntry, filters: GeelarkTaskHistoryFilters): boolean {
+  if (filters.status !== 'all' && historyStatusBucket(item) !== filters.status) return false;
+
+  const platform = normalizeSearchToken(filters.platform);
+  const platforms = taskHistoryPlatforms(item);
+  if (platform && platform !== 'all' && !platforms.some((value) => normalizeSearchToken(value) === platform)) {
+    return false;
+  }
+
+  const createdAt = normalizeHistoryTimestamp(item.createdAt);
+  const from = parseDateBoundary(filters.from);
+  const to = parseDateBoundary(filters.to, true);
+  if (from !== undefined && (!createdAt || createdAt < from)) return false;
+  if (to !== undefined && (!createdAt || createdAt > to)) return false;
+
+  const query = normalizeSearchToken(filters.q);
+  if (!query) return true;
+  const searchable = uniqueStrings([
+    item.id,
+    item.planName,
+    item.statusText,
+    ...platforms,
+    ...item.shareLinks,
+    ...item.failReasons,
+    ...item.accounts.flatMap((account) => [account.id, account.username, account.region, account.platform]),
+  ], 50).join(' ').toLowerCase();
+  return searchable.includes(query);
+}
+
 export function normalizeTaskHistoryEntry(item: unknown): GeelarkTaskHistoryEntry {
   const record = asRecord(item) ?? {};
   const detail = normalizeTaskDetailPayload({
@@ -204,11 +303,121 @@ export function normalizeTaskHistoryEntry(item: unknown): GeelarkTaskHistoryEntr
   };
 }
 
-export function buildTaskHistoryResponse(items: unknown[]) {
+function normalizeHistoryFilters(filters?: Partial<GeelarkTaskHistoryFilters>): GeelarkTaskHistoryFilters {
+  const status = filters?.status;
   return {
-    items,
-    history: items.map((item) => normalizeTaskHistoryEntry(item)),
+    status: status === 'success' || status === 'failed' || status === 'pending' ? status : 'all',
+    platform: readTrimmedString(filters?.platform),
+    q: readTrimmedString(filters?.q),
+    from: readTrimmedString(filters?.from),
+    to: readTrimmedString(filters?.to),
   };
+}
+
+export function buildTaskHistoryResponse(items: unknown[], options?: GeelarkTaskHistoryBuildOptions) {
+  if (!options) {
+    return {
+      items,
+      history: items.map((item) => normalizeTaskHistoryEntry(item)),
+    };
+  }
+
+  const filters = normalizeHistoryFilters(options?.filters);
+  const pairs = items.map((item) => ({
+    raw: item,
+    history: normalizeTaskHistoryEntry(item),
+  }));
+  const filteredPairs = pairs.filter((pair) => matchesTaskHistoryFilters(pair.history, filters));
+  const limit = Math.min(Math.max(Math.trunc(options?.limit ?? filteredPairs.length), 1), 100);
+  const offset = Math.max(Math.trunc(options?.offset ?? 0), 0);
+  const pagedPairs = filteredPairs.slice(offset, offset + limit);
+  const response: {
+    items: unknown[];
+    history: GeelarkTaskHistoryEntry[];
+    page?: GeelarkTaskHistoryPageInfo;
+    filters?: GeelarkTaskHistoryFilters;
+  } = {
+    items: pagedPairs.map((pair) => pair.raw),
+    history: pagedPairs.map((pair) => pair.history),
+  };
+  if (options) {
+    const nextOffset = offset + pagedPairs.length;
+    response.page = {
+      limit,
+      offset,
+      returned: pagedPairs.length,
+      filtered: filteredPairs.length,
+      available: pairs.length,
+      hasMore: nextOffset < filteredPairs.length,
+      nextOffset: nextOffset < filteredPairs.length ? nextOffset : undefined,
+    };
+    response.filters = filters;
+  }
+  return response;
+}
+
+function escapeCsvCell(value: unknown): string {
+  const raw = Array.isArray(value) ? value.join(' | ') : String(value ?? '');
+  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+export function buildTaskHistoryCsv(history: GeelarkTaskHistoryEntry[]): string {
+  const header = [
+    'task_id',
+    'plan_name',
+    'status',
+    'created_at',
+    'updated_at',
+    'platforms',
+    'account_count',
+    'success_count',
+    'failed_count',
+    'share_links',
+    'fail_reasons',
+  ];
+  const rows = history.map((item) => [
+    item.id,
+    item.planName ?? '',
+    item.statusText,
+    item.createdAt ?? '',
+    item.updatedAt ?? '',
+    taskHistoryPlatforms(item).join(' | '),
+    item.accountCount,
+    item.successCount,
+    item.failedCount,
+    item.shareLinks.join(' | '),
+    item.failReasons.join(' | '),
+  ]);
+  return [header, ...rows].map((row) => row.map(escapeCsvCell).join(',')).join('\n');
+}
+
+function readQueryString(value: unknown): string | undefined {
+  if (Array.isArray(value)) return readQueryString(value[0]);
+  return readTrimmedString(value);
+}
+
+function readQueryInt(value: unknown, fallback: number, max: number): number {
+  const raw = readQueryString(value);
+  const parsed = raw ? Number.parseInt(raw, 10) : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), max);
+}
+
+function readQueryOffset(value: unknown): number {
+  const raw = readQueryString(value);
+  const parsed = raw ? Number.parseInt(raw, 10) : 0;
+  return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
+}
+
+function readTaskHistoryStatusFilter(value: unknown): GeelarkTaskHistoryStatusFilter {
+  const raw = readQueryString(value)?.toLowerCase();
+  return raw === 'success' || raw === 'failed' || raw === 'pending' ? raw : 'all';
+}
+
+function hasAdvancedHistoryQuery(req: Request): boolean {
+  return ['limit', 'offset', 'status', 'platform', 'q', 'query', 'from', 'to', 'format', 'export']
+    .some((key) => req.query[key] !== undefined);
 }
 
 function readCookie(req: Request, name: string): string | undefined {
@@ -315,10 +524,30 @@ geelarkRouter.get('/task/:id', async (req, res) => {
 });
 
 geelarkRouter.get('/tasks', async (req, res) => {
-  const size = Math.min(Number.parseInt(String(req.query.size ?? '20'), 10) || 20, 100);
+  const size = readQueryInt(req.query.size, 20, 100);
+  const advanced = hasAdvancedHistoryQuery(req);
+  const limit = readQueryInt(req.query.limit, size, 100);
+  const offset = readQueryOffset(req.query.offset);
+  const filters: GeelarkTaskHistoryFilters = {
+    status: readTaskHistoryStatusFilter(req.query.status),
+    platform: readQueryString(req.query.platform),
+    q: readQueryString(req.query.q) ?? readQueryString(req.query.query),
+    from: readQueryString(req.query.from),
+    to: readQueryString(req.query.to),
+  };
+  const format = readQueryString(req.query.format) ?? readQueryString(req.query.export);
   try {
     const items = await getTaskHistory(size);
-    res.json(buildTaskHistoryResponse(items));
+    const response = buildTaskHistoryResponse(items, advanced ? { filters, limit, offset } : undefined);
+    if (format === 'csv') {
+      res
+        .status(200)
+        .setHeader('content-type', 'text/csv; charset=utf-8')
+        .setHeader('content-disposition', 'attachment; filename="geelark-task-history.csv"')
+        .send(buildTaskHistoryCsv(response.history));
+      return;
+    }
+    res.json(response);
   } catch (err) {
     console.error('[geelark/tasks]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load task history' });

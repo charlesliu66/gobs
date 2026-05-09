@@ -10,9 +10,11 @@ import {
 } from '../api/campaignDistribution.ts';
 import {
   fetchAccounts,
+  exportTaskHistoryCsv,
   fetchTaskHistory,
   fetchTaskDetail,
   publishVideo,
+  type TaskHistoryPageInfo,
   type GeelarkAccount,
 } from '../api/geelark';
 import {
@@ -22,8 +24,6 @@ import {
 import {
   generateCaptionForPost,
   translateCaptionForPost,
-  type CaptionByPlatformResult,
-  type CaptionCampaignContext,
 } from '../api/promptPolish';
 import {
   getLocalPlaybackSrc,
@@ -50,8 +50,30 @@ import { DistributeStepAsset } from '../components/distribute/DistributeStepAsse
 import { DistributeStepAccounts } from '../components/distribute/DistributeStepAccounts.tsx';
 import { DistributeStepCopy } from '../components/distribute/DistributeStepCopy.tsx';
 import { DistributeStepPublish } from '../components/distribute/DistributeStepPublish.tsx';
-import { DistributeStepReadinessNav, type DistributeStepReadinessItem } from '../components/distribute/DistributeStepReadinessNav.tsx';
-import { DistributePublishHistory } from '../components/distribute/DistributePublishHistory.tsx';
+import { DistributeStepReadinessNav } from '../components/distribute/DistributeStepReadinessNav.tsx';
+import {
+  DistributePublishHistory,
+  type DistributePublishHistoryQuery,
+} from '../components/distribute/DistributePublishHistory.tsx';
+import { DistributeRecentContextPanel } from '../components/distribute/DistributeRecentContextPanel.tsx';
+import {
+  DEFAULT_DISTRIBUTE_STEP_SECTION_IDS as DISTRIBUTE_STEP_SECTION_IDS,
+  buildCaptionCampaignContext,
+  buildCaptionGenerationSeed,
+  buildCopyCardKeys,
+  buildDistributeStepViewModel,
+  buildDraftsFromPlatformResult,
+  buildPlatformAccountCounts,
+  groupAccountsByPlatform,
+  normalizePlatformKey,
+  resolveDraftForPlatform,
+} from '../components/distribute/distributePageViewModel.ts';
+import {
+  buildDistributionRecentContext,
+  loadDistributionRecentContexts,
+  saveDistributionRecentContext,
+  type DistributionRecentContext,
+} from '../components/distribute/distributionRecentContext.ts';
 import { PendingDistributionPackages } from '../components/distribution/PendingDistributionPackages';
 import {
   buildDistributeDraftFromPackage,
@@ -79,12 +101,6 @@ const CAPTION_LANGS: CaptionLanguage[] = ['DEFAULT', 'EN', 'CN', 'TH', 'ID'];
 const BATCH_POLL_MS = 8000;
 const DEFAULT_DRAFT_KEY = 'default';
 const EMPTY_DRAFT: CaptionDraft = { caption: '', hashtags: '' };
-const DISTRIBUTE_STEP_SECTION_IDS = {
-  asset: 'distribute-step-asset',
-  copy: 'distribute-step-copy',
-  accounts: 'distribute-step-accounts',
-  publish: 'distribute-step-publish',
-} as const;
 
 export function TabDistribute() {
   const { videoUrl, videoPath, prompt, taskId } = useCreateFlow();
@@ -122,6 +138,12 @@ export function TabDistribute() {
   const [batchRefreshing, setBatchRefreshing] = useState(false);
 
   const [historyItems, setHistoryItems] = useState<DistributionTaskHistoryItem[]>([]);
+  const [historyQuery, setHistoryQuery] = useState<DistributePublishHistoryQuery>({
+    status: 'all',
+    platform: 'all',
+    query: '',
+  });
+  const [historyPage, setHistoryPage] = useState<TaskHistoryPageInfo | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyDetail, setHistoryDetail] = useState<TaskDetailLike | null>(null);
@@ -133,6 +155,7 @@ export function TabDistribute() {
   const [activePackageId, setActivePackageId] = useState<string | null>(null);
   const [pendingPackageDraft, setPendingPackageDraft] = useState<PendingDistributionDraft | null>(null);
   const [packageAsset, setPackageAsset] = useState<DistributeAssetOption | null>(null);
+  const [recentContexts, setRecentContexts] = useState<DistributionRecentContext[]>(() => loadDistributionRecentContexts());
 
   const packageQueryId = useMemo(
     () => new URLSearchParams(location.search).get('package')?.trim() ?? '',
@@ -275,20 +298,32 @@ export function TabDistribute() {
     return () => window.clearTimeout(timer);
   }, [latestBatch, refreshBatch]);
 
-  const loadTaskHistory = useCallback(async () => {
+  const loadTaskHistory = useCallback(async (
+    query: DistributePublishHistoryQuery = historyQuery,
+    offset = historyPage?.offset ?? 0,
+  ) => {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const response = await fetchTaskHistory({ size: 20 }) as { items: unknown[]; history?: DistributionTaskHistoryItem[] };
+      const response = await fetchTaskHistory({
+        size: 100,
+        limit: 20,
+        offset,
+        status: query.status,
+        platform: query.platform,
+        query: query.query,
+      }) as { items: unknown[]; history?: DistributionTaskHistoryItem[]; page?: TaskHistoryPageInfo };
       const rawHistory = Array.isArray(response.history) ? response.history : response.items;
       setHistoryItems(normalizeTaskHistoryItems(rawHistory));
+      setHistoryPage(response.page ?? null);
     } catch (cause) {
       setHistoryError(cause instanceof Error ? cause.message : t('distribute.historyLoadFailed'));
       setHistoryItems([]);
+      setHistoryPage(null);
     } finally {
       setHistoryLoading(false);
     }
-  }, [t]);
+  }, [historyPage?.offset, historyQuery, t]);
 
   useEffect(() => {
     void loadTaskHistory();
@@ -326,6 +361,7 @@ export function TabDistribute() {
     const nextDraft = buildDistributeDraftFromPackage(pkg);
     const nextDraftKeys = Object.keys(nextDraft.platformDrafts);
     const nextPackageAsset = buildPackageAssetOption(nextDraft);
+    const nextActiveDraftKey = nextDraftKeys[0] ?? DEFAULT_DRAFT_KEY;
 
     setActivePackageId(pkg.id);
     setPendingPackageDraft(nextDraft);
@@ -333,11 +369,21 @@ export function TabDistribute() {
     setSelectedAssetId(nextPackageAsset?.id ?? null);
     setCaptionLang('DEFAULT');
     setPlatformDrafts(nextDraftKeys.length > 0 ? nextDraft.platformDrafts : { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT });
-    setActiveDraftKey(nextDraftKeys[0] ?? DEFAULT_DRAFT_KEY);
+    setActiveDraftKey(nextActiveDraftKey);
     setCaptionHint('');
     setCaptionGenError(null);
     setPushError(null);
-  }, []);
+    setRecentContexts(saveDistributionRecentContext(buildDistributionRecentContext({
+      packageId: pkg.id,
+      packageTitle: nextDraft.title,
+      selectedAsset: nextPackageAsset,
+      selectedAccounts: [],
+      platformDrafts: nextDraftKeys.length > 0 ? nextDraft.platformDrafts : { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT },
+      activeDraftKey: nextActiveDraftKey,
+      needShareLink,
+      markAI,
+    })));
+  }, [markAI, needShareLink]);
 
   useEffect(() => {
     if (!packageQueryId || activePackageId === packageQueryId) return;
@@ -380,7 +426,7 @@ export function TabDistribute() {
 
     const selectedAccounts = accountsForPermission.filter((account) => selectedIds.has(account.id));
     const platformKeys = [
-      ...new Set(selectedAccounts.map((account) => normalizePlatformKey(account.platform)).filter(Boolean)),
+      ...new Set(selectedAccounts.map((account) => normalizePlatformKey(account.platform, DEFAULT_DRAFT_KEY)).filter(Boolean)),
     ] as string[];
 
     setCaptionGenLoading(true);
@@ -417,7 +463,7 @@ export function TabDistribute() {
       );
 
       if ('byPlatform' in result && result.byPlatform) {
-        const nextDrafts = buildDraftsFromPlatformResult(result.byPlatform);
+        const nextDrafts = buildDraftsFromPlatformResult(result.byPlatform, DEFAULT_DRAFT_KEY, EMPTY_DRAFT);
         setPlatformDrafts(nextDrafts);
         setActiveDraftKey(Object.keys(nextDrafts)[0] ?? DEFAULT_DRAFT_KEY);
       } else if ('caption' in result) {
@@ -491,6 +537,98 @@ export function TabDistribute() {
     });
   }, []);
 
+  const selectedAccounts = useMemo(
+    () => accountsForPermission.filter((account) => selectedIds.has(account.id)),
+    [accountsForPermission, selectedIds],
+  );
+
+  const selectedPlatformKeys = useMemo(
+    () => [...new Set(selectedAccounts.map((account) => normalizePlatformKey(account.platform, DEFAULT_DRAFT_KEY)).filter(Boolean))],
+    [selectedAccounts],
+  );
+
+  const scrollToDistributeSection = useCallback((sectionId: string) => {
+    if (typeof document === 'undefined') return;
+    const element = document.getElementById(sectionId);
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${sectionId}`);
+    }
+  }, []);
+
+  const recordRecentContext = useCallback(() => {
+    const next = buildDistributionRecentContext({
+      packageId: activePackageId,
+      packageTitle: pendingPackageDraft?.title ?? '',
+      selectedAsset,
+      selectedAccounts,
+      platformDrafts,
+      activeDraftKey,
+      needShareLink,
+      markAI,
+    });
+    setRecentContexts(saveDistributionRecentContext(next));
+    return next;
+  }, [
+    activeDraftKey,
+    activePackageId,
+    markAI,
+    needShareLink,
+    pendingPackageDraft?.title,
+    platformDrafts,
+    selectedAccounts,
+    selectedAsset,
+  ]);
+
+  const applyRecentContextState = useCallback((context: DistributionRecentContext) => {
+    const validAccountIds = new Set(accountsForPermission.map((account) => account.id));
+    const nextSelectedIds = new Set(context.accountIds.filter((id) => validAccountIds.has(id)));
+    const nextDrafts = Object.keys(context.platformDrafts).length > 0
+      ? context.platformDrafts
+      : { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT };
+    const nextDraftKey = nextDrafts[context.activeDraftKey]
+      ? context.activeDraftKey
+      : Object.keys(nextDrafts)[0] ?? DEFAULT_DRAFT_KEY;
+
+    setSelectedIds(nextSelectedIds);
+    if (context.assetId) setSelectedAssetId(context.assetId);
+    setPlatformDrafts(nextDrafts);
+    setActiveDraftKey(nextDraftKey);
+    setNeedShareLink(context.needShareLink);
+    setMarkAI(context.markAI);
+    setCaptionLang('DEFAULT');
+    setCaptionGenError(null);
+    setPushError(null);
+    setRecentContexts(saveDistributionRecentContext({ ...context, savedAt: Date.now() }));
+    toast.success(t('distribute.recentContextRestored'));
+  }, [accountsForPermission, t]);
+
+  const handleRestoreRecentContext = useCallback(async (context: DistributionRecentContext) => {
+    if (context.packageId && activePackageId !== context.packageId) {
+      const matchedPackage = pendingPackages.find((pkg) => pkg.id === context.packageId);
+      try {
+        const pkg = matchedPackage ?? await getCampaignDistributionPackage(context.packageId);
+        setPendingPackages((previous) => (
+          previous.some((current) => current.id === pkg.id) ? previous : [pkg, ...previous]
+        ));
+        applyPendingPackage(pkg);
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t('distribute.pendingPackagesLoadFailed'));
+      }
+    }
+
+    applyRecentContextState(context);
+    scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.publish);
+  }, [
+    activePackageId,
+    applyPendingPackage,
+    applyRecentContextState,
+    pendingPackages,
+    scrollToDistributeSection,
+    t,
+  ]);
+
   const handleLoadHistoryDetail = useCallback(async (historyTaskId: string) => {
     setHistoryDetailLoading(true);
     setHistoryDetailId(historyTaskId);
@@ -505,6 +643,35 @@ export function TabDistribute() {
     }
   }, [t]);
 
+  const handleReviewCurrentBatch = useCallback(() => {
+    scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.publish);
+  }, [scrollToDistributeSection]);
+
+  const handleViewPublishHistory = useCallback(() => {
+    void loadTaskHistory();
+    scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.history);
+  }, [loadTaskHistory, scrollToDistributeSection]);
+
+  const handleHistoryQueryChange = useCallback((nextQuery: DistributePublishHistoryQuery) => {
+    setHistoryQuery(nextQuery);
+    void loadTaskHistory(nextQuery, 0);
+  }, [loadTaskHistory]);
+
+  const handleHistoryPageChange = useCallback((offset: number) => {
+    void loadTaskHistory(historyQuery, offset);
+  }, [historyQuery, loadTaskHistory]);
+
+  const handleHistoryExport = useCallback((query: DistributePublishHistoryQuery) => {
+    exportTaskHistoryCsv({
+      size: 100,
+      status: query.status,
+      platform: query.platform,
+      query: query.query,
+    }).catch((cause) => {
+      toast.error(cause instanceof Error ? cause.message : t('distribute.historyLoadFailed'));
+    });
+  }, [t]);
+
   const handlePush = async () => {
     if (!selectedAsset?.videoPath && !selectedAsset?.videoUrl) {
       setPushError(t('distribute.pushRequiresVideo'));
@@ -515,8 +682,7 @@ export function TabDistribute() {
       return;
     }
 
-    const selectedAccounts = accountsForPermission.filter((account) => selectedIds.has(account.id));
-    const groupedAccounts = groupAccountsByPlatform(selectedAccounts);
+    const groupedAccounts = groupAccountsByPlatform(selectedAccounts, DEFAULT_DRAFT_KEY);
     const groupedEntries = [...groupedAccounts.entries()];
 
     setPushing(true);
@@ -527,7 +693,7 @@ export function TabDistribute() {
       const createdAt = Date.now();
       const settled = await Promise.allSettled(
         groupedEntries.map(async ([platformKey, group]) => {
-          const draft = resolveDraftForPlatform(platformKey, platformDrafts);
+          const draft = resolveDraftForPlatform(platformKey, platformDrafts, DEFAULT_DRAFT_KEY, EMPTY_DRAFT);
           const result = await publishVideo({
             videoPath: selectedAsset.videoPath || undefined,
             videoUrl: selectedAsset.videoPath ? undefined : selectedAsset.videoUrl ?? undefined,
@@ -560,6 +726,8 @@ export function TabDistribute() {
       const mergedBatch = mergeLatestBatches(batches, createdAt);
       setLatestBatch(mergedBatch);
       if (mergedBatch) {
+        recordRecentContext();
+        window.requestAnimationFrame(() => scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.publish));
         void refreshBatch(mergedBatch);
       }
       void loadTaskHistory();
@@ -584,16 +752,6 @@ export function TabDistribute() {
     return lang;
   };
 
-  const selectedAccounts = useMemo(
-    () => accountsForPermission.filter((account) => selectedIds.has(account.id)),
-    [accountsForPermission, selectedIds],
-  );
-
-  const selectedPlatformKeys = useMemo(
-    () => [...new Set(selectedAccounts.map((account) => normalizePlatformKey(account.platform)).filter(Boolean))],
-    [selectedAccounts],
-  );
-
   const regions = [...new Set(accountsForPermission.map((account) => account.region).filter(Boolean))] as string[];
   const platforms = [...new Set(accountsForPermission.map((account) => account.platform).filter(Boolean))] as string[];
   const filteredAccounts = accountsForPermission.filter((account) => {
@@ -616,68 +774,36 @@ export function TabDistribute() {
     return draft.caption.trim().length > 0 || draft.hashtags.trim().length > 0;
   });
 
-  const preflightItems = [
-    {
-      key: 'asset',
-      label: t('distribute.preflightAsset'),
-      ready: !!selectedAsset,
-      value: selectedAsset?.title ?? t('common.none'),
+  const { preflightItems, publishDisabled, readinessItems } = buildDistributeStepViewModel({
+    selectedAsset,
+    selectedAccountCount: selectedIds.size,
+    hasAnyCopy,
+    pushing,
+    pushError,
+    labels: {
+      none: t('common.none'),
+      assetTitle: t('distribute.assetTitle'),
+      videoAndCaption: t('distribute.videoAndCaption'),
+      targetAccounts: t('distribute.targetAccounts'),
+      preflightAsset: t('distribute.preflightAsset'),
+      preflightAccounts: t('distribute.preflightAccounts'),
+      preflightCopy: t('distribute.preflightCopy'),
+      selectedCountValue: t('distribute.selectedCountValue'),
+      preflightReady: t('distribute.preflightReady'),
+      preflightOptional: t('distribute.preflightOptional'),
+      stepReadinessCopyAttention: t('distribute.stepReadinessCopyAttention'),
+      stepReadinessPublish: t('distribute.stepReadinessPublish'),
+      stepReadinessPublishError: t('distribute.stepReadinessPublishError'),
+      stepReadinessPublishBlocked: t('distribute.stepReadinessPublishBlocked'),
+      stepReadinessPublishReady: t('distribute.stepReadinessPublishReady'),
     },
-    {
-      key: 'accounts',
-      label: t('distribute.preflightAccounts'),
-      ready: selectedIds.size > 0,
-      value: t('distribute.selectedCountValue').replace('{count}', String(selectedIds.size)),
-    },
-    {
-      key: 'copy',
-      label: t('distribute.preflightCopy'),
-      ready: hasAnyCopy,
-      value: hasAnyCopy
-        ? t('distribute.preflightReady')
-        : t('distribute.preflightOptional'),
-    },
-  ];
-  const publishDisabled = pushing || selectedIds.size === 0 || !selectedAsset;
-  const publishReadinessStatus = pushError ? 'attention' : publishDisabled ? 'blocked' : 'ready';
-  const readinessItems: DistributeStepReadinessItem[] = [
-    {
-      id: 'asset',
-      href: `#${DISTRIBUTE_STEP_SECTION_IDS.asset}`,
-      step: '01',
-      title: t('distribute.assetTitle'),
-      detail: preflightItems[0]?.value ?? t('common.none'),
-      status: preflightItems[0]?.ready ? 'ready' : 'blocked',
-    },
-    {
-      id: 'copy',
-      href: `#${DISTRIBUTE_STEP_SECTION_IDS.copy}`,
-      step: '02',
-      title: t('distribute.videoAndCaption'),
-      detail: hasAnyCopy ? t('distribute.preflightReady') : t('distribute.stepReadinessCopyAttention'),
-      status: hasAnyCopy ? 'ready' : 'attention',
-    },
-    {
-      id: 'accounts',
-      href: `#${DISTRIBUTE_STEP_SECTION_IDS.accounts}`,
-      step: '03',
-      title: t('distribute.targetAccounts'),
-      detail: preflightItems[1]?.value ?? t('distribute.selectedCountValue').replace('{count}', String(selectedIds.size)),
-      status: preflightItems[1]?.ready ? 'ready' : 'blocked',
-    },
-    {
-      id: 'publish',
-      href: `#${DISTRIBUTE_STEP_SECTION_IDS.publish}`,
-      step: '04',
-      title: t('distribute.stepReadinessPublish'),
-      detail: pushError
-        ? t('distribute.stepReadinessPublishError')
-        : publishDisabled
-          ? t('distribute.stepReadinessPublishBlocked')
-          : t('distribute.stepReadinessPublishReady'),
-      status: publishReadinessStatus,
-    },
-  ];
+  });
+  const pushErrorGuidance = buildPushErrorGuidance({
+    pushError,
+    hasSelectedAsset: Boolean(selectedAsset),
+    selectedAccountCount: selectedIds.size,
+    t,
+  });
 
   return (
     <div className="max-w-6xl w-full space-y-6">
@@ -728,6 +854,24 @@ export function TabDistribute() {
             rejected: t('distribute.pendingPackagesReviewStatusLabels.rejected'),
           },
         }}
+      />
+
+      <DistributeRecentContextPanel
+        contexts={recentContexts}
+        formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
+        labels={{
+          title: t('distribute.recentContextTitle'),
+          subtitle: t('distribute.recentContextSubtitle'),
+          packageLabel: t('distribute.recentContextPackage'),
+          assetLabel: t('distribute.recentContextAsset'),
+          accountCount: t('distribute.recentContextAccountCount'),
+          platforms: t('distribute.recentContextPlatforms'),
+          needShareLink: t('distribute.needShareLink'),
+          markAI: t('distribute.markAI'),
+          updatedAt: t('distribute.recentContextUpdatedAt'),
+          useAgain: t('distribute.recentContextUseAgain'),
+        }}
+        onRestore={(context) => void handleRestoreRecentContext(context)}
       />
 
       <DistributeStepReadinessNav
@@ -908,6 +1052,7 @@ export function TabDistribute() {
           pushing={pushing}
           publishDisabled={publishDisabled}
           pushError={pushError}
+          pushErrorGuidance={pushErrorGuidance}
           showGroupedHint={selectedPlatformKeys.length > 1}
           latestBatch={latestBatch}
           batchRefreshing={batchRefreshing}
@@ -937,6 +1082,9 @@ export function TabDistribute() {
               hintSubmitting: t('distribute.latestBatchHintSubmitting'),
               hintRunning: t('distribute.latestBatchHintRunning'),
               hintDone: t('distribute.latestBatchHintDone'),
+              nextActions: t('distribute.latestBatchNextActions'),
+              reviewCurrentBatch: t('distribute.latestBatchReviewCurrent'),
+              viewHistory: t('distribute.latestBatchViewHistory'),
               refresh: t('common.refresh'),
               refreshing: t('distribute.batchRefreshing'),
               close: t('common.close'),
@@ -953,10 +1101,12 @@ export function TabDistribute() {
           onPublish={() => void handlePush()}
           onRefreshBatch={(batch) => void refreshBatch(batch)}
           onClearBatch={() => setLatestBatch(null)}
+          onReviewCurrentBatch={handleReviewCurrentBatch}
+          onViewHistory={handleViewPublishHistory}
         />
       </div>
 
-      <div className="mb-6 space-y-4">
+      <div id={DISTRIBUTE_STEP_SECTION_IDS.history} className="mb-6 scroll-mt-6 space-y-4">
         {historyError && <p className="text-sm text-[var(--color-error)]">{historyError}</p>}
         <DistributePublishHistory
           title={t('distribute.historyTitle')}
@@ -970,6 +1120,10 @@ export function TabDistribute() {
               : t('distribute.historyInspect')
           )}
           formatTime={(timestamp) => formatDateTime(timestamp, uiLocale)}
+          pageInfo={historyPage}
+          onQueryChange={handleHistoryQueryChange}
+          onPageChange={handleHistoryPageChange}
+          onExportCsv={handleHistoryExport}
           headerAction={(
             <button
               type="button"
@@ -1000,6 +1154,10 @@ export function TabDistribute() {
             taskLabel: t('distribute.batchTaskId'),
             accountCount: t('distribute.historyAccountCount'),
             unknownDate: t('distribute.historyUnknownDate'),
+            exportCsv: t('distribute.historyExportCsv'),
+            previousPage: t('distribute.historyPreviousPage'),
+            nextPage: t('distribute.historyNextPage'),
+            pageSummary: t('distribute.historyPageSummary'),
           }}
         />
 
@@ -1040,77 +1198,24 @@ export function TabDistribute() {
   );
 }
 
-function normalizePlatformKey(platform?: string | null): string {
-  return platform?.trim().toLowerCase() || DEFAULT_DRAFT_KEY;
-}
+function buildPushErrorGuidance(input: {
+  pushError: string | null;
+  hasSelectedAsset: boolean;
+  selectedAccountCount: number;
+  t: (key: string) => string;
+}): string | null {
+  if (!input.pushError) return null;
+  if (!input.hasSelectedAsset) return input.t('distribute.pushErrorGuidanceNoAsset');
+  if (input.selectedAccountCount === 0) return input.t('distribute.pushErrorGuidanceNoAccount');
 
-function buildCaptionGenerationSeed(promptSeed: string, captionHint: string): string {
-  const hint = captionHint.trim();
-  return [
-    promptSeed.trim(),
-    hint ? `Operator hint: ${hint}` : '',
-  ].filter(Boolean).join('\n\n');
-}
-
-function splitContextList(value: string): string[] {
-  return value
-    .split(/[\n,|]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function buildCaptionCampaignContext(draft: PendingDistributionDraft | null): CaptionCampaignContext | undefined {
-  if (!draft) return undefined;
-  const context = draft.captionContext;
-  const complianceNotes = [
-    context.toneRules,
-    context.sellingPoints,
-    draft.campaignContext.marketTruth.join(' | '),
-    draft.campaignContext.visualCues.join(' | '),
-  ].map((item) => item.trim()).filter(Boolean).join(' | ');
-
-  return {
-    campaignObjective: context.campaignObjective.trim() || undefined,
-    targetAudience: context.targetAudience.trim() || undefined,
-    callToAction: context.callToAction.trim() || undefined,
-    targetMarket: context.targetMarket.trim() || undefined,
-    complianceNotes: complianceNotes || undefined,
-    bannedPhrases: uniqueStrings([
-      ...splitContextList(context.avoidTerms),
-      ...draft.campaignContext.forbiddenClaims,
-    ]),
-  };
-}
-
-function buildCopyCardKeys(
-  selectedPlatformKeys: string[],
-  draftKeys: string[],
-  defaultDraftKey: string,
-): string[] {
-  const keys = new Set<string>();
-  selectedPlatformKeys.forEach((key) => keys.add(key || defaultDraftKey));
-  draftKeys.forEach((key) => keys.add(key || defaultDraftKey));
-  if (keys.size === 0) keys.add(defaultDraftKey);
-  return [...keys];
-}
-
-function buildPlatformAccountCounts(
-  accounts: GeelarkAccount[],
-  draftKeys: string[],
-  defaultDraftKey: string,
-): Record<string, number> {
-  return Object.fromEntries(
-    draftKeys.map((key) => [
-      key,
-      key === defaultDraftKey
-        ? accounts.length
-        : accounts.filter((account) => normalizePlatformKey(account.platform) === key).length,
-    ]),
-  );
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  const normalized = input.pushError.toLowerCase();
+  if (/(auth|token|session|login|401|403)/.test(normalized)) {
+    return input.t('distribute.pushErrorGuidanceAuth');
+  }
+  if (/(timeout|network|gee|provider|api|5\d\d)/.test(normalized)) {
+    return input.t('distribute.pushErrorGuidanceProvider');
+  }
+  return input.t('distribute.pushErrorGuidanceGeneric');
 }
 
 function buildCurrentAssetOption(input: {
@@ -1191,36 +1296,6 @@ function resolvePromptSeed(
     || (fallbackPrompt || '').trim()
     || getRecentPromptForVideo(asset?.taskId ?? fallbackTaskId)
     || '';
-}
-
-function buildDraftsFromPlatformResult(byPlatform: CaptionByPlatformResult['byPlatform']): Record<string, CaptionDraft> {
-  const entries = Object.entries(byPlatform ?? {})
-    .map(([platform, draft]) => [
-      normalizePlatformKey(platform),
-      {
-        caption: draft.caption || '',
-        hashtags: draft.hashtags || '',
-      },
-    ] as const);
-  if (entries.length === 0) {
-    return { [DEFAULT_DRAFT_KEY]: EMPTY_DRAFT };
-  }
-  return Object.fromEntries(entries);
-}
-
-function resolveDraftForPlatform(platformKey: string, drafts: Record<string, CaptionDraft>): CaptionDraft {
-  return drafts[platformKey] ?? drafts[DEFAULT_DRAFT_KEY] ?? EMPTY_DRAFT;
-}
-
-function groupAccountsByPlatform(accounts: GeelarkAccount[]): Map<string, GeelarkAccount[]> {
-  const grouped = new Map<string, GeelarkAccount[]>();
-  accounts.forEach((account) => {
-    const key = normalizePlatformKey(account.platform);
-    const current = grouped.get(key) ?? [];
-    current.push(account);
-    grouped.set(key, current);
-  });
-  return grouped;
 }
 
 function buildSubmitErrorBatch(accounts: GeelarkAccount[], message: string, createdAt: number): LatestPublishBatch {

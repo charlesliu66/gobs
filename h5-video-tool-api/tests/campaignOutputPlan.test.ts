@@ -335,6 +335,57 @@ test('POST and PATCH /plans round-trip produced output drafts', async () => {
   });
 });
 
+test('PATCH /plans persists Studio video outputAssetIds and distributionPackageIds', async () => {
+  await withServer(async (baseUrl) => {
+    const created = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/plans',
+      username: 'studio_writeback_owner',
+      body: buildPlanPayload('studio_writeback', {
+        status: 'producing',
+        sourceAssetRequirements: [],
+        capabilityGaps: [],
+        items: [
+          {
+            ...buildPlanPayload('studio_writeback').items[0],
+            id: 'item_studio_video',
+            requiredSourceAssetIds: [],
+            productionCapability: 'supported',
+            status: 'producing',
+            gobsCanProduce: true,
+            humanAction: undefined,
+          },
+        ],
+      }),
+    });
+
+    assert.equal(created.response.status, 201);
+
+    const patched = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'studio_writeback_owner',
+      body: {
+        status: 'ready_for_distribution',
+        items: [
+          {
+            ...created.json.items[0],
+            status: 'produced',
+            outputAssetIds: ['dreamina_task_abc_123'],
+            distributionPackageIds: ['pkg_reward'],
+          },
+        ],
+      },
+    });
+
+    assert.equal(patched.response.status, 200);
+    assert.equal(patched.json.status, 'ready_for_distribution');
+    assert.deepEqual(patched.json.items[0].outputAssetIds, ['dreamina_task_abc_123']);
+    assert.deepEqual(patched.json.items[0].distributionPackageIds, ['pkg_reward']);
+    assert.equal(patched.json.items[0].status, 'produced');
+  });
+});
+
 test('routes reject malformed output plan payloads with 400-level errors', async () => {
   await withServer(async (baseUrl) => {
     const invalidCreate = await requestJson(baseUrl, {

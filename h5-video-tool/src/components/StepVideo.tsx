@@ -26,7 +26,9 @@ import {
 } from '../api/video';
 import { submitBatchJobs } from '../api/batchJobs';
 import { getCampaignDistributionPackage, updateCampaignDistributionPackage } from '../api/campaignDistribution';
+import { getCampaignOutputPlan, updateCampaignOutputPlan } from '../api/campaignOutputPlan';
 import {
+  buildStudioGeneratedOutputPlanUpdate,
   buildStudioGeneratedPackageUpdate,
   type StudioGeneratedVideoResult,
 } from './campaign/studioPackagePatch.ts';
@@ -135,21 +137,38 @@ export function StepVideo() {
   const syncCampaignStudioPackage = useCallback(async (result: StudioGeneratedVideoResult) => {
     const handoff = campaignStudioHandoff;
     if (!handoff) return;
+
     const packageId = handoff.distributionPackageId?.trim();
-    if (!packageId) return;
+    if (packageId) {
+      try {
+        const pkg = await getCampaignDistributionPackage(packageId);
+        const patch = buildStudioGeneratedPackageUpdate({
+          pkg,
+          handoff,
+          result,
+        });
+        if (patch) {
+          await updateCampaignDistributionPackage(packageId, patch);
+        }
+      } catch (error) {
+        console.warn('[campaign-studio] failed to sync generated video to package', error);
+      }
+    }
 
     try {
-      const pkg = await getCampaignDistributionPackage(packageId);
-      const patch = buildStudioGeneratedPackageUpdate({
-        pkg,
+      const planId = handoff.outputPlanId?.trim();
+      if (!planId) return;
+      const plan = await getCampaignOutputPlan(planId);
+      const outputPatch = buildStudioGeneratedOutputPlanUpdate({
+        plan,
         handoff,
         result,
       });
-      if (patch) {
-        await updateCampaignDistributionPackage(packageId, patch);
+      if (outputPatch) {
+        await updateCampaignOutputPlan(planId, outputPatch);
       }
     } catch (error) {
-      console.warn('[campaign-studio] failed to sync generated video to package', error);
+      console.warn('[campaign-studio] failed to sync generated video to output plan', error);
     }
   }, [campaignStudioHandoff]);
 
