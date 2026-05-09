@@ -3,9 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.179)*
+*Last updated: 2026-05-09 (v0.180)*
 
-**Latest update - v0.179**
+**Latest update - v0.180**
+- Development workflow skills now separate multi-window responsibilities: Dev Worker windows implement, verify, commit, push, and hand off; one Release Owner window handles staging/prod deployment, smoke, release-ready marking, and idle restore.
+- Release and smoke skills plus `AGENTS.md` now explicitly guard against parallel deployment-state, deployment-script, and `origin/main` SHA races.
+
+**Previous update - v0.179**
 - Release deployment scripts now force password-based Paramiko SSH connections to skip local SSH key/agent probing, preventing staging/prod deploy hangs or auth failures when `SERVER_PASSWORD` is the intended credential.
 - SSH-streamed artifact uploads now explicitly send EOF after closing stdin, letting remote `cat > /tmp/*.tar.gz` commands finish cleanly after 100% upload.
 - Larger deployment archives are uploaded as 32KB base64 remote parts and merged server-side, avoiding slow SSH links that stall during one long stdin stream.

@@ -71,11 +71,20 @@ bash scripts/eval.sh <run-id>
 
 ## 三端一统（强制）
 
-**每次修改完成后，必须保证本地、GitHub、云端服务器三端同步，缺一不可。**
-**从现在开始，任何面向线上环境的发布都必须遵守 `staging -> 验证 -> prod`，禁止跳过测试环境直接发正式。**
+**三端一统由唯一 Release Owner 窗口负责，开发窗口不得各自抢部署。**
+**从现在开始，面向线上环境的发布仍必须遵守 `staging -> 验证 -> prod`，除非用户明确批准“紧急热修直接上正式”。**
+
+### 多窗口分工
+
+- **Dev Worker 窗口（窗口 1 / 2 / ...）**：负责功能开发、测试、文档、commit、push，并向 Release Owner 交付 branch/SHA、run id、验证证据和风险说明。
+- **Release Owner 窗口（窗口 3）**：唯一负责拉取已 push 的提交、部署 staging、staging smoke、`mark_release_ready.py`、prod 发布、prod smoke、恢复 `idle`，确保本地 / GitHub / 云端三端一致。
+- Dev Worker 默认不得运行 `scripts/deploy_all.py`、`scripts/deploy_api.py`、`scripts/deploy_frontend.py`、`scripts/mark_release_ready.py`、`scripts/set_deployment_state.py`。
+- 如果用户明确把某个开发窗口切换为 Release Owner，该窗口必须先 `git fetch`，确认目标 SHA、工作区干净、HEAD 已包含在 `origin/main`，再进入发布流程。
+- 多个开发窗口并行时，优先使用 `codex/<run-id>` 分支；如必须直推 `main`，每次 push 前先 fetch/rebase，禁止 force push。
 
 ```
-本地代码 → git commit → git push → 本地编译 → 部署 staging → staging 验证通过 → 正式环境发布提示 → 部署 prod → prod 验证 → 恢复 idle
+Dev Worker: 本地代码 → 测试/验证 → git commit → git push → 交付 SHA
+Release Owner: 拉取/确认 SHA → 本地构建 → 部署 staging → staging 验证通过 → 标记 release-ready → 正式环境发布提示 → 部署 prod → prod 验证 → 恢复 idle
 ```
 
 - **唯一允许发布的代码来源**：已经 `git push origin main` 的 commit
@@ -156,7 +165,7 @@ python scripts/set_deployment_state.py --target prod --phase idle --updated-by <
 ### 违禁情形
 
 - 不得只改本地、不提交
-- 不得只 push GitHub、不部署服务器
+- Dev Worker 不得越权部署；Release Owner 不得遗漏服务器同步
 - 不得跳过 TypeScript 编译检查直接部署
 - 不得跳过 `staging` 验证直接发 `prod`
 - 不得在 `staging` 自测后漏掉 `mark_release_ready.py` 直接发 `prod`
@@ -164,7 +173,7 @@ python scripts/set_deployment_state.py --target prod --phase idle --updated-by <
 - 不得在未获明确批准时使用 `--emergency-bypass`
 - **不得跳过 PRODUCT.md 更新**（功能文档必须与代码同步）
 - 不得在不同电脑上发布不同 commit 且不核对 SHA
-- AI 完成每个任务后必须主动执行上述八步，不等用户催
+- 开发任务完成后必须主动 commit/push 并交付 Release Owner；发布任务完成后必须主动完成上述发布流程，不等用户催
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: gobs-h5-smoke-test
-description: Run GOBS/QAS H5 smoke checks for local, staging, or prod. Use when asked to do smoke testing, verify staging or prod after deploy, check H5 reachability, compare deployed commit versions, or prepare a short verifier summary for this repository.
+description: Run GOBS/QAS H5 smoke checks for local, staging, or prod. Use when asked to do smoke testing, verify staging or prod after deploy, check H5 reachability, compare deployed commit versions, or prepare a short verifier summary for the Release Owner in this repository.
 metadata:
   author: wei.liu
   version: "0.1.0"
@@ -29,6 +29,14 @@ This skill helps with:
 - quick route/API reachability checks
 - simple version and environment validation
 - producing a concise smoke summary
+
+## Multi-Window Smoke Boundary
+
+- Dev Worker windows should use this skill for local smoke only unless the user explicitly assigns them as Release Owner.
+- Staging/prod smoke belongs to the Release Owner window after deployment.
+- Always compare `/api/system/version` against the expected SHA supplied by the release handoff or release guard.
+- If staging/prod smoke finds a commit mismatch, treat it as release failure and do not mark release-ready or idle until the Release Owner resolves it.
+- Smoke checks prove reachability and version alignment; they do not prove real GeeLark posting unless the guarded real-post verifier is explicitly run with operator confirmation.
 
 ## Required Context
 
@@ -80,6 +88,7 @@ powershell -ExecutionPolicy Bypass -File .agents/skills/gobs-h5-smoke-test/scrip
 - Do not claim full end-to-end verification from HTTP reachability alone.
 - If `Depth=full`, append manual checks from `references/manual-checks.md`.
 - If the expected commit does not match the deployed commit, surface that as a failure.
+- Do not change deployment state from this skill; deployment-state changes belong to `$gobs-release-guard`.
 - Prefer short, actionable smoke reports over long prose.
 
 ## Output Style
@@ -88,6 +97,7 @@ Return a short `Smoke Test Report`:
 
 - environment
 - base URL
+- expected SHA and actual SHA
 - version result
 - key route/API checks
 - warnings
@@ -95,4 +105,3 @@ Return a short `Smoke Test Report`:
 - next action
 
 If `Depth=full`, end with a compact manual follow-up checklist.
-

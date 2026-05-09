@@ -2,6 +2,12 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.180 - 2026-05-09
+**Multi-window development/release split**
+**Workflow / Skills:**
+- Updated GOBS development and release skills so Dev Worker windows own implementation, verification, commit, push, and handoff, while one Release Owner window serializes staging/prod deployment, smoke, release-ready marking, and idle restore.
+- Added explicit multi-window guardrails in skills and `AGENTS.md` to avoid parallel windows racing on deployment scripts, deployment state, or `origin/main` release SHA.
+
 ## v0.179 - 2026-05-09
 **Release SSH auth hardening**
 **Deploy / Release Guard:**
