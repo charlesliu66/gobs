@@ -289,3 +289,56 @@ test('buildCampaignDistributionCreateInputFromProductionItem uses produced text 
   assert.deepEqual(draft.publishIntent.platforms, ['facebook']);
   assert.equal(draft.review.status, 'needs_review');
 });
+
+test('buildCampaignDistributionCreateInputFromProductionItem carries Banner placeholders as non-publishable image context', () => {
+  const draft = buildCampaignDistributionCreateInputFromProductionItem({
+    mission: 'Prepare a static Banner prompt for distribution review.',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    variantPack: createVariantPack(),
+    selectedVariantId: 'variant_reward',
+    knowledgeContext: createKnowledgeContext(),
+    routedKnowledgePackIds: ['gold-market', 'gold-persona'],
+    generationSource: 'llm',
+    warnings: [],
+    productionItem: {
+      id: 'item_cross_platform_banner',
+      type: 'banner',
+      quantity: 4,
+      platform: 'cross_platform',
+      title: 'Campaign banner set',
+      contentBrief: 'Static reward-first Banner variants.',
+      requiredSourceAssetIds: ['src_key_art', 'src_game_logo'],
+      productionCapability: 'supported_with_source_assets',
+      status: 'produced',
+      gobsCanProduce: true,
+      outputAssetIds: ['banner_prompt_item_cross_platform_banner_1'],
+      distributionPackageIds: [],
+      producedOutputs: [
+        {
+          id: 'banner_prompt_item_cross_platform_banner_1',
+          kind: 'banner_prompt',
+          title: 'Banner prompt placeholder',
+          body: 'Create static campaign banner variants for the reward reveal.',
+          variants: ['Square 1:1', 'Story 9:16'],
+          platform: 'cross_platform',
+          status: 'needs_review',
+          qualityStatus: 'needs_fix',
+          bannerSpecIds: ['square_1_1', 'story_9_16'],
+          sourceAssetIds: ['asset_key_art', 'asset_logo'],
+          createdAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    },
+    outputAssets: [],
+    sourceAssetRequirements: [],
+  });
+
+  assert.equal(draft.assetReadiness.state, 'generating');
+  assert.equal(draft.assetReadiness.primaryAssetId, 'banner_prompt_item_cross_platform_banner_1');
+  assert.match(draft.assetReadiness.reason ?? '', /final image/i);
+  assert.equal(draft.assets[0]?.type, 'image');
+  assert.equal(draft.assets[0]?.status, 'generating');
+  assert.match(draft.copy.caption, /static campaign banner/i);
+  assert.equal(draft.review.status, 'needs_review');
+});

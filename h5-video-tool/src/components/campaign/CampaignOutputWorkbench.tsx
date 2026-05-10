@@ -1,9 +1,12 @@
 import type {
   CampaignOutputPlan,
   GameSourceAssetRequirement,
+  ProducedOutputDraft,
   ProductionItem,
 } from './outputPlan.ts';
+import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 import { canOpenProductionItemInStudio } from './studioBridge.ts';
+import { BannerOutputCard } from './BannerOutputCard.tsx';
 
 type Copy = {
   emptyTitle: string;
@@ -36,6 +39,15 @@ type Copy = {
   uploadAsset: string;
   needsSelection: string;
   missingAsset: string;
+  bannerSpecs: string;
+  bannerMainVisual: string;
+  bannerShortCopy: string;
+  bannerCta: string;
+  bannerPromptPlaceholder: string;
+  bannerQuality: string;
+  qualityUsable: string;
+  qualityNeedsFix: string;
+  qualityUnusable: string;
 };
 
 interface CampaignOutputWorkbenchProps {
@@ -51,6 +63,7 @@ interface CampaignOutputWorkbenchProps {
   onCreateDistributionPackage: () => void;
   onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onUploadSourceAsset: (asset: GameSourceAssetRequirement) => void;
+  onMarkBannerQuality?: (item: ProductionItem, output: ProducedOutputDraft, status: CreativeQualityStatus) => void;
   assetNamesById?: Record<string, string>;
 }
 
@@ -67,6 +80,7 @@ export function CampaignOutputWorkbench({
   onCreateDistributionPackage,
   onChooseSourceAsset,
   onUploadSourceAsset,
+  onMarkBannerQuality,
   assetNamesById = {},
 }: CampaignOutputWorkbenchProps) {
   const activePlan = createdPlan ?? plan;
@@ -105,7 +119,10 @@ export function CampaignOutputWorkbench({
               item={item}
               requirements={activePlan.sourceAssetRequirements}
               copy={copy}
+              assetNamesById={assetNamesById}
+              onChooseSourceAsset={onChooseSourceAsset}
               onOpenInStudio={onOpenInStudio}
+              onMarkBannerQuality={onMarkBannerQuality}
             />
           ))}
         </div>
@@ -202,12 +219,18 @@ function ProductionItemCard({
   item,
   requirements,
   copy,
+  assetNamesById,
+  onChooseSourceAsset,
   onOpenInStudio,
+  onMarkBannerQuality,
 }: {
   item: ProductionItem;
   requirements: GameSourceAssetRequirement[];
   copy: Copy;
+  assetNamesById: Record<string, string>;
+  onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onOpenInStudio?: (item: ProductionItem) => void;
+  onMarkBannerQuality?: (item: ProductionItem, output: ProducedOutputDraft, status: CreativeQualityStatus) => void;
 }) {
   const itemRequirements = requirements.filter((asset) => item.requiredSourceAssetIds.includes(asset.id));
   const studioReady = canOpenProductionItemInStudio(item);
@@ -228,6 +251,16 @@ function ProductionItemCard({
         <InfoLine label={copy.requiredAssets} value={itemRequirements.map((asset) => asset.label).join(', ') || '-'} />
         <InfoLine label={copy.nextAction} value={item.humanAction?.label ?? (item.gobsCanProduce ? copy.confirmProduction : '-')} />
       </div>
+      {item.type === 'banner' ? (
+        <BannerOutputCard
+          item={item}
+          requirements={itemRequirements}
+          assetNamesById={assetNamesById}
+          copy={copy}
+          onChooseSourceAsset={onChooseSourceAsset}
+          onMarkQuality={onMarkBannerQuality}
+        />
+      ) : null}
       {studioReady && onOpenInStudio ? (
         <div className="mt-4 flex flex-wrap gap-2" data-section="studioBridgeActions">
           <button type="button" className="btn-secondary" data-action="openInStudio" onClick={() => onOpenInStudio(item)}>

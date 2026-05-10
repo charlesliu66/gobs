@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-10 (v0.185)*
+*Last updated: 2026-05-10 (v0.186)*
 
-**Latest update - v0.185**
+**Latest update - v0.186**
+- Campaign Output Plans now treat Banner/static ads as formal deliverables with square 1:1, portrait 4:5, story 9:16, and landscape 16:9 specs.
+- Banner production creates deterministic prompt placeholders from Campaign context and selected Asset Library IDs, without calling image-generation providers or claiming a final rendered design.
+- Campaign Output Workbench now shows a Banner card with source assets, short copy, CTA, prompt placeholder, and `usable` / `needs_fix` / `unusable` human marking; distribution handoff carries Banner placeholders as non-publishable image context.
+
+**Previous update - v0.185**
 - Asset Library assets now expose stable team reuse categories aligned with the Run 0 `AssetContract` vocabulary, while preserving the original AI category as separate evidence.
 - Asset responses include preprocessing metadata for file type, dimensions, aspect ratio, orientation, thumbnail readiness, video duration, audio presence, and campaign-compatible category.
 - Operators can manually correct an asset's team category from the Asset Library detail drawer, and downstream Campaign/Banner code can reference assets by `assetId` without copying file payloads.
@@ -228,6 +233,7 @@
 - **Google Drive 闆嗘垚**锛歄Auth 杩炴帴鍚庡彲娴忚 Drive 鏂囦欢锛屾寜闇€缂撳瓨鍒版湇鍔″櫒浣跨敤
 - 澶氳处鍙锋暟鎹殧绂伙細涓嶅悓鐢ㄦ埛鐨勭礌鏉愪簰涓嶅彲瑙?
 - **Asset reuse metadata (v0.185)**: Asset Library responses now include team reuse categories, category source, preprocessing metadata, manual category correction, and an `assetId`-based Run 0 `AssetContract` mapping helper for later Campaign/Banner reuse.
+- **Banner Output MVP (v0.186)**: Campaign Output Plans can now include Banner deliverables with four initial specs, Asset Library source IDs, deterministic prompt placeholders, three-state quality marking, and non-publishable distribution package context.
 
 ---
 
@@ -288,6 +294,7 @@
 - **Slash entry**: repo-local plugin `gobs-loop` adds a shorter `/gobs-loop` wrapper while `$gobs-multi-agent-dev-loop` remains the portable fallback.
 - **Campaign quality/data contract foundation (v0.183)**: Window A Run 0 defines importable frontend quality states, deterministic rubric helpers, five-entity Campaign/Asset/Output/Review/Package contracts, and fixtures for the next Asset Library, Banner, review, and next-version runs.
 - **Asset Library reuse MVP (v0.185)**: Window A Run 1 adds reusable Asset Library categories, preprocessing metadata, manual category correction, and `assetId` contract mapping while keeping Workbench and distribution package routes out of scope.
+- **Banner Output MVP (v0.186)**: Window A Run 2 adds Banner specs, prompt placeholder production, Workbench quality marking, and distribution handoff context without provider image generation or route rewrites.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -297,6 +304,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.186 - 2026-05-10
+**Banner Output MVP**
+
+- **[banner output] Added first-class Banner plan items** (`h5-video-tool/src/components/campaign/outputPlan.ts`): Campaign Output Plans can include Banner deliverables with `square_1_1`, `portrait_4_5`, `story_9_16`, and `landscape_16_9` specs plus Asset Library source IDs.
+- **[workbench] Added Banner card and quality marking** (`h5-video-tool/src/components/campaign/BannerOutputCard.tsx`, `h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx`): operators can review selected source assets, short copy, CTA, prompt placeholder, and mark the produced Banner as `usable`, `needs_fix`, or `unusable`.
+- **[distribution context] Added non-publishable Banner package handoff** (`h5-video-tool/src/components/campaign/distributionPackage.ts`, `h5-video-tool-api/src/services/campaignOutputPlan.ts`): produced Banner placeholders persist as `banner_prompt` outputs and enter package context with `assetReadiness.state = generating` until a real image exists.
 
 ### v0.185 - 2026-05-10
 **Asset Library reuse metadata MVP**

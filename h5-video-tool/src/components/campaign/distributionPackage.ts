@@ -353,6 +353,11 @@ function producedPackageCopy(item: ProductionItem): Partial<CampaignDistribution
   };
 }
 
+function producedBannerOutput(item: ProductionItem): ProducedOutputDraft | undefined {
+  if (item.type !== 'banner' || item.status !== 'produced') return undefined;
+  return firstProducedOutput(item, ['banner_prompt']);
+}
+
 export function buildCampaignDistributionCreateInputFromProductionItem(
   args: BuildCampaignDistributionCreateInputFromProductionItemArgs,
 ): CampaignDistributionCreateInput {
@@ -375,7 +380,9 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
       : undefined,
   });
   const producedCopy = producedPackageCopy(args.productionItem);
+  const bannerOutput = producedBannerOutput(args.productionItem);
   const hasProducedCopy = Boolean(producedCopy);
+  const hasProducedBanner = Boolean(bannerOutput);
   const firstProducedTextAssetId = args.productionItem.producedOutputs?.[0]?.id;
 
   return {
@@ -387,6 +394,12 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
     },
     assetReadiness: selectedOutputAsset
       ? draft.assetReadiness
+      : hasProducedBanner
+        ? {
+            state: 'generating',
+            primaryAssetId: bannerOutput?.id,
+            reason: 'Banner prompt placeholder is ready; render or export the final image before publishing.',
+          }
       : {
           state: 'needs_asset',
           reason: hasProducedCopy
@@ -395,6 +408,12 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
         },
     assets: selectedOutputAsset
       ? draft.assets
+      : hasProducedBanner
+        ? [{
+            assetId: bannerOutput?.id,
+            type: 'image',
+            status: 'generating',
+          }]
       : hasProducedCopy
         ? [{
             assetId: firstProducedTextAssetId,
@@ -409,10 +428,17 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
           caption: producedCopy.caption ?? draft.copy.caption,
           hashtags: producedCopy.hashtags ?? draft.copy.hashtags,
         }
+      : hasProducedBanner
+        ? {
+            ...draft.copy,
+            headline: args.productionItem.title || draft.copy.headline,
+            caption: bannerOutput?.body ?? draft.copy.caption,
+            hashtags: [],
+          }
       : draft.copy,
     review: {
       ...draft.review,
-      status: selectedOutputAsset || hasProducedCopy ? 'needs_review' : 'draft',
+      status: selectedOutputAsset || hasProducedCopy || hasProducedBanner ? 'needs_review' : 'draft',
     },
     publishIntent: {
       ...draft.publishIntent,

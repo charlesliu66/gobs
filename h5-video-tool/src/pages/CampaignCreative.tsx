@@ -28,6 +28,7 @@ import {
   applySourceAssetSelectionOverrides,
   buildAvailableSourceAssetsFromLibraryAssets,
   buildCampaignOutputPlan,
+  markProducedOutputQuality,
   produceSupportedCampaignOutputs,
   sourceAssetFilterType,
   updateSourceAssetRequirementMatches,
@@ -35,6 +36,7 @@ import {
   type GameSourceAssetRequirement,
   type ProductionItem,
 } from '../components/campaign/outputPlan.ts';
+import type { CreativeQualityStatus } from '../components/campaign/quality/creativeQualityTypes.ts';
 import type {
   CampaignCreativeBrief,
   CampaignCreativeFormState,
@@ -289,7 +291,13 @@ export function CampaignCreative() {
 
   const producedDistributionPackageDraft = useMemo(() => {
     if (!brief || !strategy || !createdOutputPlan) return null;
-    const producedItem = createdOutputPlan.items.find((item) => item.status === 'produced');
+    const producedItem = createdOutputPlan.items.find((item) => item.status === 'produced' && item.type === 'banner')
+      ?? createdOutputPlan.items.find((item) =>
+        item.status === 'produced' && item.outputAssetIds.some((assetId) =>
+          item.producedOutputs?.some((output) => output.id === assetId),
+        ),
+      )
+      ?? createdOutputPlan.items.find((item) => item.status === 'produced');
     if (!producedItem) return null;
     return buildCampaignDistributionCreateInputFromProductionItem({
       mission,
@@ -625,6 +633,31 @@ export function CampaignCreative() {
     }
   };
 
+  const handleMarkBannerQuality = async (
+    item: ProductionItem,
+    output: NonNullable<ProductionItem['producedOutputs']>[number],
+    status: CreativeQualityStatus,
+  ) => {
+    if (!createdOutputPlan || outputPlanLoading) return;
+    const nextPlan = markProducedOutputQuality(createdOutputPlan, item.id, output.id, status);
+    setCreatedOutputPlan(nextPlan);
+    setOutputPlanLoading(true);
+    setOutputPlanError(null);
+    try {
+      const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
+        status: nextPlan.status,
+        items: nextPlan.items,
+        sourceAssetRequirements: nextPlan.sourceAssetRequirements,
+        capabilityGaps: nextPlan.capabilityGaps,
+      });
+      setCreatedOutputPlan(confirmedPlan);
+    } catch (error) {
+      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
+    } finally {
+      setOutputPlanLoading(false);
+    }
+  };
+
   const handleOpenDistribution = () => {
     if (!createdDistributionPackage) return;
     navigate(`/distribute?package=${encodeURIComponent(createdDistributionPackage.id)}`);
@@ -746,6 +779,7 @@ export function CampaignCreative() {
                 },
               })
             }
+            onMarkBannerQuality={handleMarkBannerQuality}
             assetNamesById={assetNamesById}
             copy={{
               emptyTitle: t('campaignCreative.outputWorkbench.emptyTitle'),
@@ -778,6 +812,15 @@ export function CampaignCreative() {
               uploadAsset: t('campaignCreative.outputWorkbench.uploadAsset'),
               needsSelection: t('campaignCreative.outputWorkbench.needsSelection'),
               missingAsset: t('campaignCreative.outputWorkbench.missingAsset'),
+              bannerSpecs: t('campaignCreative.outputWorkbench.bannerSpecs'),
+              bannerMainVisual: t('campaignCreative.outputWorkbench.bannerMainVisual'),
+              bannerShortCopy: t('campaignCreative.outputWorkbench.bannerShortCopy'),
+              bannerCta: t('campaignCreative.outputWorkbench.bannerCta'),
+              bannerPromptPlaceholder: t('campaignCreative.outputWorkbench.bannerPromptPlaceholder'),
+              bannerQuality: t('campaignCreative.outputWorkbench.bannerQuality'),
+              qualityUsable: t('campaignCreative.outputWorkbench.qualityUsable'),
+              qualityNeedsFix: t('campaignCreative.outputWorkbench.qualityNeedsFix'),
+              qualityUnusable: t('campaignCreative.outputWorkbench.qualityUnusable'),
             }}
           />
 

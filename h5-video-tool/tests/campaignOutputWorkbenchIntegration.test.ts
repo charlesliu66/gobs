@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pageSource = readFileSync(resolve(__dirname, '../src/pages/CampaignCreative.tsx'), 'utf-8');
+const workbenchSource = readFileSync(resolve(__dirname, '../src/components/campaign/CampaignOutputWorkbench.tsx'), 'utf-8');
+const bannerCardSource = readFileSync(resolve(__dirname, '../src/components/campaign/BannerOutputCard.tsx'), 'utf-8');
 
 test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmation', () => {
   assert.match(pageSource, /CampaignOutputWorkbench/);
@@ -16,6 +18,7 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /produceSupportedCampaignOutputs/);
   assert.match(pageSource, /createCampaignOutputPlan/);
   assert.match(pageSource, /buildCampaignDistributionCreateInputFromProductionItem/);
+  assert.match(pageSource, /handleMarkBannerQuality/);
 });
 
 test('CampaignCreative confirms production from the draft plan on the first primary action', () => {
@@ -40,6 +43,18 @@ test('CampaignCreative wires source asset readiness through Asset Library and ou
   assert.match(pageSource, /<AssetPicker/);
   assert.match(pageSource, /onChooseSourceAsset=\{setAssetPickerRequirement\}/);
   assert.match(pageSource, /sourceAssetFilterType\(assetPickerRequirement\.assetType\)/);
+});
+
+test('CampaignOutputWorkbench includes the Banner card and three-state quality controls', () => {
+  assert.match(workbenchSource, /BannerOutputCard/);
+  assert.match(workbenchSource, /onMarkBannerQuality/);
+  assert.match(bannerCardSource, /bannerPromptPlaceholder/);
+  assert.match(bannerCardSource, /qualityUsable/);
+  assert.match(bannerCardSource, /qualityNeedsFix/);
+  assert.match(bannerCardSource, /qualityUnusable/);
+  assert.match(bannerCardSource, /usable/);
+  assert.match(bannerCardSource, /needs_fix/);
+  assert.match(bannerCardSource, /unusable/);
 });
 
 test('CampaignCreative keeps system plan and strategy controls secondary', () => {

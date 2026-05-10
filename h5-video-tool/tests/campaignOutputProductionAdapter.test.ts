@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildCampaignOutputPlan,
+  markProducedOutputQuality,
   produceSupportedCampaignOutputs,
 } from '../src/components/campaign/outputPlan.ts';
 import type {
@@ -123,6 +124,52 @@ test('produceSupportedCampaignOutputs leaves blocked visual and video outputs un
     blockedVisualItems.some((item) => item.humanAction?.type === 'provide_source_asset' || item.humanAction?.type === 'external_production'),
     true,
   );
+});
+
+test('produceSupportedCampaignOutputs produces Banner prompt placeholders when source assets are ready', () => {
+  const draft = buildCampaignOutputPlan({
+    mission: 'Create static banner ads for the new hero launch',
+    brief: createBrief({
+      platform: 'facebook',
+      objective: 'Launch static banner ads for the new hero',
+      referenceStyle: 'premium static banner',
+    }),
+    strategy: createStrategy({
+      assetNeeds: ['banner key art', 'game logo'],
+      visualCues: ['hero key visual', 'campaign banner'],
+    }),
+    requestedPlatforms: ['facebook'],
+    availableSourceAssets: [
+      { assetId: 'asset_key_art', assetType: 'key_art' },
+      { assetId: 'asset_logo', assetType: 'game_logo' },
+    ],
+  });
+
+  const produced = produceSupportedCampaignOutputs({
+    plan: draft,
+    mission: 'Create static banner ads for the new hero launch',
+    brief: createBrief({ platform: 'facebook' }),
+    strategy: createStrategy(),
+    selectedVariantTitle: 'Hero key visual launch',
+  });
+
+  const bannerItem = produced.items.find((item) => item.type === 'banner');
+  assert.ok(bannerItem);
+  const bannerOutput = bannerItem.producedOutputs?.find((output) => output.kind === 'banner_prompt');
+
+  assert.equal(bannerItem.status, 'produced');
+  assert.ok(bannerOutput);
+  assert.match(bannerOutput.body, /Formats:/);
+  assert.match(bannerOutput.body, /asset_key_art/);
+  assert.deepEqual(bannerOutput.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+  assert.equal(bannerItem.outputAssetIds.includes(bannerOutput.id), true);
+
+  const marked = markProducedOutputQuality(produced, bannerItem.id, bannerOutput.id, 'usable');
+  const markedBannerOutput = marked.items
+    .find((item) => item.id === bannerItem.id)
+    ?.producedOutputs?.find((output) => output.id === bannerOutput.id);
+  assert.equal(markedBannerOutput?.qualityStatus, 'usable');
+  assert.equal(markedBannerOutput?.status, 'approved');
 });
 
 test('produceSupportedCampaignOutputs is idempotent for already produced items', () => {

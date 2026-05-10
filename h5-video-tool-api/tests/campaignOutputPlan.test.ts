@@ -335,6 +335,61 @@ test('POST and PATCH /plans round-trip produced output drafts', async () => {
   });
 });
 
+test('POST /plans round-trips Banner prompt placeholders and quality status', async () => {
+  await withServer(async (baseUrl) => {
+    const payload = buildPlanPayload('banner_prompt', {
+      status: 'ready_for_distribution',
+      sourceAssetRequirements: [],
+      capabilityGaps: [],
+      items: [
+        {
+          ...buildPlanPayload('banner_prompt').items[0],
+          id: 'item_cross_platform_banner',
+          type: 'banner',
+          quantity: 4,
+          platform: 'cross_platform',
+          title: 'Campaign banner set',
+          contentBrief: 'Static banner prompt placeholder.',
+          requiredSourceAssetIds: [],
+          productionCapability: 'supported_with_source_assets',
+          status: 'produced',
+          gobsCanProduce: true,
+          outputAssetIds: ['banner_prompt_item_cross_platform_banner_1'],
+          producedOutputs: [
+            {
+              id: 'banner_prompt_item_cross_platform_banner_1',
+              kind: 'banner_prompt',
+              title: 'Banner prompt placeholder',
+              body: 'Create static campaign banner variants.',
+              variants: ['Square 1:1', 'Story 9:16'],
+              platform: 'cross_platform',
+              status: 'needs_review',
+              qualityStatus: 'needs_fix',
+              bannerSpecIds: ['square_1_1', 'story_9_16'],
+              sourceAssetIds: ['asset_key_art', 'asset_logo'],
+              createdAt: '2026-05-10T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    });
+
+    const created = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/plans',
+      username: 'banner_owner',
+      body: payload,
+    });
+
+    assert.equal(created.response.status, 201);
+    const output = created.json.items[0].producedOutputs[0];
+    assert.equal(output.kind, 'banner_prompt');
+    assert.equal(output.qualityStatus, 'needs_fix');
+    assert.deepEqual(output.bannerSpecIds, ['square_1_1', 'story_9_16']);
+    assert.deepEqual(output.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+  });
+});
+
 test('PATCH /plans persists Studio video outputAssetIds and distributionPackageIds', async () => {
   await withServer(async (baseUrl) => {
     const created = await requestJson(baseUrl, {
@@ -448,6 +503,33 @@ test('routes reject malformed output plan payloads with 400-level errors', async
     });
     assert.equal(invalidProducedOutput.response.status, 400);
     assert.match(String(invalidProducedOutput.json?.error ?? ''), /producedOutputs\[0\]\.kind/i);
+
+    const invalidQualityStatus = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'validator',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                id: 'banner_prompt_bad_quality',
+                kind: 'banner_prompt',
+                title: 'Bad quality output',
+                body: 'This should not validate.',
+                variants: ['Square 1:1'],
+                platform: 'cross_platform',
+                qualityStatus: 'excellent',
+                createdAt: '2026-05-10T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(invalidQualityStatus.response.status, 400);
+    assert.match(String(invalidQualityStatus.json?.error ?? ''), /qualityStatus/i);
   });
 });
 

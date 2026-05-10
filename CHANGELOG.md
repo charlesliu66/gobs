@@ -2,6 +2,18 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.186 - 2026-05-10
+**Banner Output MVP**
+**Campaign Output / Distribution Prep:**
+- Added Banner as a first-class Campaign Output item with four initial specs: square 1:1, portrait 4:5, story 9:16, and landscape 16:9.
+- Added Banner source-asset reuse from Asset Library IDs, including Run 1 team category matching for logos, finished banners, key art, character art, gameplay screenshots, and UI screenshots.
+- Added deterministic Banner prompt placeholder production for ready Banner items, without calling image generation providers or claiming a final downloadable design.
+- Added a Workbench Banner card with selected source assets, short copy, CTA, prompt placeholder, and three-state human quality marking (`usable`, `needs_fix`, `unusable`).
+- Added distribution package handoff for produced Banner placeholders as non-publishable image context with `assetReadiness.state = generating`.
+**Tests / Build:**
+- Added frontend coverage for Banner specs, Asset Library category mapping, prompt placeholder production, quality marking, Workbench wiring, and distribution package handoff.
+- Added backend campaign output plan validation coverage for `banner_prompt`, Banner metadata, and invalid quality-status rejection.
+
 ## v0.185 - 2026-05-10
 **Asset Library reuse metadata MVP**
 **Asset Library / Campaign Contracts:**

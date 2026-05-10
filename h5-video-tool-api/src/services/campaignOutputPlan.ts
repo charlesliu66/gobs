@@ -63,11 +63,23 @@ const PRODUCED_OUTPUT_KINDS = [
   'headline',
   'hashtag',
   'post_copy',
+  'banner_prompt',
 ] as const;
 const PRODUCED_OUTPUT_STATUSES = [
   'draft',
   'needs_review',
   'approved',
+] as const;
+const CREATIVE_QUALITY_STATUSES = [
+  'usable',
+  'needs_fix',
+  'unusable',
+] as const;
+const BANNER_OUTPUT_SPEC_IDS = [
+  'square_1_1',
+  'portrait_4_5',
+  'story_9_16',
+  'landscape_16_9',
 ] as const;
 
 export type CampaignOutputPlanStatus = (typeof CAMPAIGN_OUTPUT_PLAN_STATUSES)[number];
@@ -203,6 +215,23 @@ function normalizeSafeIdentifierList(value: unknown, field: string): string[] {
   return values;
 }
 
+function normalizeOptionalEnumList<T extends readonly string[]>(
+  value: unknown,
+  field: string,
+  allowed: T,
+): T[number][] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) {
+    throw new CampaignOutputPlanValidationError(`${field} must be a string array`);
+  }
+  return uniqueStrings(value.map((item) => (typeof item === 'string' ? item : String(item)))).map((item) => {
+    if (!allowed.includes(item)) {
+      throw new CampaignOutputPlanValidationError(`${field} must contain one of: ${allowed.join(', ')}`);
+    }
+    return item as T[number];
+  });
+}
+
 function normalizeNumber(value: unknown, field: string): number {
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue) || numberValue < 0) {
@@ -236,6 +265,17 @@ function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[
       variants: normalizeStringList(raw.variants, `${field}[${index}].variants`),
       platform: requireText(raw.platform, `${field}[${index}].platform`),
       status: normalizeOptionalEnum(raw.status, `${field}[${index}].status`, PRODUCED_OUTPUT_STATUSES) ?? 'draft',
+      qualityStatus: normalizeOptionalEnum(
+        raw.qualityStatus,
+        `${field}[${index}].qualityStatus`,
+        CREATIVE_QUALITY_STATUSES,
+      ),
+      bannerSpecIds: normalizeOptionalEnumList(
+        raw.bannerSpecIds,
+        `${field}[${index}].bannerSpecIds`,
+        BANNER_OUTPUT_SPEC_IDS,
+      ),
+      sourceAssetIds: normalizeSafeIdentifierList(raw.sourceAssetIds, `${field}[${index}].sourceAssetIds`),
       createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
     };
   });

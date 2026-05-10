@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applySourceAssetSelectionOverrides,
+  BANNER_OUTPUT_SPECS,
   buildAvailableSourceAssetsFromLibraryAssets,
   buildCampaignOutputPlan,
   inferSourceAssetTypesForLibraryAsset,
+  markProducedOutputQuality,
   sourceAssetFilterType,
   updateSourceAssetRequirementMatches,
 } from '../src/components/campaign/outputPlan.ts';
@@ -73,6 +75,51 @@ test('buildCampaignOutputPlan creates visible deliverables with source asset req
   assert.equal(plan.items.some((item) => item.type === 'caption_set'), true);
   assert.equal(plan.sourceAssetRequirements.some((asset) => asset.assetType === 'character_art'), true);
   assert.equal(plan.capabilityGaps.some((gap) => gap.gapType === 'source_asset_missing'), true);
+});
+
+test('buildCampaignOutputPlan includes Banner specs and resolves Run 1 Asset Library categories', () => {
+  const plan = buildCampaignOutputPlan({
+    mission: 'Create static launch banner ads for Facebook and story placements',
+    brief: createBrief({
+      platform: 'facebook',
+      objective: 'Launch static banner ads for the new hero',
+      referenceStyle: 'premium campaign banner',
+    }),
+    strategy: createStrategy({
+      assetNeeds: ['finished banner key art', 'game logo'],
+      visualCues: ['hero key visual', 'campaign banner'],
+    }),
+    requestedPlatforms: ['facebook'],
+    availableSourceAssets: buildAvailableSourceAssetsFromLibraryAssets([
+      {
+        id: 'asset_finished_banner',
+        filename: 'hero-launch-visual.png',
+        mimetype: 'image/png',
+        team_category: 'finished_banner',
+      },
+      {
+        id: 'asset_logo',
+        filename: 'gold-glory-logo.png',
+        mimetype: 'image/png',
+        team_category: 'logo',
+      },
+    ]),
+  });
+
+  const bannerItem = plan.items.find((item) => item.type === 'banner');
+  assert.ok(bannerItem);
+  assert.deepEqual(bannerItem.bannerDetails?.specs, BANNER_OUTPUT_SPECS.map((spec) => spec.id));
+  assert.equal(plan.sourceAssetRequirements.some((asset) => asset.assetType === 'key_art' && asset.status === 'needs_selection'), true);
+  assert.equal(plan.sourceAssetRequirements.some((asset) => asset.assetType === 'game_logo' && asset.status === 'needs_selection'), true);
+
+  const selectedPlan = applySourceAssetSelectionOverrides(plan, {
+    src_key_art: ['asset_finished_banner'],
+    src_game_logo: ['asset_logo'],
+  });
+  const selectedBanner = selectedPlan.items.find((item) => item.type === 'banner');
+  assert.equal(selectedBanner?.status, 'ready_to_produce');
+  assert.equal(selectedBanner?.bannerDetails?.selectedMainVisualAssetId, 'asset_finished_banner');
+  assert.equal(selectedBanner?.bannerDetails?.selectedLogoAssetId, 'asset_logo');
 });
 
 test('buildCampaignOutputPlan falls back without strategy and asks for review', () => {
@@ -154,6 +201,7 @@ test('buildAvailableSourceAssetsFromLibraryAssets maps Asset Library records int
   assert.equal(mapped.some((asset) => asset.assetId === 'asset_logo' && asset.assetType === 'game_logo'), true);
   assert.equal(mapped.some((asset) => asset.assetId === 'asset_gameplay' && asset.assetType === 'gameplay_recording'), true);
   assert.equal(mapped.every((asset) => asset.matchStrength === 'candidate'), true);
+  assert.deepEqual(inferSourceAssetTypesForLibraryAsset({ id: 'asset_banner', filename: 'upload.png', mimetype: 'image/png', team_category: 'finished_banner' }), ['key_art', 'event_banner']);
   assert.deepEqual(inferSourceAssetTypesForLibraryAsset({ id: 'asset_reward', filename: 'reward-chest-icon.png', mimetype: 'image/png' }), ['reward_icon']);
   assert.equal(sourceAssetFilterType('gameplay_recording'), 'video');
   assert.equal(sourceAssetFilterType('game_logo'), 'image');
@@ -200,4 +248,50 @@ test('updateSourceAssetRequirementMatches only unblocks items affected by that r
   assert.equal(withLogo.items.find((item) => item.type === 'tiktok_video')?.status, 'blocked');
   assert.equal(withLogo.capabilityGaps.some((gap) => gap.id === 'gap_missing_game_logo'), false);
   assert.equal(withLogo.capabilityGaps.some((gap) => gap.id === 'gap_missing_gameplay_recording'), true);
+});
+
+test('markProducedOutputQuality updates a produced Banner output with shared quality states', () => {
+  const plan = buildCampaignOutputPlan({
+    mission: 'Create banner ads with available assets',
+    brief: createBrief({ platform: 'facebook' }),
+    strategy: createStrategy({ assetNeeds: ['banner key art', 'game logo'] }),
+    requestedPlatforms: ['facebook'],
+    availableSourceAssets: [
+      { assetId: 'asset_key_art', assetType: 'key_art' },
+      { assetId: 'asset_logo', assetType: 'game_logo' },
+    ],
+  });
+
+  const banner = plan.items.find((item) => item.type === 'banner');
+  assert.ok(banner);
+  const producedPlan = {
+    ...plan,
+    items: plan.items.map((item) =>
+      item.id === banner.id
+        ? {
+            ...item,
+            status: 'produced' as const,
+            producedOutputs: [
+              {
+                id: 'banner_prompt_item_banner_1',
+                kind: 'banner_prompt' as const,
+                title: 'Banner prompt placeholder',
+                body: 'Create static campaign banner variants.',
+                variants: ['Square 1:1'],
+                platform: 'cross_platform',
+                status: 'draft' as const,
+                createdAt: '2026-05-10T00:00:00.000Z',
+              },
+            ],
+          }
+        : item,
+    ),
+  };
+
+  const marked = markProducedOutputQuality(producedPlan, banner.id, 'banner_prompt_item_banner_1', 'needs_fix');
+  const markedOutput = marked.items
+    .find((item) => item.id === banner.id)
+    ?.producedOutputs?.[0];
+  assert.equal(markedOutput?.qualityStatus, 'needs_fix');
+  assert.equal(markedOutput?.status, 'needs_review');
 });

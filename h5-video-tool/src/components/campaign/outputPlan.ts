@@ -3,6 +3,7 @@ import type {
   CampaignCreativeStrategy,
   CampaignCreativeVariantPack,
 } from './model.ts';
+import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 
 export type ProductionItemType =
   | 'fb_post'
@@ -28,8 +29,64 @@ export type ProductionItemStatus =
   | 'failed'
   | 'skipped';
 
-export type ProducedOutputKind = 'caption' | 'headline' | 'hashtag' | 'post_copy';
+export type ProducedOutputKind = 'caption' | 'headline' | 'hashtag' | 'post_copy' | 'banner_prompt';
 export type ProducedOutputStatus = 'draft' | 'needs_review' | 'approved';
+
+export type BannerOutputSpecId = 'square_1_1' | 'portrait_4_5' | 'story_9_16' | 'landscape_16_9';
+
+export interface BannerOutputSpec {
+  id: BannerOutputSpecId;
+  label: string;
+  aspectRatio: string;
+  width: number;
+  height: number;
+  platformHint: string;
+}
+
+export interface BannerOutputDetails {
+  specs: BannerOutputSpecId[];
+  mainVisualRequirementId: string;
+  logoRequirementId?: string;
+  selectedMainVisualAssetId?: string;
+  selectedLogoAssetId?: string;
+  shortCopy: string;
+  cta: string;
+}
+
+export const BANNER_OUTPUT_SPECS: readonly BannerOutputSpec[] = [
+  {
+    id: 'square_1_1',
+    label: 'Square 1:1',
+    aspectRatio: '1:1',
+    width: 1080,
+    height: 1080,
+    platformHint: 'Facebook / Instagram feed',
+  },
+  {
+    id: 'portrait_4_5',
+    label: 'Portrait 4:5',
+    aspectRatio: '4:5',
+    width: 1080,
+    height: 1350,
+    platformHint: 'Facebook / Instagram feed',
+  },
+  {
+    id: 'story_9_16',
+    label: 'Story 9:16',
+    aspectRatio: '9:16',
+    width: 1080,
+    height: 1920,
+    platformHint: 'Story / Reels placement',
+  },
+  {
+    id: 'landscape_16_9',
+    label: 'Landscape 16:9',
+    aspectRatio: '16:9',
+    width: 1920,
+    height: 1080,
+    platformHint: 'Landscape feed / web placement',
+  },
+] as const;
 
 export interface ProducedOutputDraft {
   id: string;
@@ -39,6 +96,9 @@ export interface ProducedOutputDraft {
   variants: string[];
   platform: string;
   status: ProducedOutputStatus;
+  qualityStatus?: CreativeQualityStatus;
+  bannerSpecIds?: BannerOutputSpecId[];
+  sourceAssetIds?: string[];
   createdAt: string;
 }
 
@@ -55,6 +115,7 @@ export interface ProductionItem {
   gobsCanProduce: boolean;
   outputAssetIds: string[];
   distributionPackageIds: string[];
+  bannerDetails?: BannerOutputDetails;
   producedOutputs?: ProducedOutputDraft[];
   humanAction?: {
     type: 'confirm' | 'provide_source_asset' | 'review_risk' | 'external_production';
@@ -121,7 +182,12 @@ export interface SourceAssetLibraryRecord {
   mime_type?: string;
   mimetype?: string;
   ai_category?: string;
+  team_category?: string | null;
+  reuse_category?: string | null;
   ai_description?: string | null;
+  preprocess?: {
+    campaign_asset_category?: string | null;
+  };
   tags?: Array<{ key?: string; value?: string }>;
 }
 
@@ -286,6 +352,7 @@ function makeItem(input: {
   capability: ProductionCapability;
   requirements: Map<string, GameSourceAssetRequirement>;
   fallbackReview?: boolean;
+  bannerDetails?: BannerOutputDetails;
 }): ProductionItem {
   const requiredSourceAssetIds = (input.requiredAssetTypes ?? []).map(sourceRequirementId);
   const status = itemStatusForRequirementIds(requiredSourceAssetIds, input.requirements);
@@ -302,6 +369,7 @@ function makeItem(input: {
     gobsCanProduce: input.capability === 'supported' || (input.capability === 'supported_with_source_assets' && status !== 'blocked'),
     outputAssetIds: [],
     distributionPackageIds: [],
+    bannerDetails: input.bannerDetails,
     producedOutputs: [],
   };
   if (input.fallbackReview) {
@@ -340,6 +408,26 @@ function attachRequirementUsage(
       ]);
     });
   });
+}
+
+function firstMatchedAssetId(requirements: GameSourceAssetRequirement[], requirementId?: string): string | undefined {
+  if (!requirementId) return undefined;
+  return requirements.find((requirement) => requirement.id === requirementId)?.matchedAssetIds[0];
+}
+
+function hydrateBannerDetailsFromRequirements(
+  item: ProductionItem,
+  requirements: GameSourceAssetRequirement[],
+): ProductionItem {
+  if (!item.bannerDetails) return item;
+  return {
+    ...item,
+    bannerDetails: {
+      ...item.bannerDetails,
+      selectedMainVisualAssetId: firstMatchedAssetId(requirements, item.bannerDetails.mainVisualRequirementId),
+      selectedLogoAssetId: firstMatchedAssetId(requirements, item.bannerDetails.logoRequirementId),
+    },
+  };
 }
 
 function buildCapabilityGaps(
@@ -384,6 +472,9 @@ function sourceAssetSearchText(asset: SourceAssetLibraryRecord): string {
   return [
     asset.filename,
     asset.ai_category,
+    asset.team_category ?? undefined,
+    asset.reuse_category ?? undefined,
+    asset.preprocess?.campaign_asset_category ?? undefined,
     asset.ai_description,
     ...(asset.tags ?? []).flatMap((tag) => [tag.key, tag.value]),
   ].join(' ').toLowerCase();
@@ -392,9 +483,27 @@ function sourceAssetSearchText(asset: SourceAssetLibraryRecord): string {
 export function inferSourceAssetTypesForLibraryAsset(asset: SourceAssetLibraryRecord): string[] {
   const text = sourceAssetSearchText(asset);
   const mime = (asset.mimetype ?? asset.mime_type ?? '').toLowerCase();
+  const teamCategory = asset.team_category ?? asset.reuse_category ?? asset.preprocess?.campaign_asset_category;
   const types = new Set<string>();
   const isVideo = mime.startsWith('video/');
   const isImage = mime.startsWith('image/');
+
+  if (teamCategory === 'logo') {
+    types.add('game_logo');
+  }
+  if (teamCategory === 'character_image') {
+    types.add('character_art');
+  }
+  if (teamCategory === 'finished_banner') {
+    types.add('key_art');
+    types.add('event_banner');
+  }
+  if (teamCategory === 'gameplay_screenshot' || teamCategory === 'scene_image') {
+    types.add('key_art');
+  }
+  if (teamCategory === 'ui_screenshot') {
+    types.add('ui_screenshot');
+  }
 
   if (isVideo && /gameplay|recording|battle|combat|clip|screen ?record|实机|录屏|战斗|玩法|视频片段/.test(text)) {
     types.add('gameplay_recording');
@@ -488,9 +597,12 @@ function updateItemForSourceReadiness(
 
 function rebuildPlanAfterSourceReadiness(plan: CampaignOutputPlan): CampaignOutputPlan {
   const items = plan.items.map((item) =>
-    item.requiredSourceAssetIds.length > 0
-      ? updateItemForSourceReadiness(item, plan.sourceAssetRequirements)
-      : item,
+    hydrateBannerDetailsFromRequirements(
+      item.requiredSourceAssetIds.length > 0
+        ? updateItemForSourceReadiness(item, plan.sourceAssetRequirements)
+        : item,
+      plan.sourceAssetRequirements,
+    ),
   );
   const requirementMap = new Map(plan.sourceAssetRequirements.map((requirement) => [
     requirement.assetType,
@@ -571,6 +683,10 @@ function outputId(item: ProductionItem, index: number): string {
   return `copy_${slugify(item.id)}_${index + 1}`;
 }
 
+function bannerOutputId(item: ProductionItem): string {
+  return `banner_prompt_${slugify(item.id)}_1`;
+}
+
 function hashtagsFromSignals(signals: ReturnType<typeof textSignals>, platform: string): string[] {
   const raw = [
     'GoldAndGlory',
@@ -593,17 +709,61 @@ function producedDraft(
   body: string,
   variants: string[],
   createdAt: string,
+  extras: Partial<Pick<ProducedOutputDraft, 'bannerSpecIds' | 'sourceAssetIds'>> = {},
 ): ProducedOutputDraft {
   return {
-    id: outputId(item, index),
+    id: kind === 'banner_prompt' ? bannerOutputId(item) : outputId(item, index),
     kind,
     title,
     body,
     variants,
     platform: item.platform,
     status: 'draft',
+    ...extras,
     createdAt,
   };
+}
+
+function bannerSpecLabels(specIds: BannerOutputSpecId[]): string[] {
+  return specIds.map((id) => BANNER_OUTPUT_SPECS.find((spec) => spec.id === id)?.label ?? id);
+}
+
+function buildBannerPromptForItem(
+  item: ProductionItem,
+  args: ProduceSupportedCampaignOutputsArgs,
+): ProducedOutputDraft[] {
+  if (!item.bannerDetails) return [];
+  const signals = textSignals(args);
+  const sourceAssetIds = uniqueStrings([
+    item.bannerDetails.selectedMainVisualAssetId,
+    item.bannerDetails.selectedLogoAssetId,
+  ]);
+  const specLabels = bannerSpecLabels(item.bannerDetails.specs);
+  const body = [
+    `Create static campaign banner variants for ${signals.angle}.`,
+    `Formats: ${specLabels.join(', ')}.`,
+    `Main visual assetId: ${item.bannerDetails.selectedMainVisualAssetId ?? 'needs-selected-main-visual'}.`,
+    item.bannerDetails.selectedLogoAssetId ? `Logo assetId: ${item.bannerDetails.selectedLogoAssetId}.` : undefined,
+    `Short copy: ${item.bannerDetails.shortCopy}.`,
+    `CTA: ${item.bannerDetails.cta}.`,
+    `Visual direction: premium Gold and Glory composition, clear focal character or gameplay moment, readable CTA, no unsupported reward claims.`,
+  ].filter(Boolean).join('\n');
+
+  return [
+    producedDraft(
+      item,
+      'banner_prompt',
+      0,
+      'Banner prompt placeholder',
+      body,
+      specLabels,
+      new Date().toISOString(),
+      {
+        bannerSpecIds: item.bannerDetails.specs,
+        sourceAssetIds,
+      },
+    ),
+  ];
 }
 
 function buildProducedOutputsForItem(
@@ -647,6 +807,11 @@ function buildProducedOutputsForItem(
         producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt),
       );
     }
+    case 'banner':
+      return buildBannerPromptForItem(item, args).map((output) => ({
+        ...output,
+        createdAt,
+      }));
     default:
       return [];
   }
@@ -656,6 +821,13 @@ function isTextProductionSupported(item: ProductionItem): boolean {
   return ['caption_set', 'headline_set', 'hashtag_set', 'fb_post'].includes(item.type)
     && item.status !== 'blocked'
     && item.productionCapability !== 'manual_recommended'
+    && item.productionCapability !== 'unsupported'
+    && item.gobsCanProduce;
+}
+
+function isBannerProductionSupported(item: ProductionItem): boolean {
+  return item.type === 'banner'
+    && item.status !== 'blocked'
     && item.productionCapability !== 'unsupported'
     && item.gobsCanProduce;
 }
@@ -670,7 +842,7 @@ export function produceSupportedCampaignOutputs(
       producedCount += 1;
       return item;
     }
-    if (!isTextProductionSupported(item)) {
+    if (!isTextProductionSupported(item) && !isBannerProductionSupported(item)) {
       return {
         ...item,
         producedOutputs: item.producedOutputs ?? [],
@@ -692,8 +864,10 @@ export function produceSupportedCampaignOutputs(
       producedOutputs,
       humanAction: {
         type: 'confirm' as const,
-        label: 'Review produced draft',
-        detail: 'GOBS produced this draft copy. Review it before distribution.',
+        label: item.type === 'banner' ? 'Review banner prompt' : 'Review produced draft',
+        detail: item.type === 'banner'
+          ? 'GOBS produced a Banner prompt placeholder. Render or export a final image before publishing.'
+          : 'GOBS produced this draft copy. Review it before distribution.',
       },
     };
   });
@@ -704,6 +878,28 @@ export function produceSupportedCampaignOutputs(
     items,
     updatedAt: nowIso,
   };
+}
+
+function bannerDetailsForPlan(args: BuildCampaignOutputPlanArgs, mainVisualAssetType: string): BannerOutputDetails {
+  const cta = safeSentence(args.strategy?.cta || args.brief.cta, 'Play Gold and Glory today');
+  const shortCopy = safeSentence(
+    args.strategy?.recommendedHook || args.variantPack?.variants[0]?.hook || args.brief.sellingPoints[0],
+    args.brief.objective || args.mission,
+  );
+  return {
+    specs: BANNER_OUTPUT_SPECS.map((spec) => spec.id),
+    mainVisualRequirementId: sourceRequirementId(mainVisualAssetType),
+    logoRequirementId: sourceRequirementId('game_logo'),
+    shortCopy,
+    cta,
+  };
+}
+
+function shouldPlanBanner(brief: CampaignCreativeBrief, corpus: string, platforms: string[]): boolean {
+  return needsBanner(corpus)
+    || brief.mode === 'tiktok_ua'
+    || platforms.includes('facebook')
+    || /static|image|visual|creative|素材|静态|广告图/.test(corpus);
 }
 
 export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): CampaignOutputPlan {
@@ -727,7 +923,8 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       requiredTypes.add('character_art');
     }
   });
-  if (needsBanner(corpus)) {
+  const includeBanner = shouldPlanBanner(args.brief, corpus, platforms);
+  if (includeBanner) {
     requiredTypes.add('key_art');
     requiredTypes.add('game_logo');
     if (/event|活动/.test(corpus)) requiredTypes.add('event_banner');
@@ -803,22 +1000,27 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
     }));
   }
 
-  if (needsBanner(corpus)) {
+  if (includeBanner) {
+    const bannerMainVisualType = /event|活动/.test(corpus) ? 'event_banner' : 'key_art';
     items.push(makeItem({
       type: 'banner',
-      quantity: 1,
+      quantity: BANNER_OUTPUT_SPECS.length,
       platform: 'cross_platform',
       title: 'Campaign banner set',
       contentBrief: args.strategy?.angle || args.brief.objective || args.mission,
-      requiredAssetTypes: ['key_art', 'game_logo', ...(/event|活动/.test(corpus) ? ['event_banner'] : [])],
-      capability: 'manual_recommended',
+      requiredAssetTypes: [bannerMainVisualType, 'game_logo'],
+      capability: 'supported_with_source_assets',
       requirements,
+      bannerDetails: bannerDetailsForPlan(args, bannerMainVisualType),
       fallbackReview: !hasStrategy,
     }));
   }
 
   attachRequirementUsage(items, requirements);
-  const capabilityGaps = buildCapabilityGaps(items, requirements);
+  const hydratedItems = items.map((item) =>
+    hydrateBannerDetailsFromRequirements(item, [...requirements.values()]),
+  );
+  const capabilityGaps = buildCapabilityGaps(hydratedItems, requirements);
 
   return {
     id: `output_plan_${slugify(args.brief.briefId || args.mission)}`,
@@ -827,10 +1029,37 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
     mission: args.mission,
     briefId: args.brief.briefId,
     status: capabilityGaps.some((gap) => gap.priorityHint === 'high') ? 'needs_confirmation' : 'draft',
-    items,
+    items: hydratedItems,
     sourceAssetRequirements: [...requirements.values()],
     capabilityGaps,
     createdAt: nowIso,
     updatedAt: nowIso,
+  };
+}
+
+export function markProducedOutputQuality(
+  plan: CampaignOutputPlan,
+  itemId: string,
+  outputIdValue: string,
+  qualityStatus: CreativeQualityStatus,
+): CampaignOutputPlan {
+  return {
+    ...plan,
+    items: plan.items.map((item) => {
+      if (item.id !== itemId) return item;
+      return {
+        ...item,
+        producedOutputs: (item.producedOutputs ?? []).map((output) =>
+          output.id === outputIdValue
+            ? {
+                ...output,
+                qualityStatus,
+                status: qualityStatus === 'usable' ? 'approved' : 'needs_review',
+              }
+            : output,
+        ),
+      };
+    }),
+    updatedAt: new Date().toISOString(),
   };
 }
