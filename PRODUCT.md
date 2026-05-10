@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-10 (v0.183)*
+*Last updated: 2026-05-10 (v0.184)*
 
-**Latest update - v0.183**
+**Latest update - v0.184**
+- Story video result pages now include a human review panel, letting operators manually mark generated videos as `usable`, `needs_fix`, or `unusable`.
+- Reviews use the Run 0 `ReviewContract` shape, link back to a story-video `outputId`, and keep fixed issue tags for opening, pacing, selling point, ending, and character accuracy.
+- The review panel shows local review history and explicitly avoids claiming automatic video understanding; it is a capture step for later quality panels and next-version work.
+
+**Previous update - v0.183**
 - Campaign creative outputs now have a small shared quality foundation: `usable`, `needs_fix`, and `unusable` are the only allowed states for the next optimization runs.
 - Frontend TypeScript contracts now define the minimum Campaign -> Asset -> Output -> Review -> Package graph, including `Output.campaignId`, `Output.assetIds`, `Review.outputId`, optional `parentOutputId`, and `Package.outputIds`.
 - Fixture-backed validation and documentation give Asset Library, Banner Output, story-video review, and next-version runs a stable base before shared Workbench or backend route wiring begins.

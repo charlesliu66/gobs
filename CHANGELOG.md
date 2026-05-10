@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.184 - 2026-05-10
+**Story video human review capture**
+**Campaign / Studio Result:**
+- Added a result-page story video review panel so operators can manually mark generated videos as `usable`, `needs_fix`, or `unusable` using the Run 0 quality contract states.
+- Added fixed story-video issue tags for weak opening, slow pacing, unclear selling point, weak ending, and inaccurate character, plus an optional next-version note field.
+- Stored review records in a Run 0 `ReviewContract`-compatible shape linked by `outputId`, with Campaign Studio handoff outputs using their production item id and standalone results deriving a stable story-video task id.
+- Kept the UI explicit that these are human-entered reviews, not automatic video understanding.
+**Tests / Build:**
+- Added native node:test coverage for story review id derivation, fixed tags, ReviewContract-compatible record creation, invalid storage filtering, and output-level review listing.
+
 ## v0.183 - 2026-05-10
 **Creative quality and data contract foundation**
 **Campaign / Workflow:**

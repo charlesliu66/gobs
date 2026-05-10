@@ -2,6 +2,8 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo } from 'react';
 import { useCreateFlow } from '../context/CreateFlowContext';
 import { loadVideoHistory, getVideoFileUrl, getLocalPlaybackSrc } from '../utils/videoHistory';
+import { StoryVideoReviewPanel } from '../components/campaign/quality/StoryVideoReviewPanel.tsx';
+import { buildStoryVideoOutputId } from '../components/campaign/quality/storyVideoReviewStore.ts';
 
 export function Result() {
   const [searchParams] = useSearchParams();
@@ -34,6 +36,15 @@ export function Result() {
       : videoUrl && (!taskId || taskId === contextTaskId)
         ? videoUrl
         : historyPlaybackUrl;
+
+  const storyReviewOutputId = useMemo(() => {
+    if (!url) return null;
+    return buildStoryVideoOutputId({
+      campaignOutputId: campaignStudioHandoff?.productionItemId,
+      taskId: taskId ?? contextTaskId,
+      resultUrl: url,
+    });
+  }, [campaignStudioHandoff?.productionItemId, contextTaskId, taskId, url]);
 
   // 将当前成片同步到 context，便于「去分发」与 taskId 一致
   useEffect(() => {
@@ -88,6 +99,15 @@ export function Result() {
             </div>
             {taskId && (
               <p className="text-xs text-[var(--color-text-subtle)]">任务 ID: {taskId}</p>
+            )}
+            {storyReviewOutputId && (
+              <StoryVideoReviewPanel
+                outputId={storyReviewOutputId}
+                campaignId={campaignStudioHandoff?.campaignId}
+                resultTaskId={taskId ?? contextTaskId}
+                resultUrl={url}
+                title={campaignStudioHandoff?.title ?? historyItem?.prompt ?? 'Story video result'}
+              />
             )}
             <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5">
               <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-4">下一步</p>
