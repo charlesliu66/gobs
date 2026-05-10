@@ -28,15 +28,16 @@ export function StepStoryboardAssetsSidebar({
       <div className="space-y-2">
         {chSheets.map((ch) => {
           const manualStateId = shot.characterStateOverrides?.[ch.id] ?? '';
+          const autoStateId = getAutoMatchStateId(ch, shot) ?? '';
           const defaultStateId = ch.activeStateId ?? '';
-          const effectiveStateId = manualStateId || defaultStateId;
+          const effectiveStateId = manualStateId || autoStateId || defaultStateId;
           const effectiveState = effectiveStateId ? ch.states?.find((s) => s.id === effectiveStateId) ?? null : null;
-          const suggestedStateId = getAutoMatchStateId(ch, shot);
+          const suggestedStateId = autoStateId;
           const suggestedState = suggestedStateId && suggestedStateId !== effectiveStateId
             ? ch.states?.find((s) => s.id === suggestedStateId) ?? null
             : null;
           const thumb = getCharacterShotImage(ch, shot);
-          const sourceLabel = manualStateId ? '手动' : effectiveState ? '默认' : '未设';
+          const sourceLabel = manualStateId ? '手动' : autoStateId ? '自动' : effectiveState ? '默认' : '未设';
 
           return (
             <div key={ch.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">

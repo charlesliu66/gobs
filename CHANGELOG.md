@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.182 - 2026-05-10
+**Advanced Studio storyboard pacing and state references**
+**Production Wizard:**
+- Added a sourced Duration Plan design for Advanced Studio so future storyboard generation can turn target duration into beat budgets and shot-count changes instead of simply stretching single shots.
+- Improved character-state matching so aliases such as 童年时期, 小时候, childhood, and related age terms can resolve to the correct state image before Seedance multimodal references are assembled.
+- Repaired Chinese mojibake in storyboard video version timeline and A/B compare controls.
+**Tests / Build:**
+- Added regression coverage for automatic childhood-state matching, manual override priority, and locale mojibake markers in user-facing message sources.
+
 ## v0.181 - 2026-05-09
 **Release collaboration governance**
 **Workflow / Deploy:**

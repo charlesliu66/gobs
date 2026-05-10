@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   buildLocaleHeaders,
@@ -19,6 +20,8 @@ import {
   readStoredUiLocale,
 } from './locale.ts';
 import { getMessage } from './messages.ts';
+
+const MOJIBAKE_PATTERN = /(?:æ|ç|å|ï¼|ã|â|�)/;
 
 test('normalizeUiLocale maps English variants to en', () => {
   assert.equal(normalizeUiLocale('en-US'), 'en');
@@ -84,7 +87,7 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'generate.pageTitle'), 'Start Your Video Dream');
   assert.equal(getMessage('en', 'generate.inputTitle'), 'Video Idea');
   assert.equal(getMessage('en', 'generate.matchAssets'), 'Match Assets');
-  assert.equal(getMessage('en', 'generate.tiktokReferenceVideo'), 'TikTok Reference Video');
+  assert.equal(getMessage('en', 'generate.tiktokReferenceVideo'), 'Motion Reference Video');
   assert.equal(getMessage('en', 'generate.configureDriveHint'), 'Before using "Match Assets", set a Drive folder in Materials first.');
   assert.equal(getMessage('en', 'productionWizard.projectTitlePlaceholder'), 'Project title');
   assert.equal(getMessage('en', 'productionWizard.subtitle'), 'Advanced Production · Story Outline -> Character & Scene Design -> Storyboard -> Export');
@@ -148,6 +151,11 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.notEqual(getMessage('zh-CN', 'login.title'), 'login.title');
   assert.notEqual(getMessage('zh-CN', 'quickfilm.startGeneration'), 'quickfilm.startGeneration');
   assert.equal(getMessage('en', 'missing.key'), 'missing.key');
+});
+
+test('locale source does not contain common mojibake markers', () => {
+  const source = readFileSync(new URL('./messages.ts', import.meta.url), 'utf8');
+  assert.equal(MOJIBAKE_PATTERN.test(source), false);
 });
 
 test('formatDateTime supports custom formatting options', () => {

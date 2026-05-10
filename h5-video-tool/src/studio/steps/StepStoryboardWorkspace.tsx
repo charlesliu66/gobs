@@ -10,7 +10,7 @@ import type { BatchJobDto, QueueSnapshotDto } from '../../api/batchJobs';
 import { hasProductionShotPreviewMedia } from '../productionTypes';
 import type { ShotReviewResult, ShotReviewSuggestion, ContinuityIssue } from '../../api/shotReview';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
-import { autoMatchCharacterStateBySheet, computeShotRefTags } from '../productionAssets';
+import { autoMatchCharacterStateBySheet, buildShotStateMatchText, computeShotRefTags } from '../productionAssets';
 import { useProductionContext } from '../ProductionContext';
 import { StepStoryboardAssetsSidebar } from './StepStoryboardAssetsSidebar';
 import { StepStoryboardMainHeader } from './StepStoryboardMainHeader';
@@ -374,7 +374,7 @@ export function StepStoryboardWorkspace({
           getAutoMatchStateId={(ch, s) =>
             autoMatchCharacterStateBySheet(
               ch,
-              [s.action, s.subject, s.emotion, s.notes].filter(Boolean).join(' '),
+              buildShotStateMatchText(s),
             )
           }
           onChangeCharacterStateOverride={(characterId, stateId) => {

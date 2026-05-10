@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getCharacterShotImage } from '../src/studio/productionAssets.ts';
+import {
+  autoMatchCharacterStateBySheet,
+  getCharacterShotImage,
+} from '../src/studio/productionAssets.ts';
 
 const characterSheet = {
   id: 'char-1',
@@ -47,4 +50,35 @@ test('getCharacterShotImage falls back to active look when state image is unavai
   });
 
   assert.equal(result, 'look-default.png');
+});
+
+test('autoMatchCharacterStateBySheet treats childhood and 小时候 as the same age state', () => {
+  const result = autoMatchCharacterStateBySheet(
+    characterSheet as never,
+    '回忆闪回：Silas 小时候独自站在旧庭院里，神情害怕。',
+  );
+
+  assert.equal(result, 'state-child');
+});
+
+test('getCharacterShotImage uses the auto-matched state before the default active state', () => {
+  const result = getCharacterShotImage(characterSheet as never, {
+    subject: 'Silas 童年时期',
+    action: '小时候的 Silas 追着光跑过走廊',
+    characterStateOverrides: {},
+  });
+
+  assert.equal(result, 'state-child.png');
+});
+
+test('manual per-shot state override still wins over automatic age matching', () => {
+  const result = getCharacterShotImage(characterSheet as never, {
+    subject: 'Silas 小时候',
+    action: '童年回忆中奔跑',
+    characterStateOverrides: {
+      'char-1': 'state-default',
+    },
+  });
+
+  assert.equal(result, 'state-default.png');
 });

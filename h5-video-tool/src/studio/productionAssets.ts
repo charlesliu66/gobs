@@ -398,16 +398,23 @@ export function layoutCharacterLookTree(nodes: CharacterLookNode[]): {
 
 /**
  * 获取角色在特定分镜中应使用的参考图。
- * 优先级：分镜手动覆盖状态图 > 角色默认激活状态图 > lookTree 定稿图
+ * 优先级：分镜手动覆盖状态图 > 分镜内容自动匹配状态图 > 角色默认激活状态图 > lookTree 定稿图
  */
 export function getCharacterShotImage(
   ch: CharacterSheet,
-  shot?: { characterStateOverrides?: Record<string, string> },
+  shot?: Partial<ProductionShot> & { characterStateOverrides?: Record<string, string> },
 ): string | undefined {
   const overrideStateId = shot?.characterStateOverrides?.[ch.id];
   if (overrideStateId) {
     const st = ch.states?.find((s) => s.id === overrideStateId);
     if (st?.imageDataUrl) return st.imageDataUrl;
+  }
+  if (shot) {
+    const autoStateId = autoMatchCharacterStateBySheet(ch, buildShotStateMatchText(shot));
+    if (autoStateId) {
+      const st = ch.states?.find((s) => s.id === autoStateId);
+      if (st?.imageDataUrl) return st.imageDataUrl;
+    }
   }
   if (ch.activeStateId) {
     const st = ch.states?.find((s) => s.id === ch.activeStateId);
@@ -1142,6 +1149,112 @@ export function autoMatchCharacterState(
   return undefined;
 }
 
+function normalizeStateMatchText(value: string | undefined | null): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[，。！？、；：,.!?;:()[\]{}"'“”‘’<>《》【】]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function buildShotStateMatchText(shot: Partial<ProductionShot>): string {
+  return normalizeStateMatchText([
+    shot.subject,
+    shot.action,
+    shot.emotion,
+    shot.notes,
+    shot.dialogue,
+    shot.audioCue,
+    shot.structuredStill?.sp_subject,
+    shot.structuredStill?.sp_environment,
+    shot.structuredStill?.sp_style,
+    shot.structuredMotion?.mp_motion,
+    shot.structuredMotion?.mp_tempo,
+  ].filter(Boolean).join(' '));
+}
+
+const CHARACTER_STATE_ALIAS_GROUPS: Array<{
+  key: string;
+  aliases: string[];
+  weight: number;
+}> = [
+  {
+    key: 'childhood',
+    aliases: ['童年', '童年时期', '童年形象', '小时候', '小时侯', '幼年', '儿时', '孩提', '儿童', '孩童', '小孩', '小男孩', '小女孩', 'childhood', 'as a child', 'child', 'kid', 'little boy', 'little girl', 'younger self'],
+    weight: 14,
+  },
+  {
+    key: 'teen',
+    aliases: ['少年', '少女', '少男', '青少年', '青春期', 'teen', 'teenager', 'adolescent'],
+    weight: 12,
+  },
+  {
+    key: 'young_adult',
+    aliases: ['青年', '年轻', '年轻时期', '青年时期', 'young adult', 'youth'],
+    weight: 10,
+  },
+  {
+    key: 'middle_age',
+    aliases: ['中年', '成熟时期', 'middle aged', 'middle-aged', 'mature'],
+    weight: 10,
+  },
+  {
+    key: 'elderly',
+    aliases: ['老年', '老年时期', '年老', '年迈', '老人', '白发', 'elderly', 'old age', 'senior', 'aged'],
+    weight: 12,
+  },
+  {
+    key: 'battle',
+    aliases: ['战斗', '打斗', '搏击', '格斗', '战场', '厮杀', '持刀', '持剑', '攻击', 'battle', 'fight', 'combat'],
+    weight: 10,
+  },
+  {
+    key: 'injured',
+    aliases: ['受伤', '伤口', '包扎', '流血', '虚弱', '倒地', 'injured', 'wounded', 'bleeding'],
+    weight: 10,
+  },
+  {
+    key: 'formal',
+    aliases: ['正式', '正装', '西装', '礼服', '宴会', '婚礼', '庆典', '典礼', 'formal', 'suit', 'gown'],
+    weight: 9,
+  },
+  {
+    key: 'casual',
+    aliases: ['日常', '普通', '休闲', '家居', '平时', 'casual', 'daily', 'everyday'],
+    weight: 8,
+  },
+  {
+    key: 'sad',
+    aliases: ['哭', '哭泣', '流泪', '泪水', '悲伤', '伤心', 'sad', 'cry', 'tears'],
+    weight: 8,
+  },
+  {
+    key: 'happy',
+    aliases: ['开心', '高兴', '庆祝', '胜利', '获胜', '狂喜', 'happy', 'celebrate', 'victory'],
+    weight: 7,
+  },
+  {
+    key: 'work',
+    aliases: ['职场', '工作', '办公', '上班', '会议', 'office', 'work', 'business'],
+    weight: 8,
+  },
+  {
+    key: 'sport',
+    aliases: ['运动', '健身', '跑步', '训练', '比赛', 'sport', 'workout', 'gym', 'training'],
+    weight: 8,
+  },
+];
+
+function containsStateAlias(text: string, alias: string): boolean {
+  const normalizedAlias = normalizeStateMatchText(alias);
+  if (!normalizedAlias) return false;
+  if (/^[a-z0-9 ]+$/.test(normalizedAlias)) {
+    return new RegExp(`(^|\\s)${normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(text);
+  }
+  return text.includes(normalizedAlias);
+}
+
 /**
  * 根据分镜描述关键词，自动匹配角色最合适的状态（新版：接受 CharacterSheet + 描述文本）
  * 返回匹配到的 CharacterState id，或 null（无匹配）
@@ -1153,41 +1266,30 @@ export function autoMatchCharacterStateBySheet(
   const states = sheet.states ?? [];
   if (states.length === 0) return null;
 
-  const desc = shotDescription.toLowerCase();
-
-  // 关键词权重匹配
-  const KEYWORD_GROUPS: Array<{ keywords: string[]; weight: number }> = [
-    { keywords: ['战斗', '打斗', '搏击', '格斗', '战场', 'battle', 'fight'], weight: 10 },
-    { keywords: ['正装', '西装', '礼服', '婚礼', '庆典', 'formal', 'suit'], weight: 10 },
-    { keywords: ['正式', '宴会', '盛装', '典礼'], weight: 9 },
-    { keywords: ['休闲', '日常', '家居', '放松', 'casual', 'daily'], weight: 8 },
-    { keywords: ['睡衣', '睡觉', '卧室', 'pajama', 'sleep', 'bedroom'], weight: 10 },
-    { keywords: ['运动', '健身', '跑步', '训练', 'sport', 'workout', 'gym'], weight: 9 },
-    { keywords: ['雨', '雨天', '淋雨', 'rain', 'wet'], weight: 8 },
-    { keywords: ['冬', '雪', '寒冷', '大衣', 'winter', 'snow', 'coat'], weight: 9 },
-    { keywords: ['夏', '泳装', '海滩', '比基尼', 'summer', 'beach', 'swim'], weight: 9 },
-    { keywords: ['悲伤', '哭泣', '流泪', '伤心', 'sad', 'cry', 'tears'], weight: 7 },
-    { keywords: ['狂喜', '庆祝', '胜利', '开心', 'happy', 'celebrate', 'victory'], weight: 7 },
-    { keywords: ['受伤', '伤口', '包扎', '虚弱', '倒地'], weight: 9 },
-    { keywords: ['职场', '工作', '办公', '上班', '会议'], weight: 8 },
-    { keywords: ['约会', '浪漫', '爱情', 'date', 'romantic'], weight: 8 },
-  ];
+  const desc = normalizeStateMatchText(shotDescription);
+  if (!desc) return null;
 
   const scores = states.map((state) => {
-    const label = (state.label ?? '').toLowerCase();
-    const notes = (state.notes ?? '').toLowerCase();
-    const stateText = label + ' ' + notes;
+    const label = normalizeStateMatchText(state.label);
+    const notes = normalizeStateMatchText(state.notes);
+    const prompt = normalizeStateMatchText(state.statePrompt);
+    const stateText = [label, notes, prompt].filter(Boolean).join(' ');
 
     let score = 0;
 
-    for (const group of KEYWORD_GROUPS) {
-      const descMatch = group.keywords.some((k) => desc.includes(k));
-      const stateMatch = group.keywords.some((k) => stateText.includes(k));
-      if (descMatch && stateMatch) score += group.weight;
+    if (label.length > 1 && desc.includes(label)) score += 30;
+    if (notes.length > 1 && desc.includes(notes)) score += 10;
+
+    for (const group of CHARACTER_STATE_ALIAS_GROUPS) {
+      const descMatch = group.aliases.some((alias) => containsStateAlias(desc, alias));
+      if (!descMatch) continue;
+      const stateMatch = group.aliases.some((alias) => containsStateAlias(stateText, alias));
+      if (stateMatch) score += group.weight;
     }
 
-    // 直接字面量匹配（状态名出现在描述里，加高权重）
-    if (label.length > 1 && desc.includes(label)) score += 15;
+    for (const token of label.split(/\s+/).filter((part) => part.length >= 2)) {
+      if (desc.includes(token)) score += 3;
+    }
 
     return { id: state.id, score };
   });

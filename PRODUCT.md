@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-09 (v0.181)*
+*Last updated: 2026-05-10 (v0.182)*
 
-**Latest update - v0.181**
+**Latest update - v0.182**
+- Advanced Studio storyboard pacing now has a sourced Duration Plan design for the next implementation phase, defining how 60s/180s targets should change beat budgets and shot count instead of stretching single shots.
+- Character-state references now auto-match common aliases such as 童年时期/小时候/childhood before falling back to the default active state, so Seedance multimodal references can pick the correct state image with less manual work.
+- Storyboard video version timeline and A/B compare Chinese copy no longer shows mojibake, and locale tests now guard against common encoded-garbage markers in user-facing messages.
+
+**Previous update - v0.181**
 - Dev Worker -> Release Owner handoff is now documented for multi-window work: this development window can stop at a local commit, while a separate Release Owner window handles staging/prod deployment, smoke checks, release-ready marking, and idle restore.
 - Deployment artifact uploads now keep small archives on SSH stdin streaming and use bounded base64 part uploads with retry/cleanup plus optional fresh SSH sessions for larger archives.
 - API and frontend deployment scripts use the safer large-archive upload path without changing their CLI flags or prod frontend staging-to-prod promotion behavior.
