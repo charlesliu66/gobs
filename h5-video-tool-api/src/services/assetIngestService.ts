@@ -268,6 +268,7 @@ async function processFile(
       status: 'ready',
       ai_category: '未分类',
       ai_description: null,
+      team_category: null,
       folder_id: null,
       created_at: now,
       updated_at: now,

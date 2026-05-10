@@ -21,6 +21,7 @@
 - Release and Collaboration Governance is active at `docs/workflow/runs/2026-05-09-release-and-workflow-governance/`, implementing the Run 0 recommendation from the next optimization checklist: Dev Worker commit-only handoff, Release Owner pickup discipline, and safer large-archive upload fallback.
 - Quality and Data Contract Foundation is merged at `a62a774`, giving Window B the three-state creative quality vocabulary plus Campaign/Asset/Output/Review/Package contracts.
 - Story Video Review Capture is active at `docs/workflow/runs/2026-05-10-story-video-review-capture/`, implementing Window B Run 3 from the 2026-05-10 optimization checklist: human story-video quality marks, fixed issue tags, and Run 0 `ReviewContract`-compatible result-page review history.
+- Asset Library Reuse MVP is active at `docs/workflow/runs/2026-05-10-asset-library-reuse-mvp/`, implementing Window A Run 1 with team categories, preprocessing metadata, manual category correction, and `assetId`-based Run 0 `AssetContract` mapping.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -29,6 +30,7 @@
   - `docs/plans/2026-05-09-legacy-surface-reduction-audit.md`
   - `docs/plans/2026-05-10-gobs-next-optimization-checklist.md`
   - `docs/plans/2026-05-10-creative-quality-and-data-contract.md`
+  - `docs/plans/2026-05-10-asset-library-reuse-mvp.md`
 
 > 最后更新：2026-05-10
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
@@ -75,6 +77,7 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-10-asset-library-reuse-mvp` | Window A Run 1: Asset Library team categories, preprocessing metadata, manual category correction, and Run 0 `AssetContract` references by `assetId` | Builder/Verifier in progress on branch `codex/2026-05-10-asset-library-reuse-mvp`; deployment deferred to Release Owner |
 | `2026-05-10-story-video-review-capture` | Window B Run 3: human story-video quality marks, fixed issue tags, and Run 0 `ReviewContract`-compatible result-page review history | Builder/Verifier in progress on branch `codex/2026-05-10-story-video-review-capture`; deployment deferred to Release Owner |
 | `2026-05-10-quality-data-contract-foundation` | Window A Run 0: minimal creative quality states, five-entity data contract, fixtures, and validation tests before Asset Library/Banner/Review work | Merged to `origin/main` @ `a62a774`; deployment remains Release Owner responsibility |
 | `2026-05-09-release-and-workflow-governance` | Run 0 release/collaboration stabilization: commit-only Dev Worker handoff checklist plus bounded large-archive upload fallback for deployment scripts | Builder/Verifier in progress; deployment intentionally deferred to Release Owner window |

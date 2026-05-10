@@ -27,6 +27,7 @@ import {
 } from '../services/assetSearchService.js';
 import { getHighlightCandidates } from '../services/assetHighlightService.js';
 import { getThumbPath, ensureThumbnail } from '../services/assetThumbnailService.js';
+import { buildAssetReuseFields, isTeamAssetCategory } from '../services/assetReuseService.js';
 
 const router = Router();
 
@@ -84,13 +85,14 @@ function requireUser(req: Request, res: Response): string | null {
   return username;
 }
 
-function addUrls(item: Record<string, unknown>, token: string) {
+function addAssetResponseFields(item: Record<string, unknown>, token: string) {
   const id = item.id as string;
   const fileUrl = `/api/asset-library/assets/${id}/file?token=${encodeURIComponent(token)}`;
   const thumbUrl = `/api/asset-library/assets/${id}/thumb?token=${encodeURIComponent(token)}`;
   const thumbExists = item.filepath ? fs.existsSync(getThumbPath(item.filepath as string)) : false;
   return {
     ...item,
+    ...buildAssetReuseFields(item as never, { thumbnailReady: thumbExists }),
     file_url: fileUrl,
     thumbnail_url: thumbExists ? thumbUrl : fileUrl,
   };
@@ -204,7 +206,7 @@ router.get('/assets', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...addUrls(item as unknown as Record<string, unknown>, token),
+    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
@@ -414,6 +416,59 @@ router.patch('/assets/:id/tags', (req: Request, res: Response) => {
   res.json({ ok: true, action: 'upserted' });
 });
 
+// ── PATCH /assets/:id/category ────────────────────────────────────────────────
+// 手动修正团队复用分类，保留 AI 分类原始结果。
+
+router.patch('/assets/:id/category', (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
+  const { id: assetId } = req.params;
+  const { teamCategory, team_category: snakeTeamCategory } = req.body as {
+    teamCategory?: string;
+    team_category?: string;
+  };
+  const requestedCategory = (teamCategory ?? snakeTeamCategory ?? '').trim();
+  if (!isTeamAssetCategory(requestedCategory)) {
+    res.status(400).json({ error: '不支持的素材分类' });
+    return;
+  }
+
+  const asset = db.prepare(`SELECT * FROM assets WHERE id = @id`).get({ id: assetId }) as
+    | Record<string, unknown>
+    | undefined;
+
+  if (!asset) {
+    res.status(404).json({ error: '资产不存在' });
+    return;
+  }
+  if (asset.username !== username) {
+    res.status(403).json({ error: '无权操作他人资产' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE assets SET team_category = @team_category, updated_at = @now WHERE id = @id
+    `).run({ id: assetId, team_category: requestedCategory, now });
+
+    db.prepare(`
+      DELETE FROM asset_tags WHERE asset_id = @asset_id AND key = 'team_category' AND source = 'human'
+    `).run({ asset_id: assetId });
+
+    db.prepare(`
+      INSERT INTO asset_tags (asset_id, key, value, source, confidence, status, created_at)
+      VALUES (@asset_id, 'team_category', @value, 'human', 1.0, 'confirmed', @created_at)
+    `).run({ asset_id: assetId, value: requestedCategory, created_at: now });
+  })();
+
+  const updated = db.prepare(`SELECT * FROM assets WHERE id = @id`).get({ id: assetId }) as Record<string, unknown>;
+  const token = req.headers.authorization?.slice(7) ?? '';
+  const withTags = attachTags([addAssetResponseFields(updated, token)])[0];
+  res.json({ ok: true, asset: withTags });
+});
+
 // ── POST /assets/batch-tags ────────────────────────────────────────────────────
 // 批量更新标签
 // body: { updates: Array<{ assetId, key, value, status?, action? }> }
@@ -554,7 +609,7 @@ router.get('/search', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...addUrls(item as unknown as Record<string, unknown>, token),
+    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
@@ -572,16 +627,16 @@ router.get('/facets', (req: Request, res: Response) => {
 });
 
 // ── GET /categories ─────────────────────────────────────────────────────────
-// 返回各 ai_category 的素材计数（虚拟文件夹）
+// 返回团队分类优先、AI 分类兜底的素材计数（虚拟文件夹）
 
 router.get('/categories', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
 
   const rows = db.prepare(`
-    SELECT COALESCE(ai_category, '未分类') as category, COUNT(*) as count
+    SELECT COALESCE(team_category, ai_category, '未分类') as category, COUNT(*) as count
     FROM assets WHERE username = @username AND deleted_at IS NULL
-    GROUP BY ai_category
+    GROUP BY COALESCE(team_category, ai_category, '未分类')
     ORDER BY count DESC
   `).all({ username }) as Array<{ category: string; count: number }>;
 
@@ -707,7 +762,7 @@ router.get('/favorites', (req: Request, res: Response) => {
 
   const token = req.headers.authorization?.slice(7) ?? '';
   const itemsWithUrl = items.map((item) => ({
-    ...addUrls(item, token),
+    ...addAssetResponseFields(item, token),
     is_favorite: true,
   }));
   const assetsWithTags = attachTags(itemsWithUrl);
@@ -763,7 +818,7 @@ router.get('/recent', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = items.map((item) => ({
-    ...addUrls(item, token),
+    ...addAssetResponseFields(item, token),
     is_favorite: favoriteSet.has(item.id as string),
   }));
   const assetsWithTags = attachTags(itemsWithUrl);

@@ -12,6 +12,32 @@ export const AI_CATEGORIES = [
 ] as const;
 export type AiCategory = typeof AI_CATEGORIES[number];
 
+export const TEAM_ASSET_CATEGORIES = [
+  'character_image',
+  'scene_image',
+  'ui_screenshot',
+  'logo',
+  'gameplay_screenshot',
+  'video_clip',
+  'finished_banner',
+  'reference_image',
+] as const;
+export type TeamAssetCategory = typeof TEAM_ASSET_CATEGORIES[number];
+
+export type TeamAssetCategorySource = 'manual' | 'ai_category' | 'filename' | 'mime' | 'fallback';
+
+export interface AssetPreprocessSummary {
+  file_type: 'image' | 'video' | 'audio' | 'other';
+  width: number | null;
+  height: number | null;
+  aspect_ratio: string | null;
+  orientation: string | null;
+  thumbnail_ready: boolean;
+  duration_sec: number | null;
+  has_audio: boolean;
+  campaign_asset_category: TeamAssetCategory;
+}
+
 export interface AssetRecord {
   id: string;
   username: string;
@@ -30,6 +56,7 @@ export interface AssetRecord {
   status: AssetStatus;
   ai_category: AiCategory;
   ai_description: string | null;
+  team_category: TeamAssetCategory | null;
   folder_id: string | null;
   created_at: string;
   updated_at: string;

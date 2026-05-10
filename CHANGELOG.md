@@ -2,6 +2,17 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.185 - 2026-05-10
+**Asset Library reuse metadata MVP**
+**Asset Library / Campaign Contracts:**
+- Added a stable team-facing Asset Library category vocabulary aligned with Run 0 `AssetContract` categories for character images, scene images, UI screenshots, logos, gameplay screenshots, video clips, finished banners, and reference images.
+- Added additive reuse metadata on Asset Library responses, including category source, preprocessing summary, file type, dimensions, aspect ratio, thumbnail readiness, video duration, and audio presence.
+- Added manual category correction through `PATCH /api/asset-library/assets/:id/category`, preserving original `ai_category` evidence while storing operator correction in `team_category`.
+- Added frontend detail-drawer category correction and a material helper that maps `LibraryAsset` records to Run 0 `AssetContract` references by `assetId` without copying file payloads.
+**Tests / Build:**
+- Added backend native node:test coverage for category fallback, preprocessing summary, invalid category rejection, cross-user rejection, and manual category persistence.
+- Added frontend native node:test coverage for `LibraryAsset` to `AssetContract` mapping and duration conversion.
+
 ## v0.184 - 2026-05-10
 **Story video human review capture**
 **Campaign / Studio Result:**

@@ -32,7 +32,7 @@ export function listAssets(query: SearchQuery): PagedResult {
   const params: Record<string, any> = { username, limit: pageSize, offset };
 
   if (aiCategory) {
-    conditions.push('a.ai_category = @aiCategory');
+    conditions.push('(a.team_category = @aiCategory OR (a.team_category IS NULL AND a.ai_category = @aiCategory))');
     params.aiCategory = aiCategory;
   }
 
@@ -85,7 +85,7 @@ export function searchAssets(query: SearchQuery): PagedResult {
   const params: Record<string, any> = { username, q: likeQ, limit: pageSize, offset };
 
   if (aiCategory) {
-    conditions.push('a.ai_category = @aiCategory');
+    conditions.push('(a.team_category = @aiCategory OR (a.team_category IS NULL AND a.ai_category = @aiCategory))');
     params.aiCategory = aiCategory;
   }
 

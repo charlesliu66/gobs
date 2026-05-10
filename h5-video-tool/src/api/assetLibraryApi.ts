@@ -3,7 +3,7 @@
  * 对接后端 /api/asset-library/* (TASK-A 实现)
  * TASK-D: 新增 getAssetHighlights
  */
-import { apiGet, apiPost, apiDelete } from './client';
+import { apiGet, apiPost, apiDelete, apiPatch } from './client';
 
 const BASE = '/api/asset-library';
 
@@ -15,6 +15,32 @@ export interface AssetTag {
   source: 'ai' | 'human';
   confidence: number;
   status: 'pending' | 'confirmed' | 'rejected';
+}
+
+export const TEAM_ASSET_CATEGORIES = [
+  'character_image',
+  'scene_image',
+  'ui_screenshot',
+  'logo',
+  'gameplay_screenshot',
+  'video_clip',
+  'finished_banner',
+  'reference_image',
+] as const;
+
+export type TeamAssetCategory = typeof TEAM_ASSET_CATEGORIES[number];
+export type TeamAssetCategorySource = 'manual' | 'ai_category' | 'filename' | 'mime' | 'fallback';
+
+export interface AssetPreprocessSummary {
+  file_type: 'image' | 'video' | 'audio' | 'other';
+  width: number | null;
+  height: number | null;
+  aspect_ratio: string | null;
+  orientation: string | null;
+  thumbnail_ready: boolean;
+  duration_sec: number | null;
+  has_audio: boolean;
+  campaign_asset_category: TeamAssetCategory;
 }
 
 export interface LibraryAsset {
@@ -31,8 +57,15 @@ export interface LibraryAsset {
   mimetype?: string;
   filesize?: number;
   duration?: number | null;
+  width?: number | null;
+  height?: number | null;
+  orientation?: string | null;
   ai_category?: string;
   ai_description?: string;
+  team_category?: TeamAssetCategory;
+  team_category_source?: TeamAssetCategorySource;
+  reuse_category?: TeamAssetCategory;
+  preprocess?: AssetPreprocessSummary;
   is_favorite?: boolean;
   last_used_at?: string;
 }
@@ -142,6 +175,17 @@ export async function batchUpdateTags(
   updates: BatchTagUpdate[]
 ): Promise<{ ok: boolean; results: Array<{ assetId: string; key: string; result: string }> }> {
   return apiPost(`${BASE}/assets/batch-tags`, { updates });
+}
+
+export async function updateAssetCategory(
+  assetId: string,
+  teamCategory: TeamAssetCategory,
+): Promise<LibraryAsset> {
+  const result = await apiPatch<{ ok: boolean; asset: LibraryAsset }>(
+    `${BASE}/assets/${encodeURIComponent(assetId)}/category`,
+    { teamCategory },
+  );
+  return result.asset;
 }
 
 // ── 待确认标签（分页）────────────────────────────────────────────────────────

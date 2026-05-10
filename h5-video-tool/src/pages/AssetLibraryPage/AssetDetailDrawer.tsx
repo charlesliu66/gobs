@@ -1,14 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AssetTag, LibraryAsset } from '../../api/assetLibraryApi';
-import { buildAssetFileUrl } from '../../api/assetLibraryApi';
+import type { AssetTag, LibraryAsset, TeamAssetCategory } from '../../api/assetLibraryApi';
+import {
+  buildAssetFileUrl,
+  TEAM_ASSET_CATEGORIES,
+  updateAssetCategory,
+} from '../../api/assetLibraryApi';
 import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { formatDateTime } from '../../i18n/locale.ts';
 import { localizeAssetCategory, localizeAssetTagKey } from './localize.ts';
+import { toast } from '../../components/Toast';
 
 interface Props {
   asset: LibraryAsset | null;
   onClose: () => void;
+  onAssetUpdated?: (asset: LibraryAsset) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -42,7 +48,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function AssetDetailDrawer({ asset, onClose }: Props) {
+export function AssetDetailDrawer({ asset, onClose, onAssetUpdated }: Props) {
   const navigate = useNavigate();
   const { uiLocale } = useLocale();
   const isEnglish = uiLocale === 'en';
@@ -56,6 +62,17 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
         uploadedAt: 'Uploaded At',
         aiCategory: 'AI Category',
         aiDescription: 'AI Description',
+        teamCategory: 'Team Category',
+        categorySource: 'Category Source',
+        fileType: 'File Type',
+        aspectRatio: 'Aspect Ratio',
+        thumbnail: 'Thumbnail',
+        ready: 'Ready',
+        missing: 'Missing',
+        categorySaved: 'Category saved',
+        categorySaveFailed: 'Failed to save category',
+        saveCategory: 'Save Category',
+        savingCategory: 'Saving...',
         baseAttrs: 'Base Attributes',
         aiTags: 'AI Tags',
         pendingTags: (count: number) => `${count} AI tags still need review`,
@@ -72,6 +89,17 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
         uploadedAt: '上传时间',
         aiCategory: 'AI 分类',
         aiDescription: 'AI 描述',
+        teamCategory: '团队分类',
+        categorySource: '分类来源',
+        fileType: '文件类型',
+        aspectRatio: '比例',
+        thumbnail: '缩略图',
+        ready: '已生成',
+        missing: '未生成',
+        categorySaved: '分类已保存',
+        categorySaveFailed: '分类保存失败',
+        saveCategory: '保存分类',
+        savingCategory: '保存中...',
         baseAttrs: '基础属性',
         aiTags: 'AI 标签',
         pendingTags: (count: number) => `${count} 个 AI 标签待确认`,
@@ -79,6 +107,8 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
         useForProduction: '用于高级制片',
         useForStudio: '用于视频生成',
       };
+  const [selectedCategory, setSelectedCategory] = useState<TeamAssetCategory>('reference_image');
+  const [savingCategory, setSavingCategory] = useState(false);
 
   useEffect(() => {
     if (!asset) return;
@@ -89,6 +119,25 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
     return () => document.removeEventListener('keydown', handler);
   }, [asset, onClose]);
 
+  useEffect(() => {
+    if (!asset) return;
+    setSelectedCategory(asset.team_category ?? asset.reuse_category ?? 'reference_image');
+  }, [asset]);
+
+  async function handleSaveCategory() {
+    if (!asset) return;
+    setSavingCategory(true);
+    try {
+      const updated = await updateAssetCategory(asset.id, selectedCategory);
+      onAssetUpdated?.(updated);
+      toast.success(text.categorySaved);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : text.categorySaveFailed);
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
   if (!asset) return null;
 
   const mime = asset.mime_type ?? asset.mimetype ?? '';
@@ -96,9 +145,11 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
   const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
   const size = asset.filesize ?? asset.size ?? 0;
   const rawAsset = asset as unknown as Record<string, unknown>;
-  const width = rawAsset.width as number | undefined;
-  const height = rawAsset.height as number | undefined;
-  const duration = asset.duration;
+  const preprocess = asset.preprocess;
+  const width = (asset.width ?? preprocess?.width ?? rawAsset.width) as number | undefined;
+  const height = (asset.height ?? preprocess?.height ?? rawAsset.height) as number | undefined;
+  const duration = asset.duration ?? preprocess?.duration_sec;
+  const currentCategory = asset.team_category ?? asset.reuse_category ?? preprocess?.campaign_asset_category;
   const tags = asset.tags ?? [];
   const ruleTags = tags.filter((tag) => tag.status === 'confirmed' && tag.source !== 'ai');
   const aiTags = tags.filter((tag) => tag.status === 'confirmed' && tag.source === 'ai');
@@ -137,9 +188,16 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
               {text.fileInfo}
             </p>
             <MetaRow label={text.size} value={formatBytes(size)} />
+            {preprocess?.file_type && <MetaRow label={text.fileType} value={preprocess.file_type} />}
             {width && height && <MetaRow label={text.dimensions} value={`${width} x ${height}`} />}
+            {preprocess?.aspect_ratio && <MetaRow label={text.aspectRatio} value={preprocess.aspect_ratio} />}
             {duration != null && <MetaRow label={text.duration} value={`${duration.toFixed(1)}s`} />}
+            {preprocess && <MetaRow label={text.thumbnail} value={preprocess.thumbnail_ready ? text.ready : text.missing} />}
             <MetaRow label={text.uploadedAt} value={formatDateTime(asset.created_at, uiLocale)} />
+            {currentCategory && (
+              <MetaRow label={text.teamCategory} value={localizeAssetCategory(uiLocale, currentCategory)} />
+            )}
+            {asset.team_category_source && <MetaRow label={text.categorySource} value={asset.team_category_source} />}
             {asset.ai_category && asset.ai_category !== '未分类' && asset.ai_category !== 'uncategorized' && (
               <MetaRow label={text.aiCategory} value={localizeAssetCategory(uiLocale, asset.ai_category)} />
             )}
@@ -147,6 +205,33 @@ export function AssetDetailDrawer({ asset, onClose }: Props) {
           </div>
 
           <div className="space-y-4 px-5 py-4">
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3">
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                {text.teamCategory}
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedCategory}
+                  onChange={(event) => setSelectedCategory(event.target.value as TeamAssetCategory)}
+                  className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none"
+                >
+                  {TEAM_ASSET_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {localizeAssetCategory(uiLocale, category)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={savingCategory || selectedCategory === asset.team_category}
+                  onClick={() => void handleSaveCategory()}
+                  className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingCategory ? text.savingCategory : text.saveCategory}
+                </button>
+              </div>
+            </div>
+
             {ruleTags.length > 0 && (
               <div>
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">

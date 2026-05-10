@@ -41,6 +41,7 @@ db.exec(`
     status TEXT DEFAULT 'pending',
     ai_category TEXT DEFAULT '未分类',
     ai_description TEXT,
+    team_category TEXT,
     folder_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -112,6 +113,9 @@ try {
   db.exec(`ALTER TABLE assets ADD COLUMN ai_description TEXT`);
 } catch { /* column already exists */ }
 try {
+  db.exec(`ALTER TABLE assets ADD COLUMN team_category TEXT`);
+} catch { /* column already exists */ }
+try {
   db.exec(`ALTER TABLE assets ADD COLUMN folder_id TEXT`);
 } catch { /* column already exists */ }
 
@@ -122,6 +126,9 @@ try {
 // 依赖新列的索引放在迁移之后
 try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(ai_category)`);
+} catch { /* index or column issue */ }
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_team_category ON assets(team_category)`);
 } catch { /* index or column issue */ }
 try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_deleted ON assets(deleted_at)`);

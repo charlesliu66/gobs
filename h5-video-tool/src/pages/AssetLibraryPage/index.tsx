@@ -172,7 +172,14 @@ export function AssetLibraryPage() {
         onUseForGenerate={handleUseForGenerate}
       />
 
-      <AssetDetailDrawer asset={activeAsset} onClose={() => setActiveAsset(null)} />
+      <AssetDetailDrawer
+        asset={activeAsset}
+        onClose={() => setActiveAsset(null)}
+        onAssetUpdated={(asset) => {
+          setActiveAsset(asset);
+          setGalleryKey((value) => value + 1);
+        }}
+      />
 
       <AssetUploadSheet open={uploadOpen} onClose={() => setUploadOpen(false)} onComplete={handleImportComplete} />
 

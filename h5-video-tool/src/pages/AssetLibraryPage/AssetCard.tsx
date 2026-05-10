@@ -5,18 +5,26 @@ import { useLocale } from '../../i18n/LocaleContext.tsx';
 import { localizeAssetCategory } from './localize.ts';
 
 const CATEGORY_COLORS: Record<string, string> = {
+  character_image: 'bg-blue-500/80',
   角色: 'bg-blue-500/80',
   character: 'bg-blue-500/80',
+  scene_image: 'bg-green-500/80',
   场景: 'bg-green-500/80',
   scene: 'bg-green-500/80',
+  reference_image: 'bg-teal-500/80',
   道具: 'bg-orange-500/80',
   武器道具: 'bg-orange-500/80',
   prop: 'bg-orange-500/80',
   物体: 'bg-teal-500/80',
   object: 'bg-teal-500/80',
+  ui_screenshot: 'bg-purple-500/80',
   风格素材: 'bg-purple-500/80',
   UI素材: 'bg-purple-500/80',
   style: 'bg-purple-500/80',
+  logo: 'bg-sky-500/80',
+  gameplay_screenshot: 'bg-emerald-500/80',
+  finished_banner: 'bg-pink-500/80',
+  video_clip: 'bg-cyan-500/80',
   宣传图: 'bg-pink-500/80',
   poster: 'bg-pink-500/80',
   视频片段: 'bg-cyan-500/80',
@@ -75,7 +83,7 @@ export function AssetCard({
   const isImage = !isVideo && !imgError;
   const fileUrl = asset.file_url ?? buildAssetFileUrl(asset.id);
   const thumbUrl = asset.thumbnail_url ?? fileUrl;
-  const category = asset.ai_category ?? '未分类';
+  const category = asset.team_category ?? asset.reuse_category ?? asset.ai_category ?? '未分类';
   const catColor = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.未分类;
 
   useEffect(() => {

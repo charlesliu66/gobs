@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-10 (v0.184)*
+*Last updated: 2026-05-10 (v0.185)*
 
-**Latest update - v0.184**
+**Latest update - v0.185**
+- Asset Library assets now expose stable team reuse categories aligned with the Run 0 `AssetContract` vocabulary, while preserving the original AI category as separate evidence.
+- Asset responses include preprocessing metadata for file type, dimensions, aspect ratio, orientation, thumbnail readiness, video duration, audio presence, and campaign-compatible category.
+- Operators can manually correct an asset's team category from the Asset Library detail drawer, and downstream Campaign/Banner code can reference assets by `assetId` without copying file payloads.
+
+**Previous update - v0.184**
 - Story video result pages now include a human review panel, letting operators manually mark generated videos as `usable`, `needs_fix`, or `unusable`.
 - Reviews use the Run 0 `ReviewContract` shape, link back to a story-video `outputId`, and keep fixed issue tags for opening, pacing, selling point, ending, and character accuracy.
 - The review panel shows local review history and explicitly avoids claiming automatic video understanding; it is a capture step for later quality panels and next-version work.
@@ -222,6 +227,7 @@
 - 鎼滅储 + 绛涢€夛細鍏抽敭璇嶏紙鏂囦欢鍚?+ AI 鎻忚堪锛夋悳绱?+ 姣斾緥/绫诲瀷/鏂瑰悜/鐢昏川 4 涓?dropdown
 - **Google Drive 闆嗘垚**锛歄Auth 杩炴帴鍚庡彲娴忚 Drive 鏂囦欢锛屾寜闇€缂撳瓨鍒版湇鍔″櫒浣跨敤
 - 澶氳处鍙锋暟鎹殧绂伙細涓嶅悓鐢ㄦ埛鐨勭礌鏉愪簰涓嶅彲瑙?
+- **Asset reuse metadata (v0.185)**: Asset Library responses now include team reuse categories, category source, preprocessing metadata, manual category correction, and an `assetId`-based Run 0 `AssetContract` mapping helper for later Campaign/Banner reuse.
 
 ---
 
@@ -281,6 +287,7 @@
 - **Repo Private Skills**: repo-private `gobs-release-guard`, `gobs-h5-smoke-test`, and `gobs-multi-agent-dev-loop` cover release gating, H5 smoke checks, and guarded multi-agent development.
 - **Slash entry**: repo-local plugin `gobs-loop` adds a shorter `/gobs-loop` wrapper while `$gobs-multi-agent-dev-loop` remains the portable fallback.
 - **Campaign quality/data contract foundation (v0.183)**: Window A Run 0 defines importable frontend quality states, deterministic rubric helpers, five-entity Campaign/Asset/Output/Review/Package contracts, and fixtures for the next Asset Library, Banner, review, and next-version runs.
+- **Asset Library reuse MVP (v0.185)**: Window A Run 1 adds reusable Asset Library categories, preprocessing metadata, manual category correction, and `assetId` contract mapping while keeping Workbench and distribution package routes out of scope.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -290,6 +297,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.185 - 2026-05-10
+**Asset Library reuse metadata MVP**
+
+- **[asset reuse] Added team category and preprocessing metadata** (`h5-video-tool-api/src/services/assetReuseService.ts`, `h5-video-tool-api/src/routes/assetLibrary.ts`): Asset Library responses expose stable reuse categories, category source, file type, dimensions, aspect ratio, orientation, thumbnail readiness, duration, audio presence, and campaign-compatible category.
+- **[manual correction] Added owner-scoped category correction** (`h5-video-tool-api/src/routes/assetLibrary.ts`, `h5-video-tool/src/pages/AssetLibraryPage/AssetDetailDrawer.tsx`): operators can save `team_category` without overwriting original `ai_category`, and the detail drawer refreshes the updated asset after save.
+- **[contract bridge] Added assetId contract mapping helper** (`h5-video-tool/src/materials/assetReuse.ts`): downstream Campaign/Banner code can build Run 0 `AssetContract` references from `LibraryAsset` records without duplicating file payloads.
 
 ### v0.183 - 2026-05-10
 **Creative quality and data contract foundation**
