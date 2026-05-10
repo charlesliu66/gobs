@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.183 - 2026-05-10
+**Creative quality and data contract foundation**
+**Campaign / Workflow:**
+- Added Window A Run 0 frontend contracts for three-state creative quality (`usable`, `needs_fix`, `unusable`) and the minimal Campaign -> Asset -> Output -> Review -> Package graph.
+- Added deterministic rubric helpers and fixture-backed graph validation so later Asset Library, Banner, story-review, and next-version runs can share IDs before touching shared Workbench or backend route files.
+- Documented the Run 0 contract boundaries and downstream handoff for Run 1, Run 2, Run 3, and Run 4.
+**Tests / Build:**
+- Added native node:test coverage for the three quality states, invalid status rejection, valid fixtures, missing campaign/asset/output links, parent output links, and duplicate IDs.
+
 ## v0.182 - 2026-05-10
 **Advanced Studio storyboard pacing and state references**
 **Production Wizard:**

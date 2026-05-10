@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-10 (v0.182)*
+*Last updated: 2026-05-10 (v0.183)*
 
-**Latest update - v0.182**
+**Latest update - v0.183**
+- Campaign creative outputs now have a small shared quality foundation: `usable`, `needs_fix`, and `unusable` are the only allowed states for the next optimization runs.
+- Frontend TypeScript contracts now define the minimum Campaign -> Asset -> Output -> Review -> Package graph, including `Output.campaignId`, `Output.assetIds`, `Review.outputId`, optional `parentOutputId`, and `Package.outputIds`.
+- Fixture-backed validation and documentation give Asset Library, Banner Output, story-video review, and next-version runs a stable base before shared Workbench or backend route wiring begins.
+
+**Previous update - v0.182**
 - Advanced Studio storyboard pacing now has a sourced Duration Plan design for the next implementation phase, defining how 60s/180s targets should change beat budgets and shot count instead of stretching single shots.
 - Character-state references now auto-match common aliases such as 童年时期/小时候/childhood before falling back to the default active state, so Seedance multimodal references can pick the correct state image with less manual work.
 - Storyboard video version timeline and A/B compare Chinese copy no longer shows mojibake, and locale tests now guard against common encoded-garbage markers in user-facing messages.
@@ -270,6 +275,7 @@
 
 - **Repo Private Skills**: repo-private `gobs-release-guard`, `gobs-h5-smoke-test`, and `gobs-multi-agent-dev-loop` cover release gating, H5 smoke checks, and guarded multi-agent development.
 - **Slash entry**: repo-local plugin `gobs-loop` adds a shorter `/gobs-loop` wrapper while `$gobs-multi-agent-dev-loop` remains the portable fallback.
+- **Campaign quality/data contract foundation (v0.183)**: Window A Run 0 defines importable frontend quality states, deterministic rubric helpers, five-entity Campaign/Asset/Output/Review/Package contracts, and fixtures for the next Asset Library, Banner, review, and next-version runs.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -279,6 +285,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.183 - 2026-05-10
+**Creative quality and data contract foundation**
+
+- **[quality contract] Added three-state creative quality foundation** (`h5-video-tool/src/components/campaign/quality/*`): `usable`, `needs_fix`, and `unusable` are the only statuses, with deterministic human-signal rubric helpers and no scoring or AI diagnosis.
+- **[data contract] Added Campaign/Asset/Output/Review/Package contracts** (`h5-video-tool/src/components/campaign/contracts/campaignOutputContracts.ts`): fixtures and graph validation cover `Output.campaignId`, `Output.assetIds`, `Review.outputId`, optional `parentOutputId`, and `Package.outputIds`.
+- **[workflow] Documented Window A Run 0 handoff** (`docs/plans/2026-05-10-creative-quality-and-data-contract.md`, `docs/workflow/runs/2026-05-10-quality-data-contract-foundation/`): Run 1/2/3/4 can consume the foundation without touching shared Workbench or backend route files in this run.
 
 ### v0.178 - 2026-05-09
 **Distribution operator happy path polish**

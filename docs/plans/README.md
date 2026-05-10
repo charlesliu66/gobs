@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-10-gobs-next-optimization-checklist.md](./2026-05-10-gobs-next-optimization-checklist.md)
+  - GOBS 后续优化落地清单：按 run 拆解 `Quality And Data Contract Foundation -> Asset Library Reuse MVP -> Banner Output MVP -> Story Video Review Capture -> Quality Review And Next Version` 等执行项，明确目标、文件范围、实现步骤、验收标准和不要做什么。
 - [2026-05-09-next-optimization-execution-checklist.md](./2026-05-09-next-optimization-execution-checklist.md)
   - 二轮优化后总执行清单：把 OpenClaw 最新评估、当前代码事实和最近发布实操结果收敛成 `发布稳定性 -> 减负清理 -> Distribution 最后一公里 -> 数据契约 -> 巨型组件治理` 的分阶段 checklist。
 - [2026-05-09-gobs-current-state-optimization-recommendation.md](./2026-05-09-gobs-current-state-optimization-recommendation.md)
