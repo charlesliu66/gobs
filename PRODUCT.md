@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.195)*
+*Last updated: 2026-05-11 (v0.196)*
 
-**Latest update - v0.195**
+**Latest update - v0.196**
+- Campaign Output Workbench now shows quantity-weighted coverage summary for true coverage, assistive coverage, blocked deliverables, and direct/template breakdowns instead of only raw ready/blocked counts.
+- Each planned output now gets a business-facing readiness state derived from existing capability enums plus source-asset readiness, with blocked items calling out the missing assets needed to unblock them.
+- The new coverage layer stays frontend-only; this release does not change `ProductionCapability`, Output Plan contracts, backend APIs, or asset schema.
+
+**Previous update - v0.195**
 - Editor Workbench now has 6 packaging templates for safe-frame labels, gameplay transition, character entry, battle cut-in, reward CTA, and end-card CTA.
 - Templates apply as normal text clips, and the gameplay transition template reuses the existing `crossfade` field when a video clip is selected.
 - Preview/export behavior stays on existing editor text presets and timeline fields; this release does not change render/export engines or provider services.
@@ -285,6 +290,7 @@
 - **Distribution final mile (v0.190)**: `/distribute` now restores active publish context after refresh, supports account-group previews/updates, and pairs publish failure reasons with next-step guidance.
 - **Knowledge traceability (v0.191)**: Campaign Brief review now displays routed Brain citations with feedback controls, suppresses `do_not_use_again` citation IDs in later generation, and carries knowledge references into Output Workbench items.
 - **Data contract hardening (v0.192)**: Campaign Output, Studio handoff, and Distribution Package payloads now carry Campaign/Brief/Output/Package lineage, restore Studio handoff from backend IDs after refresh, and surface compact link-health status.
+- **Coverage compatibility layer (v0.196)**: Campaign Output Workbench now shows quantity-weighted true/direct/template/assistive/blocked coverage plus per-item readiness without changing stored `ProductionCapability` enums or backend contracts.
 
 ---
 

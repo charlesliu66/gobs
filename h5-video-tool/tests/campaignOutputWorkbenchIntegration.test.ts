@@ -23,6 +23,11 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /handleMarkBannerQuality/);
   assert.match(pageSource, /handleCreateNextVersion/);
   assert.match(pageSource, /appendNextVersionDraftToPlan/);
+  assert.match(pageSource, /trueCoverage: t\('campaignCreative\.outputWorkbench\.trueCoverage'\)/);
+  assert.match(pageSource, /assistiveCoverage: t\('campaignCreative\.outputWorkbench\.assistiveCoverage'\)/);
+  assert.match(pageSource, /directCoverage: t\('campaignCreative\.outputWorkbench\.directCoverage'\)/);
+  assert.match(pageSource, /readinessStatus: t\('campaignCreative\.outputWorkbench\.readinessStatus'\)/);
+  assert.match(pageSource, /unsupportedReasonDetail: t\('campaignCreative\.outputWorkbench\.unsupportedReasonDetail'\)/);
 });
 
 test('CampaignCreative confirms production from the draft plan on the first primary action', () => {
@@ -50,6 +55,10 @@ test('CampaignCreative wires source asset readiness through Asset Library and ou
 });
 
 test('CampaignOutputWorkbench includes the Banner card and three-state quality controls', () => {
+  assert.match(workbenchSource, /summarizeCampaignOutputCoverage/);
+  assert.match(workbenchSource, /buildProductionItemCoverageMap/);
+  assert.match(workbenchSource, /ReadinessBadge/);
+  assert.match(workbenchSource, /CoverageBreakdownRow/);
   assert.match(workbenchSource, /BannerOutputCard/);
   assert.match(workbenchSource, /onMarkBannerQuality/);
   assert.match(bannerCardSource, /bannerPromptPlaceholder/);
