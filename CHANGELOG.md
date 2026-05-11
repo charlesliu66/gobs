@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.195 - 2026-05-11
+**Editor effects sprint**
+**Editor Workbench:**
+- Added a typed editor packaging template catalog with 6 templates covering safe-frame labels, gameplay transition, character entry, battle cut-in, reward CTA, and end-card CTA.
+- Added a compact `Pack` menu in the Editor Workbench that applies templates as normal text clips and reuses the existing `crossfade` transition flag when a transition template is applied to a selected video clip.
+- Kept preview/export behavior on existing text presets and timeline fields; no render/export engine, provider, backend route, or data-model changes were made.
+**Tests / Build:**
+- Added targeted editor-effect template tests for category coverage, preset compatibility, timeline clamping, and transition recommendations; rebuilt the frontend production bundle.
+
 ## v0.194 - 2026-05-11
 **Large component refactor**
 **Distribution Center:**

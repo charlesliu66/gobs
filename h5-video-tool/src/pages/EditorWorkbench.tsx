@@ -75,6 +75,11 @@ import {
   type EditorCreativeKnowledgeContext,
 } from '../editor/utils/editorCreativeBrief';
 import {
+  buildEditorEffectApplication,
+  listEditorEffectTemplates,
+  type EditorEffectTemplateId,
+} from '../editor/effectTemplates';
+import {
   deleteEditorProjectMemoryItem,
   fetchEditorAgentMemory,
   rememberEditorProjectFeedback,
@@ -482,6 +487,7 @@ export function EditorWorkbench() {
   const [selectedVideoClipId, setSelectedVideoClipId] = useState<string | null>(null);
   const [selectedTextClipId, setSelectedTextClipId] = useState<string | null>(null);
   const [showTextPanel, setShowTextPanel] = useState(false);
+  const [effectMenuOpen, setEffectMenuOpen] = useState(false);
   const [showProjectManager, setShowProjectManager] = useState(false);
   /** 新建项目命名弹窗 */
   const [projectNamingModal, setProjectNamingModal] = useState<{
@@ -1778,6 +1784,55 @@ export function EditorWorkbench() {
     setShowTextPanel(true);
   }, [applyTimelineProject, currentTime, project, t]);
 
+  const handleApplyEffectTemplate = useCallback((templateId: EditorEffectTemplateId) => {
+    const application = buildEditorEffectApplication(templateId, {
+      timelineStart: currentTime,
+      projectDurationSec: Math.max(project.durationSec, durationSec),
+      aspectRatio,
+      seed: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    });
+
+    if (!application || application.textClips.length === 0) {
+      toast.warning(t('editorWorkbench.effectTemplateNeedsVideo'));
+      setEffectMenuOpen(false);
+      return;
+    }
+
+    let nextProject = project;
+    for (const clip of application.textClips) {
+      nextProject = upsertTextClip(nextProject, clip);
+    }
+
+    if (application.transitionAfter) {
+      if (selectedVideoClipId) {
+        nextProject = setVideoClipTransitionAfter(nextProject, selectedVideoClipId, application.transitionAfter);
+      } else {
+        pushLog(t('editorWorkbench.effectTemplateTransitionSkipped'));
+      }
+    }
+
+    applyTimelineProject(nextProject);
+    setSelectedTextClipId(application.textClips[0]?.id ?? null);
+    setShowTextPanel(true);
+    setEffectMenuOpen(false);
+    pushLog(tx('editorWorkbench.effectTemplateApplied', {
+      name: application.template.label,
+      count: application.textClips.length,
+    }));
+  }, [
+    applyTimelineProject,
+    aspectRatio,
+    currentTime,
+    durationSec,
+    project,
+    pushLog,
+    selectedVideoClipId,
+    t,
+    tx,
+  ]);
+
+  const effectTemplates = useMemo(() => listEditorEffectTemplates(), []);
+
   const activeTextClips = useMemo(
     () => getActiveTextClips(project, currentTime),
     [project, currentTime],
@@ -2226,6 +2281,50 @@ export function EditorWorkbench() {
               >
                 {t('editorWorkbench.addOutro')}
               </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setEffectMenuOpen((open) => !open)}
+                  className={`rounded px-2 py-1.5 text-[10px] transition-colors ${
+                    effectMenuOpen
+                      ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]'
+                  }`}
+                  title={t('editorWorkbench.effectTemplatesTitle')}
+                >
+                  {t('editorWorkbench.effectTemplatesButton')}
+                </button>
+                {effectMenuOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-[min(320px,85vw)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-1.5 shadow-xl">
+                    {effectTemplates.map((template) => {
+                      const disabled = !template.supportedAspectRatios.includes(aspectRatio);
+                      return (
+                        <button
+                          key={template.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => handleApplyEffectTemplate(template.id)}
+                          className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--color-surface-hover)] disabled:pointer-events-none disabled:opacity-40"
+                          title={disabled ? t('editorWorkbench.effectTemplateUnsupported') : template.purpose}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-[11px] font-medium text-[var(--color-text)]">
+                              {template.label}
+                            </span>
+                            <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
+                              {template.shortLabel}
+                              {template.transitionAfter ? ' · crossfade' : ''}
+                            </span>
+                          </span>
+                          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--color-text-muted)]">
+                            {template.category}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
             <button
               type="button"

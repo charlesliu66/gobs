@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.194)*
+*Last updated: 2026-05-11 (v0.195)*
 
-**Latest update - v0.194**
+**Latest update - v0.195**
+- Editor Workbench now has 6 packaging templates for safe-frame labels, gameplay transition, character entry, battle cut-in, reward CTA, and end-card CTA.
+- Templates apply as normal text clips, and the gameplay transition template reuses the existing `crossfade` field when a video clip is selected.
+- Preview/export behavior stays on existing editor text presets and timeline fields; this release does not change render/export engines or provider services.
+
+**Previous update - v0.194**
 - `/distribute` is lighter internally: asset-option helpers for package/current/local/output videos now live in a typed helper module instead of the page component.
 - Distribution publish behavior, account selection, caption generation, recent context restore, and history remain unchanged.
 - Helper tests now guard asset IDs, URL priority, dedupe ordering, prompt fallback, and source labels.
