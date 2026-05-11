@@ -21,10 +21,12 @@
 ## 4) Self-Test Results
 | Test type | Command/Method | Result | Evidence |
 |---|---|---|---|
-| Backend targeted tests | `node --import tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts` in `h5-video-tool-api` | PASS | 15 tests passed. |
-| Frontend targeted tests | `npx --yes tsx --test tests/campaignDataContractLinkHealth.test.ts tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts tests/campaignProductionLoopPresence.test.ts tests/distributionPackageIntake.test.ts` in `h5-video-tool` | PASS | 27 tests passed. |
-| Backend build | `npm run build` in `h5-video-tool-api` | PASS | TypeScript build and build-info completed. |
-| Frontend build | `npm run build` in `h5-video-tool` | PASS | Vite production build completed. |
+| Frontend targeted tests | `node --test --experimental-strip-types tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts tests/campaignDataContractLinkHealth.test.ts tests/distributionPackageIntake.test.ts tests/campaignProductionLoopPresence.test.ts tests/campaignStudioPackagePatch.test.ts tests/campaignStudioBridge.test.ts` in `h5-video-tool` | PASS | 35/35 tests passed. |
+| Backend targeted tests | `npx tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts` in `h5-video-tool-api` | PASS | 15/15 tests passed. |
+| Backend build | `npm run build` in `h5-video-tool-api` | PASS | TypeScript compile, asset copy, and build-info succeeded. |
+| Frontend build | `npm run build` in `h5-video-tool` | PASS | Vite production build succeeded with the existing `src/api/client.ts` mixed import warning. |
+| Standard eval | `bash scripts/eval.sh 2026-05-11-data-contract-hardening` | PASS | `eval-result.json` records backend build, frontend build, TypeScript, and API health 200. |
+| Workflow guard | `python scripts/workflow_guard.py --run-id 2026-05-11-data-contract-hardening --stage build` | WARN | Only unrelated dirty docs outside this run scope; scoped code files are listed in `SESSION-ANCHOR.md`. |
 | Diff hygiene | `git diff --check` | PASS | No whitespace errors. |
 
 ## 5) Known Risks and Uncertainties
