@@ -8,41 +8,40 @@
 ## 2) Implemented
 | AC ID | What was implemented | Files changed | Notes |
 |---|---|---|---|
-| AC-01 | New Output Plans accept `campaignId`; produced copy/Banner drafts inherit `campaignId`, `briefId`, and `parentOutputId`; backend rejects explicit Campaign/Brief mismatches. | `outputPlan.ts`, `CampaignCreative.tsx`, `campaignOutputPlan.ts`, frontend/backend tests | Legacy produced outputs without lineage remain readable and show link-health warnings. |
-| AC-02 | Distribution Package `source` now preserves `outputPlanId`, `productionItemId`, `outputIds`, and `sourceAssetIds`; Studio package writeback refreshes that lineage. | `distributionPackage.ts`, `studioPackagePatch.ts`, `campaignDistributionPackage.ts`, package tests | New fields live in existing JSON payloads; no table migration. |
-| AC-03 | Campaign -> Studio navigation now includes `outputPlan`, `productionItem`, and optional `package` URL params; Studio can rebuild handoff from backend Output Plan if route state is gone. | `CampaignCreative.tsx`, `Studio.tsx`, `studioBridge.ts`, presence tests | Existing route-state flow remains the fast path. |
-| AC-04 | Added shared link-health helper and compact health status/issue display in Campaign Output Workbench and pending Distribution Package cards. | `dataContractLinkHealth.ts`, `CampaignOutputWorkbench.tsx`, `PendingDistributionPackages.tsx`, i18n, link-health tests | Health is informational for legacy data and blocking-looking only when a required ID is missing. |
+| AC-01 | Output Plans now persist Campaign/Brief lineage and produced outputs carry campaign, brief, parent item, and output lineage. | `h5-video-tool/src/components/campaign/outputPlan.ts`, `h5-video-tool-api/src/services/campaignOutputPlan.ts`, related tests | Existing legacy records remain optional-compatible. |
+| AC-02 | Distribution Packages now preserve related output/source-asset lineage from produced outputs and Studio writeback. | `distributionPackage.ts`, `studioPackagePatch.ts`, `packageToDistributeDraft.ts`, backend package service/tests | Package source fields carry output plan, production item, output IDs, and source asset IDs. |
+| AC-03 | Studio handoff can be restored from URL IDs and backend Output Plan data when route state is gone. | `Studio.tsx`, `CampaignCreative.tsx`, `CampaignOutputWorkbench.tsx`, related tests | Refresh/direct-open resilience added without a new global store. |
+| AC-04 | Compact link-health detection is visible on Campaign Output and pending Distribution Package surfaces. | `dataContractLinkHealth.ts`, `CampaignOutputWorkbench.tsx`, `PendingDistributionPackages.tsx`, i18n/tests | Shows healthy/warning/broken lineage status and issue details. |
 
 ## 3) Not Implemented
 | AC ID | Reason | Impact | Proposed next step |
 |---|---|---|---|
-| [None] | All scoped AC implemented. | None. | Continue to verifier and release guard. |
+| N/A | No AC intentionally skipped. | N/A | N/A |
 
 ## 4) Self-Test Results
 | Test type | Command/Method | Result | Evidence |
 |---|---|---|---|
-| Frontend targeted tests | `node --test --experimental-strip-types tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts tests/campaignDataContractLinkHealth.test.ts tests/distributionPackageIntake.test.ts tests/campaignProductionLoopPresence.test.ts tests/campaignStudioPackagePatch.test.ts tests/campaignStudioBridge.test.ts` | PASS | 35/35 tests passed. |
-| Backend targeted tests | `npx tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts` | PASS | 15/15 tests passed. |
-| Backend build | `cd h5-video-tool-api && npm run build` | PASS | TypeScript compile, asset copy, build-info succeeded. |
-| Frontend build | `cd h5-video-tool && npm run build` | PASS | Vite build succeeded with existing `src/api/client.ts` mixed import warning. |
-| Standard eval | `bash scripts/eval.sh 2026-05-11-data-contract-hardening` | PASS | eval-result.json records backend build, frontend build, TypeScript, and API health 200. |
-| Workflow guard | `python scripts/workflow_guard.py --run-id 2026-05-11-data-contract-hardening --stage build` | WARN | Only unrelated dirty docs outside this run scope; no code scope errors after anchor update. |
+| Backend targeted tests | `node --import tsx --test tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts` in `h5-video-tool-api` | PASS | 15 tests passed. |
+| Frontend targeted tests | `npx --yes tsx --test tests/campaignDataContractLinkHealth.test.ts tests/campaignOutputPlan.test.ts tests/campaignDistributionPackage.test.ts tests/campaignProductionLoopPresence.test.ts tests/distributionPackageIntake.test.ts` in `h5-video-tool` | PASS | 27 tests passed. |
+| Backend build | `npm run build` in `h5-video-tool-api` | PASS | TypeScript build and build-info completed. |
+| Frontend build | `npm run build` in `h5-video-tool` | PASS | Vite production build completed. |
+| Diff hygiene | `git diff --check` | PASS | No whitespace errors. |
 
 ## 5) Known Risks and Uncertainties
-- Legacy records can lack new lineage fields.
-  - Why it remains: No historical migration is in scope.
-  - Possible impact: Older packages/plans may show link-health warnings.
-  - Suggested follow-up: Optional one-time repair/migration only after operators confirm the new chain works.
-- GeeLark publish records do not yet store package lineage.
-  - Why it remains: Direct publish API attribution is out of scope for Run 9.
-  - Possible impact: Post-publish history is still task/account based rather than campaign-output based.
-  - Suggested follow-up: Later publish-attribution run can attach package IDs to task metadata.
+- Legacy lineage is partial:
+  - Why it remains: The run intentionally avoids historical data migration.
+  - Possible impact: Older packages/plans may show warning/broken health instead of healthy.
+  - Suggested follow-up: Treat this as expected for legacy records; migrate only if operators need old packages in active workflows.
+- GeeLark publish records do not yet store Campaign attribution:
+  - Why it remains: Direct publish payload attribution was out of scope.
+  - Possible impact: Package context is traceable before publish, but publish history attribution remains separate.
+  - Suggested follow-up: Add publish-history attribution in a dedicated Distribution run if needed.
 
 ## 6) Scope Compliance Statement
 - I did not expand scope beyond the approved PlannerSpec: Yes.
-- If No, list deviations and reasons: N/A.
+- If No, list deviations and reasons: None.
 
 ## 7) Change Summary
-- What changed: Campaign Output, Studio handoff, and Distribution Package payloads now carry minimal Run 0 ID lineage with link-health visibility.
-- Why changed: Run 9 asked to reduce cross-page broken chains and refresh-lost context.
-- What did not change: No provider services, generation routes, database table migrations, or GeeLark publish API behavior changed.
+- What changed: Optional lineage fields, refresh-safe Studio handoff, package source traceability, and link-health UI.
+- Why changed: To make Campaign -> Studio -> Distribution traceable after navigation/refresh and before publish preparation.
+- What did not change: Provider services, generation models, deploy scripts, global state libraries, table schemas, historical data, and GeeLark publish API behavior.

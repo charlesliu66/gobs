@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-11-campaign-production-coverage-and-team-assets-plan.md](./2026-05-11-campaign-production-coverage-and-team-assets-plan.md)
+  - 下一阶段新总纲：把目标从“创意质量评估与迭代闭环”前移为 `Campaign 素材生产覆盖率提升`，并合并 Team 共享素材库存储决策：当前服务器先跑通、Google Drive 只做导入源、对象存储/EMC 暂缓。
 - [2026-05-10-gobs-next-optimization-checklist.md](./2026-05-10-gobs-next-optimization-checklist.md)
   - GOBS 后续优化落地清单：按 run 拆解 `Quality And Data Contract Foundation -> Asset Library Reuse MVP -> Banner Output MVP -> Story Video Review Capture -> Quality Review And Next Version` 等执行项，明确目标、文件范围、实现步骤、验收标准和不要做什么。
 - [2026-05-09-next-optimization-execution-checklist.md](./2026-05-09-next-optimization-execution-checklist.md)

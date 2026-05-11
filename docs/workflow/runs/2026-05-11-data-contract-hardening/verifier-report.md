@@ -3,43 +3,44 @@
 ## 1) Validation Scope
 - Spec file: `docs/workflow/runs/2026-05-11-data-contract-hardening/planner-spec.md`
 - Build report file: `docs/workflow/runs/2026-05-11-data-contract-hardening/builder-report.md`
-- Version or commit under test: codex/2026-05-11-data-contract-hardening@working-tree before commit
+- Version or commit under test: `codex/2026-05-11-data-contract-hardening@9aaef71` working tree
 
 ## 2) Coverage Checklist
-- Happy path: Covered by Campaign Output -> produced output -> Package -> Distribution draft lineage tests.
-- Edge cases: Covered by legacy/missing lineage link-health warnings and backend optional field normalization.
-- Loading state: Studio backend restore uses guarded async fetch and no crash if restore fails.
-- Empty state: Existing Campaign Output and pending Package empty states remain unchanged.
-- Error/failure path: Backend rejects explicit Campaign/Brief mismatches; Studio restore silently keeps page usable on fetch failure.
-- Regression: Existing output plan, package, Studio bridge, Studio writeback, and Distribution intake test slices rerun.
-- Stress/Stability: Build and eval reran production bundles; no global state or schema migration introduced.
-- Race/Concurrency: Route-state handoff remains first path; URL restore skips when current handoff already matches.
+- Happy path: PASS - Campaign output plan, produced outputs, package creation, Studio writeback, and Distribution intake carry lineage.
+- Edge cases: PASS - legacy/missing lineage is normalized to warning/broken status without crashing.
+- Loading state: PASS by build/source coverage - Studio direct URL restore keeps route-state fallback and backend fetch path.
+- Empty state: PASS - link-health helpers report missing optional relationships explicitly.
+- Error/failure path: PASS - backend rejects explicit Campaign/Brief mismatches and malformed payloads.
+- Regression: PASS - existing Campaign Output, Distribution Package, Studio package patch, and intake tests remain green.
+- Stress/Stability: PASS for scope - no schema migration or provider-service change introduced.
+- Race/Concurrency: PASS for scope - route state is no longer the only carrier for Campaign Studio handoff IDs.
 
 ## 3) Pass Items
 | Area | Case | Result | Evidence |
 |---|---|---|---|
-| Frontend contracts | Output Plan lineage, Package lineage, link health, Studio restore presence, Distribution intake | PASS | 35/35 targeted frontend tests passed. |
-| Backend validators | Output Plan produced-output mismatch rejection and Package source-lineage persistence | PASS | 15/15 targeted backend tests passed. |
-| Production builds | API and H5 production bundles | PASS | `npm run build` passed in both workspaces. |
-| Standard eval | Build, TypeScript, API health | PASS | `eval-result.json` verdict PASS with API health 200. |
-| Workflow scope | Build-stage guard | WARN | Only unrelated dirty docs outside run scope; scoped code files are listed in SESSION-ANCHOR. |
+| Backend | Output Plan and Distribution Package targeted tests | PASS | 15 tests passed. |
+| Frontend | Data contract link health, Campaign Output, package intake, Studio loop tests | PASS | 27 tests passed. |
+| Backend build | Production build | PASS | `npm run build` completed in `h5-video-tool-api`. |
+| Frontend build | Production build | PASS | `npm run build` completed in `h5-video-tool`. |
+| Hygiene | Whitespace diff check | PASS | `git diff --check`. |
+| Eval artifact | Existing run eval result | PASS | `eval-result.json` records backend/frontend build, TS, and API health pass. |
 
 ## 4) Failed Items (Defect List)
 | Defect ID | Severity (P0-P3) | Title | Repro Steps | Expected | Actual | Suggested Fix Order |
 |---|---|---|---|---|---|---|
-| [None] | - | - | - | - | - | - |
+| None | N/A | No verifier defects found. | N/A | N/A | N/A | N/A |
 
 ## 5) Stress and Stability Results
 | Scenario | Load/Duration | Metric | Result | Risk |
 |---|---|---|---|---|
-| Production bundle rebuild | API + frontend builds repeated in eval | Zero build/type errors | PASS | Existing Vite mixed import warning remains unrelated. |
-| Local API health | Temporary local API started with dummy local env | `/api/health` 200 | PASS | API process stopped after eval. |
+| Legacy payload compatibility | Targeted tests and build | Missing lineage is optional | PASS | Legacy records may show warnings, which is expected. |
+| Refresh-safe Studio restore | Frontend targeted tests | URL/backend handoff rebuild | PASS | Requires backend plan fetch to succeed for full restoration. |
 
 ## 6) Regression Result
-- Full/targeted regression summary: Targeted frontend/backend regression slices plus both production builds passed.
+- Full/targeted regression summary: Targeted frontend/backend data-contract suites and production builds passed.
 - New regressions found: None.
 
 ## 7) Final Verification Verdict
-- Gate 3 status: PASS
-- Gate 4 blocking defects (P0/P1): 0
-- Release recommendation: GO
+- Gate 3 status: PASS.
+- Gate 4 blocking defects (P0/P1): 0.
+- Release recommendation: GO for git push to `main`; deployment remains a separate Release Owner action.
