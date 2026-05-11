@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.189 - 2026-05-11
+**Character Showcase validation**
+**Advanced Studio:**
+- Added a machine-readable Character Showcase validation ledger with 10 records covering 5 characters x 2 directions: character reveal and skill/selling-point showcase.
+- Added deterministic summary helpers that calculate usable rate, video-vs-Banner fit, high-risk cases, and a strict `continue` / `experimental` / `pause` decision; the current fixture is constrained `continue` at 5/10 usable.
+- Added a Character Showcase validation notice to the Studio template entry and preset recommendation metadata so operators see that the path is best for single-character reveal, single-character skill payoff, and simple reward payoff rather than group/UI-heavy scenes.
+**Tests / Build:**
+- Added targeted Character Showcase validation tests and extended Studio template/preset tests for the constrained continue notice and recommendation metadata.
+
 ## v0.188 - 2026-05-11
 **Motion Transfer validation**
 **Advanced Studio:**

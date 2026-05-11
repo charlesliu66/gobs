@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.188)*
+*Last updated: 2026-05-11 (v0.189)*
 
-**Latest update - v0.188**
+**Latest update - v0.189**
+- Character Showcase now has a 10-sample validation ledger covering 5 characters x 2 directions, with a strict `continue` / `experimental` / `pause` decision helper.
+- Current Character Showcase validation is constrained `continue` at 5/10 usable samples, focused on single-character reveal, single-character skill payoff, and simple reward payoff.
+- Advanced Studio shows a Character Showcase validation notice and preset recommendation metadata so group shots, pet/mount interactions, UI-heavy panels, and long environment storytelling stay out of the stable guidance.
+
+**Previous update - v0.188**
 - Motion Transfer now has a validation ledger with 10 sample records and a strict `continue` / `experimental` / `pause` decision helper.
 - Current Motion Transfer validation is `experimental` at 2/10 usable samples, so it remains available only as a controlled Studio experiment rather than a stable Campaign path.
 - Advanced Studio shows an experimental validation notice on the Motion Transfer entry, making the current usable-rate boundary visible before operators choose it.
@@ -246,6 +251,7 @@
 - **Banner Output MVP (v0.186)**: Campaign Output Plans can now include Banner deliverables with four initial specs, Asset Library source IDs, deterministic prompt placeholders, three-state quality marking, and non-publishable distribution package context.
 - **Quality review and next-version MVP (v0.187)**: Campaign Output Workbench can turn human quality feedback into traceable next-version drafts for Banner prompts and platform copy without adding a revision system or claiming automatic video understanding.
 - **Motion Transfer validation (v0.188)**: Advanced Studio now marks Motion Transfer as experimental based on a 10-sample validation ledger and a strict 2/10 usable-rate conclusion.
+- **Character Showcase validation (v0.189)**: Advanced Studio now marks Character Showcase as constrained continue based on a 10-sample validation ledger, with preset guidance focused on single-character reveal, skill payoff, and simple reward payoff.
 
 ---
 
@@ -309,6 +315,7 @@
 - **Banner Output MVP (v0.186)**: Window A Run 2 adds Banner specs, prompt placeholder production, Workbench quality marking, and distribution handoff context without provider image generation or route rewrites.
 - **Quality review and next-version MVP (v0.187)**: Window A Run 4 adds Workbench quality diagnostics, fixed feedback tags, and child output drafts with `parentOutputId` for Banner/copy next versions.
 - **Motion Transfer validation (v0.188)**: Run 5 records 10 validation samples, concludes `experimental`, and adds an Advanced Studio entry hint without touching provider services.
+- **Character Showcase validation (v0.189)**: Run 6 records 10 validation samples, concludes constrained `continue`, and adds Character Showcase entry/preset guidance without touching provider services.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -318,6 +325,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.189 - 2026-05-11
+**Character Showcase validation**
+
+- **[validation ledger] Added Character Showcase sample records** (`h5-video-tool/src/studio/characterShowcaseValidation.ts`): 10 samples cover 5 characters x 2 directions, generated-result assessment, drift/readability/ad-feel, video-vs-Banner fit, and ad-usability.
+- **[decision gate] Added constrained continue calculation** (`h5-video-tool/src/studio/characterShowcaseValidation.ts`): current usable rate is 5/10, so Character Showcase can continue only for single-character reveal, skill payoff, and simple reward payoff.
+- **[studio guidance] Added Character Showcase validation notice and preset metadata** (`h5-video-tool/src/config/studioTemplateOptions.ts`, `h5-video-tool/src/config/studioQualityPresets.ts`): `boss-showcase` now exposes the constrained status and recommended preset guidance before operators start the flow.
 
 ### v0.188 - 2026-05-11
 **Motion Transfer validation**

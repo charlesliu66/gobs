@@ -1,3 +1,4 @@
+import { getCharacterShowcaseValidationNotice } from '../studio/characterShowcaseValidation.ts';
 import { getMotionTransferValidationNotice } from '../studio/motionTransferValidation.ts';
 
 export const ACTIVE_STUDIO_TEMPLATE_IDS = ['viral-dance', 'boss-showcase'] as const;
@@ -47,5 +48,6 @@ export function getStudioTemplateDisplayMeta(template: TemplateLike): string {
 
 export function getStudioTemplateValidationNotice(templateId: string): string | undefined {
   if (templateId === 'viral-dance') return getMotionTransferValidationNotice();
+  if (templateId === 'boss-showcase') return getCharacterShowcaseValidationNotice();
   return undefined;
 }

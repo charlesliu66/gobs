@@ -48,5 +48,12 @@ test('Motion Transfer template carries experimental validation notice', () => {
   assert.match(getStudioTemplateValidationNotice('viral-dance') ?? '', /experimental/);
   assert.match(getStudioTemplateValidationNotice('viral-dance') ?? '', /2\/10 usable/);
   assert.equal(getStudioTemplateValidationNotice('custom'), undefined);
-  assert.equal(getStudioTemplateValidationNotice('boss-showcase'), undefined);
+});
+
+test('Character Showcase template carries constrained continue validation notice', () => {
+  const notice = getStudioTemplateValidationNotice('boss-showcase') ?? '';
+
+  assert.match(notice, /continue/);
+  assert.match(notice, /5\/10 usable/);
+  assert.match(notice, /single-character reveal or skill payoff/);
 });

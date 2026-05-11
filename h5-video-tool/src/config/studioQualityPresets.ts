@@ -1,3 +1,5 @@
+import { CHARACTER_SHOWCASE_RECOMMENDED_PRESET_IDS } from '../studio/characterShowcaseValidation.ts';
+
 export type StudioPresetLocale = 'zh' | 'en';
 
 export interface StudioQualityPreset {
@@ -6,6 +8,7 @@ export interface StudioQualityPreset {
   labelEn: string;
   promptZh: string;
   promptEn: string;
+  validationRecommendation?: 'recommended' | 'not_recommended';
 }
 
 export interface StudioQualityPresetGroup {
@@ -38,6 +41,12 @@ export const STUDIO_SHOWCASE_SUBTYPES: StudioQualityPreset[] = [
     promptEn: 'Center the reward payoff: character action and reward UI land together, ending on a victorious freeze that can support a CTA.',
   },
 ];
+
+export function getCharacterShowcasePresetRecommendation(presetId: string): 'recommended' | 'not_recommended' {
+  return (CHARACTER_SHOWCASE_RECOMMENDED_PRESET_IDS as readonly string[]).includes(presetId)
+    ? 'recommended'
+    : 'not_recommended';
+}
 
 export const STUDIO_MOTION_PROMPTS: StudioQualityPreset[] = [
   {
@@ -130,6 +139,12 @@ export function getStudioQualityPresetGroups(templateId: string, locale: StudioP
     .map((group) => ({
       id: group.id,
       title: locale === 'en' ? group.titleEn : group.titleZh,
-      presets: group.presets,
+      presets:
+        group.id === 'showcase'
+          ? group.presets.map((preset) => ({
+              ...preset,
+              validationRecommendation: getCharacterShowcasePresetRecommendation(preset.id),
+            }))
+          : group.presets,
     }));
 }
