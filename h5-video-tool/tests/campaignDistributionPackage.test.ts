@@ -270,7 +270,7 @@ test('buildCampaignDistributionCreateInputFromProductionItem uses produced text 
       productionCapability: 'supported',
       status: 'produced',
       gobsCanProduce: true,
-      outputAssetIds: ['copy_item_facebook_fb_post_1'],
+      outputAssetIds: ['copy_item_facebook_fb_post_1', 'copy_item_facebook_fb_post_2', 'copy_item_facebook_fb_post_3'],
       distributionPackageIds: [],
       producedOutputs: [
         {
@@ -285,14 +285,44 @@ test('buildCampaignDistributionCreateInputFromProductionItem uses produced text 
           status: 'draft',
           createdAt: '2026-05-08T00:00:00.000Z',
         },
+        {
+          id: 'copy_item_facebook_fb_post_2',
+          kind: 'cta',
+          title: 'Facebook CTA variants',
+          body: 'Download Gold and Glory now',
+          variants: ['Download Gold and Glory now'],
+          platform: 'facebook',
+          status: 'draft',
+          createdAt: '2026-05-08T00:00:00.000Z',
+        },
+        {
+          id: 'copy_item_facebook_fb_post_3',
+          kind: 'platform_post',
+          title: 'Facebook platform post draft',
+          body: 'Reward reveal\nOne run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.\n#GoldAndGlory #FacebookGaming',
+          variants: [
+            'Reward reveal\nOne run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.\n#GoldAndGlory #FacebookGaming',
+          ],
+          platform: 'facebook',
+          status: 'draft',
+          createdAt: '2026-05-08T00:00:00.000Z',
+        },
       ],
     },
     outputAssets: [],
     sourceAssetRequirements: [],
   });
 
-  assert.equal(draft.copy.caption, 'One run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.');
+  assert.equal(
+    draft.copy.caption,
+    'Reward reveal\nOne run, one mistake, one reward reveal your squad will not forget. Download Gold and Glory now.\n#GoldAndGlory #FacebookGaming',
+  );
   assert.equal(draft.source.sourceId, 'item_facebook_fb_post');
+  assert.deepEqual(draft.source.outputIds, [
+    'copy_item_facebook_fb_post_1',
+    'copy_item_facebook_fb_post_2',
+    'copy_item_facebook_fb_post_3',
+  ]);
   assert.deepEqual(draft.publishIntent.platforms, ['facebook']);
   assert.equal(draft.review.status, 'needs_review');
 });

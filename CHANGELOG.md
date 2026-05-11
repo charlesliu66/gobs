@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.197 - 2026-05-11
+**Campaign text production coverage**
+**Campaign Output / Distribution Prep:**
+- Extended Campaign produced text outputs with `cta` and `platform_post` while keeping `ProductionItemType` unchanged.
+- Added deterministic text production context/prompt helpers so caption, headline, CTA, hashtag, post copy, and platform post drafts bind platform, angle, audience, tone, selling points, CTA intent, forbidden claims, and knowledge citations.
+- Updated backend Output Plan validation to round-trip the new output kinds and compact `textContext` metadata.
+- Updated Distribution Package copy selection to prefer full platform-post drafts while keeping packages non-publishable until real media/account steps are explicit.
+**Tests / Build:**
+- Added text prompt/context, output production, Distribution Package, and backend Output Plan coverage; rebuilt both frontend and API production bundles.
+
 ## v0.196 - 2026-05-11
 **Navigation and production entry guidance**
 **Navigation / Home / Studio:**

@@ -64,11 +64,20 @@ const PRODUCED_OUTPUT_KINDS = [
   'hashtag',
   'post_copy',
   'banner_prompt',
+  'cta',
+  'platform_post',
 ] as const;
 const PRODUCED_OUTPUT_STATUSES = [
   'draft',
   'needs_review',
   'approved',
+] as const;
+const TEXT_PRODUCTION_PLATFORMS = [
+  'tiktok',
+  'facebook',
+  'instagram',
+  'x',
+  'generic',
 ] as const;
 const CREATIVE_QUALITY_STATUSES = [
   'usable',
@@ -308,6 +317,21 @@ function normalizeKnowledgeReferences(value: unknown, field: string): UnknownRec
   });
 }
 
+function normalizeTextContext(value: unknown, field: string): UnknownRecord | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = requireObject(value, field);
+  return {
+    platform: requireEnum(raw.platform, `${field}.platform`, TEXT_PRODUCTION_PLATFORMS),
+    angle: requireText(raw.angle, `${field}.angle`),
+    audience: requireText(raw.audience, `${field}.audience`),
+    tone: requireText(raw.tone, `${field}.tone`),
+    sellingPoints: normalizeStringList(raw.sellingPoints, `${field}.sellingPoints`),
+    ctaIntent: requireText(raw.ctaIntent, `${field}.ctaIntent`),
+    forbiddenClaims: normalizeStringList(raw.forbiddenClaims, `${field}.forbiddenClaims`),
+    knowledgeCitations: normalizeStringList(raw.knowledgeCitations, `${field}.knowledgeCitations`),
+  };
+}
+
 function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
@@ -350,6 +374,7 @@ function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[
       campaignId: normalizeOptionalSafeIdentifier(raw.campaignId, `${field}[${index}].campaignId`),
       briefId: normalizeOptionalSafeIdentifier(raw.briefId, `${field}[${index}].briefId`),
       knowledgeReferences: normalizeKnowledgeReferences(raw.knowledgeReferences, `${field}[${index}].knowledgeReferences`),
+      textContext: normalizeTextContext(raw.textContext, `${field}[${index}].textContext`),
       createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
     };
   });

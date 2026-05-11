@@ -10,6 +10,11 @@ import type {
 import type { CreativeFeedbackTag } from './feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 import type { CreativeIssueTag } from './quality/creativeQualityTypes.ts';
+import {
+  buildTextOutputDraftContent,
+  buildTextProductionContext,
+  type TextProductionContext,
+} from './textProductionPrompt.ts';
 
 export type ProductionItemType =
   | 'fb_post'
@@ -35,7 +40,14 @@ export type ProductionItemStatus =
   | 'failed'
   | 'skipped';
 
-export type ProducedOutputKind = 'caption' | 'headline' | 'hashtag' | 'post_copy' | 'banner_prompt';
+export type ProducedOutputKind =
+  | 'caption'
+  | 'headline'
+  | 'hashtag'
+  | 'post_copy'
+  | 'banner_prompt'
+  | 'cta'
+  | 'platform_post';
 export type ProducedOutputStatus = 'draft' | 'needs_review' | 'approved';
 
 export type BannerOutputSpecId = 'square_1_1' | 'portrait_4_5' | 'story_9_16' | 'landscape_16_9';
@@ -113,6 +125,7 @@ export interface ProducedOutputDraft {
   campaignId?: string;
   briefId?: string;
   knowledgeReferences?: CampaignKnowledgeCitation[];
+  textContext?: TextProductionContext;
   createdAt: string;
 }
 
@@ -731,20 +744,6 @@ function bannerOutputId(item: ProductionItem): string {
   return `banner_prompt_${slugify(item.id)}_1`;
 }
 
-function hashtagsFromSignals(signals: ReturnType<typeof textSignals>, platform: string): string[] {
-  const raw = [
-    'GoldAndGlory',
-    platform === 'facebook' ? 'FacebookGaming' : 'MobileRPG',
-    signals.proof,
-    signals.angle,
-  ];
-  return uniqueStrings(raw)
-    .map((value) => value.replace(/[^a-zA-Z0-9]+/g, ''))
-    .filter((value) => value.length > 2)
-    .slice(0, 6)
-    .map((value) => `#${value}`);
-}
-
 function producedDraft(
   item: ProductionItem,
   kind: ProducedOutputKind,
@@ -761,6 +760,7 @@ function producedDraft(
     | 'campaignId'
     | 'briefId'
     | 'parentOutputId'
+    | 'textContext'
   >> = {},
 ): ProducedOutputDraft {
   return {
@@ -828,56 +828,60 @@ function buildProducedOutputsForItem(
   args: ProduceSupportedCampaignOutputsArgs,
   createdAt: string,
 ): ProducedOutputDraft[] {
-  const signals = textSignals(args);
+  const textContext = buildTextProductionContext({
+    platform: item.platform,
+    mission: args.mission,
+    brief: args.brief,
+    strategy: args.strategy,
+    knowledgeContext: args.knowledgeContext,
+    knowledgeReferences: item.knowledgeReferences,
+    selectedVariantTitle: resolveVariantTitle(args),
+  });
   const lineageExtras = {
     campaignId: args.plan.campaignId,
     briefId: args.plan.briefId,
     parentOutputId: item.id,
     knowledgeReferences: item.knowledgeReferences,
+    textContext,
   };
-  const captionVariants = uniqueStrings([
-    `${signals.hook}. ${signals.cta}.`,
-    `${signals.objective} for ${signals.audience}. ${signals.cta}.`,
-    `${signals.proof}. ${signals.cta}.`,
-  ]);
-  const headlineVariants = uniqueStrings([
-    resolveVariantTitle(args),
-    signals.angle,
-    signals.hook,
-    signals.proof,
-  ]).slice(0, 3);
-  const hashtags = hashtagsFromSignals(signals, item.platform);
+  const caption = buildTextOutputDraftContent('caption', textContext);
+  const headline = buildTextOutputDraftContent('headline', textContext);
+  const hashtag = buildTextOutputDraftContent('hashtag', textContext);
+  const postCopy = buildTextOutputDraftContent('post_copy', textContext);
+  const cta = buildTextOutputDraftContent('cta', textContext);
+  const platformPost = buildTextOutputDraftContent('platform_post', textContext);
 
   switch (item.type) {
     case 'caption_set':
       return [
-        producedDraft(item, 'caption', 0, 'Caption variants', captionVariants[0], captionVariants, createdAt, {
+        producedDraft(item, 'caption', 0, caption.title, caption.body, caption.variants, createdAt, {
           ...lineageExtras,
         }),
       ];
     case 'headline_set':
       return [
-        producedDraft(item, 'headline', 0, 'Headline variants', headlineVariants[0], headlineVariants, createdAt, {
+        producedDraft(item, 'headline', 0, headline.title, headline.body, headline.variants, createdAt, {
           ...lineageExtras,
         }),
       ];
     case 'hashtag_set':
       return [
-        producedDraft(item, 'hashtag', 0, 'Hashtag set', hashtags.join(' '), hashtags, createdAt, {
+        producedDraft(item, 'hashtag', 0, hashtag.title, hashtag.body, hashtag.variants, createdAt, {
           ...lineageExtras,
         }),
       ];
-    case 'fb_post': {
-      const postBodies = Array.from({ length: Math.max(1, item.quantity) }, (_, index) => {
-        const opener = captionVariants[index % captionVariants.length];
-        return `${opener} ${signals.proof}.`;
-      });
-      return postBodies.map((body, index) =>
-        producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt, {
+    case 'fb_post':
+      return [
+        producedDraft(item, 'post_copy', 0, postCopy.title, postCopy.body, postCopy.variants, createdAt, {
           ...lineageExtras,
         }),
-      );
-    }
+        producedDraft(item, 'cta', 1, cta.title, cta.body, cta.variants, createdAt, {
+          ...lineageExtras,
+        }),
+        producedDraft(item, 'platform_post', 2, platformPost.title, platformPost.body, platformPost.variants, createdAt, {
+          ...lineageExtras,
+        }),
+      ];
     case 'banner':
       return buildBannerPromptForItem(item, args, createdAt);
     default:

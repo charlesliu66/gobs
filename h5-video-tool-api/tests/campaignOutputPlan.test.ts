@@ -283,7 +283,11 @@ test('POST and PATCH /plans round-trip produced output drafts', async () => {
           status: 'produced',
           gobsCanProduce: true,
           requiredSourceAssetIds: [],
-          outputAssetIds: ['copy_item_produced_caption_1'],
+          outputAssetIds: [
+            'copy_item_produced_caption_1',
+            'copy_item_produced_caption_2',
+            'copy_item_produced_caption_3',
+          ],
           producedOutputs: [
             {
               id: 'copy_item_produced_caption_1',
@@ -292,6 +296,54 @@ test('POST and PATCH /plans round-trip produced output drafts', async () => {
               body: 'One run, one mistake, one comeback.',
               variants: ['One run, one mistake, one comeback.'],
               platform: 'cross_platform',
+              textContext: {
+                platform: 'generic',
+                angle: 'Comeback angle',
+                audience: 'returning players',
+                tone: 'direct and energetic',
+                sellingPoints: ['one comeback'],
+                ctaIntent: 'Play today',
+                forbiddenClaims: ['No guaranteed SSR'],
+                knowledgeCitations: ['Market truth: comeback proof matters'],
+              },
+              createdAt: '2026-05-08T00:00:00.000Z',
+            },
+            {
+              id: 'copy_item_produced_caption_2',
+              kind: 'cta',
+              title: 'CTA 1',
+              body: 'Play today',
+              variants: ['Play today'],
+              platform: 'cross_platform',
+              status: 'needs_review',
+              textContext: {
+                platform: 'generic',
+                angle: 'Comeback angle',
+                audience: 'returning players',
+                tone: 'direct and energetic',
+                sellingPoints: ['one comeback'],
+                ctaIntent: 'Play today',
+                forbiddenClaims: ['No guaranteed SSR'],
+              },
+              createdAt: '2026-05-08T00:00:00.000Z',
+            },
+            {
+              id: 'copy_item_produced_caption_3',
+              kind: 'platform_post',
+              title: 'Platform post 1',
+              body: 'Comeback angle\nOne run, one mistake, one comeback.\nPlay today\n#GoldAndGlory',
+              variants: ['Comeback angle\nOne run, one mistake, one comeback.\nPlay today\n#GoldAndGlory'],
+              platform: 'cross_platform',
+              status: 'draft',
+              textContext: {
+                platform: 'generic',
+                angle: 'Comeback angle',
+                audience: 'returning players',
+                tone: 'direct and energetic',
+                sellingPoints: ['one comeback'],
+                ctaIntent: 'Play today',
+                forbiddenClaims: ['No guaranteed SSR'],
+              },
               createdAt: '2026-05-08T00:00:00.000Z',
             },
           ],
@@ -310,6 +362,12 @@ test('POST and PATCH /plans round-trip produced output drafts', async () => {
     assert.equal(created.response.status, 201);
     assert.equal(created.json.items[0].producedOutputs[0].kind, 'caption');
     assert.equal(created.json.items[0].producedOutputs[0].body, 'One run, one mistake, one comeback.');
+    assert.equal(created.json.items[0].producedOutputs[1].kind, 'cta');
+    assert.equal(created.json.items[0].producedOutputs[2].kind, 'platform_post');
+    assert.equal(created.json.items[0].producedOutputs[2].textContext.angle, 'Comeback angle');
+    assert.deepEqual(created.json.items[0].producedOutputs[0].textContext.knowledgeCitations, [
+      'Market truth: comeback proof matters',
+    ]);
 
     const patched = await requestJson(baseUrl, {
       method: 'PATCH',
@@ -632,6 +690,41 @@ test('routes reject malformed output plan payloads with 400-level errors', async
     });
     assert.equal(invalidQualityStatus.response.status, 400);
     assert.match(String(invalidQualityStatus.json?.error ?? ''), /qualityStatus/i);
+
+    const invalidTextContext = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'validator',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                id: 'copy_bad_context',
+                kind: 'platform_post',
+                title: 'Bad text context',
+                body: 'This should not validate.',
+                variants: ['This should not validate.'],
+                platform: 'facebook',
+                textContext: {
+                  platform: 'linkedin',
+                  angle: 'Bad angle',
+                  audience: 'operators',
+                  tone: 'direct',
+                  sellingPoints: ['bad'],
+                  ctaIntent: 'Ship it',
+                  forbiddenClaims: [],
+                },
+                createdAt: '2026-05-10T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(invalidTextContext.response.status, 400);
+    assert.match(String(invalidTextContext.json?.error ?? ''), /textContext\.platform/i);
 
     const invalidFeedbackTag = await requestJson(baseUrl, {
       method: 'PATCH',

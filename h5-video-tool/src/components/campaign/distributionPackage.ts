@@ -361,11 +361,13 @@ function firstProducedOutput(
 
 function producedPackageCopy(item: ProductionItem): Partial<CampaignDistributionPackageCopy> | null {
   if (item.status !== 'produced' || (item.producedOutputs?.length ?? 0) === 0) return null;
+  const platformPost = firstProducedOutput(item, ['platform_post']);
   const post = firstProducedOutput(item, ['post_copy']);
+  const cta = firstProducedOutput(item, ['cta']);
   const caption = firstProducedOutput(item, ['caption']);
   const headline = firstProducedOutput(item, ['headline']);
   const hashtags = firstProducedOutput(item, ['hashtag']);
-  const captionBody = post?.body || caption?.body;
+  const captionBody = platformPost?.body || post?.body || uniqueStrings([caption?.body, cta?.body]).join(' ');
   if (!captionBody && !headline?.body && !hashtags?.variants.length) return null;
   return {
     headline: headline?.body,

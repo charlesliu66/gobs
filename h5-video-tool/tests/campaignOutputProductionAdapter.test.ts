@@ -87,6 +87,20 @@ test('produceSupportedCampaignOutputs produces supported copy and post items wit
   assert.equal(producedTextItems.every((item) => item.status === 'produced'), true);
   assert.equal(producedTextItems.every((item) => (item.producedOutputs ?? []).length > 0), true);
   assert.match(producedTextItems[0].producedOutputs?.[0]?.body ?? '', /hero/i);
+  const producedKinds = produced.items.flatMap((item) => item.producedOutputs ?? []).map((output) => output.kind);
+  for (const kind of ['caption', 'headline', 'cta', 'hashtag', 'platform_post'] as const) {
+    assert.equal(producedKinds.includes(kind), true);
+  }
+  const facebookPost = produced.items.find((item) => item.type === 'fb_post');
+  const platformPost = facebookPost?.producedOutputs?.find((output) => output.kind === 'platform_post');
+  const cta = facebookPost?.producedOutputs?.find((output) => output.kind === 'cta');
+  assert.ok(platformPost);
+  assert.ok(cta);
+  assert.equal(platformPost.status, 'draft');
+  assert.equal(platformPost.textContext?.platform, 'facebook');
+  assert.equal(platformPost.textContext?.angle, 'New hero launch for returning squads');
+  assert.equal(platformPost.textContext?.sellingPoints.includes('The new hero skill combo'), true);
+  assert.deepEqual(platformPost.textContext?.forbiddenClaims, ['No guaranteed rewards']);
   assert.equal(
     producedTextItems.every((item) => item.outputAssetIds.every((assetId) =>
       item.producedOutputs?.some((output) => output.id === assetId),

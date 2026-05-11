@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.196)*
+*Last updated: 2026-05-11 (v0.197)*
 
-**Latest update - v0.196**
+**Latest update - v0.197**
+- Campaign text production now covers caption, headline, CTA, hashtag, and platform post drafts through existing output items, without adding a new production item type.
+- Produced text drafts carry compact source context for platform, angle, audience, tone, selling points, CTA intent, forbidden claims, and knowledge citations when available.
+- Campaign Distribution Packages now prefer full platform-post copy from produced text outputs while preserving explicit review/media requirements before publishing.
+
+**Previous update - v0.196**
 - Main navigation now follows the comprehensive optimization A1 structure: Campaign, Produce, Assets, Distribute, and History.
 - Platform planning pages stay routeable but move out of the primary sidebar into a low-prominence Home experimental entry.
 - Studio now starts with a production entry guide that explains when to use Advanced Studio, QuickFilm, Production Wizard, or Editor.
