@@ -1,38 +1,14 @@
-# GOBS / QAS Task Index
+# GOBS / QAS Task Index - Campaign Production Coverage V2 Mainline
 
-## 2026-05-08 Current Mainline Addendum
+## 2026-05-11 Current Mainline Addendum
 
-- `Campaign Output Workbench + Game Source Assets` is the next Campaign Mission Control direction after the completed Distribution Handoff MVP.
-- The default post-brief user surface should show deliverables, required game source assets, GOBS production capability, and capability gaps instead of internal System Plan reasoning.
-- Phase 1 implementation run is active at `docs/workflow/runs/2026-05-08-campaign-output-workbench-game-source-assets/`, covering deterministic output plans, owner-scoped persistence, Workbench UI, and distribution bridge.
-- Phase 2A implementation run is active at `docs/workflow/runs/2026-05-08-campaign-output-production-adapters/`, covering safe text/post production adapters and produced-item distribution package bridging.
-- Phase 2B optimization run is active at `docs/workflow/runs/2026-05-08-campaign-output-one-click-production/`, reducing Output Workbench confirmation friction so one primary action saves and produces supported outputs.
-- Phase 3 source asset readiness run is active at `docs/workflow/runs/2026-05-09-campaign-source-asset-readiness/`, connecting Output Workbench source requirements to Asset Library candidates, row-level selection, and upload routing.
-- Advanced Studio template optimization Phase 1 is active at `docs/workflow/runs/2026-05-09-advanced-studio-template-optimization/`, reducing Studio creation to Quick Single, Motion Transfer, and Character Showcase while parking heavier AI image/BGM/model work for later phases.
-- Distribution Center operator MVP is active at `docs/workflow/runs/2026-05-09-distribution-center-ops-mvp/`, reducing duplicate Campaign inputs, adding account groups, and making platform copy/account mapping visible.
-- Distribution Center publish history follow-up is active at `docs/workflow/runs/2026-05-09-distribution-publish-history-filters/`, adding frontend-only history filters and date grouping without touching GeeLark publish APIs.
-- Campaign to Studio production bridge is active at `docs/workflow/runs/2026-05-09-campaign-studio-production-bridge/`, connecting eligible Campaign Output video items to Advanced Studio and adding unified Asset Library reference slots.
-- Current optimization recommendation is recorded at `docs/plans/2026-05-09-gobs-current-state-optimization-recommendation.md`: prioritize `方案 C + 方案 A` (experience loop + safe reduction), and defer large state-management/component rewrites.
-- Campaign Production Loop closeout is active at `docs/workflow/runs/2026-05-09-campaign-production-loop-closeout/`, preserving Campaign -> Studio handoff context through video generation and syncing linked packages back into publishable Distribution drafts.
-- Release tooling hardening is active at `docs/workflow/runs/2026-05-09-release-tooling-hardening/`, fixing Python 3.10 release helper compatibility and making SSH/SFTP deploy scripts finish deterministically.
-- Distribution Center Step Refinement is active at `docs/workflow/runs/2026-05-09-distribution-step-refinement/`, splitting `/distribute` into asset, copy, accounts, and preflight/publish operator sections while preserving GeeLark publish behavior.
-- Distribution Center Step Readiness Nav is active at `docs/workflow/runs/2026-05-09-distribution-step-readiness-nav/`, adding a compact four-step readiness overview and jump anchors without changing GeeLark publish behavior.
-- Distribution Operator Happy Path Polish is active at `docs/workflow/runs/2026-05-09-distribution-operator-happy-path-polish/`, adding recent config restore, latest-batch next actions, compatible publish-history query/pagination/export, clearer publish error guidance, refresh-safe Campaign Output Plan writeback, a guarded GeeLark real-publish verifier, and a legacy-surface reduction audit.
-- Release and Collaboration Governance is active at `docs/workflow/runs/2026-05-09-release-and-workflow-governance/`, implementing the Run 0 recommendation from the next optimization checklist: Dev Worker commit-only handoff, Release Owner pickup discipline, and safer large-archive upload fallback.
-- Quality and Data Contract Foundation is merged at `a62a774`, giving Window B the three-state creative quality vocabulary plus Campaign/Asset/Output/Review/Package contracts.
-- Story Video Review Capture is merged/deployed at `0c5134e`, implementing Window B Run 3 from the 2026-05-10 optimization checklist: human story-video quality marks, fixed issue tags, and Run 0 `ReviewContract`-compatible result-page review history.
-- Asset Library Reuse MVP is merged/deployed at `9595f23`, implementing Window A Run 1 with team categories, preprocessing metadata, manual category correction, and `assetId`-based Run 0 `AssetContract` mapping.
-- Banner Output MVP is merged/deployed at `ce212be`, implementing Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable distribution package context.
-- Quality Review And Next Version is merged/deployed at `e90c11e`, implementing Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs.
-- Motion Transfer Validation is merged/deployed at `352e8bb`, implementing Run 5: 10-sample validation ledger, experimental/pause/continue decision, and Studio experimental entry hint.
-- Character Showcase Validation is merged/deployed at `02d65fc`, implementing Run 6: 10-sample 5-character validation ledger, constrained continue decision, and Studio Character Showcase entry/preset guidance.
-- Distribution Final Mile is merged/deployed at `bc693a7`, implementing Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance.
-- Knowledge Traceability is merged/deployed at `9aaef71`, implementing Run 8: visible knowledge citations, citation feedback, rejected-citation suppression, and Output Plan knowledge references.
-- Data Contract Hardening is merged/deployed at `24c23c1`, implementing Run 9: Campaign/Brief/Output/Package lineage, Studio refresh-safe handoff restoration, and operator-visible link health.
-- Legacy Surface Reduction is merged/deployed at `278235f`, implementing Run 10: hide parked legacy surfaces from primary navigation while preserving direct URL access and `sj-ui` rollback boundaries.
-- Large Component Refactor is merged/deployed at `44beb99`, implementing Run 11: extract one tested `/distribute` asset-option helper boundary without changing publish behavior.
-- Editor Effects Sprint is active at `docs/workflow/runs/2026-05-11-editor-effects-sprint/`, implementing Run 12: 6 tested editor packaging templates applied through existing text clips and transition fields.
+- 当前正式承接主线调整为 `Campaign 素材生产覆盖率 V2`：优先提高 Campaign 需制作素材中可直接生产、模板化生产、或可辅助推进的比例，而不是继续把“创意质量评估与迭代闭环”作为第一目标。
+- 第一轮必须从 Run 0 开始：`Existing Capability Audit & Compatibility Map`。它先审计现有 Campaign Output Plan、Asset Library、Google Drive、Banner Output 能力，固定“复用 / 增量 / 禁止碰”的边界，再允许 Run 1A / Run 1B / Run 2 开工。
+- V2 执行权威文档是 `docs/plans/2026-05-11-campaign-production-coverage-v2-adjustment-plan.md`；原总纲 `docs/plans/2026-05-11-campaign-production-coverage-and-team-assets-plan.md` 只保留方向判断和 Team Asset 存储决策背景。
+- 旧的 05-08 / 05-09 Campaign -> Studio -> Distribution、Distribution Center、Release Governance、Quality Contract、Editor Effects 等 run 仍是有效历史上下文，但不再是默认下一阶段入口。
 - Source docs:
+  - `docs/plans/2026-05-11-campaign-production-coverage-v2-adjustment-plan.md`
+  - `docs/plans/2026-05-11-campaign-production-coverage-and-team-assets-plan.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
   - `docs/plans/2026-05-08-campaign-output-production-adapters-design.md`
@@ -63,9 +39,9 @@
 - 当前产品北极星：`Campaign Creative Agent` 必须从 campaign brief 出发，产出创意素材或变体，并把它们送入分发。
 - 当前默认受众：市场和运营同学；专业剪辑、制片和深度调参能力保留在 `Advanced Studio`，不再定义默认体验。
 - 当前最值得继续推进的方向：
-  1. `Campaign -> Studio -> Distribution` 体验闭环：Studio 生成结果要能稳定回填到 Campaign Package / Distribution 上下文。
-  2. `Legacy Surface Reduction`：先审计并清理/隔离 `sj-ui`、`RiskSentiment/TiktokMatrix` 等非主线表面。
-  3. `Distribution Center Step Refinement`：继续拆 `TabDistribute`，但围绕真实运营步骤拆，不做纯技术大重构。
+  1. `Run 0 - Existing Capability Audit & Compatibility Map`：先审计现有能力、兼容枚举和复用边界，产出固定格式 audit table。
+  2. `Run 1A / Run 1B`：在不替换落库 capability 的前提下做 coverage UI compatibility layer，并补齐高频文本产物策略。
+  3. `Run 2 / Run 3 / Run 4`：在 Team Asset 权限与预处理缺口清楚后，再做 Banner Prompt Hardening 和后续 Distribution bridge。
 
 ---
 
@@ -85,11 +61,9 @@
 
 ### 3. 当前主线方案
 
-- [2026-05-07-campaign-to-distribution-handoff-mvp-design.md](plans/2026-05-07-campaign-to-distribution-handoff-mvp-design.md)：把 OpenClaw 产品/代码评估收敛成 `Campaign Creative -> Distribution Package -> 分发` 的下一步优化方案。
-- [2026-05-06-campaign-creative-agent-next-phase-design.md](plans/2026-05-06-campaign-creative-agent-next-phase-design.md)：Campaign Creative Agent 的受众、形态和长期主链路。
-- [2026-05-06-campaign-mission-control-phase0-implementation-plan.md](plans/2026-05-06-campaign-mission-control-phase0-implementation-plan.md)：Mission Control Phase 0 的产品骨架。
-- [2026-05-06-gobs-fastpublish-knowledge-integration-design.md](plans/2026-05-06-gobs-fastpublish-knowledge-integration-design.md)：fastpublish 知识如何进入 GOBS。
-- [2026-05-07-gold-and-glory-canonical-brain-sync-design.md](plans/2026-05-07-gold-and-glory-canonical-brain-sync-design.md)：真实 Gold and Glory Brain 的 source whitelist、checksum 和刷新边界。
+- [2026-05-11-campaign-production-coverage-v2-adjustment-plan.md](plans/2026-05-11-campaign-production-coverage-v2-adjustment-plan.md)：当前执行权威；Run 0 审计先行，后续只做增量兼容，不替换已有 Campaign Output / Asset Library / Drive / Banner 能力。
+- [2026-05-11-campaign-production-coverage-and-team-assets-plan.md](plans/2026-05-11-campaign-production-coverage-and-team-assets-plan.md)：下一阶段总纲；将目标从质量闭环前移到 `Campaign 素材生产覆盖率提升`，并记录 Team Asset 存储决策。
+- [2026-05-10-gobs-next-optimization-checklist.md](plans/2026-05-10-gobs-next-optimization-checklist.md)：上一阶段 Quality/Data Contract 到 Editor Effects 的落地脉络；仅作为历史上下文，不再作为默认下一轮入口。
 
 ---
 
@@ -97,6 +71,7 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
+| `2026-05-11-campaign-production-coverage-run0-audit` | Run 0: Existing Capability Audit & Compatibility Map for Campaign Production Coverage V2 | Next to bootstrap; must finish before Run 1A / Run 1B / Run 2 implementation |
 | `2026-05-11-editor-effects-sprint` | Run 12: add a tested editor packaging template catalog and compact workbench apply menu without changing render/export engines | Builder/Verifier in progress on branch `codex/2026-05-11-editor-effects-sprint`; this window is also acting as Release Owner per user instruction |
 | `2026-05-11-large-component-refactor` | Run 11: extract `/distribute` asset-option helpers into a tested module without changing publish behavior | Merged/deployed @ `44beb99`; Run 12 starts from this base |
 | `2026-05-11-legacy-surface-reduction` | Run 10: hide parked legacy surfaces from primary navigation, preserve direct URLs, and guard `sj-ui` isolation | Merged/deployed @ `278235f`; Run 11 starts from this base |

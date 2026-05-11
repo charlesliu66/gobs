@@ -1,6 +1,6 @@
-# Plans Index
+# Plans Index - Campaign Production Coverage V2 Mainline
 
-> 最后更新：2026-05-09
+> 最后更新：2026-05-11
 > 用途：说明 `docs/plans/` 存什么、什么时候该放到这里，而不是放进 `workflow/runs/`。
 
 ---
@@ -22,14 +22,23 @@
 
 ---
 
+## 当前主线
+
+- 当前正式承接主线是 `Campaign 素材生产覆盖率 V2`，入口文档为 [2026-05-11-campaign-production-coverage-v2-adjustment-plan.md](./2026-05-11-campaign-production-coverage-v2-adjustment-plan.md)。
+- 第一轮必须先做 `Run 0 - Existing Capability Audit & Compatibility Map`，确认现有 Campaign Output Plan、Asset Library、Google Drive、Banner Output 的复用边界后，才能推进 Run 1A / Run 1B / Run 2。
+- [2026-05-11-campaign-production-coverage-and-team-assets-plan.md](./2026-05-11-campaign-production-coverage-and-team-assets-plan.md) 保留为方向总纲和 Team Asset 存储决策背景；具体执行以 V2 调整计划为准。
+- 05-08 / 05-09 / 05-10 的 Campaign、Distribution、Quality Contract、Editor Effects 相关方案仍保留为历史上下文，但不再作为默认下一阶段入口。
+
+---
+
 ## 当前值得优先关注的方案
 
 - [2026-05-11-campaign-production-coverage-v2-adjustment-plan.md](./2026-05-11-campaign-production-coverage-v2-adjustment-plan.md)
-  - 基于 OpenClaw 反馈对 Campaign 素材生产覆盖率方案做 V2 收口：先做现有能力审计和兼容映射，不替换已有 capability/type，不重建素材库，优先推进 coverage UI、文本产物、Team Asset 权限与 Banner Prompt MVP。
+  - 当前主线执行权威：先做 Run 0 现有能力审计和兼容映射，不替换已有 capability/type，不重建素材库；后续优先推进 coverage UI、文本产物、Team Asset 权限与 Banner Prompt Hardening。
 - [2026-05-11-campaign-production-coverage-and-team-assets-plan.md](./2026-05-11-campaign-production-coverage-and-team-assets-plan.md)
-  - 下一阶段新总纲：把目标从“创意质量评估与迭代闭环”前移为 `Campaign 素材生产覆盖率提升`，并合并 Team 共享素材库存储决策：当前服务器先跑通、Google Drive 只做导入源、对象存储/EMC 暂缓。
+  - 下一阶段方向总纲：把目标从“创意质量评估与迭代闭环”前移为 `Campaign 素材生产覆盖率提升`，并合并 Team 共享素材库存储决策：当前服务器先跑通、Google Drive 只做导入源、对象存储/EMC 暂缓。
 - [2026-05-10-gobs-next-optimization-checklist.md](./2026-05-10-gobs-next-optimization-checklist.md)
-  - GOBS 后续优化落地清单：按 run 拆解 `Quality And Data Contract Foundation -> Asset Library Reuse MVP -> Banner Output MVP -> Story Video Review Capture -> Quality Review And Next Version` 等执行项，明确目标、文件范围、实现步骤、验收标准和不要做什么。
+  - 上一阶段优化落地清单：按 run 拆解 `Quality And Data Contract Foundation -> Asset Library Reuse MVP -> Banner Output MVP -> Story Video Review Capture -> Quality Review And Next Version` 等执行项；保留为历史上下文，不再作为默认下一阶段入口。
 - [2026-05-09-next-optimization-execution-checklist.md](./2026-05-09-next-optimization-execution-checklist.md)
   - 二轮优化后总执行清单：把 OpenClaw 最新评估、当前代码事实和最近发布实操结果收敛成 `发布稳定性 -> 减负清理 -> Distribution 最后一公里 -> 数据契约 -> 巨型组件治理` 的分阶段 checklist。
 - [2026-05-09-gobs-current-state-optimization-recommendation.md](./2026-05-09-gobs-current-state-optimization-recommendation.md)
