@@ -21,6 +21,7 @@ export interface LibraryCharacterLookNode {
 
 export interface LibraryCharacter {
   id: string;
+  ownerId?: string;
   name: string;
   isProtagonist?: boolean;
   description?: string;
@@ -31,6 +32,7 @@ export interface LibraryCharacter {
   activeLookId?: string;
   sourceProject?: string;
   tags?: string[];
+  assetBindings?: Record<string, { assetId: string; slotKey: string; filename: string; updatedAt: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,7 +51,7 @@ export interface LibraryCharacterSummary {
 
 export async function saveCharacterToLibrary(
   char: Partial<LibraryCharacter> & { name: string },
-): Promise<{ id: string; updatedAt: string }> {
+): Promise<{ id: string; updatedAt: string; assetCount?: number }> {
   return apiPost('/api/character-library/save', char);
 }
 
@@ -73,6 +75,6 @@ export async function getSharedCharacter(token: string): Promise<{ char: Library
   return apiGet(`/api/character-library/share/${encodeURIComponent(token)}`);
 }
 
-export async function importSharedCharacter(token: string): Promise<{ id: string; name: string }> {
+export async function importSharedCharacter(token: string): Promise<{ id: string; name: string; assetCount?: number }> {
   return apiPost('/api/character-library/import', { token });
 }

@@ -68,6 +68,7 @@ export function CharacterWardrobePanel({
 
   const handleSaveToLibrary = useCallback(async () => {
     setSavingToLib(true);
+    setErr(null);
     try {
       const ensured = ensureCharacterLookTree(sheet);
       await saveCharacterToLibrary({
@@ -348,7 +349,7 @@ export function CharacterWardrobePanel({
                     disabled={savingToLib}
                     className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[10px] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] disabled:opacity-50"
                   >
-                    {savingToLib ? '保存中…' : savedToLib ? '已保存到形象库' : '保存到形象库'}
+                    {savingToLib ? '保存中…' : savedToLib ? '已保存并同步素材库' : '保存到形象库'}
                   </button>
                 </div>
               ) : (

@@ -1,30 +1,27 @@
 /**
- * 形象库 API — 单用户，支持分享链接
- * POST   /api/character-library/save         保存/更新角色到形象库
- * GET    /api/character-library/list          列出所有角色
- * GET    /api/character-library/:id           获取单个角色详情
- * DELETE /api/character-library/:id           删除角色
- * POST   /api/character-library/:id/share     生成分享 token
- * GET    /api/character-library/share/:token  通过分享 token 读取角色（只读）
- * POST   /api/character-library/import        从分享 token 导入到本地形象库
+ * Character Library API
+ * POST   /api/character-library/save
+ * GET    /api/character-library/list
+ * GET    /api/character-library/:id
+ * DELETE /api/character-library/:id
+ * POST   /api/character-library/:id/share
+ * GET    /api/character-library/share/:token
+ * POST   /api/character-library/import
  */
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { resolvePath } from '../infra/storage/resolver.js';
+import { sanitizeUsername } from '../utils/safeUsername.js';
+import {
+  syncCharacterLibraryAssets,
+  type CharacterLibraryAssetBinding,
+} from '../services/characterLibraryAssetSync.js';
 
 export const characterLibraryRouter = Router();
 
-const LIB_DIR = resolvePath('character-library');
 const SHARE_DIR = resolvePath('character-library', '_shares');
-
-async function ensureDirs() {
-  await fs.mkdir(LIB_DIR, { recursive: true });
-  await fs.mkdir(SHARE_DIR, { recursive: true });
-}
-
-// ── 数据结构 ─────────────────────────────────────────────────────────────────
 
 interface LibraryCharacterState {
   id: string;
@@ -44,54 +41,78 @@ interface LibraryCharacterLookNode {
 
 interface LibraryCharacter {
   id: string;
+  ownerId: string;
   name: string;
   isProtagonist?: boolean;
   description?: string;
-  /** 基础形象 */
   baseImageDataUrl?: string;
   baseConfirmed?: boolean;
-  /** 各状态 */
   states: LibraryCharacterState[];
-  /** 形象演化树 */
   lookTree?: LibraryCharacterLookNode[];
-  /** 当前定稿形象 id */
   activeLookId?: string;
-  /** 来源项目名（可选） */
   sourceProject?: string;
   createdAt: string;
   updatedAt: string;
-  /** 标签，用于搜索 */
   tags?: string[];
+  assetBindings?: Record<string, CharacterLibraryAssetBinding>;
 }
 
-function charFilePath(id: string): string {
-  return path.join(LIB_DIR, `${id}.json`);
+function getLibraryDir(username: string): string {
+  return resolvePath('character-library', sanitizeUsername(username));
 }
 
-// ── 保存/更新角色 ─────────────────────────────────────────────────────────────
+function charFilePath(username: string, id: string): string {
+  return path.join(getLibraryDir(username), `${id}.json`);
+}
+
+async function ensureDirs(username?: string) {
+  await fs.mkdir(SHARE_DIR, { recursive: true });
+  if (username) {
+    await fs.mkdir(getLibraryDir(username), { recursive: true });
+  }
+}
+
+function requireUser(req: Request, res: Response): string | null {
+  const rawUsername = req.user?.username?.trim();
+  if (!rawUsername) {
+    res.status(401).json({ error: '未鉴权' });
+    return null;
+  }
+  return sanitizeUsername(rawUsername);
+}
+
+async function readCharacter(username: string, id: string): Promise<LibraryCharacter | null> {
+  try {
+    const raw = await fs.readFile(charFilePath(username, id), 'utf-8');
+    return JSON.parse(raw) as LibraryCharacter;
+  } catch {
+    return null;
+  }
+}
 
 characterLibraryRouter.post('/save', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
   const body = req.body as Partial<LibraryCharacter> & { id?: string };
   if (!body.name?.trim()) {
     res.status(400).json({ error: '请提供角色名称' });
     return;
   }
-  await ensureDirs();
+
+  await ensureDirs(username);
 
   const now = new Date().toISOString();
   const id = body.id?.trim() && /^[\w-]+$/.test(body.id.trim())
     ? body.id.trim()
     : `char_${Date.now()}_${randomBytes(4).toString('hex')}`;
 
-  // 若已存在，保留 createdAt
-  let createdAt = now;
-  try {
-    const existing = JSON.parse(await fs.readFile(charFilePath(id), 'utf-8')) as LibraryCharacter;
-    createdAt = existing.createdAt;
-  } catch { /* new */ }
+  const existing = await readCharacter(username, id);
+  const createdAt = existing?.createdAt ?? now;
 
   const char: LibraryCharacter = {
     id,
+    ownerId: username,
     name: body.name.trim(),
     isProtagonist: body.isProtagonist,
     description: body.description?.trim(),
@@ -106,23 +127,42 @@ characterLibraryRouter.post('/save', async (req: Request, res: Response) => {
     updatedAt: now,
   };
 
-  await fs.writeFile(charFilePath(id), JSON.stringify(char, null, 2), 'utf-8');
-  res.json({ id, updatedAt: now });
+  const syncResult = syncCharacterLibraryAssets({
+    username,
+    characterId: id,
+    characterName: char.name,
+    sourceProject: char.sourceProject,
+    baseImageDataUrl: char.baseImageDataUrl,
+    states: char.states,
+    lookTree: char.lookTree,
+    existingBindings: existing?.assetBindings ?? null,
+  });
+  char.assetBindings = syncResult.bindings;
+
+  await fs.writeFile(charFilePath(username, id), JSON.stringify(char, null, 2), 'utf-8');
+  res.json({ id, updatedAt: now, assetCount: syncResult.assetCount });
 });
 
-// ── 列出所有角色 ──────────────────────────────────────────────────────────────
+characterLibraryRouter.get('/list', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
 
-characterLibraryRouter.get('/list', async (_req: Request, res: Response) => {
-  await ensureDirs();
-  const files = (await fs.readdir(LIB_DIR))
-    .filter((f) => f.endsWith('.json') && !f.startsWith('_'));
+  await ensureDirs(username);
 
-  const list: Array<Pick<LibraryCharacter, 'id' | 'name' | 'isProtagonist' | 'baseImageDataUrl' | 'sourceProject' | 'tags' | 'updatedAt' | 'createdAt'> & { stateCount: number }> = [];
+  const files = (await fs.readdir(getLibraryDir(username)))
+    .filter((file) => file.endsWith('.json') && !file.startsWith('_'));
 
-  for (const f of files) {
+  const characters: Array<
+    Pick<LibraryCharacter, 'id' | 'name' | 'isProtagonist' | 'baseImageDataUrl' | 'sourceProject' | 'tags' | 'updatedAt' | 'createdAt'> & {
+      stateCount: number;
+    }
+  > = [];
+
+  for (const fileName of files) {
     try {
-      const char = JSON.parse(await fs.readFile(path.join(LIB_DIR, f), 'utf-8')) as LibraryCharacter;
-      list.push({
+      const raw = await fs.readFile(path.join(getLibraryDir(username), fileName), 'utf-8');
+      const char = JSON.parse(raw) as LibraryCharacter;
+      characters.push({
         id: char.id,
         name: char.name,
         isProtagonist: char.isProtagonist,
@@ -133,71 +173,105 @@ characterLibraryRouter.get('/list', async (_req: Request, res: Response) => {
         createdAt: char.createdAt,
         stateCount: char.states?.length ?? 0,
       });
-    } catch { /* skip */ }
+    } catch {
+      // ignore broken files
+    }
   }
 
-  list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  res.json({ characters: list });
+  characters.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  res.json({ characters });
 });
-
-// ── 获取单个角色 ──────────────────────────────────────────────────────────────
 
 characterLibraryRouter.get('/:id', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
   const { id } = req.params;
-  if (!/^[\w-]+$/.test(id)) { res.status(400).json({ error: '无效 id' }); return; }
-  try {
-    const char = JSON.parse(await fs.readFile(charFilePath(id), 'utf-8'));
-    res.json(char);
-  } catch {
-    res.status(404).json({ error: '角色不存在' });
+  if (!/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效 id' });
+    return;
   }
+
+  const char = await readCharacter(username, id);
+  if (!char) {
+    res.status(404).json({ error: '角色不存在' });
+    return;
+  }
+
+  res.json(char);
 });
 
-// ── 删除角色 ─────────────────────────────────────────────────────────────────
-
 characterLibraryRouter.delete('/:id', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
   const { id } = req.params;
-  if (!/^[\w-]+$/.test(id)) { res.status(400).json({ error: '无效 id' }); return; }
+  if (!/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效 id' });
+    return;
+  }
+
   try {
-    await fs.unlink(charFilePath(id));
+    await fs.unlink(charFilePath(username, id));
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: '角色不存在' });
   }
 });
 
-// ── 生成分享 token ────────────────────────────────────────────────────────────
-
 characterLibraryRouter.post('/:id/share', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!/^[\w-]+$/.test(id)) { res.status(400).json({ error: '无效 id' }); return; }
-  await ensureDirs();
+  const username = requireUser(req, res);
+  if (!username) return;
 
-  let char: LibraryCharacter;
-  try {
-    char = JSON.parse(await fs.readFile(charFilePath(id), 'utf-8'));
-  } catch {
-    res.status(404).json({ error: '角色不存在' }); return;
+  const { id } = req.params;
+  if (!/^[\w-]+$/.test(id)) {
+    res.status(400).json({ error: '无效 id' });
+    return;
+  }
+
+  await ensureDirs(username);
+  const char = await readCharacter(username, id);
+  if (!char) {
+    res.status(404).json({ error: '角色不存在' });
+    return;
   }
 
   const token = randomBytes(16).toString('hex');
-  const expireMs = 7 * 24 * 60 * 60 * 1000; // 7天
-  const sharePayload = { token, charId: id, char, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + expireMs).toISOString() };
+  const expireMs = 7 * 24 * 60 * 60 * 1000;
+  const sharePayload = {
+    token,
+    ownerId: username,
+    charId: id,
+    char,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + expireMs).toISOString(),
+  };
+
   await fs.writeFile(path.join(SHARE_DIR, `${token}.json`), JSON.stringify(sharePayload, null, 2), 'utf-8');
 
   const baseUrl = process.env.API_PUBLIC_BASE_URL || process.env.API_SELF_BASE_URL || '';
-  res.json({ token, shareUrl: `${baseUrl}/api/character-library/share/${token}`, expiresAt: sharePayload.expiresAt });
+  res.json({
+    token,
+    shareUrl: `${baseUrl}/api/character-library/share/${token}`,
+    expiresAt: sharePayload.expiresAt,
+  });
 });
-
-// ── 通过分享 token 读取（只读） ────────────────────────────────────────────────
 
 characterLibraryRouter.get('/share/:token', async (req: Request, res: Response) => {
   const { token } = req.params;
-  if (!/^[0-9a-f]{32}$/.test(token)) { res.status(400).json({ error: '无效 token' }); return; }
+  if (!/^[0-9a-f]{32}$/.test(token)) {
+    res.status(400).json({ error: '无效 token' });
+    return;
+  }
+
   try {
-    const payload = JSON.parse(await fs.readFile(path.join(SHARE_DIR, `${token}.json`), 'utf-8')) as { expiresAt: string; char: LibraryCharacter };
+    const payload = JSON.parse(await fs.readFile(path.join(SHARE_DIR, `${token}.json`), 'utf-8')) as {
+      expiresAt: string;
+      char: LibraryCharacter;
+    };
     if (new Date(payload.expiresAt) < new Date()) {
-      res.status(410).json({ error: '分享链接已过期（7天有效）' }); return;
+      res.status(410).json({ error: '分享链接已过期（7天有效）' });
+      return;
     }
     res.json({ char: payload.char, expiresAt: payload.expiresAt });
   } catch {
@@ -205,24 +279,55 @@ characterLibraryRouter.get('/share/:token', async (req: Request, res: Response) 
   }
 });
 
-// ── 通过分享 token 导入到本地形象库 ──────────────────────────────────────────
-
 characterLibraryRouter.post('/import', async (req: Request, res: Response) => {
+  const username = requireUser(req, res);
+  if (!username) return;
+
   const { token } = req.body as { token?: string };
-  if (!token || !/^[0-9a-f]{32}$/.test(token)) { res.status(400).json({ error: '无效 token' }); return; }
-  await ensureDirs();
+  if (!token || !/^[0-9a-f]{32}$/.test(token)) {
+    res.status(400).json({ error: '无效 token' });
+    return;
+  }
+
+  await ensureDirs(username);
+
   try {
-    const payload = JSON.parse(await fs.readFile(path.join(SHARE_DIR, `${token}.json`), 'utf-8')) as { expiresAt: string; char: LibraryCharacter };
+    const payload = JSON.parse(await fs.readFile(path.join(SHARE_DIR, `${token}.json`), 'utf-8')) as {
+      expiresAt: string;
+      char: LibraryCharacter;
+    };
+
     if (new Date(payload.expiresAt) < new Date()) {
-      res.status(410).json({ error: '分享链接已过期' }); return;
+      res.status(410).json({ error: '分享链接已过期' });
+      return;
     }
+
     const now = new Date().toISOString();
     const newId = `char_${Date.now()}_${randomBytes(4).toString('hex')}`;
-    const imported: LibraryCharacter = { ...payload.char, id: newId, createdAt: now, updatedAt: now };
-    await fs.writeFile(charFilePath(newId), JSON.stringify(imported, null, 2), 'utf-8');
-    res.json({ id: newId, name: imported.name });
-  } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : '导入失败' });
+    const imported: LibraryCharacter = {
+      ...payload.char,
+      id: newId,
+      ownerId: username,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const syncResult = syncCharacterLibraryAssets({
+      username,
+      characterId: imported.id,
+      characterName: imported.name,
+      sourceProject: imported.sourceProject,
+      baseImageDataUrl: imported.baseImageDataUrl,
+      states: imported.states,
+      lookTree: imported.lookTree,
+      existingBindings: null,
+    });
+    imported.assetBindings = syncResult.bindings;
+
+    await fs.writeFile(charFilePath(username, newId), JSON.stringify(imported, null, 2), 'utf-8');
+    res.json({ id: newId, name: imported.name, assetCount: syncResult.assetCount });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : '导入失败' });
   }
 });
 

@@ -70,6 +70,7 @@ export function CharacterPortraitEditorModal({
   const [compassKey, setCompassKey] = useState('');
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   const busy = portraitJob?.status === 'generating';
   const preview = portraitJob?.status === 'done' ? portraitJob.previewDataUrl : null;
@@ -190,26 +191,35 @@ export function CharacterPortraitEditorModal({
 
   const handleSaveToLibrary = useCallback(async () => {
     setSavingToLib(true);
+    setSaveErr(null);
     try {
-      const baseImage = characterSheet.baseImageDataUrl ?? getCharacterLookImage(characterSheet);
+      const ensured = ensureCharacterLookTree(characterSheet);
+      const baseImage = ensured.baseImageDataUrl ?? getCharacterLookImage(ensured);
       await saveCharacterToLibrary({
-        name: characterSheet.name,
-        isProtagonist: characterSheet.isProtagonist,
+        name: ensured.name,
+        isProtagonist: ensured.isProtagonist,
         baseImageDataUrl: baseImage,
-        baseConfirmed: characterSheet.baseConfirmed ?? !!baseImage,
-        states: (characterSheet.states ?? []).map((s) => ({
+        baseConfirmed: ensured.baseConfirmed ?? !!baseImage,
+        states: (ensured.states ?? []).map((s) => ({
           id: s.id,
           label: s.label,
           imageDataUrl: s.imageDataUrl,
           statePrompt: s.statePrompt,
           notes: s.notes,
         })),
+        lookTree: ensured.lookTree?.map((node) => ({
+          id: node.id,
+          parentId: node.parentId,
+          label: node.label,
+          imageDataUrl: node.imageDataUrl,
+          note: node.note,
+        })),
+        activeLookId: ensured.activeLookId,
       });
       setSavedToLib(true);
       setTimeout(() => setSavedToLib(false), 3000);
     } catch (e) {
-      // 错误静默展示在按钮上
-      console.error(e);
+      setSaveErr(e instanceof Error ? e.message : '保存失败');
     } finally {
       setSavingToLib(false);
     }
@@ -221,6 +231,7 @@ export function CharacterPortraitEditorModal({
       : genMode === 'reference' && !refDataUrl
         ? '参考图模式请先上传一张参考图。'
         : null;
+  const activeError = jobErr ?? localErr ?? saveErr;
 
   return (
     <div
@@ -367,7 +378,7 @@ export function CharacterPortraitEditorModal({
                   仅保存在本机浏览器。填写后仅用于本次生图请求覆盖服务端 Key。
                 </p>
 
-                {(jobErr || localErr) && <p className="text-xs text-red-400">{jobErr ?? localErr}</p>}
+                {activeError && <p className="text-xs text-red-400">{activeError}</p>}
 
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -433,7 +444,7 @@ export function CharacterPortraitEditorModal({
                 disabled={savingToLib}
                 className="rounded-lg px-4 py-2 text-sm border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] disabled:opacity-50 transition-colors"
               >
-                {savingToLib ? '保存中…' : savedToLib ? '✓ 已保存到形象库' : '保存到形象库'}
+                {savingToLib ? '保存中…' : savedToLib ? '✓ 已保存并同步素材库' : '保存到形象库'}
               </button>
               <button
                 type="button"

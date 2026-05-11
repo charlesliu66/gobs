@@ -91,7 +91,7 @@ export function CharacterLibraryPanel({ onImportToProject }: Props) {
           <div className="space-y-2">
             <p className="text-xs text-[var(--color-text-muted)]">暂无角色</p>
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3 text-[10px] text-[var(--color-text-muted)] leading-relaxed">
-              💡 在<strong className="text-[var(--color-text)]">高级制片</strong>的角色卡里，点击「保存到形象库」可将角色及所有状态保存到这里，方便跨项目复用。
+              💡 在<strong className="text-[var(--color-text)]">高级制片</strong>的角色卡里，点击「保存到形象库」会把角色、状态图同步保存到这里，并自动写入当前账号的素材库，方便跨项目复用。
             </div>
           </div>
         ) : chars.map((c) => (

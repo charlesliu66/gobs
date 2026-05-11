@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.200)*
+*Last updated: 2026-05-11 (v0.201)*
 
-**Latest update - v0.200**
+**Latest update - v0.201**
+- Advanced Studio "Save to Character Library" is now owner-scoped end to end: character library save/list/read/delete/import flows all resolve against the current logged-in account instead of a shared global directory.
+- Saving a character from Advanced Studio now also syncs the saved base look, state wardrobe images, and available look-tree images into the same account's Asset Library as `character_image` assets, so they appear in `/asset-library` without a separate manual upload.
+- Character save feedback is now clearer in the UI: successful saves explicitly say the asset library was synced, and save failures no longer fail silently in the portrait editor.
+
+**Previous update - v0.200**
 - Campaign Creative route now keeps the same `/campaign-creative` behavior behind a thin page entry, while the implementation is split into dedicated brief, output, strategy, and distribution modules.
 - Mission brief generation, Output Workbench production, Advanced Studio handoff, and Distribution Package handoff all stay on the same storage keys and primary actions after the split.
 - This release is a frontend-only page refactor to reduce merge hotspots and future regression risk; it does not change Output Plan contracts, backend APIs, or deployment flow.

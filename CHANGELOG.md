@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.201 - 2026-05-11
+**Advanced Studio character library owner sync**
+**Advanced Studio / Character Library / Asset Library:**
+- Moved character-library save/list/read/delete/import storage to owner-scoped directories keyed by the current authenticated username, removing the old shared storage path from the active read/write flow.
+- Saving a character from Advanced Studio now synchronizes the saved base look, wardrobe states, and saved look-tree images into the same account's Asset Library as `character_image` assets, so operators can see and reuse them from `/asset-library`.
+- Updated Advanced Studio save feedback so portrait/wardrobe saves explicitly confirm Asset Library sync and surface save failures instead of swallowing them silently.
+**Tests / Build:**
+- Rebuilt backend and frontend production bundles and ran an isolated temporary `API_DATA_DIR` sync sanity check to verify owner-scoped asset rows are written with `team_category=character_image`.
+
 ## v0.200 - 2026-05-11
 **Campaign Creative page split**
 **Campaign Creative:**
