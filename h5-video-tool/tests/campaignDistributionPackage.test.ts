@@ -363,6 +363,21 @@ test('buildCampaignDistributionCreateInputFromProductionItem carries Banner plac
           qualityStatus: 'needs_fix',
           bannerSpecIds: ['square_1_1', 'story_9_16'],
           sourceAssetIds: ['asset_key_art', 'asset_logo'],
+          bannerPromptContext: {
+            readiness: 'template_ready',
+            specIds: ['square_1_1', 'story_9_16'],
+            sourceAssetIds: ['asset_key_art', 'asset_logo'],
+            mainVisualAssetId: 'asset_key_art',
+            logoAssetId: 'asset_logo',
+            copy: {
+              headline: 'Reward-first UA opener',
+              shortCopy: 'Fast gold payoff',
+              cta: 'Download Gold and Glory now',
+            },
+            assetFitWarnings: [],
+            forbiddenClaims: ['No guaranteed SSR.'],
+            knowledgeCitations: ['Market / approvedAngles: Lead with the payoff before the CTA.'],
+          },
           createdAt: '2026-05-10T00:00:00.000Z',
         },
       ],
@@ -373,9 +388,11 @@ test('buildCampaignDistributionCreateInputFromProductionItem carries Banner plac
 
   assert.equal(draft.assetReadiness.state, 'generating');
   assert.equal(draft.assetReadiness.primaryAssetId, 'banner_prompt_item_cross_platform_banner_1');
+  assert.match(draft.assetReadiness.reason ?? '', /template/i);
   assert.match(draft.assetReadiness.reason ?? '', /final image/i);
   assert.equal(draft.assets[0]?.type, 'image');
   assert.equal(draft.assets[0]?.status, 'generating');
   assert.match(draft.copy.caption, /static campaign banner/i);
+  assert.deepEqual(draft.source.sourceAssetIds, ['asset_key_art', 'asset_logo']);
   assert.equal(draft.review.status, 'needs_review');
 });

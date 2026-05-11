@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.197)*
+*Last updated: 2026-05-11 (v0.198)*
 
-**Latest update - v0.197**
+**Latest update - v0.198**
+- Campaign Banner prompt production now creates structured template-ready artifacts with objective, formats, source assets, copy lock, composition rules, forbidden claims, citations, asset-fit warnings, and handoff checklist.
+- Banner prompt outputs carry compact `bannerPromptContext` metadata for `template_ready` readiness, spec/source lineage, copy snapshot, warnings, guardrails, and citations through API round-trips.
+- Campaign Output Workbench now separates true/direct/template coverage so prompt-only Banner work is not mistaken for direct/auto visual production.
+
+**Previous update - v0.197**
 - Campaign text production now covers caption, headline, CTA, hashtag, and platform post drafts through existing output items, without adding a new production item type.
 - Produced text drafts carry compact source context for platform, angle, audience, tone, selling points, CTA intent, forbidden claims, and knowledge citations when available.
 - Campaign Distribution Packages now prefer full platform-post copy from produced text outputs while preserving explicit review/media requirements before publishing.
@@ -290,6 +295,7 @@
 - **Asset reuse metadata (v0.185)**: Asset Library responses now include team reuse categories, category source, preprocessing metadata, manual category correction, and an `assetId`-based Run 0 `AssetContract` mapping helper for later Campaign/Banner reuse.
 - **Banner Output MVP (v0.186)**: Campaign Output Plans can now include Banner deliverables with four initial specs, Asset Library source IDs, deterministic prompt placeholders, three-state quality marking, and non-publishable distribution package context.
 - **Quality review and next-version MVP (v0.187)**: Campaign Output Workbench can turn human quality feedback into traceable next-version drafts for Banner prompts and platform copy without adding a revision system or claiming automatic video understanding.
+- **Banner Prompt Hardening (v0.198)**: Banner prompts are now structured template-ready artifacts with persisted `bannerPromptContext`, asset-fit warnings, source/spec lineage, and Workbench coverage split from direct/auto text outputs.
 - **Motion Transfer validation (v0.188)**: Advanced Studio now marks Motion Transfer as experimental based on a 10-sample validation ledger and a strict 2/10 usable-rate conclusion.
 - **Character Showcase validation (v0.189)**: Advanced Studio now marks Character Showcase as constrained continue based on a 10-sample validation ledger, with preset guidance focused on single-character reveal, skill payoff, and simple reward payoff.
 - **Distribution final mile (v0.190)**: `/distribute` now restores active publish context after refresh, supports account-group previews/updates, and pairs publish failure reasons with next-step guidance.

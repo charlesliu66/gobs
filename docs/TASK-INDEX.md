@@ -2,6 +2,8 @@
 
 ## 2026-05-11 Current Mainline Addendum
 
+- Current Window A handoff: Run B2 is completed and pushed to `main` @ `1d0c543`; Run B3 is active at `docs/workflow/runs/2026-05-11-campaign-banner-prompt-hardening/`, focused on structured Banner prompt artifacts and `template_ready` coverage classification.
+
 - 当前正式承接主线调整为 `Campaign 素材生产覆盖率 V2`：优先提高 Campaign 需制作素材中可直接生产、模板化生产、或可辅助推进的比例，而不是继续把“创意质量评估与迭代闭环”作为第一目标。
 - 综合优化第一批 Run A1/A2 已完成并提交到 `main`；窗口 A 当前继续 Run B2：`docs/workflow/runs/2026-05-11-campaign-text-production-pack/`，补齐 Campaign caption / headline / CTA / hashtag / platform post 文本产物覆盖。
 - Campaign 生产覆盖率主线的第一轮仍必须从 Run 0 开始：`Existing Capability Audit & Compatibility Map`。它先审计现有 Campaign Output Plan、Asset Library、Google Drive、Banner Output 能力，固定“复用 / 增量 / 禁止碰”的边界，再允许 Run 1A / Run 1B / Run 2 开工。
@@ -72,7 +74,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-11-campaign-text-production-pack` | Comprehensive Optimization Run B2: expand Campaign text outputs to caption, headline, CTA, hashtag, and platform post drafts without adding new production item types or publishing actions | Active in Window A Dev Worker; commit to `main`, no deployment |
+| `2026-05-11-campaign-banner-prompt-hardening` | Comprehensive Optimization Run B3: harden Campaign Banner prompt outputs into structured template-ready artifacts without preview, provider calls, or real publishing | Active in Window A Dev Worker; commit to `main`, no deployment |
+| `2026-05-11-campaign-text-production-pack` | Comprehensive Optimization Run B2: expand Campaign text outputs to caption, headline, CTA, hashtag, and platform post drafts without adding new production item types or publishing actions | Completed and pushed to `main` @ `1d0c543`; deployment remains Release Owner responsibility |
 | `2026-05-11-gobs-navigation-structure` | Comprehensive Optimization Run A1/A2: regroup sidebar IA, keep Platform as experimental direct-link discovery, and add Studio production entry guidance | Completed and pushed to `main` @ `c2bdff0`; deployment remains Release Owner responsibility |
 | `2026-05-11-campaign-production-coverage-run0-audit` | Run 0: Existing Capability Audit & Compatibility Map for Campaign Production Coverage V2 | Next to bootstrap; must finish before Run 1A / Run 1B / Run 2 implementation |
 | `2026-05-11-editor-effects-sprint` | Run 12: add a tested editor packaging template catalog and compact workbench apply menu without changing render/export engines | Builder/Verifier in progress on branch `codex/2026-05-11-editor-effects-sprint`; this window is also acting as Release Owner per user instruction |

@@ -173,9 +173,21 @@ test('produceSupportedCampaignOutputs produces Banner prompt placeholders when s
 
   assert.equal(bannerItem.status, 'produced');
   assert.ok(bannerOutput);
-  assert.match(bannerOutput.body, /Formats:/);
+  assert.match(bannerOutput.body, /## Formats/);
+  assert.match(bannerOutput.body, /## Source Assets/);
+  assert.match(bannerOutput.body, /## Copy Lock/);
+  assert.match(bannerOutput.body, /template_ready/);
   assert.match(bannerOutput.body, /asset_key_art/);
   assert.deepEqual(bannerOutput.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+  assert.equal(bannerOutput.bannerPromptContext?.readiness, 'template_ready');
+  assert.deepEqual(bannerOutput.bannerPromptContext?.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+  assert.equal(bannerOutput.bannerPromptContext?.copy.cta, 'Try the new hero today');
+  assert.deepEqual(bannerOutput.bannerPromptContext?.specIds, [
+    'square_1_1',
+    'portrait_4_5',
+    'story_9_16',
+    'landscape_16_9',
+  ]);
   assert.equal(bannerItem.outputAssetIds.includes(bannerOutput.id), true);
 
   const marked = markProducedOutputQuality(produced, bannerItem.id, bannerOutput.id, 'usable');

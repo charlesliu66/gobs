@@ -112,6 +112,11 @@ const BANNER_OUTPUT_SPEC_IDS = [
   'story_9_16',
   'landscape_16_9',
 ] as const;
+const BANNER_PROMPT_READINESS = [
+  'template_ready',
+  'needs_source_asset',
+  'needs_copy',
+] as const;
 const KNOWLEDGE_REFERENCE_SECTIONS = [
   'marketTruth',
   'audienceTension',
@@ -332,6 +337,31 @@ function normalizeTextContext(value: unknown, field: string): UnknownRecord | un
   };
 }
 
+function normalizeBannerPromptCopy(value: unknown, field: string): UnknownRecord {
+  const raw = requireObject(value, field);
+  return {
+    headline: requireText(raw.headline, `${field}.headline`),
+    shortCopy: requireText(raw.shortCopy, `${field}.shortCopy`),
+    cta: requireText(raw.cta, `${field}.cta`),
+  };
+}
+
+function normalizeBannerPromptContext(value: unknown, field: string): UnknownRecord | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = requireObject(value, field);
+  return {
+    readiness: requireEnum(raw.readiness, `${field}.readiness`, BANNER_PROMPT_READINESS),
+    specIds: normalizeOptionalEnumList(raw.specIds, `${field}.specIds`, BANNER_OUTPUT_SPEC_IDS) ?? [],
+    sourceAssetIds: normalizeSafeIdentifierList(raw.sourceAssetIds, `${field}.sourceAssetIds`),
+    mainVisualAssetId: normalizeOptionalSafeIdentifier(raw.mainVisualAssetId, `${field}.mainVisualAssetId`),
+    logoAssetId: normalizeOptionalSafeIdentifier(raw.logoAssetId, `${field}.logoAssetId`),
+    copy: normalizeBannerPromptCopy(raw.copy, `${field}.copy`),
+    assetFitWarnings: normalizeStringList(raw.assetFitWarnings, `${field}.assetFitWarnings`),
+    forbiddenClaims: normalizeStringList(raw.forbiddenClaims, `${field}.forbiddenClaims`),
+    knowledgeCitations: normalizeStringList(raw.knowledgeCitations, `${field}.knowledgeCitations`),
+  };
+}
+
 function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
@@ -375,9 +405,30 @@ function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[
       briefId: normalizeOptionalSafeIdentifier(raw.briefId, `${field}[${index}].briefId`),
       knowledgeReferences: normalizeKnowledgeReferences(raw.knowledgeReferences, `${field}[${index}].knowledgeReferences`),
       textContext: normalizeTextContext(raw.textContext, `${field}[${index}].textContext`),
+      bannerPromptContext: normalizeBannerPromptContext(
+        raw.bannerPromptContext,
+        `${field}[${index}].bannerPromptContext`,
+      ),
       createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
     };
   });
+}
+
+function normalizeBannerDetails(value: unknown, field: string): UnknownRecord | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = requireObject(value, field);
+  return {
+    specs: normalizeOptionalEnumList(raw.specs, `${field}.specs`, BANNER_OUTPUT_SPEC_IDS) ?? [],
+    mainVisualRequirementId: requireSafeIdentifier(raw.mainVisualRequirementId, `${field}.mainVisualRequirementId`),
+    logoRequirementId: normalizeOptionalSafeIdentifier(raw.logoRequirementId, `${field}.logoRequirementId`),
+    selectedMainVisualAssetId: normalizeOptionalSafeIdentifier(
+      raw.selectedMainVisualAssetId,
+      `${field}.selectedMainVisualAssetId`,
+    ),
+    selectedLogoAssetId: normalizeOptionalSafeIdentifier(raw.selectedLogoAssetId, `${field}.selectedLogoAssetId`),
+    shortCopy: requireText(raw.shortCopy, `${field}.shortCopy`),
+    cta: requireText(raw.cta, `${field}.cta`),
+  };
 }
 
 function normalizeProductionItems(value: unknown): UnknownRecord[] {
@@ -409,6 +460,7 @@ function normalizeProductionItems(value: unknown): UnknownRecord[] {
         raw.distributionPackageIds,
         `items[${index}].distributionPackageIds`,
       ),
+      bannerDetails: normalizeBannerDetails(raw.bannerDetails, `items[${index}].bannerDetails`),
       producedOutputs: normalizeProducedOutputs(raw.producedOutputs, `items[${index}].producedOutputs`),
       knowledgeReferences: normalizeKnowledgeReferences(raw.knowledgeReferences, `items[${index}].knowledgeReferences`),
       humanAction: normalizeHumanAction(raw.humanAction, `items[${index}].humanAction`),

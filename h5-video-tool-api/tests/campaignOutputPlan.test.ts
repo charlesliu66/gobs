@@ -413,6 +413,15 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
           status: 'produced',
           gobsCanProduce: true,
           outputAssetIds: ['banner_prompt_item_cross_platform_banner_1'],
+          bannerDetails: {
+            specs: ['square_1_1', 'story_9_16'],
+            mainVisualRequirementId: 'src_key_art',
+            logoRequirementId: 'src_game_logo',
+            selectedMainVisualAssetId: 'asset_key_art',
+            selectedLogoAssetId: 'asset_logo',
+            shortCopy: 'Lead with gameplay proof.',
+            cta: 'Play today',
+          },
           knowledgeReferences: [
             {
               citationId: 'kref_aa_123',
@@ -442,6 +451,21 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
               reviewerId: 'campaign_operator',
               campaignId: 'campaign_banner_prompt',
               briefId: 'brief_banner_prompt',
+              bannerPromptContext: {
+                readiness: 'template_ready',
+                specIds: ['square_1_1', 'story_9_16'],
+                sourceAssetIds: ['asset_key_art', 'asset_logo'],
+                mainVisualAssetId: 'asset_key_art',
+                logoAssetId: 'asset_logo',
+                copy: {
+                  headline: 'Reward-first hero launch',
+                  shortCopy: 'Lead with gameplay proof.',
+                  cta: 'Play today',
+                },
+                assetFitWarnings: ['Verify mobile safe area before export.'],
+                forbiddenClaims: ['No guaranteed SSR.'],
+                knowledgeCitations: ['Market / approvedAngles: Lead with gameplay proof.'],
+              },
               knowledgeReferences: [
                 {
                   citationId: 'kref_aa_123',
@@ -469,6 +493,8 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
     assert.equal(created.response.status, 201);
     const output = created.json.items[0].producedOutputs[0];
     assert.equal(created.json.items[0].knowledgeReferences[0].citationId, 'kref_aa_123');
+    assert.deepEqual(created.json.items[0].bannerDetails.specs, ['square_1_1', 'story_9_16']);
+    assert.equal(created.json.items[0].bannerDetails.selectedMainVisualAssetId, 'asset_key_art');
     assert.equal(output.kind, 'banner_prompt');
     assert.equal(output.qualityStatus, 'needs_fix');
     assert.equal(output.parentOutputId, 'banner_prompt_parent');
@@ -480,6 +506,11 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
     assert.equal(output.reviewerId, 'campaign_operator');
     assert.equal(output.campaignId, 'campaign_banner_prompt');
     assert.equal(output.briefId, 'brief_banner_prompt');
+    assert.equal(output.bannerPromptContext.readiness, 'template_ready');
+    assert.deepEqual(output.bannerPromptContext.specIds, ['square_1_1', 'story_9_16']);
+    assert.deepEqual(output.bannerPromptContext.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+    assert.equal(output.bannerPromptContext.copy.cta, 'Play today');
+    assert.deepEqual(output.bannerPromptContext.assetFitWarnings, ['Verify mobile safe area before export.']);
     assert.equal(output.knowledgeReferences[0].value, 'Lead with gameplay proof.');
   });
 });
@@ -725,6 +756,45 @@ test('routes reject malformed output plan payloads with 400-level errors', async
     });
     assert.equal(invalidTextContext.response.status, 400);
     assert.match(String(invalidTextContext.json?.error ?? ''), /textContext\.platform/i);
+
+    const invalidBannerPromptContext = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'validator',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                id: 'banner_prompt_bad_context',
+                kind: 'banner_prompt',
+                title: 'Bad banner context',
+                body: 'This should not validate.',
+                variants: ['Square 1:1'],
+                platform: 'cross_platform',
+                bannerPromptContext: {
+                  readiness: 'auto_ready',
+                  specIds: ['square_1_1'],
+                  sourceAssetIds: ['asset_key_art'],
+                  copy: {
+                    headline: 'Bad context',
+                    shortCopy: 'Bad',
+                    cta: 'Play',
+                  },
+                  assetFitWarnings: [],
+                  forbiddenClaims: [],
+                  knowledgeCitations: [],
+                },
+                createdAt: '2026-05-10T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(invalidBannerPromptContext.response.status, 400);
+    assert.match(String(invalidBannerPromptContext.json?.error ?? ''), /bannerPromptContext\.readiness/i);
 
     const invalidFeedbackTag = await requestJson(baseUrl, {
       method: 'PATCH',

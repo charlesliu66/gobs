@@ -399,10 +399,18 @@ function sourceAssetIdsForProductionItem(
   const requirementIds = new Set(item.requiredSourceAssetIds);
   return uniqueStrings([
     ...(item.producedOutputs ?? []).flatMap((output) => output.sourceAssetIds ?? []),
+    ...(item.producedOutputs ?? []).flatMap((output) => output.bannerPromptContext?.sourceAssetIds ?? []),
     ...(sourceAssetRequirements ?? [])
       .filter((requirement) => requirementIds.has(requirement.id))
       .flatMap((requirement) => requirement.matchedAssetIds),
   ]);
+}
+
+function bannerPromptReadinessReason(output: ProducedOutputDraft | undefined): string {
+  if (output?.bannerPromptContext?.readiness === 'template_ready') {
+    return 'Banner prompt template is ready as non-publishable context; render or export the final image before publishing.';
+  }
+  return 'Banner prompt context is available; resolve asset-fit warnings and render a final image before publishing.';
 }
 
 export function buildCampaignDistributionCreateInputFromProductionItem(
@@ -455,7 +463,7 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
         ? {
             state: 'generating',
             primaryAssetId: bannerOutput?.id,
-            reason: 'Banner prompt placeholder is ready; render or export the final image before publishing.',
+            reason: bannerPromptReadinessReason(bannerOutput),
           }
       : {
           state: 'needs_asset',

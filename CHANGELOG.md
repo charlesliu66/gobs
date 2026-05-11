@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.198 - 2026-05-11
+**Campaign Banner prompt hardening**
+**Campaign Output / Distribution Prep:**
+- Upgraded Banner prompt production from a short placeholder into a structured template-ready artifact with objective, formats, source assets, copy lock, composition rules, forbidden claims, citations, asset-fit warnings, and handoff checklist.
+- Added compact `bannerPromptContext` metadata so Banner prompts preserve `template_ready` readiness, spec/source asset lineage, copy snapshot, warnings, guardrails, and citations through frontend/API round-trips.
+- Split Campaign Output Workbench readiness into true/direct/template coverage so prompt-only Banner output is visible as `template_ready`, not direct/auto production.
+- Kept Distribution Package handoff honest by carrying Banner prompts only as non-publishable image context until a final image is rendered or exported.
+**Tests / Build:**
+- Added Banner prompt, coverage view-model, output production, Distribution Package, and backend Output Plan coverage; rebuilt both frontend and API production bundles.
+
 ## v0.197 - 2026-05-11
 **Campaign text production coverage**
 **Campaign Output / Distribution Prep:**

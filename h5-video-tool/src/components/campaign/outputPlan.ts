@@ -15,6 +15,10 @@ import {
   buildTextProductionContext,
   type TextProductionContext,
 } from './textProductionPrompt.ts';
+import {
+  buildStructuredBannerPrompt,
+  type BannerPromptContext,
+} from './bannerPrompt.ts';
 
 export type ProductionItemType =
   | 'fb_post'
@@ -126,6 +130,7 @@ export interface ProducedOutputDraft {
   briefId?: string;
   knowledgeReferences?: CampaignKnowledgeCitation[];
   textContext?: TextProductionContext;
+  bannerPromptContext?: BannerPromptContext;
   createdAt: string;
 }
 
@@ -761,6 +766,7 @@ function producedDraft(
     | 'briefId'
     | 'parentOutputId'
     | 'textContext'
+    | 'bannerPromptContext'
   >> = {},
 ): ProducedOutputDraft {
   return {
@@ -776,8 +782,16 @@ function producedDraft(
   };
 }
 
-function bannerSpecLabels(specIds: BannerOutputSpecId[]): string[] {
-  return specIds.map((id) => BANNER_OUTPUT_SPECS.find((spec) => spec.id === id)?.label ?? id);
+function bannerSpecsForIds(specIds: BannerOutputSpecId[]): BannerOutputSpec[] {
+  return specIds
+    .map((id) => BANNER_OUTPUT_SPECS.find((spec) => spec.id === id))
+    .filter((spec): spec is BannerOutputSpec => Boolean(spec));
+}
+
+function knowledgeCitationLines(references: CampaignKnowledgeCitation[] | undefined): string[] {
+  return uniqueStrings((references ?? []).map((reference) =>
+    `${reference.packTitle} / ${reference.section}: ${reference.value}`,
+  ));
 }
 
 function buildBannerPromptForItem(
@@ -791,25 +805,36 @@ function buildBannerPromptForItem(
     item.bannerDetails.selectedMainVisualAssetId,
     item.bannerDetails.selectedLogoAssetId,
   ]);
-  const specLabels = bannerSpecLabels(item.bannerDetails.specs);
-  const body = [
-    `Create static campaign banner variants for ${signals.angle}.`,
-    `Formats: ${specLabels.join(', ')}.`,
-    `Main visual assetId: ${item.bannerDetails.selectedMainVisualAssetId ?? 'needs-selected-main-visual'}.`,
-    item.bannerDetails.selectedLogoAssetId ? `Logo assetId: ${item.bannerDetails.selectedLogoAssetId}.` : undefined,
-    `Short copy: ${item.bannerDetails.shortCopy}.`,
-    `CTA: ${item.bannerDetails.cta}.`,
-    `Visual direction: premium Gold and Glory composition, clear focal character or gameplay moment, readable CTA, no unsupported reward claims.`,
-  ].filter(Boolean).join('\n');
+  const prompt = buildStructuredBannerPrompt({
+    angle: signals.angle,
+    objective: signals.objective,
+    audience: signals.audience,
+    proof: signals.proof,
+    specs: bannerSpecsForIds(item.bannerDetails.specs),
+    mainVisualAssetId: item.bannerDetails.selectedMainVisualAssetId,
+    logoAssetId: item.bannerDetails.selectedLogoAssetId,
+    shortCopy: item.bannerDetails.shortCopy,
+    cta: item.bannerDetails.cta,
+    visualDirection: uniqueStrings([
+      ...(args.strategy?.visualCues ?? []),
+      'Premium Gold and Glory composition with a clear focal character or gameplay moment.',
+      'Keep CTA readable and avoid unsupported reward claims.',
+    ]).join(' '),
+    forbiddenClaims: uniqueStrings([
+      ...(args.brief.forbiddenClaims ?? []),
+      ...(args.strategy?.forbiddenClaims ?? []),
+    ]),
+    knowledgeCitations: knowledgeCitationLines(item.knowledgeReferences),
+  });
 
   return [
     producedDraft(
       item,
       'banner_prompt',
       0,
-      'Banner prompt placeholder',
-      body,
-      specLabels,
+      prompt.title,
+      prompt.body,
+      prompt.variants,
       createdAt,
       {
         bannerSpecIds: item.bannerDetails.specs,
@@ -818,6 +843,7 @@ function buildBannerPromptForItem(
         campaignId: args.plan.campaignId,
         briefId: args.plan.briefId,
         parentOutputId: item.id,
+        bannerPromptContext: prompt.context,
       },
     ),
   ];
@@ -938,7 +964,7 @@ export function produceSupportedCampaignOutputs(
         type: 'confirm' as const,
         label: item.type === 'banner' ? 'Review banner prompt' : 'Review produced draft',
         detail: item.type === 'banner'
-          ? 'GOBS produced a Banner prompt placeholder. Render or export a final image before publishing.'
+          ? 'GOBS produced a template-ready Banner prompt. Render or export a final image before publishing.'
           : 'GOBS produced this draft copy. Review it before distribution.',
       },
     };

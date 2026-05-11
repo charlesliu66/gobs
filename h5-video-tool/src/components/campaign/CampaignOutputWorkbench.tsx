@@ -15,6 +15,7 @@ import {
   summarizeOutputPlanLinkHealth,
   type CampaignDataLinkHealthStatus,
 } from './dataContractLinkHealth.ts';
+import { summarizeCampaignOutputCoverage } from './outputCoverageViewModel.ts';
 
 type Copy = {
   emptyTitle: string;
@@ -32,6 +33,8 @@ type Copy = {
   createdPlan: string;
   totalItems: string;
   gobsReady: string;
+  directReady: string;
+  templateReady: string;
   blocked: string;
   linkHealth: string;
   linkHealthy: string;
@@ -57,6 +60,11 @@ type Copy = {
   bannerShortCopy: string;
   bannerCta: string;
   bannerPromptPlaceholder: string;
+  bannerPromptReadiness: string;
+  bannerPromptTemplateReady: string;
+  bannerPromptNeedsAsset: string;
+  bannerPromptNeedsCopy: string;
+  bannerAssetFitWarnings: string;
   bannerQuality: string;
   qualityUsable: string;
   qualityNeedsFix: string;
@@ -128,8 +136,8 @@ export function CampaignOutputWorkbench({
     );
   }
 
-  const readyCount = activePlan.items.filter((item) => item.gobsCanProduce).length;
-  const blockedCount = activePlan.items.filter((item) => item.status === 'blocked').length;
+  const coverage = summarizeCampaignOutputCoverage(activePlan.items);
+  const blockedCount = coverage.needsSourceAsset + coverage.unsupported;
   const linkHealth = summarizeOutputPlanLinkHealth(activePlan);
   const linkHealthLabels: Record<CampaignDataLinkHealthStatus, string> = {
     healthy: copy.linkHealthy,
@@ -145,9 +153,11 @@ export function CampaignOutputWorkbench({
       </div>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)]">{copy.subtitle}</p>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4" data-section="outputSummary">
+      <div className="mt-6 grid gap-4 md:grid-cols-3 lg:grid-cols-6" data-section="outputSummary">
         <SummaryBlock label={copy.totalItems} value={String(sumQuantities(activePlan.items))} />
-        <SummaryBlock label={copy.gobsReady} value={String(readyCount)} />
+        <SummaryBlock label={copy.gobsReady} value={String(coverage.trueReady)} />
+        <SummaryBlock label={copy.directReady} value={String(coverage.directReady)} />
+        <SummaryBlock label={copy.templateReady} value={String(coverage.templateReady)} />
         <SummaryBlock label={copy.blocked} value={String(blockedCount)} />
         <SummaryBlock
           label={copy.linkHealth}

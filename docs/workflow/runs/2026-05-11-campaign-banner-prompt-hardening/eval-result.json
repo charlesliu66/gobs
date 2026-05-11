@@ -1,0 +1,31 @@
+{
+  "runId": "2026-05-11-campaign-banner-prompt-hardening",
+  "status": "not_run",
+  "reason": "bash is not available in the current PowerShell environment, so scripts/eval.sh could not start.",
+  "attemptedCommand": "bash scripts/eval.sh 2026-05-11-campaign-banner-prompt-hardening",
+  "fallbackEvidence": [
+    {
+      "command": "node --test src/components/campaign/bannerPrompt.test.ts src/components/campaign/outputCoverageViewModel.test.ts tests/campaignOutputProductionAdapter.test.ts tests/campaignDistributionPackage.test.ts",
+      "cwd": "h5-video-tool",
+      "result": "pass",
+      "testsPassed": 14
+    },
+    {
+      "command": "node --import tsx --test tests/campaignOutputPlan.test.ts",
+      "cwd": "h5-video-tool-api",
+      "result": "pass",
+      "testsPassed": 9
+    },
+    {
+      "command": "npm run build",
+      "cwd": "h5-video-tool",
+      "result": "pass"
+    },
+    {
+      "command": "npm run build",
+      "cwd": "h5-video-tool-api",
+      "result": "pass"
+    }
+  ],
+  "p0p1Defects": 0
+}

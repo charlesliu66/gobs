@@ -13,6 +13,11 @@ type BannerCopy = {
   bannerShortCopy: string;
   bannerCta: string;
   bannerPromptPlaceholder: string;
+  bannerPromptReadiness: string;
+  bannerPromptTemplateReady: string;
+  bannerPromptNeedsAsset: string;
+  bannerPromptNeedsCopy: string;
+  bannerAssetFitWarnings: string;
   bannerQuality: string;
   chooseAsset: string;
   qualityUsable: string;
@@ -54,9 +59,17 @@ export function BannerOutputCard({
   const selectedMainVisual = item.bannerDetails.selectedMainVisualAssetId;
   const selectedLogo = item.bannerDetails.selectedLogoAssetId;
   const promptOutput = item.producedOutputs?.find((output) => output.kind === 'banner_prompt');
+  const promptContext = promptOutput?.bannerPromptContext;
   const specs = item.bannerDetails.specs
     .map((id) => BANNER_OUTPUT_SPECS.find((spec) => spec.id === id))
     .filter(Boolean);
+  const readinessLabel = promptContext?.readiness === 'template_ready'
+    ? copy.bannerPromptTemplateReady
+    : promptContext?.readiness === 'needs_source_asset'
+      ? copy.bannerPromptNeedsAsset
+      : promptContext?.readiness === 'needs_copy'
+        ? copy.bannerPromptNeedsCopy
+        : undefined;
 
   return (
     <div className="mt-4 border-t border-[var(--color-border)]/35 pt-4" data-section="bannerOutputCard">
@@ -110,6 +123,30 @@ export function BannerOutputCard({
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#e6c66e]">
             {copy.bannerPromptPlaceholder}
           </div>
+          {readinessLabel ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2" data-section="bannerPromptReadiness">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-subtle)]">
+                {copy.bannerPromptReadiness}
+              </span>
+              <span className="rounded-full border border-[#d5b56a]/35 bg-[#d5b56a]/12 px-3 py-1 text-xs font-semibold text-[#ffe9a6]">
+                {readinessLabel}
+              </span>
+            </div>
+          ) : null}
+          {promptContext?.assetFitWarnings.length ? (
+            <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/8 px-3 py-2" data-section="bannerAssetFitWarnings">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-100">
+                {copy.bannerAssetFitWarnings}
+              </div>
+              <ul className="mt-2 grid gap-1">
+                {promptContext.assetFitWarnings.map((warning) => (
+                  <li key={warning} className="text-xs leading-5 text-[var(--color-text-muted)]">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--color-text-muted)]">
             {promptOutput.body}
           </p>
