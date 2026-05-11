@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.196)*
+*Last updated: 2026-05-11 (v0.197)*
 
-**Latest update - v0.196**
+**Latest update - v0.197**
+- Campaign Creative route now keeps the same `/campaign-creative` behavior behind a thin page entry, while the implementation is split into dedicated brief, output, strategy, and distribution modules.
+- Mission brief generation, Output Workbench production, Advanced Studio handoff, and Distribution Package handoff all stay on the same storage keys and primary actions after the split.
+- This release is a frontend-only page refactor to reduce merge hotspots and future regression risk; it does not change Output Plan contracts, backend APIs, or deployment flow.
+
+**Previous update - v0.196**
 - Campaign Output Workbench now shows quantity-weighted coverage summary for true coverage, assistive coverage, blocked deliverables, and direct/template breakdowns instead of only raw ready/blocked counts.
 - Each planned output now gets a business-facing readiness state derived from existing capability enums plus source-asset readiness, with blocked items calling out the missing assets needed to unblock them.
 - The new coverage layer stays frontend-only; this release does not change `ProductionCapability`, Output Plan contracts, backend APIs, or asset schema.

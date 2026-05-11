@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.197 - 2026-05-11
+**Campaign Creative page split**
+**Campaign Creative:**
+- Reduced `src/pages/CampaignCreative.tsx` to a thin route entry and moved the implementation into dedicated `campaignCreative/` modules for brief, output, strategy, distribution, and shared page state.
+- Kept `/campaign-creative`, mission brief generation, Output Workbench production, Advanced Studio handoff, and Distribution Package handoff behavior unchanged while separating render ownership from state/handler ownership.
+- Updated structural regression tests to point at the new module boundaries so future refactors can move safely without relying on the old 1k+ page file.
+**Tests / Build:**
+- Reran targeted Campaign Creative source-presence tests plus frontend and backend production builds.
+
 ## v0.196 - 2026-05-11
 **Campaign output coverage compatibility layer**
 **Campaign Output Workbench:**
