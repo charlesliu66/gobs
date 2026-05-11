@@ -5,6 +5,8 @@
 > Status: 下一阶段优先级总纲
 > Replaces: 下一阶段不再以“创意质量评估与迭代闭环”为第一目标，而是先提升 Campaign 素材生产覆盖率。
 
+> V2 Adjustment: 具体开发执行请先参考 `2026-05-11-campaign-production-coverage-v2-adjustment-plan.md`。V2 基于代码现状和 OpenClaw 反馈，要求先做现有能力审计、保持 `ProductionCapability` / `ProductionItemType` 向后兼容，并避免重建已有 Asset Library / Google Drive 模块。
+
 ## 1. 核心判断
 
 下一阶段目标从：

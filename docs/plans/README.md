@@ -24,6 +24,8 @@
 
 ## 当前值得优先关注的方案
 
+- [2026-05-11-campaign-production-coverage-v2-adjustment-plan.md](./2026-05-11-campaign-production-coverage-v2-adjustment-plan.md)
+  - 基于 OpenClaw 反馈对 Campaign 素材生产覆盖率方案做 V2 收口：先做现有能力审计和兼容映射，不替换已有 capability/type，不重建素材库，优先推进 coverage UI、文本产物、Team Asset 权限与 Banner Prompt MVP。
 - [2026-05-11-campaign-production-coverage-and-team-assets-plan.md](./2026-05-11-campaign-production-coverage-and-team-assets-plan.md)
   - 下一阶段新总纲：把目标从“创意质量评估与迭代闭环”前移为 `Campaign 素材生产覆盖率提升`，并合并 Team 共享素材库存储决策：当前服务器先跑通、Google Drive 只做导入源、对象存储/EMC 暂缓。
 - [2026-05-10-gobs-next-optimization-checklist.md](./2026-05-10-gobs-next-optimization-checklist.md)
