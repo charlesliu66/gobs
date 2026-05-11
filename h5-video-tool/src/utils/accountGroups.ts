@@ -1,5 +1,8 @@
 export interface AccountGroupAccount {
   id: string;
+  username?: string;
+  platform?: string;
+  region?: string;
   remark?: string;
 }
 
@@ -143,8 +146,50 @@ export function saveCustomAccountGroup(
   return next;
 }
 
+export function updateCustomAccountGroup(
+  accounts: AccountGroupAccount[],
+  groupId: string,
+  accountIds: string[],
+): AccountGroup[] {
+  const permittedIds = new Set(accounts.map((account) => account.id));
+  const filteredIds = uniqueStrings(accountIds).filter((id) => permittedIds.has(id));
+  const existing = loadCustomAccountGroups(accounts);
+  const target = existing.find((group) => group.id === groupId);
+  if (!target || filteredIds.length === 0) return existing;
+
+  const next = existing
+    .map((group) => (
+      group.id === groupId
+        ? { ...group, accountIds: filteredIds }
+        : group
+    ))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  persistCustomAccountGroups(next);
+  return next;
+}
+
 export function deleteCustomAccountGroup(accounts: AccountGroupAccount[], groupId: string): AccountGroup[] {
   const next = loadCustomAccountGroups(accounts).filter((group) => group.id !== groupId);
   persistCustomAccountGroups(next);
   return next;
+}
+
+export function summarizeAccountGroupMembers(
+  group: Pick<AccountGroup, 'accountIds'>,
+  accounts: AccountGroupAccount[],
+  maxVisible = 3,
+): string {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const names = group.accountIds
+    .map((id) => {
+      const account = accountById.get(id);
+      const username = account?.username?.trim();
+      const platform = account?.platform?.trim();
+      if (username && platform) return `${username} (${platform})`;
+      return username || id;
+    })
+    .filter(Boolean);
+  const visible = names.slice(0, Math.max(1, maxVisible));
+  const hiddenCount = Math.max(0, names.length - visible.length);
+  return hiddenCount > 0 ? `${visible.join(', ')} +${hiddenCount}` : visible.join(', ');
 }

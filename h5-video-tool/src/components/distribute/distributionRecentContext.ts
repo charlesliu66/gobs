@@ -45,6 +45,7 @@ interface StorageLike {
 }
 
 export const DISTRIBUTION_RECENT_CONTEXT_STORAGE_KEY = 'gobs:distribute:recent-contexts';
+export const DISTRIBUTION_ACTIVE_CONTEXT_STORAGE_KEY = 'gobs:distribute:active-context';
 export const MAX_DISTRIBUTION_RECENT_CONTEXTS = 3;
 
 export function buildDistributionRecentContext(input: BuildRecentContextInput): DistributionRecentContext {
@@ -112,6 +113,35 @@ export function saveDistributionRecentContext(
   }
 
   return next;
+}
+
+export function loadDistributionActiveContext(storage?: StorageLike | null): DistributionRecentContext | null {
+  const target = resolveStorage(storage);
+  if (!target) return null;
+
+  try {
+    const parsed = JSON.parse(target.getItem(DISTRIBUTION_ACTIVE_CONTEXT_STORAGE_KEY) || 'null') as unknown;
+    return normalizeRecentContext(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function saveDistributionActiveContext(
+  context: DistributionRecentContext,
+  storage?: StorageLike | null,
+): DistributionRecentContext | null {
+  const target = resolveStorage(storage);
+  const sanitized = normalizeRecentContext(context);
+  if (!sanitized) return null;
+
+  try {
+    target?.setItem(DISTRIBUTION_ACTIVE_CONTEXT_STORAGE_KEY, JSON.stringify(sanitized));
+  } catch {
+    // localStorage can fail in private browsing or storage-quota states. Keep UI functional.
+  }
+
+  return sanitized;
 }
 
 function resolveStorage(storage?: StorageLike | null): StorageLike | null {

@@ -25,7 +25,8 @@
 - Banner Output MVP is merged/deployed at `ce212be`, implementing Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable distribution package context.
 - Quality Review And Next Version is merged/deployed at `e90c11e`, implementing Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs.
 - Motion Transfer Validation is merged/deployed at `352e8bb`, implementing Run 5: 10-sample validation ledger, experimental/pause/continue decision, and Studio experimental entry hint.
-- Character Showcase Validation is active at `docs/workflow/runs/2026-05-11-character-showcase-validation/`, implementing Run 6: 10-sample 5-character validation ledger, constrained continue decision, and Studio Character Showcase entry/preset guidance.
+- Character Showcase Validation is merged/deployed at `02d65fc`, implementing Run 6: 10-sample 5-character validation ledger, constrained continue decision, and Studio Character Showcase entry/preset guidance.
+- Distribution Final Mile is active at `docs/workflow/runs/2026-05-11-distribution-final-mile/`, implementing Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -39,6 +40,7 @@
   - `docs/plans/2026-05-10-quality-review-next-version.md`
   - `docs/plans/2026-05-10-motion-transfer-validation.md`
   - `docs/plans/2026-05-10-character-showcase-validation.md`
+  - `docs/plans/2026-05-10-distribution-final-mile.md`
 
 > 最后更新：2026-05-11
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
@@ -85,7 +87,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-11-character-showcase-validation` | Run 6: 10-sample Character Showcase validation ledger, constrained continue decision, and Studio entry/preset guidance | Builder/Verifier in progress on branch `codex/2026-05-11-character-showcase-validation`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-distribution-final-mile` | Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance | Builder/Verifier in progress on branch `codex/2026-05-11-distribution-final-mile`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-character-showcase-validation` | Run 6: 10-sample Character Showcase validation ledger, constrained continue decision, and Studio entry/preset guidance | Merged/deployed @ `02d65fc`; Run 7 starts from this base |
 | `2026-05-11-motion-transfer-validation` | Run 5: 10-sample Motion Transfer validation ledger, experimental/pause/continue decision, and Studio experimental entry hint | Merged/deployed @ `352e8bb`; Run 6 starts from this base |
 | `2026-05-10-quality-review-next-version` | Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs | Merged/deployed via Release Owner @ `e90c11e`; this run is the base for Run 5 |
 | `2026-05-10-banner-output-mvp` | Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable Distribution Package context | Merged/deployed via Release Owner @ `ce212be`; this run is the base for Run 4 |

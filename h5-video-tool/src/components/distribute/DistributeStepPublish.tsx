@@ -40,6 +40,7 @@ interface LatestBatchLabels {
   taskId: string;
   logs: string;
   shareLink: string;
+  failureNextAction: string;
 }
 
 interface DistributeStepPublishLabels {
@@ -327,7 +328,8 @@ function LatestBatchPanel({
 
             {(item.detailError || item.submitError || item.detail?.failDesc) && (
               <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-200">
-                {item.detail?.failDesc || item.detailError || item.submitError}
+                <p>{item.detail?.failDesc || item.detailError || item.submitError}</p>
+                <p className="mt-1 text-red-100">{labels.failureNextAction}</p>
               </div>
             )}
 

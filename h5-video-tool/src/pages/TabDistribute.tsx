@@ -63,6 +63,7 @@ import {
   buildCopyCardKeys,
   buildDistributeStepViewModel,
   buildDraftsFromPlatformResult,
+  buildPublishFailureGuidance,
   buildPlatformAccountCounts,
   groupAccountsByPlatform,
   normalizePlatformKey,
@@ -70,7 +71,9 @@ import {
 } from '../components/distribute/distributePageViewModel.ts';
 import {
   buildDistributionRecentContext,
+  loadDistributionActiveContext,
   loadDistributionRecentContexts,
+  saveDistributionActiveContext,
   saveDistributionRecentContext,
   type DistributionRecentContext,
 } from '../components/distribute/distributionRecentContext.ts';
@@ -156,6 +159,7 @@ export function TabDistribute() {
   const [pendingPackageDraft, setPendingPackageDraft] = useState<PendingDistributionDraft | null>(null);
   const [packageAsset, setPackageAsset] = useState<DistributeAssetOption | null>(null);
   const [recentContexts, setRecentContexts] = useState<DistributionRecentContext[]>(() => loadDistributionRecentContexts());
+  const [activeContextRestored, setActiveContextRestored] = useState(false);
 
   const packageQueryId = useMemo(
     () => new URLSearchParams(location.search).get('package')?.trim() ?? '',
@@ -581,7 +585,7 @@ export function TabDistribute() {
     selectedAsset,
   ]);
 
-  const applyRecentContextState = useCallback((context: DistributionRecentContext) => {
+  const applyRecentContextState = useCallback((context: DistributionRecentContext, options?: { announce?: boolean }) => {
     const validAccountIds = new Set(accountsForPermission.map((account) => account.id));
     const nextSelectedIds = new Set(context.accountIds.filter((id) => validAccountIds.has(id)));
     const nextDrafts = Object.keys(context.platformDrafts).length > 0
@@ -601,10 +605,15 @@ export function TabDistribute() {
     setCaptionGenError(null);
     setPushError(null);
     setRecentContexts(saveDistributionRecentContext({ ...context, savedAt: Date.now() }));
-    toast.success(t('distribute.recentContextRestored'));
+    if (options?.announce !== false) {
+      toast.success(t('distribute.recentContextRestored'));
+    }
   }, [accountsForPermission, t]);
 
-  const handleRestoreRecentContext = useCallback(async (context: DistributionRecentContext) => {
+  const handleRestoreRecentContext = useCallback(async (
+    context: DistributionRecentContext,
+    options?: { announce?: boolean; scroll?: boolean },
+  ) => {
     if (context.packageId && activePackageId !== context.packageId) {
       const matchedPackage = pendingPackages.find((pkg) => pkg.id === context.packageId);
       try {
@@ -618,8 +627,10 @@ export function TabDistribute() {
       }
     }
 
-    applyRecentContextState(context);
-    scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.publish);
+    applyRecentContextState(context, { announce: options?.announce });
+    if (options?.scroll !== false) {
+      scrollToDistributeSection(DISTRIBUTE_STEP_SECTION_IDS.publish);
+    }
   }, [
     activePackageId,
     applyPendingPackage,
@@ -627,6 +638,44 @@ export function TabDistribute() {
     pendingPackages,
     scrollToDistributeSection,
     t,
+  ]);
+
+  useEffect(() => {
+    if (activeContextRestored || loading) return;
+    const activeContext = loadDistributionActiveContext();
+    if (!activeContext) {
+      setActiveContextRestored(true);
+      return;
+    }
+
+    setActiveContextRestored(true);
+    void handleRestoreRecentContext(activeContext, { announce: false, scroll: false });
+  }, [activeContextRestored, handleRestoreRecentContext, loading]);
+
+  useEffect(() => {
+    if (!activeContextRestored) return;
+    if (!selectedAsset && selectedAccounts.length === 0 && !pendingPackageDraft) return;
+
+    saveDistributionActiveContext(buildDistributionRecentContext({
+      packageId: activePackageId,
+      packageTitle: pendingPackageDraft?.title ?? '',
+      selectedAsset,
+      selectedAccounts,
+      platformDrafts,
+      activeDraftKey,
+      needShareLink,
+      markAI,
+    }));
+  }, [
+    activeContextRestored,
+    activeDraftKey,
+    activePackageId,
+    markAI,
+    needShareLink,
+    pendingPackageDraft,
+    platformDrafts,
+    selectedAccounts,
+    selectedAsset,
   ]);
 
   const handleLoadHistoryDetail = useCallback(async (historyTaskId: string) => {
@@ -798,11 +847,18 @@ export function TabDistribute() {
       stepReadinessPublishReady: t('distribute.stepReadinessPublishReady'),
     },
   });
-  const pushErrorGuidance = buildPushErrorGuidance({
-    pushError,
+  const failureGuidanceLabels = {
+    noAsset: t('distribute.pushErrorGuidanceNoAsset'),
+    noAccount: t('distribute.pushErrorGuidanceNoAccount'),
+    auth: t('distribute.pushErrorGuidanceAuth'),
+    provider: t('distribute.pushErrorGuidanceProvider'),
+    generic: t('distribute.pushErrorGuidanceGeneric'),
+  };
+  const pushErrorGuidance = buildPublishFailureGuidance({
+    message: pushError,
     hasSelectedAsset: Boolean(selectedAsset),
     selectedAccountCount: selectedIds.size,
-    t,
+    labels: failureGuidanceLabels,
   });
 
   return (
@@ -1028,6 +1084,8 @@ export function TabDistribute() {
               config: t('distribute.accountGroupsConfig'),
               custom: t('distribute.accountGroupsCustom'),
               selected: t('distribute.accountGroupsSelected'),
+              preview: t('distribute.accountGroupsPreview'),
+              update: t('distribute.accountGroupsUpdate'),
               save: t('distribute.accountGroupsSave'),
               savePlaceholder: t('distribute.accountGroupsSavePlaceholder'),
               cancel: t('common.cancel'),
@@ -1094,6 +1152,7 @@ export function TabDistribute() {
               taskId: t('distribute.batchTaskId'),
               logs: t('distribute.batchLogs'),
               shareLink: t('distribute.batchShareLink'),
+              failureNextAction: t('distribute.batchFailureNextAction'),
             },
           }}
           onNeedShareLinkChange={setNeedShareLink}
@@ -1196,26 +1255,6 @@ export function TabDistribute() {
       </div>
     </div>
   );
-}
-
-function buildPushErrorGuidance(input: {
-  pushError: string | null;
-  hasSelectedAsset: boolean;
-  selectedAccountCount: number;
-  t: (key: string) => string;
-}): string | null {
-  if (!input.pushError) return null;
-  if (!input.hasSelectedAsset) return input.t('distribute.pushErrorGuidanceNoAsset');
-  if (input.selectedAccountCount === 0) return input.t('distribute.pushErrorGuidanceNoAccount');
-
-  const normalized = input.pushError.toLowerCase();
-  if (/(auth|token|session|login|401|403)/.test(normalized)) {
-    return input.t('distribute.pushErrorGuidanceAuth');
-  }
-  if (/(timeout|network|gee|provider|api|5\d\d)/.test(normalized)) {
-    return input.t('distribute.pushErrorGuidanceProvider');
-  }
-  return input.t('distribute.pushErrorGuidanceGeneric');
 }
 
 function buildCurrentAssetOption(input: {

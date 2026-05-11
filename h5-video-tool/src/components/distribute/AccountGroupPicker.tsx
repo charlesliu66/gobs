@@ -4,6 +4,8 @@ import {
   buildAccountGroups,
   deleteCustomAccountGroup,
   saveCustomAccountGroup,
+  summarizeAccountGroupMembers,
+  updateCustomAccountGroup,
   type AccountGroup,
   type AccountGroupAccount,
 } from '../../utils/accountGroups.ts';
@@ -16,6 +18,8 @@ interface AccountGroupPickerLabels {
   config: string;
   custom: string;
   selected: string;
+  preview: string;
+  update: string;
   save: string;
   savePlaceholder: string;
   cancel: string;
@@ -65,6 +69,10 @@ export function AccountGroupPicker({
 
   const handleDelete = (groupId: string) => {
     setCustomGroups(deleteCustomAccountGroup(accounts, groupId));
+  };
+
+  const handleUpdate = (groupId: string) => {
+    setCustomGroups(updateCustomAccountGroup(accounts, groupId, [...selectedIds]));
   };
 
   return (
@@ -123,6 +131,7 @@ export function AccountGroupPicker({
           {groups.map((group) => {
             const fullySelected = group.accountIds.every((id) => selectedIds.has(id));
             const sourceLabel = group.source === 'config' ? labels.config : labels.custom;
+            const memberPreview = summarizeAccountGroupMembers(group, accounts);
             return (
               <span
                 key={group.id}
@@ -144,16 +153,33 @@ export function AccountGroupPicker({
                   <span className={fullySelected ? 'text-white/65' : 'text-[var(--color-text-subtle)]'}>
                     {fullySelected ? labels.selected : sourceLabel}
                   </span>
+                  <span
+                    title={`${labels.preview}: ${memberPreview}`}
+                    className={fullySelected ? 'max-w-44 truncate text-white/65' : 'max-w-44 truncate text-[var(--color-text-subtle)]'}
+                  >
+                    {memberPreview}
+                  </span>
                 </button>
                 {group.source === 'custom' ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(group.id)}
-                    className={fullySelected ? 'text-white/75 hover:text-white' : 'text-[var(--color-text-subtle)] hover:text-[var(--color-text)]'}
-                    aria-label={`${labels.delete} ${group.name}`}
-                  >
-                    x
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdate(group.id)}
+                      disabled={selectedCount === 0}
+                      className={fullySelected ? 'text-white/75 hover:text-white disabled:opacity-50' : 'text-[var(--color-text-subtle)] hover:text-[var(--color-text)] disabled:opacity-50'}
+                      aria-label={`${labels.update} ${group.name}`}
+                    >
+                      {labels.update}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(group.id)}
+                      className={fullySelected ? 'text-white/75 hover:text-white' : 'text-[var(--color-text-subtle)] hover:text-[var(--color-text)]'}
+                      aria-label={`${labels.delete} ${group.name}`}
+                    >
+                      x
+                    </button>
+                  </>
                 ) : null}
               </span>
             );

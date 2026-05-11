@@ -6,6 +6,7 @@ import {
   buildCopyCardKeys,
   buildDistributeStepViewModel,
   buildDraftsFromPlatformResult,
+  buildPublishFailureGuidance,
   buildPlatformAccountCounts,
   groupAccountsByPlatform,
   resolveDraftForPlatform,
@@ -82,4 +83,45 @@ test('caption generation seed keeps operator hints separated from prompt seed', 
     buildCaptionGenerationSeed('Hero reveal', 'avoid spoilers'),
     'Hero reveal\n\nOperator hint: avoid spoilers',
   );
+});
+
+test('publish failure guidance separates missing input, auth, provider, and generic next steps', () => {
+  const labels = {
+    noAsset: 'choose asset',
+    noAccount: 'choose account',
+    auth: 'check auth',
+    provider: 'refresh provider batch',
+    generic: 'check setup',
+  };
+
+  assert.equal(buildPublishFailureGuidance({
+    message: 'Cannot publish',
+    hasSelectedAsset: false,
+    selectedAccountCount: 1,
+    labels,
+  }), 'choose asset');
+  assert.equal(buildPublishFailureGuidance({
+    message: 'Cannot publish',
+    hasSelectedAsset: true,
+    selectedAccountCount: 0,
+    labels,
+  }), 'choose account');
+  assert.equal(buildPublishFailureGuidance({
+    message: '401 token expired',
+    hasSelectedAsset: true,
+    selectedAccountCount: 1,
+    labels,
+  }), 'check auth');
+  assert.equal(buildPublishFailureGuidance({
+    message: 'GeeLark API timeout',
+    hasSelectedAsset: true,
+    selectedAccountCount: 1,
+    labels,
+  }), 'refresh provider batch');
+  assert.equal(buildPublishFailureGuidance({
+    message: 'caption rejected',
+    hasSelectedAsset: true,
+    selectedAccountCount: 1,
+    labels,
+  }), 'check setup');
 });

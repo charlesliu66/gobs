@@ -19,6 +19,8 @@ interface AccountGroupPickerLabels {
   config: string;
   custom: string;
   selected: string;
+  preview: string;
+  update: string;
   save: string;
   savePlaceholder: string;
   cancel: string;

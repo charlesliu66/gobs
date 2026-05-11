@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.190 - 2026-05-11
+**Distribution final mile**
+**Distribution Center:**
+- Added browser-local active publish context restore for `/distribute`, preserving the current Package, selected asset, account ids, platform copy drafts, active draft, and publish options after refresh without auto-publishing.
+- Added account-group member previews and custom-group update support so operators can inspect group targets and overwrite a saved group from the current selection.
+- Added batch-level failure next-action guidance in the latest publish batch, keeping the raw GeeLark/task error visible while telling operators to refresh the batch/history and preserve task/account/log evidence.
+**Tests / Build:**
+- Added native tests for active distribution context restore, publish failure guidance, and account-group preview/update helpers; reran distribution helper regressions and production builds.
+
 ## v0.189 - 2026-05-11
 **Character Showcase validation**
 **Advanced Studio:**

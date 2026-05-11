@@ -51,6 +51,14 @@ export interface DistributeStepViewModel {
   readinessItems: DistributeStepReadinessItem[];
 }
 
+export interface PublishFailureGuidanceLabels {
+  noAsset: string;
+  noAccount: string;
+  auth: string;
+  provider: string;
+  generic: string;
+}
+
 export function normalizePlatformKey(platform?: string | null, defaultDraftKey = 'default'): string {
   return platform?.trim().toLowerCase() || defaultDraftKey;
 }
@@ -244,4 +252,24 @@ export function buildDistributeStepViewModel(args: BuildDistributeStepViewModelA
       },
     ],
   };
+}
+
+export function buildPublishFailureGuidance(input: {
+  message: string | null;
+  hasSelectedAsset: boolean;
+  selectedAccountCount: number;
+  labels: PublishFailureGuidanceLabels;
+}): string | null {
+  if (!input.message) return null;
+  if (!input.hasSelectedAsset) return input.labels.noAsset;
+  if (input.selectedAccountCount === 0) return input.labels.noAccount;
+
+  const normalized = input.message.toLowerCase();
+  if (/(auth|token|session|login|401|403)/.test(normalized)) {
+    return input.labels.auth;
+  }
+  if (/(timeout|network|gee|provider|api|5\d\d)/.test(normalized)) {
+    return input.labels.provider;
+  }
+  return input.labels.generic;
 }

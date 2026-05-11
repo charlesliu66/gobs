@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.189)*
+*Last updated: 2026-05-11 (v0.190)*
 
-**Latest update - v0.189**
+**Latest update - v0.190**
+- Distribution now restores the latest active publish context after refresh, including Package, selected asset, selected account ids, platform copy drafts, active draft, and publish options, without auto-publishing.
+- Account groups now show member previews and custom groups can be updated from the current selection, making final account targeting easier to verify.
+- Latest publish batch failures now show the raw reason plus a clear next action to refresh batch/history and keep task/account/log evidence.
+
+**Previous update - v0.189**
 - Character Showcase now has a 10-sample validation ledger covering 5 characters x 2 directions, with a strict `continue` / `experimental` / `pause` decision helper.
 - Current Character Showcase validation is constrained `continue` at 5/10 usable samples, focused on single-character reveal, single-character skill payoff, and simple reward payoff.
 - Advanced Studio shows a Character Showcase validation notice and preset recommendation metadata so group shots, pet/mount interactions, UI-heavy panels, and long environment storytelling stay out of the stable guidance.
@@ -252,6 +257,7 @@
 - **Quality review and next-version MVP (v0.187)**: Campaign Output Workbench can turn human quality feedback into traceable next-version drafts for Banner prompts and platform copy without adding a revision system or claiming automatic video understanding.
 - **Motion Transfer validation (v0.188)**: Advanced Studio now marks Motion Transfer as experimental based on a 10-sample validation ledger and a strict 2/10 usable-rate conclusion.
 - **Character Showcase validation (v0.189)**: Advanced Studio now marks Character Showcase as constrained continue based on a 10-sample validation ledger, with preset guidance focused on single-character reveal, skill payoff, and simple reward payoff.
+- **Distribution final mile (v0.190)**: `/distribute` now restores active publish context after refresh, supports account-group previews/updates, and pairs publish failure reasons with next-step guidance.
 
 ---
 
@@ -316,6 +322,7 @@
 - **Quality review and next-version MVP (v0.187)**: Window A Run 4 adds Workbench quality diagnostics, fixed feedback tags, and child output drafts with `parentOutputId` for Banner/copy next versions.
 - **Motion Transfer validation (v0.188)**: Run 5 records 10 validation samples, concludes `experimental`, and adds an Advanced Studio entry hint without touching provider services.
 - **Character Showcase validation (v0.189)**: Run 6 records 10 validation samples, concludes constrained `continue`, and adds Character Showcase entry/preset guidance without touching provider services.
+- **Distribution final mile (v0.190)**: Run 7 restores active `/distribute` context after refresh, improves account-group preview/update, and adds batch failure next actions without changing GeeLark backend routes.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -325,6 +332,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.190 - 2026-05-11
+**Distribution final mile**
+
+- **[context restore] Added active Distribution context persistence** (`h5-video-tool/src/components/distribute/distributionRecentContext.ts`, `h5-video-tool/src/pages/TabDistribute.tsx`): refresh can restore Package, selected asset, selected accounts, platform drafts, active draft, and publish options without auto-publishing.
+- **[account groups] Added group preview/update helpers** (`h5-video-tool/src/utils/accountGroups.ts`, `h5-video-tool/src/components/distribute/AccountGroupPicker.tsx`): operators can inspect group members and update custom group membership from the current selection.
+- **[failure guidance] Added batch next-action copy** (`h5-video-tool/src/components/distribute/DistributeStepPublish.tsx`, `h5-video-tool/src/components/distribute/distributePageViewModel.ts`): failures keep the raw reason visible and add a concrete next step for refresh/history/log evidence.
 
 ### v0.189 - 2026-05-11
 **Character Showcase validation**
