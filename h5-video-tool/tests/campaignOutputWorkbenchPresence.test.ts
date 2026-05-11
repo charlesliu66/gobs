@@ -15,18 +15,22 @@ test('campaign output plan API helpers build output plan endpoints', () => {
   assert.equal(campaignOutputPlanPath('plan_123'), '/api/campaign-output/plans/plan_123');
 });
 
-test('CampaignOutputWorkbench exposes output, source asset, gap, and production confirmation sections', () => {
+test('CampaignOutputWorkbench exposes coverage, source asset, gap, and production confirmation sections', () => {
   const source = readFileSync(
     resolve(__dirname, '../src/components/campaign/CampaignOutputWorkbench.tsx'),
     'utf-8',
   );
 
+  assert.match(source, /outputCoverageViewModel/);
   assert.match(source, /outputSummary/);
+  assert.match(source, /coverageBreakdown/);
   assert.match(source, /productionList/);
   assert.match(source, /sourceAssetReadiness/);
   assert.match(source, /capabilityGaps/);
   assert.match(source, /confirmProduction/);
   assert.match(source, /producedOutputs/);
+  assert.match(source, /productionReadiness/);
+  assert.match(source, /readinessNotice/);
   assert.match(source, /sourceAssetMatches/);
   assert.match(source, /sourceAssetActions/);
   assert.match(source, /studioBridgeActions/);
@@ -39,12 +43,15 @@ test('CampaignOutputWorkbench exposes output, source asset, gap, and production 
   assert.doesNotMatch(source, /onCreatePlan/);
 });
 
-test('campaign output workbench i18n exists in Chinese and English locale blocks', () => {
+test('campaign output workbench i18n includes coverage summary labels in Chinese and English locale blocks', () => {
   const messages = readFileSync(resolve(__dirname, '../src/i18n/messages.ts'), 'utf-8');
 
   assert.match(messages, /outputWorkbench:\s*{/);
-  assert.match(messages, /产出清单/);
-  assert.match(messages, /Output Workbench/);
+  assert.match(messages, /产出覆盖概览/);
+  assert.match(messages, /Output Coverage/);
+  assert.match(messages, /真实覆盖率/);
+  assert.match(messages, /True Coverage/);
+  assert.match(messages, /Direct Production/);
   assert.match(messages, /Source Asset Readiness/);
   assert.match(messages, /Produced Outputs/);
   assert.match(messages, /Confirm And Produce Supported Outputs/);

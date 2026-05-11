@@ -5,9 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pageSource = readFileSync(resolve(__dirname, '../src/pages/CampaignCreative.tsx'), 'utf-8');
+const hookSource = readFileSync(resolve(__dirname, '../src/pages/campaignCreative/useCampaignCreativeState.ts'), 'utf-8');
 
 test('CampaignCreative still preserves the advanced editor handoff', () => {
-  assert.match(pageSource, /campaign_creative_editor_handoff/);
-  assert.match(pageSource, /navigate\('\/editor', \{ state: \{ fromCampaignCreative: true \} \}\)/);
+  assert.match(hookSource, /campaign_creative_editor_handoff/);
+  assert.match(hookSource, /navigate\('\/editor', \{ state: \{ fromCampaignCreative: true \} \}\)/);
 });

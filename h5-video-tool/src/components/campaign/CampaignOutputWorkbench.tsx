@@ -15,7 +15,12 @@ import {
   summarizeOutputPlanLinkHealth,
   type CampaignDataLinkHealthStatus,
 } from './dataContractLinkHealth.ts';
-import { summarizeCampaignOutputCoverage } from './outputCoverageViewModel.ts';
+import {
+  buildProductionItemCoverageMap,
+  summarizeCampaignOutputCoverage,
+  type ProductionItemCoverageState,
+  type ProductionReadiness,
+} from './outputCoverageViewModel.ts';
 
 type Copy = {
   emptyTitle: string;
@@ -36,12 +41,27 @@ type Copy = {
   directReady: string;
   templateReady: string;
   blocked: string;
+  trueCoverage: string;
+  assistiveCoverage: string;
+  directCoverage: string;
+  templateCoverage: string;
+  needsSourceAsset: string;
+  unsupportedCoverage: string;
   linkHealth: string;
   linkHealthy: string;
   linkWarning: string;
   linkBroken: string;
   requiredAssets: string;
   nextAction: string;
+  readinessStatus: string;
+  readinessAutoReady: string;
+  readinessTemplateReady: string;
+  readinessBriefReady: string;
+  readinessNeedsSourceAsset: string;
+  readinessUnsupported: string;
+  missingAssetsToUnblock: string;
+  unsupportedReason: string;
+  unsupportedReasonDetail: string;
   knowledgeReferences: string;
   openAssetLibrary: string;
   openQuickFilm: string;
@@ -136,8 +156,10 @@ export function CampaignOutputWorkbench({
     );
   }
 
-  const coverage = summarizeCampaignOutputCoverage(activePlan.items);
-  const blockedCount = coverage.needsSourceAsset + coverage.unsupported;
+  const coverageSummary = summarizeCampaignOutputCoverage(activePlan);
+  const readinessByItemId = buildProductionItemCoverageMap(activePlan);
+  const trueCoverageCount = coverageSummary.autoReady + coverageSummary.templateReady;
+  const blockedCount = coverageSummary.needsSourceAsset + coverageSummary.unsupported;
   const linkHealth = summarizeOutputPlanLinkHealth(activePlan);
   const linkHealthLabels: Record<CampaignDataLinkHealthStatus, string> = {
     healthy: copy.linkHealthy,
@@ -153,16 +175,50 @@ export function CampaignOutputWorkbench({
       </div>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)]">{copy.subtitle}</p>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3 lg:grid-cols-6" data-section="outputSummary">
-        <SummaryBlock label={copy.totalItems} value={String(sumQuantities(activePlan.items))} />
-        <SummaryBlock label={copy.gobsReady} value={String(coverage.trueReady)} />
-        <SummaryBlock label={copy.directReady} value={String(coverage.directReady)} />
-        <SummaryBlock label={copy.templateReady} value={String(coverage.templateReady)} />
-        <SummaryBlock label={copy.blocked} value={String(blockedCount)} />
-        <SummaryBlock
-          label={copy.linkHealth}
-          value={linkHealthStatusLabel(linkHealth.status, linkHealthLabels)}
-        />
+      <div className="mt-6" data-section="outputSummary">
+        <SectionTitle title={copy.outputSummary} />
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <SummaryBlock label={copy.totalItems} value={String(coverageSummary.total)} />
+          <SummaryBlock
+            label={copy.trueCoverage}
+            value={formatCoverageValue(trueCoverageCount, coverageSummary.total)}
+          />
+          <SummaryBlock
+            label={copy.assistiveCoverage}
+            value={formatCoverageValue(coverageSummary.briefReady, coverageSummary.total)}
+          />
+          <SummaryBlock
+            label={copy.blocked}
+            value={formatCoverageValue(blockedCount, coverageSummary.total)}
+          />
+          <SummaryBlock
+            label={copy.linkHealth}
+            value={linkHealthStatusLabel(linkHealth.status, linkHealthLabels)}
+          />
+        </div>
+        <div
+          className="mt-4 rounded-2xl border border-[var(--color-border)]/45 bg-black/12 p-4"
+          data-section="coverageBreakdown"
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <CoverageBreakdownRow
+              label={copy.directCoverage}
+              value={formatCoverageValue(coverageSummary.autoReady, coverageSummary.total)}
+            />
+            <CoverageBreakdownRow
+              label={copy.templateCoverage}
+              value={formatCoverageValue(coverageSummary.templateReady, coverageSummary.total)}
+            />
+            <CoverageBreakdownRow
+              label={copy.needsSourceAsset}
+              value={formatCoverageValue(coverageSummary.needsSourceAsset, coverageSummary.total)}
+            />
+            <CoverageBreakdownRow
+              label={copy.unsupportedCoverage}
+              value={formatCoverageValue(coverageSummary.unsupported, coverageSummary.total)}
+            />
+          </div>
+        </div>
       </div>
       {linkHealth.issues.length > 0 ? (
         <div
@@ -181,6 +237,7 @@ export function CampaignOutputWorkbench({
             <ProductionItemCard
               key={item.id}
               item={item}
+              coverageState={readinessByItemId[item.id]}
               requirements={activePlan.sourceAssetRequirements}
               copy={copy}
               assetNamesById={assetNamesById}
@@ -257,10 +314,6 @@ export function CampaignOutputWorkbench({
   );
 }
 
-function sumQuantities(items: ProductionItem[]): number {
-  return items.reduce((total, item) => total + item.quantity, 0);
-}
-
 function SectionTitle({ title }: { title: string }) {
   return (
     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#e6c66e]">
@@ -280,8 +333,88 @@ function SummaryBlock({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CoverageBreakdownRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border)]/35 bg-[var(--color-surface)]/70 px-3 py-3">
+      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-subtle)]">
+        {label}
+      </div>
+      <div className="mt-2 text-sm font-semibold text-[var(--color-text)]">{value}</div>
+    </div>
+  );
+}
+
+function formatCoverageValue(count: number, total: number): string {
+  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  return `${count}/${total} (${percentage}%)`;
+}
+
+function readinessLabel(readiness: ProductionReadiness, copy: Copy): string {
+  switch (readiness) {
+    case 'auto_ready':
+      return copy.readinessAutoReady;
+    case 'template_ready':
+      return copy.readinessTemplateReady;
+    case 'brief_ready':
+      return copy.readinessBriefReady;
+    case 'needs_source_asset':
+      return copy.readinessNeedsSourceAsset;
+    default:
+      return copy.readinessUnsupported;
+  }
+}
+
+function readinessTone(readiness: ProductionReadiness): string {
+  switch (readiness) {
+    case 'auto_ready':
+      return 'border-emerald-400/35 bg-emerald-400/12 text-emerald-100';
+    case 'template_ready':
+      return 'border-sky-400/35 bg-sky-400/12 text-sky-100';
+    case 'brief_ready':
+      return 'border-violet-400/35 bg-violet-400/12 text-violet-100';
+    case 'needs_source_asset':
+      return 'border-amber-400/35 bg-amber-400/12 text-amber-100';
+    default:
+      return 'border-rose-400/35 bg-rose-400/12 text-rose-100';
+  }
+}
+
+function ReadinessBadge({ readiness, copy }: { readiness: ProductionReadiness; copy: Copy }) {
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.14em] ${readinessTone(readiness)}`}
+      data-section="productionReadiness"
+    >
+      {readinessLabel(readiness, copy)}
+    </span>
+  );
+}
+
+function ReadinessNotice({
+  tone,
+  label,
+  value,
+}: {
+  tone: 'amber' | 'rose';
+  label: string;
+  value: string;
+}) {
+  const className =
+    tone === 'amber'
+      ? 'border-amber-400/30 bg-amber-400/8 text-amber-50'
+      : 'border-rose-400/30 bg-rose-400/8 text-rose-50';
+
+  return (
+    <div className={`mt-4 rounded-xl border px-3 py-3 text-xs leading-5 ${className}`} data-section="readinessNotice">
+      <div className="font-semibold uppercase tracking-[0.12em]">{label}</div>
+      <div className="mt-2">{value}</div>
+    </div>
+  );
+}
+
 function ProductionItemCard({
   item,
+  coverageState,
   requirements,
   copy,
   assetNamesById,
@@ -291,6 +424,7 @@ function ProductionItemCard({
   onCreateNextVersion,
 }: {
   item: ProductionItem;
+  coverageState?: ProductionItemCoverageState;
   requirements: GameSourceAssetRequirement[];
   copy: Copy;
   assetNamesById: Record<string, string>;
@@ -311,14 +445,35 @@ function ProductionItemCard({
           </div>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{item.contentBrief}</p>
         </div>
-        <span className="rounded-full border border-[var(--color-border)]/50 px-3 py-1 text-xs uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
-          {item.status}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {coverageState ? <ReadinessBadge readiness={coverageState.readiness} copy={copy} /> : null}
+          <span className="rounded-full border border-[var(--color-border)]/50 px-3 py-1 text-xs uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+            {item.status}
+          </span>
+        </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <InfoLine
+          label={copy.readinessStatus}
+          value={coverageState ? readinessLabel(coverageState.readiness, copy) : '-'}
+        />
         <InfoLine label={copy.requiredAssets} value={itemRequirements.map((asset) => asset.label).join(', ') || '-'} />
         <InfoLine label={copy.nextAction} value={item.humanAction?.label ?? (item.gobsCanProduce ? copy.confirmProduction : '-')} />
       </div>
+      {coverageState?.missingRequirementLabels.length ? (
+        <ReadinessNotice
+          tone="amber"
+          label={copy.missingAssetsToUnblock}
+          value={coverageState.missingRequirementLabels.join(', ')}
+        />
+      ) : null}
+      {coverageState?.readiness === 'unsupported' ? (
+        <ReadinessNotice
+          tone="rose"
+          label={copy.unsupportedReason}
+          value={copy.unsupportedReasonDetail}
+        />
+      ) : null}
       {knowledgeReferenceSummaries.length > 0 ? (
         <KnowledgeReferenceList title={copy.knowledgeReferences} items={knowledgeReferenceSummaries} />
       ) : null}

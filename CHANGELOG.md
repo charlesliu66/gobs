@@ -2,6 +2,24 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.200 - 2026-05-11
+**Campaign Creative page split**
+**Campaign Creative:**
+- Reduced `src/pages/CampaignCreative.tsx` to a thin route entry and moved the implementation into dedicated `campaignCreative/` modules for brief, output, strategy, distribution, and shared page state.
+- Kept `/campaign-creative`, mission brief generation, Output Workbench production, Advanced Studio handoff, and Distribution Package handoff behavior unchanged while separating render ownership from state/handler ownership.
+- Updated structural regression tests to point at the new module boundaries so future refactors can move safely without relying on the old 1k+ page file.
+**Tests / Build:**
+- Reran targeted Campaign Creative source-presence tests plus frontend and backend production builds.
+
+## v0.199 - 2026-05-11
+**Campaign output coverage compatibility layer**
+**Campaign Output Workbench:**
+- Added a frontend-only coverage compatibility layer that maps existing `ProductionCapability` values and source-asset readiness into business-facing readiness buckets without changing stored Output Plan enums or backend contracts.
+- Reworked the Workbench summary to use quantity-weighted true coverage, assistive coverage, blocked deliverables, direct production, and template production counts so marketers can see what a Campaign can really produce at a glance.
+- Added per-item readiness badges plus blocked-item missing-asset callouts, keeping next actions visible without requiring operators to interpret raw `status` values.
+**Tests / Build:**
+- Added targeted coverage view-model tests plus Workbench source/i18n integration checks; reran targeted frontend tests, frontend build, and backend build.
+
 ## v0.198 - 2026-05-11
 **Campaign Banner prompt hardening**
 **Campaign Output / Distribution Prep:**
