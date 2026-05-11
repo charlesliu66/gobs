@@ -26,11 +26,13 @@ function collectSourceFiles(dir: string, skipDir: (path: string) => boolean): st
   return files;
 }
 
-test('legacy TikTok matrix stays direct-routeable but hidden from primary sidebar', () => {
+test('TikTok matrix is routeable and intentionally visible under Distribution', () => {
   const layout = source('src/components/Layout.tsx');
   const app = source('src/App.tsx');
+  const directOnlyBlock = layout.match(/const LEGACY_DIRECT_ONLY_PATHS = new Set\(\[([\s\S]*?)\]\);/)?.[1] ?? '';
 
-  assert.match(layout, /const LEGACY_DIRECT_ONLY_PATHS = new Set\(\[[\s\S]*'\/tiktok-matrix'/);
+  assert.match(layout, /labelKey: 'layout\.navDistribute'[\s\S]*to: '\/tiktok-matrix'/);
+  assert.doesNotMatch(directOnlyBlock, /'\/tiktok-matrix'/);
   assert.match(layout, /return items\.filter\(\(item\) => !LEGACY_DIRECT_ONLY_PATHS\.has\(item\.to\)\)/);
   assert.match(app, /<Route path="\/tiktok-matrix" element=\{<RiskMasterPanel \/>\} \/>/);
   assert.match(app, /<Route path="\/geelark-batch" element=\{<Navigate to="\/tiktok-matrix" replace \/>\} \/>/);
@@ -41,7 +43,16 @@ test('platform planning routes remain direct-link-only and routeable', () => {
   const layout = source('src/components/Layout.tsx');
   const app = source('src/App.tsx');
 
-  for (const path of ['/platform', '/platform/memory', '/platform/learning-lab', '/platform/ops']) {
+  for (const path of [
+    '/platform',
+    '/platform/bind',
+    '/platform/brain',
+    '/platform/data',
+    '/platform/actions',
+    '/platform/memory',
+    '/platform/learning-lab',
+    '/platform/ops',
+  ]) {
     assert.match(layout, new RegExp(`'${path}'`));
     assert.match(app, new RegExp(`<Route path="${path}"`));
   }

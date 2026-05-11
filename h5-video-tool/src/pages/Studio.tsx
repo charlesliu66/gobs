@@ -12,6 +12,7 @@ import type {
 import { buildCampaignStudioHandoff } from '../components/campaign/studioBridge.ts';
 import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
 import { getCampaignOutputPlan } from '../api/campaignOutputPlan.ts';
+import { useLocale } from '../i18n/LocaleContext.tsx';
 
 type HomeStudioState = { autoSelectCustom?: boolean; seedPrompt?: string };
 type StudioLocationState = (HomeStudioState & {
@@ -19,6 +20,40 @@ type StudioLocationState = (HomeStudioState & {
 }) | null;
 
 const STUDIO_BRIDGE_TEMPLATE_IDS = new Set<StudioBridgeTemplateId>(['custom', 'viral-dance', 'boss-showcase']);
+const STUDIO_ENTRY_GUIDES = [
+  {
+    id: 'advancedStudio',
+    to: '/studio?tab=templates',
+    titleKey: 'studioEntryGuide.advancedStudio.title',
+    bodyKey: 'studioEntryGuide.advancedStudio.body',
+    fitKey: 'studioEntryGuide.advancedStudio.fit',
+    actionKey: 'studioEntryGuide.advancedStudio.action',
+  },
+  {
+    id: 'quickFilm',
+    to: '/quickfilm',
+    titleKey: 'studioEntryGuide.quickFilm.title',
+    bodyKey: 'studioEntryGuide.quickFilm.body',
+    fitKey: 'studioEntryGuide.quickFilm.fit',
+    actionKey: 'studioEntryGuide.quickFilm.action',
+  },
+  {
+    id: 'productionWizard',
+    to: '/studio/production',
+    titleKey: 'studioEntryGuide.productionWizard.title',
+    bodyKey: 'studioEntryGuide.productionWizard.body',
+    fitKey: 'studioEntryGuide.productionWizard.fit',
+    actionKey: 'studioEntryGuide.productionWizard.action',
+  },
+  {
+    id: 'editor',
+    to: '/editor',
+    titleKey: 'studioEntryGuide.editor.title',
+    bodyKey: 'studioEntryGuide.editor.body',
+    fitKey: 'studioEntryGuide.editor.fit',
+    actionKey: 'studioEntryGuide.editor.action',
+  },
+] as const;
 
 function isStudioBridgeTemplateId(value: string | null): value is StudioBridgeTemplateId {
   return Boolean(value && STUDIO_BRIDGE_TEMPLATE_IDS.has(value as StudioBridgeTemplateId));
@@ -86,6 +121,7 @@ export function Studio() {
   } = useCreateFlow();
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as string | null;
   const urlAssetId = searchParams.get('assetId');
@@ -315,6 +351,35 @@ export function Studio() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 6 15 12 9 18"/></svg>
             </Link>
           </div>
+          <section className="mt-5 rounded-3xl border border-[var(--color-border)]/60 bg-[var(--color-surface)]/65 p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="section-overline">{t('studioEntryGuide.eyebrow')}</p>
+                <h2 className="mt-2 text-lg font-semibold tracking-[-0.02em] text-[var(--color-text)]">
+                  {t('studioEntryGuide.title')}
+                </h2>
+              </div>
+              <p className="max-w-xl text-xs leading-5 text-[var(--color-text-muted)]">
+                {t('studioEntryGuide.subtitle')}
+              </p>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-4">
+              {STUDIO_ENTRY_GUIDES.map((entry) => (
+                <Link
+                  key={entry.id}
+                  to={entry.to}
+                  className="group rounded-2xl border border-[var(--color-border)]/55 bg-[var(--color-surface-elevated)]/80 p-4 text-left transition-all hover:border-[var(--color-primary)]/45 hover:bg-[var(--color-surface-hover)]"
+                >
+                  <div className="text-sm font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary)]">
+                    {t(entry.titleKey)}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">{t(entry.bodyKey)}</p>
+                  <p className="mt-3 text-[11px] leading-5 text-[var(--color-text-subtle)]">{t(entry.fitKey)}</p>
+                  <div className="mt-4 text-xs font-semibold text-[var(--color-primary)]">{t(entry.actionKey)} -&gt;</div>
+                </Link>
+              ))}
+            </div>
+          </section>
           {/* Tab Bar */}
           <div className="mt-5 flex gap-0.5">
             {TABS.map(({ id, label }) => (

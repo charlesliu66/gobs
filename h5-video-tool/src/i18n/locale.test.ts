@@ -111,6 +111,10 @@ test('message lookup resolves English keys and falls back to Chinese', () => {
   assert.equal(getMessage('en', 'home.reviewQueue.cta'), 'Review Pending Decisions');
   assert.equal(getMessage('en', 'layout.studio'), 'Advanced Studio');
   assert.equal(getMessage('en', 'layout.projects'), 'Advanced Projects');
+  assert.equal(getMessage('en', 'layout.navProduce'), 'Produce');
+  assert.equal(getMessage('zh-CN', 'layout.navAssets'), '素材');
+  assert.equal(getMessage('en', 'home.experimental.action'), 'Open experiments');
+  assert.equal(getMessage('en', 'studioEntryGuide.title'), 'Choose the right production path first');
   assert.equal(getMessage('en', 'campaignCreative.strategy.launchEditor'), 'Open In Advanced Studio');
   assert.equal(
     getMessage('en', 'campaignCreative.knowledge.subtitle'),

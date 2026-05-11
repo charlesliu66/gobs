@@ -210,6 +210,28 @@ export function Home() {
           />
         </div>
       </section>
+
+      <section className="animate-fade-in" style={{ animationDelay: '320ms' }}>
+        <button
+          type="button"
+          onClick={() => navigate('/platform')}
+          className="group flex w-full flex-col gap-3 rounded-2xl border border-dashed border-[var(--color-border)]/70 bg-[var(--color-surface-elevated)]/55 p-5 text-left transition-all hover:border-[var(--color-primary)]/35 hover:bg-[var(--color-surface-hover)] sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-subtle)]">
+              {t('home.experimental.eyebrow')}
+            </div>
+            <p className="mt-2 text-base font-semibold text-[var(--color-text)]">{t('home.experimental.title')}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)]">
+              {t('home.experimental.body')}
+            </p>
+          </div>
+          <span className="flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)]">
+            {t('home.experimental.action')}
+            <ArrowRightIcon />
+          </span>
+        </button>
+      </section>
     </div>
   );
 }

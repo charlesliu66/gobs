@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.196 - 2026-05-11
+**Navigation and production entry guidance**
+**Navigation / Home / Studio:**
+- Regrouped primary sidebar IA into Campaign, Produce, Assets, Distribute, and History so video-making tools no longer sit under a Distribution heading.
+- Kept Platform planning routes direct-link routeable while moving discovery to a low-prominence experimental entry on Home.
+- Added a Studio production entry guide that explains Advanced Studio, QuickFilm, Production Wizard, and Editor before users choose a workflow.
+**Tests / Build:**
+- Added source-level navigation structure coverage and updated legacy-route tests for the intentional TikTok Matrix visibility change.
+
 ## v0.195 - 2026-05-11
 **Editor effects sprint**
 **Editor Workbench:**

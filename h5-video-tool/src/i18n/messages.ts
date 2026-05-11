@@ -331,6 +331,11 @@ const ZH_CN: MessageTree = {
     failed: '登录失败',
   },
   layout: {
+    navCampaign: 'Campaign',
+    navProduce: '制作',
+    navAssets: '素材',
+    navDistribute: '分发',
+    navHistory: '历史',
     navCreate: 'Mission Control',
     navPost: 'Review & Publish',
     navDistribution: 'Advanced Studio',
@@ -351,6 +356,35 @@ const ZH_CN: MessageTree = {
     openMenu: '打开菜单',
     runtimeFallback: 'GOBS',
     campaignCreative: 'Campaign Mission Control',
+  },
+  studioEntryGuide: {
+    eyebrow: '制作入口导航',
+    title: '先选对制作方式',
+    subtitle: '四个视频入口保留各自能力，但先告诉用户该从哪里开始，减少误入专业工具的成本。',
+    advancedStudio: {
+      title: 'Advanced Studio',
+      body: '从模板或 Campaign 策略开始，走完整制作流程。',
+      fit: '适合：需要模板、角色、场景和参考素材配合的制作。',
+      action: '浏览模板',
+    },
+    quickFilm: {
+      title: 'QuickFilm',
+      body: '输入故事和角色，快速生成短视频草稿。',
+      fit: '适合：快速验证一个创意点子。',
+      action: '快速验证',
+    },
+    productionWizard: {
+      title: 'Production Wizard',
+      body: '分镜板驱动的完整制片管线。',
+      fit: '适合：需要逐镜头控制的专业影音制作。',
+      action: '进入制片',
+    },
+    editor: {
+      title: 'Editor',
+      body: '时间线剪辑器，用于精剪和后期包装。',
+      fit: '适合：已有素材，需要剪辑、字幕、配乐或包装。',
+      action: '打开剪辑',
+    },
   },
   home: {
     hero: {
@@ -414,6 +448,12 @@ const ZH_CN: MessageTree = {
         title: '最后才进入专业工作台',
         body: 'Editor 和制片能力继续保留，但只在需要精细控制或异常处理时才成为主入口。',
       },
+    },
+    experimental: {
+      eyebrow: '实验性功能',
+      title: 'Platform Framework / Memory / Learning Lab / Ops Center',
+      body: '这些页面仍可直接访问，用来查看平台化探索和模拟数据；它们暂不进入主导航，避免干扰 Campaign、制作和分发主线。',
+      action: '打开实验入口',
     },
   },
   campaignCreative: {
@@ -2031,6 +2071,11 @@ const EN: MessageTree = {
     failed: 'Sign-in failed',
   },
   layout: {
+    navCampaign: 'Campaign',
+    navProduce: 'Produce',
+    navAssets: 'Assets',
+    navDistribute: 'Distribute',
+    navHistory: 'History',
     navCreate: 'Mission Control',
     navPost: 'Review & Publish',
     navDistribution: 'Advanced Studio',
@@ -2051,6 +2096,35 @@ const EN: MessageTree = {
     openMenu: 'Open menu',
     runtimeFallback: 'GOBS',
     campaignCreative: 'Campaign Mission Control',
+  },
+  studioEntryGuide: {
+    eyebrow: 'Production entry guide',
+    title: 'Choose the right production path first',
+    subtitle: 'The four video tools stay available, but the page now explains when to use each one before users fall into the wrong workflow.',
+    advancedStudio: {
+      title: 'Advanced Studio',
+      body: 'Start from templates or Campaign strategy and run the full creation flow.',
+      fit: 'Best for: template-led production with roles, scenes, and references.',
+      action: 'Browse templates',
+    },
+    quickFilm: {
+      title: 'QuickFilm',
+      body: 'Enter a story and characters, then generate a fast short-video draft.',
+      fit: 'Best for: quickly validating one creative idea.',
+      action: 'Quick validate',
+    },
+    productionWizard: {
+      title: 'Production Wizard',
+      body: 'Use a storyboard-driven end-to-end production pipeline.',
+      fit: 'Best for: professional video work that needs shot-level control.',
+      action: 'Open production',
+    },
+    editor: {
+      title: 'Editor',
+      body: 'Use the timeline editor for fine cuts and post-production packaging.',
+      fit: 'Best for: existing assets that need editing, subtitles, music, or polish.',
+      action: 'Open editor',
+    },
   },
   home: {
     hero: {
@@ -2114,6 +2188,12 @@ const EN: MessageTree = {
         title: 'Open Professional Tools Only When Needed',
         body: 'Keep the editor and production surfaces available for fine control or exception handling, not as the default starting point.',
       },
+    },
+    experimental: {
+      eyebrow: 'Experimental surfaces',
+      title: 'Platform Framework / Memory / Learning Lab / Ops Center',
+      body: 'These pages remain directly available for platform exploration and simulated data, but they stay out of primary navigation until real operating data is connected.',
+      action: 'Open experiments',
     },
   },
   campaignCreative: {

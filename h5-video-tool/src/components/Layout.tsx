@@ -157,29 +157,39 @@ function GalleryIcon() {
 
 const NAV_GROUPS: { labelKey: string; items: NavItemDef[] }[] = [
   {
-    labelKey: 'layout.navCreate',
+    labelKey: 'layout.navCampaign',
     items: [
       { to: '/campaign-creative', labelKey: 'layout.campaignCreative', icon: CampaignCreativeIcon, highlight: true },
-      { to: '/distribute', labelKey: 'layout.distribute', icon: DistributeIcon },
-      { to: '/history', labelKey: 'layout.history', icon: HistoryIcon },
     ],
   },
   {
-    labelKey: 'layout.navPost',
+    labelKey: 'layout.navProduce',
     items: [
+      { to: '/studio', labelKey: 'layout.studio', icon: StudioIcon, end: true },
+      { to: '/studio/production', labelKey: 'layout.production', icon: ProductionIcon },
+      { to: '/quickfilm', labelKey: 'layout.quickfilm', icon: QuickFilmIcon },
+      { to: '/editor', labelKey: 'layout.editor', icon: EditorIcon },
+    ],
+  },
+  {
+    labelKey: 'layout.navAssets',
+    items: [
+      { to: '/asset-library', labelKey: 'layout.assets', icon: AssetLibraryIcon },
       { to: '/gallery', labelKey: 'layout.gallery', icon: GalleryIcon },
+    ],
+  },
+  {
+    labelKey: 'layout.navDistribute',
+    items: [
+      { to: '/distribute', labelKey: 'layout.distribute', icon: DistributeIcon },
       { to: '/tiktok-matrix', labelKey: 'layout.matrix', icon: MatrixIcon },
     ],
   },
   {
-    labelKey: 'layout.navDistribution',
+    labelKey: 'layout.navHistory',
     items: [
-      { to: '/studio', labelKey: 'layout.studio', icon: StudioIcon, end: true },
+      { to: '/history', labelKey: 'layout.history', icon: HistoryIcon },
       { to: '/projects', labelKey: 'layout.projects', icon: ProjectsIcon },
-      { to: '/studio/production', labelKey: 'layout.production', icon: ProductionIcon },
-      { to: '/editor', labelKey: 'layout.editor', icon: EditorIcon },
-      { to: '/quickfilm', labelKey: 'layout.quickfilm', icon: QuickFilmIcon },
-      { to: '/asset-library', labelKey: 'layout.assets', icon: AssetLibraryIcon },
     ],
   },
 ];
@@ -207,15 +217,18 @@ function getProductionNavTo(pathname: string, search: string): string {
 
 const PLANNING_PATHS = new Set([
   '/platform',
+  '/platform/bind',
+  '/platform/brain',
+  '/platform/data',
+  '/platform/actions',
   '/platform/memory',
   '/platform/learning-lab',
   '/platform/ops',
 ]);
 
-// Parked surfaces stay routeable by direct URL, but no longer compete with the primary operator path.
+// Platform planning surfaces stay routeable by direct URL, but no longer compete with the primary operator path.
 const LEGACY_DIRECT_ONLY_PATHS = new Set([
   ...PLANNING_PATHS,
-  '/tiktok-matrix',
 ]);
 
 function filterNavItems(items: NavItemDef[]): NavItemDef[] {
