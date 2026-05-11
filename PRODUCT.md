@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.193)*
+*Last updated: 2026-05-11 (v0.194)*
 
-**Latest update - v0.193**
+**Latest update - v0.194**
+- `/distribute` is lighter internally: asset-option helpers for package/current/local/output videos now live in a typed helper module instead of the page component.
+- Distribution publish behavior, account selection, caption generation, recent context restore, and history remain unchanged.
+- Helper tests now guard asset IDs, URL priority, dedupe ordering, prompt fallback, and source labels.
+
+**Previous update - v0.193**
 - The parked `/tiktok-matrix` Risk Console is now hidden from the primary sidebar so the default navigation stays focused on Campaign, Studio, and Distribution.
 - Direct URL access remains available for `/tiktok-matrix`, `/geelark`, `/geelark-batch`, and Platform planning pages for a safe transition period.
 - `src/sj-ui` remains isolated and documented as a separate rollback-friendly deletion candidate; this release does not delete the large legacy directory.

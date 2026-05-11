@@ -184,7 +184,7 @@ export function clearDistributeAssetDraft(): void {
  * 附加 ?fat=<fileAccessToken> 以便 <video> 无法携带 Bearer 时后端仍能识别用户。
  */
 export function getVideoFileUrl(videoPath: string): string {
-  const base = import.meta.env.VITE_API_BASE_URL || '';
+  const base = import.meta.env?.VITE_API_BASE_URL || '';
   return appendFileAccessToken(`${base}/api/video/file?path=${encodeURIComponent(videoPath)}`);
 }
 

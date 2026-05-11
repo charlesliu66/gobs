@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.194 - 2026-05-11
+**Large component refactor**
+**Distribution Center:**
+- Extracted `/distribute` asset-option mapping, package/current/local/output asset candidates, dedupe ordering, prompt fallback, and source-label helpers from `TabDistribute.tsx` into a typed `distributeAssetOptions` module.
+- Kept React state ownership, publish flow, account selection, caption generation, recent context, history, and GeeLark API payloads in place.
+- Added a small `getVideoFileUrl` guard for Node test environments where `import.meta.env` is undefined, with no Vite runtime behavior change.
+**Tests / Build:**
+- Added targeted helper tests, reran existing distribution view-model tests, and reran production builds/eval before release.
+
 ## v0.193 - 2026-05-11
 **Legacy surface reduction**
 **Navigation / Legacy surfaces:**
