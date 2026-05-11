@@ -7,6 +7,7 @@
 - VerifierReport: `docs/workflow/runs/2026-05-11-production-character-library-owner-sync/verifier-report.md`
 - Additional evidence:
   - `h5-video-tool-api/tests/characterLibraryOwnerSync.test.ts`
+  - `h5-video-tool/tests/characterLibrarySaveSheet.test.ts`
   - `docs/workflow/runs/2026-05-11-production-character-library-owner-sync/eval-result.json`
   - `python scripts/workflow_guard.py --run-id 2026-05-11-production-character-library-owner-sync --stage build`
   - `python scripts/workflow_guard.py --run-id 2026-05-11-production-character-library-owner-sync --stage verify`
@@ -14,7 +15,7 @@
 
 ## 2) Delivery Decision
 - Decision: GO for commit to `main`, staging deployment, staging smoke verification, release-ready marking, prod deployment, prod smoke verification, and idle restore.
-- Decision time: 2026-05-11T11:50:00Z
+- Decision time: 2026-05-11T13:00:00Z
 - Decision owner: codex
 
 ## 3) Blocking Issues
@@ -28,12 +29,12 @@
 | Character deletion does not clean synced Asset Library assets | Low | This run is about owner isolation and visibility, not destructive lifecycle coupling. | Operators can still delete assets explicitly in Asset Library if needed. | Future asset lifecycle policy review |
 
 ## 5) Scope Compliance
-- Delivered in scope: owner-scoped Character Library persistence, Asset Library sync for saved character images, frontend save feedback improvements, regression coverage, and release docs.
+- Delivered in scope: owner-scoped Character Library persistence, Asset Library sync for saved character images, portrait-preview save correctness, frontend save feedback improvements, regression coverage, and release docs.
 - Out-of-scope changes found: None.
 - Notes: No forbidden provider/pipeline service files or new env vars were touched.
 
 ## 6) Release Boundary
-- What is guaranteed: Saved character images now appear in the same account's Asset Library as `character_image` assets, Character Library reads/writes are owner-scoped, and shared imports are rebound to the importing owner.
+- What is guaranteed: Saved character images now appear in the same account's Asset Library as `character_image` assets, portrait-preview saves persist the current preview look, Character Library reads/writes are owner-scoped, and shared imports are rebound to the importing owner.
 - What is not guaranteed: automatic asset cleanup when deleting a Character Library record.
 - Environments validated so far: local targeted regression + API/frontend production builds passed. Staging and prod verification remain Release Owner execution steps.
 

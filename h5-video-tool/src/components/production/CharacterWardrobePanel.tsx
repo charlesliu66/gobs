@@ -71,11 +71,12 @@ export function CharacterWardrobePanel({
     setErr(null);
     try {
       const ensured = ensureCharacterLookTree(sheet);
+      const baseImage = getCharacterLookImage(ensured) ?? ensured.baseImageDataUrl;
       await saveCharacterToLibrary({
         name: sheet.name,
         isProtagonist: sheet.isProtagonist,
-        baseImageDataUrl: sheet.baseImageDataUrl,
-        baseConfirmed: sheet.baseConfirmed,
+        baseImageDataUrl: baseImage,
+        baseConfirmed: ensured.baseConfirmed ?? !!baseImage,
         states: (sheet.states ?? []).map((s) => ({
           id: s.id,
           label: s.label,

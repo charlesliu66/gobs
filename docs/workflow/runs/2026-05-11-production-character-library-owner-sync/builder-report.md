@@ -3,7 +3,7 @@
 ## 1) Inputs
 - Spec file: `docs/workflow/runs/2026-05-11-production-character-library-owner-sync/planner-spec.md`
 - Spec version/date: 2026-05-11T11:45:00Z
-- Acceptance criteria covered: AC-01, AC-02, AC-03, AC-04, AC-05
+- Acceptance criteria covered: AC-01, AC-02, AC-03, AC-04, AC-05, AC-06
 
 ## 2) Implemented
 | AC ID | What was implemented | Files changed | Notes |
@@ -12,7 +12,8 @@
 | AC-02 | Added Asset Library synchronization for saved character images. | `h5-video-tool-api/src/services/characterLibraryAssetSync.ts`, `h5-video-tool-api/src/routes/characterLibrary.ts` | Base image, state images, and look-tree images are synchronized as `character_image` assets for the same owner. |
 | AC-03 | Enforced cross-account isolation and owner rebinding on import. | `h5-video-tool-api/src/routes/characterLibrary.ts` | Imported shared characters are rebound to the current owner and re-synced into that owner's Asset Library. |
 | AC-04 | Improved save UX and payload completeness. | `h5-video-tool/src/components/production/CharacterPortraitEditorModal.tsx`, `h5-video-tool/src/components/production/CharacterWardrobePanel.tsx`, `h5-video-tool/src/api/characterLibrary.ts`, `h5-video-tool/src/components/CharacterLibraryPanel.tsx` | Save now includes `lookTree` and `activeLookId`, surfaces failures, and confirms Asset Library sync. |
-| AC-05 | Added targeted regression coverage and updated release docs. | `h5-video-tool-api/tests/characterLibraryOwnerSync.test.ts`, `PRODUCT.md`, `CHANGELOG.md` | The new test proves owner isolation and Asset Library visibility for saved character assets. |
+| AC-05 | Added targeted regression coverage and updated release docs. | `h5-video-tool-api/tests/characterLibraryOwnerSync.test.ts`, `PRODUCT.md`, `CHANGELOG.md` | The backend regression proves owner isolation and Asset Library visibility for saved character assets. |
+| AC-06 | Normalized portrait-preview saves so the current preview look is what gets persisted and synchronized. | `h5-video-tool/src/components/production/CharacterPortraitEditorModal.tsx`, `h5-video-tool/src/components/production/CharacterWardrobePanel.tsx`, `h5-video-tool/src/components/production/characterLibrarySaveSheet.ts`, `h5-video-tool/tests/characterLibrarySaveSheet.test.ts` | Replace saves now overwrite the intended look, branch saves append a new look, and no-preview saves fall back to the active look instead of stale base-image metadata. |
 
 ## 3) Not Implemented
 | AC ID | Reason | Impact | Proposed next step |
@@ -23,6 +24,7 @@
 | Test type | Command/Method | Result | Evidence |
 |---|---|---|---|
 | Targeted backend regression | `cd h5-video-tool-api && node --import tsx --test tests/characterLibraryOwnerSync.test.ts` | PASS | Confirms save is owner-scoped, `owner_b` cannot read `owner_a` data, and saved character images show up as `character_image` assets for the same owner. |
+| Targeted frontend regression | `cd h5-video-tool && npx tsx --test tests/characterLibrarySaveSheet.test.ts` | PASS | Confirms preview-modal save uses the current preview for replace/branch flows and falls back to the active look when no preview exists. |
 | API build | `cd h5-video-tool-api && npm run build` | PASS | TypeScript build, asset copy, and build-info generation passed. |
 | Frontend build | `cd h5-video-tool && npm run build` | PASS | `tsc -b` and Vite production build passed; only the pre-existing dynamic import warning remained. |
 | Manual implementation audit | Code review of route + sync helper + UI save entry points | PASS | Verified account binding, sync coverage for base/state/look images, and UI error/success behavior. |
@@ -38,6 +40,6 @@
 - If No, list deviations and reasons: None.
 
 ## 7) Change Summary
-- What changed: Character saves are now owner-scoped and synchronized into the owner's Asset Library with stable bindings.
-- Why changed: Operators saved role appearances in Advanced Studio but could not find them in the material center, and the old storage path risked cross-account mixing.
+- What changed: Character saves are owner-scoped and synchronized into the owner's Asset Library with stable bindings, and portrait-preview saves now persist the current preview look instead of stale base-image state.
+- Why changed: Operators saved role appearances in Advanced Studio but could not find the freshly previewed look in the material center, and the old storage path risked cross-account mixing.
 - What did not change: Provider-side generation services, protected pipeline files, legacy asset endpoints, and deletion lifecycle policy.

@@ -11,6 +11,15 @@
 **Tests / Build:**
 - Rebuilt backend and frontend production bundles and ran an isolated temporary `API_DATA_DIR` sync sanity check to verify owner-scoped asset rows are written with `team_category=character_image`.
 
+## v0.202 - 2026-05-11
+**Advanced Studio portrait preview save follow-up**
+**Advanced Studio / Character Library / Asset Library:**
+- Fixed the portrait preview modal's "Save to Character Library" path to persist the current generated preview image, instead of re-saving the older character sheet/base image state.
+- Added a frontend save-sheet normalizer so replace saves update the targeted look, branch saves append a new look-tree branch, and the synchronized `baseImageDataUrl` always matches the active look that the user just saved.
+- Updated wardrobe-side saves to prefer the current active look image over stale base-image metadata before syncing into the Asset Library.
+**Tests / Build:**
+- Added targeted frontend regression coverage for replace, branch, and no-preview save cases, and reran frontend/backend production builds plus the existing backend owner-sync regression.
+
 ## v0.200 - 2026-05-11
 **Campaign Creative page split**
 **Campaign Creative:**

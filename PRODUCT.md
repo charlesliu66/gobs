@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.201)*
+*Last updated: 2026-05-11 (v0.202)*
 
-**Latest update - v0.201**
+**Latest update - v0.202**
+- Advanced Studio portrait preview modal now saves the current preview image itself when you click "Save to Character Library", instead of re-saving the older character base state, so the exact preview you just generated can appear in the same account's Asset Library.
+- Portrait-preview saves now normalize the outgoing character sheet before sync: replace saves overwrite the targeted look, branch saves append a new look-tree branch, and both paths align `baseImageDataUrl` with the active look that will be synchronized.
+- Wardrobe-side saves now also resolve the effective active look image before sync, avoiding stale `baseImageDataUrl` values that could keep the wrong image out of the Asset Library after a later save.
+
+**Previous update - v0.201**
 - Advanced Studio "Save to Character Library" is now owner-scoped end to end: character library save/list/read/delete/import flows all resolve against the current logged-in account instead of a shared global directory.
 - Saving a character from Advanced Studio now also syncs the saved base look, state wardrobe images, and available look-tree images into the same account's Asset Library as `character_image` assets, so they appear in `/asset-library` without a separate manual upload.
 - Character save feedback is now clearer in the UI: successful saves explicitly say the asset library was synced, and save failures no longer fail silently in the portrait editor.

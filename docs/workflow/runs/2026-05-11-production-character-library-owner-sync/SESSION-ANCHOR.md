@@ -4,8 +4,8 @@
 - Run ID: `2026-05-11-production-character-library-owner-sync`
 - Goal: Fix Advanced Studio character saves so saved appearances are owner-scoped and synchronized into the same account's Asset Library.
 - Owner: codex
-- Branch or commit context: `main@82cc0e1` working tree
-- Last updated: 2026-05-11T11:45:00Z
+- Branch or commit context: `main` working tree follow-up after `c83dfe6`
+- Last updated: 2026-05-11T12:55:00Z
 
 ## Acceptance Criteria Snapshot
 - AC-01: Character Library save/list/get/delete/share/import are all bound to the current authenticated account, not a shared cross-account directory.
@@ -13,6 +13,7 @@
 - AC-03: Re-saving the same character updates/reuses bindings instead of creating uncontrolled duplicate assets for identical images within the same save action.
 - AC-04: Frontend save feedback clearly confirms Asset Library sync and surfaces save failures.
 - AC-05: Local regression evidence proves account isolation and Asset Library visibility for the saved character assets.
+- AC-06: Saving from the portrait preview modal persists the current preview look, not a stale pre-preview base image.
 
 ## Editable Files (Builder Ownership)
 - docs/workflow/runs/2026-05-11-production-character-library-owner-sync/
@@ -25,6 +26,8 @@
 - h5-video-tool/src/components/CharacterLibraryPanel.tsx
 - h5-video-tool/src/components/production/CharacterPortraitEditorModal.tsx
 - h5-video-tool/src/components/production/CharacterWardrobePanel.tsx
+- h5-video-tool/src/components/production/characterLibrarySaveSheet.ts
+- h5-video-tool/tests/characterLibrarySaveSheet.test.ts
 
 ## Read-Only References
 - h5-video-tool-api/src/db/assetDb.ts

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildCharacterImagePrompt, ensureCharacterLookTree, getCharacterLookImage } from '../../studio/productionAssets';
+import { buildCharacterImagePrompt, ensureCharacterLookTree } from '../../studio/productionAssets';
 import type { AssetVariant, CharacterSheet, ProductionDesignLayer } from '../../studio/productionTypes';
 import type { GenerateCharacterPortraitRequest } from '../../api/storyboard';
 import { getPortraitJobKey, type PortraitEditIntent, type PortraitJobState } from './portraitJobKey';
 import { CharacterWardrobePanel } from './CharacterWardrobePanel';
 import { saveCharacterToLibrary } from '../../api/characterLibrary';
+import { buildCharacterLibrarySaveSheet } from './characterLibrarySaveSheet';
 
 export type { PortraitEditIntent } from './portraitJobKey';
 
@@ -193,28 +194,27 @@ export function CharacterPortraitEditorModal({
     setSavingToLib(true);
     setSaveErr(null);
     try {
-      const ensured = ensureCharacterLookTree(characterSheet);
-      const baseImage = ensured.baseImageDataUrl ?? getCharacterLookImage(ensured);
+      const sheetForLibrary = buildCharacterLibrarySaveSheet(characterSheet, editIntent, preview);
       await saveCharacterToLibrary({
-        name: ensured.name,
-        isProtagonist: ensured.isProtagonist,
-        baseImageDataUrl: baseImage,
-        baseConfirmed: ensured.baseConfirmed ?? !!baseImage,
-        states: (ensured.states ?? []).map((s) => ({
+        name: sheetForLibrary.name,
+        isProtagonist: sheetForLibrary.isProtagonist,
+        baseImageDataUrl: sheetForLibrary.baseImageDataUrl,
+        baseConfirmed: sheetForLibrary.baseConfirmed,
+        states: (sheetForLibrary.states ?? []).map((s) => ({
           id: s.id,
           label: s.label,
           imageDataUrl: s.imageDataUrl,
           statePrompt: s.statePrompt,
           notes: s.notes,
         })),
-        lookTree: ensured.lookTree?.map((node) => ({
+        lookTree: sheetForLibrary.lookTree?.map((node) => ({
           id: node.id,
           parentId: node.parentId,
           label: node.label,
           imageDataUrl: node.imageDataUrl,
           note: node.note,
         })),
-        activeLookId: ensured.activeLookId,
+        activeLookId: sheetForLibrary.activeLookId,
       });
       setSavedToLib(true);
       setTimeout(() => setSavedToLib(false), 3000);
@@ -223,7 +223,7 @@ export function CharacterPortraitEditorModal({
     } finally {
       setSavingToLib(false);
     }
-  }, [characterSheet]);
+  }, [characterSheet, editIntent, preview]);
 
   const localErr =
     !promptVariant

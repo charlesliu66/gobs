@@ -15,6 +15,7 @@ When an operator saves a character appearance from Advanced Studio:
 2. The saved base image, wardrobe states, and saved look-tree images are synchronized into that same account's Asset Library.
 3. The Asset Library records are tagged as reusable character images and can be seen from the normal Asset Library UI.
 4. Save success/failure is obvious in the Advanced Studio UI.
+5. Saving directly from the portrait preview modal persists the current preview image and look-tree intent, so the same image shows up in the owner's Asset Library.
 
 ## 3) Scope
 
@@ -23,6 +24,7 @@ When an operator saves a character appearance from Advanced Studio:
 - owner-scoped disk layout for character JSON
 - Asset Library synchronization for saved character images
 - frontend save feedback and compatible return types
+- portrait-preview save payload normalization for replace/branch intent
 - local regression test coverage
 
 ### Out of Scope
@@ -45,6 +47,7 @@ When an operator saves a character appearance from Advanced Studio:
 
 ### Frontend
 - Keep the existing save entry points, but include `lookTree` and `activeLookId` in the payload.
+- Normalize portrait-preview saves before submission so the just-generated preview image becomes the effective saved look for both replace and branch flows.
 - Surface save failures instead of swallowing them.
 - Make success copy explicit that Asset Library sync happened.
 
@@ -63,6 +66,7 @@ When an operator saves a character appearance from Advanced Studio:
 - AC-03: Cross-account reads do not expose another user's character entries or synced assets.
 - AC-04: Re-saving the same save payload produces stable bindings and de-duplicates identical images within the same save action.
 - AC-05: Backend build, frontend build, and a targeted regression test pass.
+- AC-06: Saving from the portrait preview modal uses the current preview image and active look intent in the synchronized payload.
 
 ## 7) Test Matrix
 
@@ -70,9 +74,11 @@ When an operator saves a character appearance from Advanced Studio:
 |---|---|
 | Owner isolation | Save as `owner_a`, verify `owner_b` cannot list or read the character |
 | Asset sync | Save a character and verify Asset Library list returns `character_image` for that owner |
+| Preview save path | Save from portrait preview modal in replace/branch mode and verify the outgoing sheet aligns with the current preview |
 | Duplicate handling | Base/state/look using the same image should produce one unique asset row in the test scenario |
 | Build | `npm run build` in API and frontend |
 | Regression | `node --import tsx --test tests/characterLibraryOwnerSync.test.ts` |
+| Frontend regression | `npx tsx --test tests/characterLibrarySaveSheet.test.ts` |
 
 ## 8) Release Notes Requirement
 
