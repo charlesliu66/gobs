@@ -7,6 +7,7 @@ import { getTemplates, type PromptTemplate } from '../api/promptPolish';
 import {
   filterVisibleStudioTemplates,
   getStudioTemplateDisplayMeta,
+  getStudioTemplateValidationNotice,
 } from '../config/studioTemplateOptions';
 
 const DURATION_ORDER = [8, 15];
@@ -67,22 +68,39 @@ export function TemplatePicker({ onSelect }: TemplatePickerProps) {
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {displayList.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onSelect(t)}
-            className="flex flex-col items-stretch text-left p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] transition-colors"
-          >
-            <span className="text-base font-semibold text-[var(--color-text)]">
-              {t.nameZh ?? t.name}
-            </span>
-            <span className="mt-1 text-xs text-[var(--color-text-muted)]">{t.description}</span>
-            <span className="mt-2 text-xs text-[var(--color-text-subtle)]">
-              {getStudioTemplateDisplayMeta(t)}
-            </span>
-          </button>
+          <TemplateButton key={t.id} template={t} onSelect={onSelect} />
         ))}
       </div>
     </div>
+  );
+}
+
+function TemplateButton({
+  template,
+  onSelect,
+}: {
+  template: PromptTemplate;
+  onSelect: (template: PromptTemplate) => void;
+}) {
+  const validationNotice = getStudioTemplateValidationNotice(template.id);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(template)}
+      className="flex flex-col items-stretch text-left p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] transition-colors"
+    >
+      <span className="text-base font-semibold text-[var(--color-text)]">
+        {template.nameZh ?? template.name}
+      </span>
+      <span className="mt-1 text-xs text-[var(--color-text-muted)]">{template.description}</span>
+      <span className="mt-2 text-xs text-[var(--color-text-subtle)]">
+        {getStudioTemplateDisplayMeta(template)}
+      </span>
+      {validationNotice ? (
+        <span className="mt-3 rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
+          {validationNotice}
+        </span>
+      ) : null}
+    </button>
   );
 }

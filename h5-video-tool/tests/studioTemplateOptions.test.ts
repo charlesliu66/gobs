@@ -5,6 +5,7 @@ import {
   getStudioTemplateAspectRatioOptions,
   getStudioTemplateDisplayMeta,
   getStudioTemplateDurationOptions,
+  getStudioTemplateValidationNotice,
   isValidStudioAspectRatio,
   isValidStudioDuration,
 } from '../src/config/studioTemplateOptions.ts';
@@ -41,4 +42,11 @@ test('template display meta communicates marketer-facing capabilities', () => {
   assert.equal(getStudioTemplateDisplayMeta({ id: 'custom' }), '4-10s · 9:16 / 16:9 / 1:1');
   assert.equal(getStudioTemplateDisplayMeta({ id: 'viral-dance' }), '5-10s · 9:16');
   assert.equal(getStudioTemplateDisplayMeta({ id: 'boss-showcase' }), '15s · 9:16 / 16:9');
+});
+
+test('Motion Transfer template carries experimental validation notice', () => {
+  assert.match(getStudioTemplateValidationNotice('viral-dance') ?? '', /experimental/);
+  assert.match(getStudioTemplateValidationNotice('viral-dance') ?? '', /2\/10 usable/);
+  assert.equal(getStudioTemplateValidationNotice('custom'), undefined);
+  assert.equal(getStudioTemplateValidationNotice('boss-showcase'), undefined);
 });

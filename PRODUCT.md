@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.187)*
+*Last updated: 2026-05-11 (v0.188)*
 
-**Latest update - v0.187**
+**Latest update - v0.188**
+- Motion Transfer now has a validation ledger with 10 sample records and a strict `continue` / `experimental` / `pause` decision helper.
+- Current Motion Transfer validation is `experimental` at 2/10 usable samples, so it remains available only as a controlled Studio experiment rather than a stable Campaign path.
+- Advanced Studio shows an experimental validation notice on the Motion Transfer entry, making the current usable-rate boundary visible before operators choose it.
+
+**Previous update - v0.187**
 - Campaign Output Workbench now shows a produced-output quality panel based only on human marks, feedback tags, and static rules; the UI explicitly avoids claiming automatic video understanding.
 - Operators can select fixed feedback tags and create a next-version draft for Banner prompts and platform copy outputs.
 - Next-version drafts preserve `parentOutputId`, Campaign/Brief context, inherited source asset IDs, feedback tags, issue tags, reviewer notes, and reviewer metadata inside the existing Output Plan.
@@ -240,6 +245,7 @@
 - **Asset reuse metadata (v0.185)**: Asset Library responses now include team reuse categories, category source, preprocessing metadata, manual category correction, and an `assetId`-based Run 0 `AssetContract` mapping helper for later Campaign/Banner reuse.
 - **Banner Output MVP (v0.186)**: Campaign Output Plans can now include Banner deliverables with four initial specs, Asset Library source IDs, deterministic prompt placeholders, three-state quality marking, and non-publishable distribution package context.
 - **Quality review and next-version MVP (v0.187)**: Campaign Output Workbench can turn human quality feedback into traceable next-version drafts for Banner prompts and platform copy without adding a revision system or claiming automatic video understanding.
+- **Motion Transfer validation (v0.188)**: Advanced Studio now marks Motion Transfer as experimental based on a 10-sample validation ledger and a strict 2/10 usable-rate conclusion.
 
 ---
 
@@ -302,6 +308,7 @@
 - **Asset Library reuse MVP (v0.185)**: Window A Run 1 adds reusable Asset Library categories, preprocessing metadata, manual category correction, and `assetId` contract mapping while keeping Workbench and distribution package routes out of scope.
 - **Banner Output MVP (v0.186)**: Window A Run 2 adds Banner specs, prompt placeholder production, Workbench quality marking, and distribution handoff context without provider image generation or route rewrites.
 - **Quality review and next-version MVP (v0.187)**: Window A Run 4 adds Workbench quality diagnostics, fixed feedback tags, and child output drafts with `parentOutputId` for Banner/copy next versions.
+- **Motion Transfer validation (v0.188)**: Run 5 records 10 validation samples, concludes `experimental`, and adds an Advanced Studio entry hint without touching provider services.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -311,6 +318,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.188 - 2026-05-11
+**Motion Transfer validation**
+
+- **[validation ledger] Added Motion Transfer sample records** (`h5-video-tool/src/studio/motionTransferValidation.ts`): 10 samples track reference action type, character asset class, generated-result assessment, success/failure reason, ad-usability, and risk level.
+- **[decision gate] Added explicit continue/experimental/pause calculation** (`h5-video-tool/src/studio/motionTransferValidation.ts`): current usable rate is 2/10, so Motion Transfer is `experimental` and cannot be promoted into the stable/default path.
+- **[studio entry] Added experimental notice** (`h5-video-tool/src/config/studioTemplateOptions.ts`, `h5-video-tool/src/components/TemplatePicker.tsx`): the Motion Transfer template card shows the validation status before users start the flow.
 
 ### v0.187 - 2026-05-11
 **Quality review and next-version MVP**

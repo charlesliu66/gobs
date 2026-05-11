@@ -1,3 +1,5 @@
+import { getMotionTransferValidationNotice } from '../studio/motionTransferValidation.ts';
+
 export const ACTIVE_STUDIO_TEMPLATE_IDS = ['viral-dance', 'boss-showcase'] as const;
 export const REMOVED_STUDIO_TEMPLATE_IDS = ['short-drama', 'cat-harem', 'cg-trailer'] as const;
 
@@ -41,4 +43,9 @@ export function getStudioTemplateDisplayMeta(template: TemplateLike): string {
   if (template.id === 'viral-dance') return '5-10s · 9:16';
   if (template.id === 'boss-showcase') return '15s · 9:16 / 16:9';
   return `${template.duration ?? '-'}s · ${template.aspectRatio ?? '-'}`;
+}
+
+export function getStudioTemplateValidationNotice(templateId: string): string | undefined {
+  if (templateId === 'viral-dance') return getMotionTransferValidationNotice();
+  return undefined;
 }

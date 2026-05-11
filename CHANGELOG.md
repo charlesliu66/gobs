@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.188 - 2026-05-11
+**Motion Transfer validation**
+**Advanced Studio:**
+- Added a machine-readable Motion Transfer validation ledger with 10 sample records covering action type, character asset class, generated-result assessment, success/failure reason, risk level, and ad-usability.
+- Added deterministic validation summary helpers that calculate usable rate and force the conclusion to `continue`, `experimental`, or `pause`; the current fixture is `experimental` at 2/10 usable.
+- Added an experimental validation notice to the Motion Transfer Studio template entry so operators do not mistake it for a stable ad-production path.
+- Documented suitable action types, high-risk action types, and the <3/10 usable exit rule without touching provider services or video generation routes.
+**Tests / Build:**
+- Added targeted Motion Transfer validation tests and extended Studio template tests for the experimental notice.
+
 ## v0.187 - 2026-05-11
 **Quality review and next-version MVP**
 **Campaign Output Workbench:**
