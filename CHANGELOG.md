@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.193 - 2026-05-11
+**Legacy surface reduction**
+**Navigation / Legacy surfaces:**
+- Hid the parked `/tiktok-matrix` Risk Console from primary sidebar navigation while keeping direct URL access and the legacy `/geelark` and `/geelark-batch` redirects alive.
+- Kept Platform planning pages direct-link-only and added source-presence tests that guard direct routes, visible core Campaign/Studio/Distribution nav targets, and `sj-ui` isolation.
+- Documented `src/sj-ui` as a separate rollback-friendly deletion candidate instead of deleting it in the same navigation cleanup.
+**Tests / Build:**
+- Added targeted legacy-surface source tests and reran production builds/eval before release.
+
 ## v0.192 - 2026-05-11
 **Data contract hardening**
 **Campaign / Studio / Distribution:**

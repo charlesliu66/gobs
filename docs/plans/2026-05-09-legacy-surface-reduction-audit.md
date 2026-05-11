@@ -46,6 +46,11 @@ Recommendation:
 - Follow-up step 2: keep direct route available for one release.
 - Follow-up step 3: delete or move behind an explicit experimental flag after no usage/support need is confirmed.
 
+Run 10 update (2026-05-11):
+- `/tiktok-matrix` is moved to direct-link-only by filtering it from the primary sidebar.
+- `/tiktok-matrix`, `/geelark`, and `/geelark-batch` routes remain registered for the release transition.
+- Source-presence tests now guard that hidden navigation does not become route deletion.
+
 ### Platform Framework / Memory / Learning Lab / Ops
 
 Observed active route behavior:
@@ -62,6 +67,10 @@ Recommendation:
 - Add a follow-up product decision: either archive into docs/experimental area or reframe as admin-only operating memory.
 - Do not delete until Campaign/Distribution telemetry or user confirmation says they are unused.
 
+Run 10 update (2026-05-11):
+- Platform planning routes remain direct-link-only and are covered by source-presence tests.
+- No Platform page deletion or route behavior change is included in Run 10.
+
 ## 3) Follow-Up Run Proposal
 
 `2026-05-xx-legacy-surface-reduction-phase1`
@@ -72,3 +81,7 @@ Acceptance criteria:
 - Keep Platform routes direct-link-only unless the product owner explicitly approves deletion.
 - Add source-presence tests proving Campaign, Studio, and Distribution routes remain unchanged.
 - Run frontend build, backend build, workflow eval, staging smoke, and prod smoke before closing.
+
+Run 10 implementation note:
+- This run completes the hide-from-primary-nav step and adds tests.
+- `src/sj-ui` deletion is still deferred because the checklist requires a separate rollback-friendly commit if the directory is removed.

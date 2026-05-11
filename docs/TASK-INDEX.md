@@ -28,7 +28,8 @@
 - Character Showcase Validation is merged/deployed at `02d65fc`, implementing Run 6: 10-sample 5-character validation ledger, constrained continue decision, and Studio Character Showcase entry/preset guidance.
 - Distribution Final Mile is merged/deployed at `bc693a7`, implementing Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance.
 - Knowledge Traceability is merged/deployed at `9aaef71`, implementing Run 8: visible knowledge citations, citation feedback, rejected-citation suppression, and Output Plan knowledge references.
-- Data Contract Hardening is active at `docs/workflow/runs/2026-05-11-data-contract-hardening/`, implementing Run 9: Campaign/Brief/Output/Package lineage, Studio refresh-safe handoff restoration, and operator-visible link health.
+- Data Contract Hardening is merged/deployed at `24c23c1`, implementing Run 9: Campaign/Brief/Output/Package lineage, Studio refresh-safe handoff restoration, and operator-visible link health.
+- Legacy Surface Reduction is active at `docs/workflow/runs/2026-05-11-legacy-surface-reduction/`, implementing Run 10: hide parked legacy surfaces from primary navigation while preserving direct URL access and `sj-ui` rollback boundaries.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -45,6 +46,7 @@
   - `docs/plans/2026-05-10-distribution-final-mile.md`
   - `docs/plans/2026-05-11-knowledge-traceability.md`
   - `docs/plans/2026-05-11-data-contract-hardening.md`
+  - `docs/plans/2026-05-11-legacy-surface-reduction.md`
 
 > 最后更新：2026-05-11
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
@@ -91,7 +93,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-11-data-contract-hardening` | Run 9: Campaign/Brief/Output/Package lineage, refresh-safe Studio handoff restore, and compact link-health status | Builder/Verifier in progress on branch `codex/2026-05-11-data-contract-hardening`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-legacy-surface-reduction` | Run 10: hide parked legacy surfaces from primary navigation, preserve direct URLs, and guard `sj-ui` isolation | Builder/Verifier in progress on branch `codex/2026-05-11-legacy-surface-reduction`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-data-contract-hardening` | Run 9: Campaign/Brief/Output/Package lineage, refresh-safe Studio handoff restore, and compact link-health status | Merged/deployed @ `24c23c1`; Run 10 starts from this base |
 | `2026-05-11-knowledge-traceability` | Run 8: visible knowledge citations, citation feedback save/list, rejected-citation suppression, and Output Plan knowledge references | Merged/deployed @ `9aaef71`; Run 9 starts from this base |
 | `2026-05-11-distribution-final-mile` | Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance | Merged/deployed @ `bc693a7`; Run 8 starts from this base |
 | `2026-05-11-character-showcase-validation` | Run 6: 10-sample Character Showcase validation ledger, constrained continue decision, and Studio entry/preset guidance | Merged/deployed @ `02d65fc`; Run 7 starts from this base |

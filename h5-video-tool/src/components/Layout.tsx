@@ -212,8 +212,14 @@ const PLANNING_PATHS = new Set([
   '/platform/ops',
 ]);
 
+// Parked surfaces stay routeable by direct URL, but no longer compete with the primary operator path.
+const LEGACY_DIRECT_ONLY_PATHS = new Set([
+  ...PLANNING_PATHS,
+  '/tiktok-matrix',
+]);
+
 function filterNavItems(items: NavItemDef[]): NavItemDef[] {
-  return items.filter((item) => !PLANNING_PATHS.has(item.to));
+  return items.filter((item) => !LEGACY_DIRECT_ONLY_PATHS.has(item.to));
 }
 
 function navLinkClass(active: boolean, highlight?: boolean): string {
