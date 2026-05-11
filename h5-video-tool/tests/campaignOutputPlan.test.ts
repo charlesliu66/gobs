@@ -106,6 +106,7 @@ function createKnowledgeContext(): DerivedCampaignKnowledgeContext {
 
 test('buildCampaignOutputPlan creates visible deliverables with source asset requirements', () => {
   const plan = buildCampaignOutputPlan({
+    campaignId: 'campaign_hero_launch',
     mission: 'Promote the new hero launch',
     brief: createBrief(),
     strategy: createStrategy(),
@@ -113,10 +114,41 @@ test('buildCampaignOutputPlan creates visible deliverables with source asset req
   });
 
   assert.equal(plan.items.some((item) => item.type === 'short_video'), true);
+  assert.equal(plan.campaignId, 'campaign_hero_launch');
   assert.equal(plan.items.some((item) => item.type === 'fb_post'), true);
   assert.equal(plan.items.some((item) => item.type === 'caption_set'), true);
   assert.equal(plan.sourceAssetRequirements.some((asset) => asset.assetType === 'character_art'), true);
   assert.equal(plan.capabilityGaps.some((gap) => gap.gapType === 'source_asset_missing'), true);
+});
+
+test('produced outputs inherit campaign, brief, and parent output lineage', () => {
+  const plan = buildCampaignOutputPlan({
+    campaignId: 'campaign_hero_launch',
+    mission: 'Promote the new hero launch',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    requestedPlatforms: ['facebook'],
+    availableSourceAssets: [
+      { assetId: 'asset_key_art', assetType: 'key_art' },
+      { assetId: 'asset_logo', assetType: 'game_logo' },
+      { assetId: 'asset_character', assetType: 'character_art' },
+    ],
+  });
+
+  const produced = produceSupportedCampaignOutputs({
+    plan,
+    mission: 'Promote the new hero launch',
+    brief: createBrief(),
+    strategy: createStrategy(),
+  });
+  const producedOutput = produced.items
+    .flatMap((item) => item.producedOutputs?.map((output) => ({ item, output })) ?? [])
+    .find(({ output }) => output.kind === 'post_copy' || output.kind === 'banner_prompt');
+
+  assert.ok(producedOutput);
+  assert.equal(producedOutput.output.campaignId, 'campaign_hero_launch');
+  assert.equal(producedOutput.output.briefId, 'brief_hero');
+  assert.equal(producedOutput.output.parentOutputId, producedOutput.item.id);
 });
 
 test('buildCampaignOutputPlan marks outputs with knowledge references', () => {

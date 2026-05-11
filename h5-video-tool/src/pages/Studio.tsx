@@ -9,7 +9,9 @@ import type {
   CampaignStudioHandoffState,
   StudioBridgeTemplateId,
 } from '../components/campaign/studioBridge.ts';
+import { buildCampaignStudioHandoff } from '../components/campaign/studioBridge.ts';
 import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
+import { getCampaignOutputPlan } from '../api/campaignOutputPlan.ts';
 
 type HomeStudioState = { autoSelectCustom?: boolean; seedPrompt?: string };
 type StudioLocationState = (HomeStudioState & {
@@ -78,6 +80,7 @@ export function Studio() {
     setPrompt,
     setDreaminaMultimodalItems,
     setViralDanceReferenceVideoUrl,
+    campaignStudioHandoff,
     setCampaignStudioHandoff,
     clearCampaignStudioHandoff,
   } = useCreateFlow();
@@ -87,6 +90,9 @@ export function Studio() {
   const tabFromUrl = searchParams.get('tab') as string | null;
   const urlAssetId = searchParams.get('assetId');
   const urlTemplateId = searchParams.get('templateId');
+  const urlOutputPlanId = searchParams.get('outputPlan');
+  const urlProductionItemId = searchParams.get('productionItem');
+  const urlPackageId = searchParams.get('package');
 
   // 主 tab：create | templates
   const [activeTab, setActiveTab] = useState<'create' | 'templates'>(
@@ -104,6 +110,46 @@ export function Studio() {
     if (tab === 'create') setSearchParams({});
     else setSearchParams({ tab });
   }, [setSearchParams]);
+
+  const applyCampaignStudioHandoff = useCallback((handoff: CampaignStudioHandoffState) => {
+    setTemplateId(handoff.templateId);
+    setCampaignStudioHandoff(handoff);
+    applyTemplateDefaults(handoff.templateId, { setVideoDuration, setVideoAspectRatio });
+    setPrompt(handoff.prompt);
+    setActiveTab('create');
+
+    void (async () => {
+      const imageItems: DreaminaMultimodalItem[] = [];
+      for (const sourceAsset of handoff.sourceAssets) {
+        try {
+          const imageItem = await loadAssetAsDreaminaImage({
+            assetId: sourceAsset.id,
+            fileName: `${sourceAsset.label}-${sourceAsset.id}`,
+            semanticRole: sourceAsset.semanticRole,
+          });
+          if (imageItem) {
+            imageItems.push(imageItem);
+          } else if (handoff.templateId === 'viral-dance') {
+            setViralDanceReferenceVideoUrl(new URL(buildAssetFileUrl(sourceAsset.id), window.location.origin).toString());
+          }
+          void recordUsage(sourceAsset.id, `campaign-studio-handoff:${sourceAsset.assetType}`);
+        } catch {
+          // Keep the seeded prompt/template even if one reference asset cannot be loaded.
+        }
+      }
+      if (imageItems.length > 0) {
+        setDreaminaMultimodalItems(imageItems);
+      }
+    })();
+  }, [
+    setCampaignStudioHandoff,
+    setDreaminaMultimodalItems,
+    setPrompt,
+    setTemplateId,
+    setVideoAspectRatio,
+    setVideoDuration,
+    setViralDanceReferenceVideoUrl,
+  ]);
 
   useEffect(() => {
     if (!isStudioBridgeTemplateId(urlTemplateId)) return;
@@ -142,49 +188,58 @@ export function Studio() {
     const handoff = st?.campaignStudioHandoff;
     if (!handoff?.fromCampaignOutput) return;
 
-    setTemplateId(handoff.templateId);
-    setCampaignStudioHandoff(handoff);
-    applyTemplateDefaults(handoff.templateId, { setVideoDuration, setVideoAspectRatio });
-    setPrompt(handoff.prompt);
-    setActiveTab('create');
-
-    void (async () => {
-      const imageItems: DreaminaMultimodalItem[] = [];
-      for (const sourceAsset of handoff.sourceAssets) {
-        try {
-          const imageItem = await loadAssetAsDreaminaImage({
-            assetId: sourceAsset.id,
-            fileName: `${sourceAsset.label}-${sourceAsset.id}`,
-            semanticRole: sourceAsset.semanticRole,
-          });
-          if (imageItem) {
-            imageItems.push(imageItem);
-          } else if (handoff.templateId === 'viral-dance') {
-            setViralDanceReferenceVideoUrl(new URL(buildAssetFileUrl(sourceAsset.id), window.location.origin).toString());
-          }
-          void recordUsage(sourceAsset.id, `campaign-studio-handoff:${sourceAsset.assetType}`);
-        } catch {
-          // Keep the seeded prompt/template even if one reference asset cannot be loaded.
-        }
-      }
-      if (imageItems.length > 0) {
-        setDreaminaMultimodalItems(imageItems);
-      }
-    })();
+    applyCampaignStudioHandoff(handoff);
 
     navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
   }, [
+    applyCampaignStudioHandoff,
     location.pathname,
     location.search,
     location.state,
     navigate,
-    setDreaminaMultimodalItems,
-    setCampaignStudioHandoff,
-    setPrompt,
-    setTemplateId,
-    setVideoAspectRatio,
-    setVideoDuration,
-    setViralDanceReferenceVideoUrl,
+  ]);
+
+  /** Refresh/direct URL restore: rebuild Campaign Studio handoff from backend Output Plan IDs. */
+  useEffect(() => {
+    const st = location.state as StudioLocationState;
+    if (st?.campaignStudioHandoff) return;
+    if (!urlOutputPlanId || !urlProductionItemId) return;
+    if (
+      campaignStudioHandoff?.outputPlanId === urlOutputPlanId
+      && campaignStudioHandoff?.productionItemId === urlProductionItemId
+      && (campaignStudioHandoff?.distributionPackageId ?? '') === (urlPackageId ?? '')
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    getCampaignOutputPlan(urlOutputPlanId)
+      .then((plan) => {
+        if (cancelled) return;
+        const item = plan.items.find((candidate) => candidate.id === urlProductionItemId);
+        if (!item) return;
+        const handoff = buildCampaignStudioHandoff({
+          item,
+          plan,
+          distributionPackageId: urlPackageId,
+        });
+        if (handoff) {
+          applyCampaignStudioHandoff(handoff);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyCampaignStudioHandoff,
+    campaignStudioHandoff?.distributionPackageId,
+    campaignStudioHandoff?.outputPlanId,
+    campaignStudioHandoff?.productionItemId,
+    location.state,
+    urlOutputPlanId,
+    urlPackageId,
+    urlProductionItemId,
   ]);
 
   // 从素材库跳转过来时：自动进入创作模式并加载素材为参考图

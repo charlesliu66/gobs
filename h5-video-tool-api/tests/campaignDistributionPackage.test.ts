@@ -32,6 +32,10 @@ function buildPackagePayload(seed: string, overrides: Record<string, unknown> = 
     source: {
       type: 'campaign_variant',
       sourceId: `variant_source_${seed}`,
+      outputPlanId: `plan_${seed}`,
+      productionItemId: `item_${seed}`,
+      outputIds: [`output_${seed}`],
+      sourceAssetIds: [`asset_${seed}`],
       createdFromRoute: 'campaign-creative',
     },
     campaign: {
@@ -200,6 +204,8 @@ test('POST /packages creates a package with server-owned identity and separated 
     assert.equal(json.updatedBy, '_default');
     assert.equal(json.assetReadiness.state, 'needs_asset');
     assert.equal(json.review.status, 'draft');
+    assert.equal(json.source.outputPlanId, 'plan_needs-asset');
+    assert.deepEqual(json.source.outputIds, ['output_needs-asset']);
     assert.deepEqual(json.knowledgeContext.packIds, [
       'routed_market_needs-asset',
       'routed_persona_needs-asset',
@@ -305,10 +311,53 @@ test('PATCH /packages/:id updates allowed fields, ignores client ownership, and 
     assert.equal(patched.json.updatedBy, 'owner_patch');
     assert.equal(patched.json.review.status, 'approved');
     assert.equal(patched.json.review.updatedBy, 'owner_patch');
+    assert.equal(patched.json.source.outputPlanId, 'plan_patch-me');
     assert.equal(patched.json.copy.caption, 'Now with a publishable asset.');
     assert.equal(patched.json.assetReadiness.publishableAsset.path, 'output/campaign/patch-me-v2.mp4');
     assert.notEqual(patched.json.updatedAt, created.json.updatedAt);
     assert.equal(patched.json.createdAt, created.json.createdAt);
+  });
+});
+
+test('PATCH /packages can refresh Studio writeback source lineage', async () => {
+  await withServer(async (baseUrl) => {
+    const created = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/packages',
+      username: 'studio_patch',
+      body: buildPackagePayload('studio-lineage', {
+        campaignId: 'campaign_studio',
+        source: {
+          type: 'campaign_variant',
+          sourceId: 'item_studio_video',
+          createdFromRoute: 'campaign-creative',
+        },
+      }),
+    });
+    assert.equal(created.response.status, 201);
+
+    const patched = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/packages/${created.json.id}`,
+      username: 'studio_patch',
+      body: {
+        campaignId: 'campaign_studio',
+        source: {
+          ...created.json.source,
+          outputPlanId: 'plan_studio',
+          productionItemId: 'item_studio_video',
+          outputIds: ['dreamina_task_abc_123'],
+          sourceAssetIds: ['asset_character', 'asset_key_art'],
+        },
+      },
+    });
+
+    assert.equal(patched.response.status, 200);
+    assert.equal(patched.json.campaignId, 'campaign_studio');
+    assert.equal(patched.json.source.outputPlanId, 'plan_studio');
+    assert.equal(patched.json.source.productionItemId, 'item_studio_video');
+    assert.deepEqual(patched.json.source.outputIds, ['dreamina_task_abc_123']);
+    assert.deepEqual(patched.json.source.sourceAssetIds, ['asset_character', 'asset_key_art']);
   });
 });
 

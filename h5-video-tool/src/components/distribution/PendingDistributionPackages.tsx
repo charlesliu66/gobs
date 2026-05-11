@@ -1,5 +1,10 @@
 import type { CampaignDistributionPackage, CampaignDistributionPackageAssetReadinessState, CampaignDistributionPackageReviewStatus } from '../campaign/distributionPackage.ts';
 import type { PendingDistributionDraft } from './packageToDistributeDraft.ts';
+import {
+  linkHealthStatusLabel,
+  summarizePackageLinkHealth,
+  type CampaignDataLinkHealthStatus,
+} from '../campaign/dataContractLinkHealth.ts';
 
 type Copy = {
   title: string;
@@ -15,6 +20,10 @@ type Copy = {
   openQuickFilm: string;
   assetState: string;
   reviewStatus: string;
+  linkHealth: string;
+  linkHealthy: string;
+  linkWarning: string;
+  linkBroken: string;
   packageAngle: string;
   packageHook: string;
   packageTargets: string;
@@ -89,6 +98,12 @@ export function PendingDistributionPackages({
             const isActive = pkg.id === activePackageId;
             const isPublishable = pkg.assetReadiness.state === 'publishable';
             const needsAsset = pkg.assetReadiness.state === 'needs_asset';
+            const linkHealth = summarizePackageLinkHealth(pkg);
+            const linkHealthLabels: Record<CampaignDataLinkHealthStatus, string> = {
+              healthy: copy.linkHealthy,
+              warning: copy.linkWarning,
+              broken: copy.linkBroken,
+            };
             return (
               <article
                 key={pkg.id}
@@ -146,7 +161,19 @@ export function PendingDistributionPackages({
                     label={copy.reviewStatus}
                     value={resolveReviewStatusLabel(pkg.review.status, copy)}
                   />
+                  <InfoBlock
+                    label={copy.linkHealth}
+                    value={linkHealthStatusLabel(linkHealth.status, linkHealthLabels)}
+                  />
                 </div>
+                {linkHealth.issues.length > 0 ? (
+                  <div
+                    className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs leading-5 text-amber-50"
+                    data-section="packageLinkHealth"
+                  >
+                    {linkHealth.issues.slice(0, 3).join(' ')}
+                  </div>
+                ) : null}
 
                 {isActive && activeDraft && !activeDraft.publishSafety.canPublishDirectly ? (
                   <div className="mt-4 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/10 p-4">

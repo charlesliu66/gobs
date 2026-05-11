@@ -34,6 +34,10 @@ function uniqueAssetsById(assets: CampaignDistributionPackageAsset[]): CampaignD
   });
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim() ?? '').filter(Boolean))];
+}
+
 export function buildStudioGeneratedPackageUpdate(input: {
   pkg: CampaignDistributionPackage;
   handoff: CampaignStudioHandoffState;
@@ -56,8 +60,24 @@ export function buildStudioGeneratedPackageUpdate(input: {
   };
   const previousAssets = input.pkg.assets.filter((asset) => asset.assetId !== assetId);
   const assets = uniqueAssetsById([readyAsset, ...previousAssets]);
+  const sourceAssetIds = uniqueStrings([
+    ...(input.pkg.source.sourceAssetIds ?? []),
+    ...input.handoff.sourceAssets.map((asset) => asset.id),
+  ]);
+  const outputIds = uniqueStrings([
+    assetId,
+    ...(input.pkg.source.outputIds ?? []),
+  ]);
 
   return {
+    campaignId: input.handoff.campaignId ?? input.pkg.campaignId,
+    source: {
+      ...input.pkg.source,
+      outputPlanId: input.handoff.outputPlanId,
+      productionItemId: input.handoff.productionItemId,
+      outputIds,
+      sourceAssetIds,
+    },
     assets,
     assetReadiness: {
       state: 'publishable',

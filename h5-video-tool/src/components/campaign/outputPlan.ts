@@ -207,6 +207,7 @@ export interface SourceAssetLibraryRecord {
 }
 
 export interface BuildCampaignOutputPlanArgs {
+  campaignId?: string;
   mission: string;
   brief: CampaignCreativeBrief;
   strategy?: CampaignCreativeStrategy | null;
@@ -752,7 +753,15 @@ function producedDraft(
   body: string,
   variants: string[],
   createdAt: string,
-  extras: Partial<Pick<ProducedOutputDraft, 'bannerSpecIds' | 'sourceAssetIds' | 'knowledgeReferences'>> = {},
+  extras: Partial<Pick<
+    ProducedOutputDraft,
+    | 'bannerSpecIds'
+    | 'sourceAssetIds'
+    | 'knowledgeReferences'
+    | 'campaignId'
+    | 'briefId'
+    | 'parentOutputId'
+  >> = {},
 ): ProducedOutputDraft {
   return {
     id: kind === 'banner_prompt' ? bannerOutputId(item) : outputId(item, index),
@@ -774,6 +783,7 @@ function bannerSpecLabels(specIds: BannerOutputSpecId[]): string[] {
 function buildBannerPromptForItem(
   item: ProductionItem,
   args: ProduceSupportedCampaignOutputsArgs,
+  createdAt: string,
 ): ProducedOutputDraft[] {
   if (!item.bannerDetails) return [];
   const signals = textSignals(args);
@@ -800,11 +810,14 @@ function buildBannerPromptForItem(
       'Banner prompt placeholder',
       body,
       specLabels,
-      new Date().toISOString(),
+      createdAt,
       {
         bannerSpecIds: item.bannerDetails.specs,
         sourceAssetIds,
         knowledgeReferences: item.knowledgeReferences,
+        campaignId: args.plan.campaignId,
+        briefId: args.plan.briefId,
+        parentOutputId: item.id,
       },
     ),
   ];
@@ -816,6 +829,12 @@ function buildProducedOutputsForItem(
   createdAt: string,
 ): ProducedOutputDraft[] {
   const signals = textSignals(args);
+  const lineageExtras = {
+    campaignId: args.plan.campaignId,
+    briefId: args.plan.briefId,
+    parentOutputId: item.id,
+    knowledgeReferences: item.knowledgeReferences,
+  };
   const captionVariants = uniqueStrings([
     `${signals.hook}. ${signals.cta}.`,
     `${signals.objective} for ${signals.audience}. ${signals.cta}.`,
@@ -833,19 +852,19 @@ function buildProducedOutputsForItem(
     case 'caption_set':
       return [
         producedDraft(item, 'caption', 0, 'Caption variants', captionVariants[0], captionVariants, createdAt, {
-          knowledgeReferences: item.knowledgeReferences,
+          ...lineageExtras,
         }),
       ];
     case 'headline_set':
       return [
         producedDraft(item, 'headline', 0, 'Headline variants', headlineVariants[0], headlineVariants, createdAt, {
-          knowledgeReferences: item.knowledgeReferences,
+          ...lineageExtras,
         }),
       ];
     case 'hashtag_set':
       return [
         producedDraft(item, 'hashtag', 0, 'Hashtag set', hashtags.join(' '), hashtags, createdAt, {
-          knowledgeReferences: item.knowledgeReferences,
+          ...lineageExtras,
         }),
       ];
     case 'fb_post': {
@@ -855,15 +874,12 @@ function buildProducedOutputsForItem(
       });
       return postBodies.map((body, index) =>
         producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt, {
-          knowledgeReferences: item.knowledgeReferences,
+          ...lineageExtras,
         }),
       );
     }
     case 'banner':
-      return buildBannerPromptForItem(item, args).map((output) => ({
-        ...output,
-        createdAt,
-      }));
+      return buildBannerPromptForItem(item, args, createdAt);
     default:
       return [];
   }
@@ -1101,7 +1117,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
 
   return {
     id: `output_plan_${slugify(args.brief.briefId || args.mission)}`,
-    campaignId: undefined,
+    campaignId: args.campaignId?.trim() || undefined,
     gameId: 'gold_and_glory',
     mission: args.mission,
     briefId: args.brief.briefId,

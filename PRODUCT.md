@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.191)*
+*Last updated: 2026-05-11 (v0.192)*
 
-**Latest update - v0.191**
+**Latest update - v0.192**
+- Campaign Output Plans now persist Campaign IDs and produced outputs inherit Campaign, Brief, and parent output lineage.
+- Distribution Packages created from produced Campaign outputs or Studio writeback now carry output plan IDs, production item IDs, output IDs, and source asset IDs.
+- Studio can restore Campaign handoff context from URL IDs and backend Output Plan data after refresh or direct open, and Campaign/Distribution surfaces now show compact link-health status.
+
+**Previous update - v0.191**
 - Campaign Brief review now shows routed Gold and Glory Brain citations, or an explicit no-citation message when the run is brief-only.
 - Operators can mark cited knowledge as useful, inaccurate, or do not use again; rejected citation IDs are saved and suppressed in later mission-brief generation.
 - Campaign Output Plan items and produced drafts now carry compact knowledge references so Workbench outputs show which source entries supported hooks, selling points, or guardrails.
@@ -264,6 +269,7 @@
 - **Character Showcase validation (v0.189)**: Advanced Studio now marks Character Showcase as constrained continue based on a 10-sample validation ledger, with preset guidance focused on single-character reveal, skill payoff, and simple reward payoff.
 - **Distribution final mile (v0.190)**: `/distribute` now restores active publish context after refresh, supports account-group previews/updates, and pairs publish failure reasons with next-step guidance.
 - **Knowledge traceability (v0.191)**: Campaign Brief review now displays routed Brain citations with feedback controls, suppresses `do_not_use_again` citation IDs in later generation, and carries knowledge references into Output Workbench items.
+- **Data contract hardening (v0.192)**: Campaign Output, Studio handoff, and Distribution Package payloads now carry Campaign/Brief/Output/Package lineage, restore Studio handoff from backend IDs after refresh, and surface compact link-health status.
 
 ---
 
@@ -330,6 +336,7 @@
 - **Character Showcase validation (v0.189)**: Run 6 records 10 validation samples, concludes constrained `continue`, and adds Character Showcase entry/preset guidance without touching provider services.
 - **Distribution final mile (v0.190)**: Run 7 restores active `/distribute` context after refresh, improves account-group preview/update, and adds batch failure next actions without changing GeeLark backend routes.
 - **Knowledge traceability (v0.191)**: Run 8 adds visible Campaign knowledge citations, citation feedback persistence, rejected-citation suppression, and Output Plan knowledge references without changing provider services.
+- **Data contract hardening (v0.192)**: Run 9 wires Run 0 contract IDs into Campaign Output Plans, Studio handoff restoration, Distribution Package source lineage, and operator-visible link-health checks without migrating historical records.
 - **鎶€鑳藉彲绉绘鎬?*锛歚gobs-multi-agent-dev-loop` 鐜板凡鍖呭惈 `agents/openai.yaml` 涓?`references/` 鐩綍锛屾敮鎸佹樉寮?`$gobs-multi-agent-dev-loop` 璋冪敤锛屽苟淇濇寔 repo 鐩稿璺緞锛屼究浜庡湪鍏朵粬鐢佃剳 `git pull` 鍚庣户缁娇鐢ㄣ€?
 - **Run 鍒濆鍖栬剼鏈?*锛歚scripts/init_workflow_run.py` 鐢ㄤ竴鏉″懡浠ょ敓鎴?`SESSION-ANCHOR.md`銆乣planner-spec.md`銆乣challenger-review.md`銆乣builder-report.md`銆乣verifier-report.md`銆乣release-decision.md`锛屽噺灏戞瘡杞墜宸ユ惌楠ㄦ灦鐨勬椂闂淬€?
 - **Workflow Guard**锛歚scripts/workflow_guard.py` 鍦?build / verify / release 鍓嶆鏌?run 璧勬枡鏄惁榻愬叏銆佹槸鍚﹁Е纰扮鍖烘枃浠躲€佹槸鍚﹁秺杩?`SESSION-ANCHOR.md` 閲屽０鏄庣殑 editable scope锛屼互鍙?verify/release 鍓嶆槸鍚﹀悓姝ユ洿鏂?`PRODUCT.md`銆?
@@ -339,6 +346,13 @@
 ---
 
 ## 浜屻€丆hangelog
+
+### v0.192 - 2026-05-11
+**Data contract hardening**
+
+- **[output plan lineage] Added Campaign/Brief lineage to produced outputs** (`h5-video-tool/src/components/campaign/outputPlan.ts`, `h5-video-tool-api/src/services/campaignOutputPlan.ts`): new Campaign Output Plans carry `campaignId`, and produced drafts preserve `campaignId`, `briefId`, and `parentOutputId`.
+- **[package lineage] Added output/package source links** (`h5-video-tool/src/components/campaign/distributionPackage.ts`, `h5-video-tool-api/src/services/campaignDistributionPackage.ts`, `h5-video-tool/src/components/campaign/studioPackagePatch.ts`): packages created from produced items or Studio writeback keep `outputPlanId`, `productionItemId`, `outputIds`, and `sourceAssetIds`.
+- **[restore + health] Added Studio URL restore and link-health UI** (`h5-video-tool/src/pages/Studio.tsx`, `h5-video-tool/src/components/campaign/dataContractLinkHealth.ts`, `h5-video-tool/src/components/distribution/PendingDistributionPackages.tsx`): refresh/direct open can rebuild Campaign Studio handoff from backend plan IDs, and broken chains are visible before distribution prep.
 
 ### v0.191 - 2026-05-11
 **Knowledge traceability**

@@ -7,9 +7,20 @@ import {
 function createPackage(state: 'publishable' | 'needs_asset') {
   return {
     id: 'pkg_reward',
+    campaignId: 'campaign_reward',
     title: 'Reward-first UA package',
+    source: {
+      type: 'campaign_variant',
+      sourceId: 'item_tiktok_video',
+      outputPlanId: 'plan_reward',
+      productionItemId: 'item_tiktok_video',
+      outputIds: ['asset_reward'],
+      sourceAssetIds: ['asset_gameplay'],
+      createdFromRoute: '/campaign-creative',
+    },
     campaign: {
       mission: 'Turn the reward-first variant into a distribution draft.',
+      briefId: 'brief_reward',
       objective: 'Drive installs',
       warnings: [],
     },
@@ -83,6 +94,10 @@ test('buildDistributeDraftFromPackage prefills distribution fields without auto-
   assert.equal(intake.captionContext.callToAction, 'Download Gold and Glory now');
   assert.equal(intake.captionContext.targetMarket, 'Global');
   assert.equal(intake.captionContext.avoidTerms, 'No guaranteed SSR.');
+  assert.equal(intake.lineage.campaignId, 'campaign_reward');
+  assert.equal(intake.lineage.briefId, 'brief_reward');
+  assert.equal(intake.lineage.outputPlanId, 'plan_reward');
+  assert.deepEqual(intake.lineage.outputIds, ['asset_reward']);
   assert.equal(intake.publishSafety.canPublishDirectly, true);
   assert.equal(intake.publishSafety.keepAccountsExplicit, true);
 });

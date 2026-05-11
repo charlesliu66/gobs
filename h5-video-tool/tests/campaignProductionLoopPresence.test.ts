@@ -15,6 +15,18 @@ test('CreateFlow keeps Campaign Studio handoff after router state is consumed', 
   assert.match(studioSource, /setCampaignStudioHandoff\(handoff\)/);
 });
 
+test('Studio can restore Campaign handoff from URL and backend Output Plan IDs', () => {
+  const campaignSource = source('src/pages/CampaignCreative.tsx');
+  const studioSource = source('src/pages/Studio.tsx');
+
+  assert.match(campaignSource, /outputPlan/);
+  assert.match(campaignSource, /productionItem/);
+  assert.match(studioSource, /getCampaignOutputPlan/);
+  assert.match(studioSource, /urlOutputPlanId/);
+  assert.match(studioSource, /urlProductionItemId/);
+  assert.match(studioSource, /buildCampaignStudioHandoff/);
+});
+
 test('StepVideo syncs generated Campaign Studio videos back to linked distribution package', () => {
   const stepVideoSource = source('src/components/StepVideo.tsx');
 

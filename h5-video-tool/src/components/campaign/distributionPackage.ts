@@ -98,6 +98,10 @@ export interface CampaignDistributionPackage {
   source: {
     type: CampaignDistributionSourceType;
     sourceId?: string;
+    outputPlanId?: string;
+    productionItemId?: string;
+    outputIds?: string[];
+    sourceAssetIds?: string[];
     createdFromRoute?: string;
   };
   campaign: {
@@ -128,10 +132,21 @@ export type CampaignDistributionCreateInput = Omit<
 >;
 
 export type CampaignDistributionUpdateInput = Partial<
-  Pick<CampaignDistributionPackage, 'title' | 'assets' | 'copy' | 'publishIntent' | 'assetReadiness' | 'review'>
+  Pick<
+    CampaignDistributionPackage,
+    | 'campaignId'
+    | 'source'
+    | 'title'
+    | 'assets'
+    | 'copy'
+    | 'publishIntent'
+    | 'assetReadiness'
+    | 'review'
+  >
 >;
 
 export interface BuildCampaignDistributionCreateInputArgs {
+  campaignId?: string;
   mission: string;
   brief: CampaignCreativeBrief;
   strategy: CampaignCreativeStrategy;
@@ -141,6 +156,8 @@ export interface BuildCampaignDistributionCreateInputArgs {
   routedKnowledgePackIds?: string[];
   generationSource: 'llm' | 'fallback';
   warnings: string[];
+  sourceOutputIds?: string[];
+  sourceAssetIds?: string[];
   primaryAsset?: {
     assetId?: string;
     type: 'video' | 'image';
@@ -161,6 +178,7 @@ export interface CampaignOutputAssetForDistribution {
 
 export interface BuildCampaignDistributionCreateInputFromProductionItemArgs
   extends Omit<BuildCampaignDistributionCreateInputArgs, 'primaryAsset'> {
+  outputPlanId?: string;
   productionItem: ProductionItem;
   outputAssets?: CampaignOutputAssetForDistribution[];
   sourceAssetRequirements?: GameSourceAssetRequirement[];
@@ -268,11 +286,14 @@ export function buildCampaignDistributionCreateInput(
   const knowledge = buildKnowledgeContext(args.strategy, args.knowledgeContext, args.routedKnowledgePackIds);
 
   return {
+    campaignId: args.campaignId?.trim() || undefined,
     gameId: 'gold_and_glory',
     title: selectedVariant?.title?.trim() || args.strategy.angle || args.brief.objective || 'Campaign package',
     source: {
       type: 'campaign_variant',
       sourceId: selectedVariant?.variantId ?? args.strategy.strategyId,
+      outputIds: uniqueStrings(args.sourceOutputIds ?? []),
+      sourceAssetIds: uniqueStrings(args.sourceAssetIds ?? []),
       createdFromRoute: '/campaign-creative',
     },
     campaign: {
@@ -358,6 +379,30 @@ function producedBannerOutput(item: ProductionItem): ProducedOutputDraft | undef
   return firstProducedOutput(item, ['banner_prompt']);
 }
 
+function outputIdsForProductionItem(
+  item: ProductionItem,
+  selectedOutputAsset: CampaignOutputAssetForDistribution | undefined,
+): string[] {
+  return uniqueStrings([
+    ...(item.producedOutputs ?? []).map((output) => output.id),
+    ...item.outputAssetIds,
+    selectedOutputAsset?.assetId,
+  ]);
+}
+
+function sourceAssetIdsForProductionItem(
+  item: ProductionItem,
+  sourceAssetRequirements: GameSourceAssetRequirement[] | undefined,
+): string[] {
+  const requirementIds = new Set(item.requiredSourceAssetIds);
+  return uniqueStrings([
+    ...(item.producedOutputs ?? []).flatMap((output) => output.sourceAssetIds ?? []),
+    ...(sourceAssetRequirements ?? [])
+      .filter((requirement) => requirementIds.has(requirement.id))
+      .flatMap((requirement) => requirement.matchedAssetIds),
+  ]);
+}
+
 export function buildCampaignDistributionCreateInputFromProductionItem(
   args: BuildCampaignDistributionCreateInputFromProductionItemArgs,
 ): CampaignDistributionCreateInput {
@@ -384,13 +429,23 @@ export function buildCampaignDistributionCreateInputFromProductionItem(
   const hasProducedCopy = Boolean(producedCopy);
   const hasProducedBanner = Boolean(bannerOutput);
   const firstProducedTextAssetId = args.productionItem.producedOutputs?.[0]?.id;
+  const outputIds = outputIdsForProductionItem(args.productionItem, selectedOutputAsset);
+  const sourceAssetIds = sourceAssetIdsForProductionItem(
+    args.productionItem,
+    args.sourceAssetRequirements,
+  );
 
   return {
     ...draft,
+    campaignId: args.campaignId?.trim() || draft.campaignId,
     title: args.productionItem.title || draft.title,
     source: {
       ...draft.source,
       sourceId: args.productionItem.id,
+      outputPlanId: args.outputPlanId?.trim() || undefined,
+      productionItemId: args.productionItem.id,
+      outputIds,
+      sourceAssetIds,
     },
     assetReadiness: selectedOutputAsset
       ? draft.assetReadiness

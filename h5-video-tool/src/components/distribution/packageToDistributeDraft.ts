@@ -36,6 +36,14 @@ export interface PendingDistributionDraft {
     hookCandidates: string[];
     visualCues: string[];
   };
+  lineage: {
+    campaignId?: string;
+    briefId?: string;
+    outputPlanId?: string;
+    productionItemId?: string;
+    outputIds: string[];
+    sourceAssetIds: string[];
+  };
   publishSafety: {
     canPublishDirectly: boolean;
     keepAccountsExplicit: true;
@@ -113,6 +121,14 @@ export function buildDistributeDraftFromPackage(pkg: CampaignDistributionPackage
       approvedAngles: [...pkg.knowledgeContext.approvedAngles],
       hookCandidates: [...pkg.knowledgeContext.hookCandidates],
       visualCues: [...pkg.knowledgeContext.visualCues],
+    },
+    lineage: {
+      campaignId: pkg.campaignId,
+      briefId: pkg.campaign.briefId,
+      outputPlanId: pkg.source.outputPlanId,
+      productionItemId: pkg.source.productionItemId,
+      outputIds: [...(pkg.source.outputIds ?? [])],
+      sourceAssetIds: [...(pkg.source.sourceAssetIds ?? [])],
     },
     publishSafety: {
       canPublishDirectly,

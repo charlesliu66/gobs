@@ -10,6 +10,11 @@ import { canOpenProductionItemInStudio } from './studioBridge.ts';
 import { BannerOutputCard } from './BannerOutputCard.tsx';
 import { CreativeQualityPanel } from './CreativeQualityPanel.tsx';
 import { summarizeKnowledgeReferences } from './knowledgeTraceability.ts';
+import {
+  linkHealthStatusLabel,
+  summarizeOutputPlanLinkHealth,
+  type CampaignDataLinkHealthStatus,
+} from './dataContractLinkHealth.ts';
 
 type Copy = {
   emptyTitle: string;
@@ -28,6 +33,10 @@ type Copy = {
   totalItems: string;
   gobsReady: string;
   blocked: string;
+  linkHealth: string;
+  linkHealthy: string;
+  linkWarning: string;
+  linkBroken: string;
   requiredAssets: string;
   nextAction: string;
   knowledgeReferences: string;
@@ -121,6 +130,12 @@ export function CampaignOutputWorkbench({
 
   const readyCount = activePlan.items.filter((item) => item.gobsCanProduce).length;
   const blockedCount = activePlan.items.filter((item) => item.status === 'blocked').length;
+  const linkHealth = summarizeOutputPlanLinkHealth(activePlan);
+  const linkHealthLabels: Record<CampaignDataLinkHealthStatus, string> = {
+    healthy: copy.linkHealthy,
+    warning: copy.linkWarning,
+    broken: copy.linkBroken,
+  };
 
   return (
     <section className="rounded-3xl border border-[#d5b56a]/25 bg-[linear-gradient(145deg,rgba(18,24,44,0.98),rgba(21,29,56,0.94))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.2)]">
@@ -130,11 +145,24 @@ export function CampaignOutputWorkbench({
       </div>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-muted)]">{copy.subtitle}</p>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3" data-section="outputSummary">
+      <div className="mt-6 grid gap-4 md:grid-cols-4" data-section="outputSummary">
         <SummaryBlock label={copy.totalItems} value={String(sumQuantities(activePlan.items))} />
         <SummaryBlock label={copy.gobsReady} value={String(readyCount)} />
         <SummaryBlock label={copy.blocked} value={String(blockedCount)} />
+        <SummaryBlock
+          label={copy.linkHealth}
+          value={linkHealthStatusLabel(linkHealth.status, linkHealthLabels)}
+        />
       </div>
+      {linkHealth.issues.length > 0 ? (
+        <div
+          className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/8 px-4 py-3 text-xs leading-5 text-amber-50"
+          data-section="linkHealth"
+        >
+          <div className="font-semibold uppercase tracking-[0.14em] text-amber-100">{copy.linkHealth}</div>
+          <div className="mt-2">{linkHealth.issues.slice(0, 3).join(' ')}</div>
+        </div>
+      ) : null}
 
       <div className="mt-6" data-section="productionList">
         <SectionTitle title={copy.productionList} />

@@ -2,6 +2,16 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.192 - 2026-05-11
+**Data contract hardening**
+**Campaign / Studio / Distribution:**
+- Added Campaign ID propagation into new Campaign Output Plans, with produced outputs inheriting Campaign, Brief, and parent output lineage.
+- Added Distribution Package source lineage for produced Campaign outputs and Studio writeback, including output plan IDs, production item IDs, output IDs, and source asset IDs.
+- Added Studio refresh/direct-open restoration from URL IDs plus backend Output Plan data, reducing route-state-only handoff loss.
+- Added compact link-health status on Campaign Output and pending Distribution Package surfaces so broken or incomplete chains are visible before distribution prep.
+**Tests / Build:**
+- Added frontend and backend contract/link-health coverage for healthy and broken chains; rebuilt both API and frontend production bundles.
+
 ## v0.191 - 2026-05-11
 **Knowledge traceability**
 **Campaign Creative / Knowledge Brain:**

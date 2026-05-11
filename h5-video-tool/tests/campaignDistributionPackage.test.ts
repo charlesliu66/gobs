@@ -103,6 +103,7 @@ function createVariantPack(): CampaignCreativeVariantPack {
 
 test('buildCampaignDistributionCreateInput preserves mission snapshot and routed knowledge while staying honest about missing assets', () => {
   const draft = buildCampaignDistributionCreateInput({
+    campaignId: 'campaign_gold',
     mission: 'Create a TikTok UA clip that proves the new-player gold payoff fast.',
     brief: createBrief(),
     strategy: createStrategy(),
@@ -115,6 +116,7 @@ test('buildCampaignDistributionCreateInput preserves mission snapshot and routed
   });
 
   assert.equal(draft.campaign.mission, 'Create a TikTok UA clip that proves the new-player gold payoff fast.');
+  assert.equal(draft.campaignId, 'campaign_gold');
   assert.equal(draft.gameId, 'gold_and_glory');
   assert.equal(draft.campaign.generationSource, 'fallback');
   assert.equal(draft.review.status, 'draft');
@@ -157,6 +159,8 @@ test('buildCampaignDistributionCreateInput marks the package publishable when a 
 
 test('buildCampaignDistributionCreateInputFromProductionItem maps produced output items to publishable packages', () => {
   const draft = buildCampaignDistributionCreateInputFromProductionItem({
+    campaignId: 'campaign_gold',
+    outputPlanId: 'plan_gold',
     mission: 'Turn the produced hero clip into distribution prep.',
     brief: createBrief(),
     strategy: createStrategy(),
@@ -194,6 +198,9 @@ test('buildCampaignDistributionCreateInputFromProductionItem maps produced outpu
   assert.equal(draft.assetReadiness.state, 'publishable');
   assert.equal(draft.assetReadiness.publishableAsset?.path, 'output/campaign/hero-clip.mp4');
   assert.equal(draft.source.sourceId, 'item_tiktok_short_video');
+  assert.equal(draft.source.outputPlanId, 'plan_gold');
+  assert.equal(draft.source.productionItemId, 'item_tiktok_short_video');
+  assert.deepEqual(draft.source.outputIds, ['asset_hero_clip']);
   assert.deepEqual(draft.publishIntent.platforms, ['tiktok']);
 });
 

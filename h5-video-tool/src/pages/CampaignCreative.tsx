@@ -304,6 +304,7 @@ export function CampaignCreative() {
   const distributionPackageDraft = useMemo(() => {
     if (!brief || !strategy) return null;
     return buildCampaignDistributionCreateInput({
+      campaignId: campaignProfile?.campaignId,
       mission,
       brief,
       strategy,
@@ -314,7 +315,7 @@ export function CampaignCreative() {
       generationSource: missionBriefResult?.generationSource ?? 'fallback',
       warnings: missionBriefResult?.warnings ?? [],
     });
-  }, [brief, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
+  }, [brief, campaignProfile?.campaignId, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
 
   const producedDistributionPackageDraft = useMemo(() => {
     if (!brief || !strategy || !createdOutputPlan) return null;
@@ -327,6 +328,8 @@ export function CampaignCreative() {
       ?? createdOutputPlan.items.find((item) => item.status === 'produced');
     if (!producedItem) return null;
     return buildCampaignDistributionCreateInputFromProductionItem({
+      campaignId: createdOutputPlan.campaignId ?? campaignProfile?.campaignId,
+      outputPlanId: createdOutputPlan.id,
       mission,
       brief,
       strategy,
@@ -340,7 +343,7 @@ export function CampaignCreative() {
       outputAssets: [],
       sourceAssetRequirements: createdOutputPlan.sourceAssetRequirements,
     });
-  }, [brief, createdOutputPlan, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
+  }, [brief, campaignProfile?.campaignId, createdOutputPlan, knowledgeContext, mission, missionBriefResult, selectedVariantId, strategy, variantPack]);
 
   const activeDistributionPackageDraft = producedDistributionPackageDraft ?? distributionPackageDraft;
 
@@ -357,6 +360,7 @@ export function CampaignCreative() {
   const campaignOutputPlanDraft = useMemo(() => {
     if (!brief) return null;
     const draft = buildCampaignOutputPlan({
+      campaignId: campaignProfile?.campaignId,
       mission,
       brief,
       strategy,
@@ -367,7 +371,7 @@ export function CampaignCreative() {
       knowledgeContext,
     });
     return applySourceAssetSelectionOverrides(draft, sourceAssetSelections);
-  }, [availableSourceAssets, brief, knowledgeContext, mission, selectedVariantId, sourceAssetSelections, strategy, variantPack]);
+  }, [availableSourceAssets, brief, campaignProfile?.campaignId, knowledgeContext, mission, selectedVariantId, sourceAssetSelections, strategy, variantPack]);
 
   const visibleKnowledgeCitations = useMemo(
     () => selectVisibleKnowledgeCitations(missionBriefResult?.knowledgeContext ?? knowledgeContext, 6),
@@ -764,7 +768,15 @@ export function CampaignCreative() {
       distributionPackageId: createdDistributionPackage?.id,
     });
     if (!handoff) return;
-    navigate(`/studio?templateId=${encodeURIComponent(handoff.templateId)}`, {
+    const params = new URLSearchParams({
+      templateId: handoff.templateId,
+      outputPlan: handoff.outputPlanId,
+      productionItem: handoff.productionItemId,
+    });
+    if (handoff.distributionPackageId) {
+      params.set('package', handoff.distributionPackageId);
+    }
+    navigate(`/studio?${params.toString()}`, {
       state: { campaignStudioHandoff: handoff },
     });
   };
@@ -900,6 +912,10 @@ export function CampaignCreative() {
               totalItems: t('campaignCreative.outputWorkbench.totalItems'),
               gobsReady: t('campaignCreative.outputWorkbench.gobsReady'),
               blocked: t('campaignCreative.outputWorkbench.blocked'),
+              linkHealth: t('campaignCreative.outputWorkbench.linkHealth'),
+              linkHealthy: t('campaignCreative.outputWorkbench.linkHealthy'),
+              linkWarning: t('campaignCreative.outputWorkbench.linkWarning'),
+              linkBroken: t('campaignCreative.outputWorkbench.linkBroken'),
               requiredAssets: t('campaignCreative.outputWorkbench.requiredAssets'),
               nextAction: t('campaignCreative.outputWorkbench.nextAction'),
               knowledgeReferences: t('campaignCreative.outputWorkbench.knowledgeReferences'),

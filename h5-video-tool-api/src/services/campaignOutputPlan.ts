@@ -442,6 +442,36 @@ function normalizeCapabilityGaps(value: unknown): UnknownRecord[] {
   });
 }
 
+function validateProducedOutputLineage(input: {
+  campaignId?: string;
+  briefId: string;
+  items: UnknownRecord[];
+}): void {
+  input.items.forEach((item, itemIndex) => {
+    const producedOutputs = Array.isArray(item.producedOutputs) ? item.producedOutputs : [];
+    producedOutputs.forEach((output, outputIndex) => {
+      if (!isRecord(output)) return;
+      const field = `items[${itemIndex}].producedOutputs[${outputIndex}]`;
+      const outputCampaignId = cleanText(output.campaignId);
+      if (input.campaignId && outputCampaignId && outputCampaignId !== input.campaignId) {
+        throw new CampaignOutputPlanValidationError(
+          `${field}.campaignId must match campaignId ${input.campaignId}`,
+        );
+      }
+      const outputBriefId = cleanText(output.briefId);
+      if (outputBriefId && outputBriefId !== input.briefId) {
+        throw new CampaignOutputPlanValidationError(
+          `${field}.briefId must match briefId ${input.briefId}`,
+        );
+      }
+      const parentOutputId = cleanText(output.parentOutputId);
+      if (parentOutputId && parentOutputId === cleanText(output.id)) {
+        throw new CampaignOutputPlanValidationError(`${field}.parentOutputId cannot reference itself`);
+      }
+    });
+  });
+}
+
 function buildPlanId(): string {
   return `cop_${nanoid(10)}`;
 }
@@ -459,17 +489,22 @@ function normalizePlanPayload(
   const createdAt = audit?.createdAt ?? nowIso();
   const updatedAt = nowIso();
 
+  const campaignId = normalizeOptionalSafeIdentifier(raw.campaignId, 'campaignId');
+  const briefId = requireSafeIdentifier(raw.briefId, 'briefId');
+  const items = normalizeProductionItems(raw.items);
+  validateProducedOutputLineage({ campaignId, briefId, items });
+
   return {
     id: audit?.id ?? buildPlanId(),
-    campaignId: normalizeOptionalSafeIdentifier(raw.campaignId, 'campaignId'),
+    campaignId,
     gameId: requireSafeIdentifier(raw.gameId, 'gameId'),
     ownerId: actor,
     createdBy: sanitizeUsername(audit?.createdBy ?? actor),
     updatedBy: actor,
     mission: requireText(raw.mission, 'mission'),
-    briefId: requireSafeIdentifier(raw.briefId, 'briefId'),
+    briefId,
     status: normalizeOptionalEnum(raw.status, 'status', CAMPAIGN_OUTPUT_PLAN_STATUSES) ?? 'draft',
-    items: normalizeProductionItems(raw.items),
+    items,
     sourceAssetRequirements: normalizeSourceAssetRequirements(raw.sourceAssetRequirements),
     capabilityGaps: normalizeCapabilityGaps(raw.capabilityGaps),
     createdAt,

@@ -61,6 +61,10 @@ export type CampaignDistributionCopyLanguage = (typeof CAMPAIGN_DISTRIBUTION_COP
 export interface CampaignDistributionPackageSource {
   type: CampaignDistributionSourceType;
   sourceId?: string;
+  outputPlanId?: string;
+  productionItemId?: string;
+  outputIds?: string[];
+  sourceAssetIds?: string[];
   createdFromRoute?: string;
 }
 
@@ -285,6 +289,10 @@ function normalizeSource(input: unknown): CampaignDistributionPackageSource {
   return {
     type: requireEnum(raw.type, 'source.type', CAMPAIGN_DISTRIBUTION_SOURCE_TYPES),
     sourceId: normalizeOptionalSafeIdentifier(raw.sourceId, 'source.sourceId'),
+    outputPlanId: normalizeOptionalSafeIdentifier(raw.outputPlanId, 'source.outputPlanId'),
+    productionItemId: normalizeOptionalSafeIdentifier(raw.productionItemId, 'source.productionItemId'),
+    outputIds: normalizeSafeIdentifierList(raw.outputIds, 'source.outputIds'),
+    sourceAssetIds: normalizeSafeIdentifierList(raw.sourceAssetIds, 'source.sourceAssetIds'),
     createdFromRoute: cleanText(raw.createdFromRoute),
   };
 }
@@ -677,6 +685,9 @@ function buildPatchInput(existing: CampaignDistributionPackage, patch: UnknownRe
   };
 
   assign('title');
+  assign('campaignId');
+  assign('gameId');
+  assign('source');
   assign('campaign');
   assign('variant');
   assign('assets');

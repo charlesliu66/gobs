@@ -477,6 +477,72 @@ test('PATCH /plans persists Studio video outputAssetIds and distributionPackageI
   });
 });
 
+test('routes reject explicit produced-output campaign or brief mismatches', async () => {
+  await withServer(async (baseUrl) => {
+    const invalidCampaign = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/plans',
+      username: 'lineage_validator',
+      body: buildPlanPayload('lineage', {
+        items: [
+          {
+            ...buildPlanPayload('lineage').items[0],
+            producedOutputs: [
+              {
+                id: 'copy_lineage_1',
+                kind: 'post_copy',
+                title: 'Lineage copy',
+                body: 'Reward-first copy.',
+                variants: ['Reward-first copy.'],
+                platform: 'facebook',
+                status: 'draft',
+                campaignId: 'campaign_other',
+                briefId: 'brief_lineage',
+                parentOutputId: 'item_lineage_video',
+                sourceAssetIds: [],
+                createdAt: '2026-05-11T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    assert.equal(invalidCampaign.response.status, 400);
+    assert.match(String(invalidCampaign.json?.error ?? ''), /campaignId/i);
+
+    const invalidBrief = await requestJson(baseUrl, {
+      method: 'POST',
+      path: '/plans',
+      username: 'lineage_validator',
+      body: buildPlanPayload('lineage_brief', {
+        items: [
+          {
+            ...buildPlanPayload('lineage_brief').items[0],
+            producedOutputs: [
+              {
+                id: 'copy_lineage_brief_1',
+                kind: 'post_copy',
+                title: 'Lineage copy',
+                body: 'Reward-first copy.',
+                variants: ['Reward-first copy.'],
+                platform: 'facebook',
+                status: 'draft',
+                campaignId: 'campaign_lineage_brief',
+                briefId: 'brief_other',
+                parentOutputId: 'item_lineage_brief_video',
+                sourceAssetIds: [],
+                createdAt: '2026-05-11T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    assert.equal(invalidBrief.response.status, 400);
+    assert.match(String(invalidBrief.json?.error ?? ''), /briefId/i);
+  });
+});
+
 test('routes reject malformed output plan payloads with 400-level errors', async () => {
   await withServer(async (baseUrl) => {
     const invalidCreate = await requestJson(baseUrl, {
