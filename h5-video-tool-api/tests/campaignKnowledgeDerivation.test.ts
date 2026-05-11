@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyDerivedCampaignKnowledgeContext, deriveCampaignKnowledgeContext } from '../src/services/campaignKnowledgeDerivation.ts';
+import {
+  buildCampaignKnowledgeCitationId,
+  createEmptyDerivedCampaignKnowledgeContext,
+  deriveCampaignKnowledgeContext,
+} from '../src/services/campaignKnowledgeDerivation.ts';
 import type { CampaignKnowledgePack } from '../src/services/campaignKnowledgeStore.ts';
 
 const packs: CampaignKnowledgePack[] = [
@@ -61,6 +65,13 @@ test('deriveCampaignKnowledgeContext combines selected pack data into stable arr
   assert.match(context.hookCandidates.join(' '), /payoff first/i);
   assert.match(context.visualCues.join(' '), /Readable contrast/);
   assert.equal(context.rationaleNotes.length >= 2, true);
+  assert.equal(context.citations.length >= 6, true);
+  assert.equal(
+    context.citations.some((citation) =>
+      citation.section === 'marketTruth' && citation.value === 'Players need a clear payoff quickly.'
+    ),
+    true,
+  );
 });
 
 test('deriveCampaignKnowledgeContext returns empty-safe defaults when nothing is selected', () => {
@@ -71,4 +82,19 @@ test('deriveCampaignKnowledgeContext returns empty-safe defaults when nothing is
 test('deriveCampaignKnowledgeContext ignores unknown selected ids without crashing', () => {
   const context = deriveCampaignKnowledgeContext(packs, ['missing']);
   assert.deepEqual(context, createEmptyDerivedCampaignKnowledgeContext(['missing']));
+});
+
+test('deriveCampaignKnowledgeContext suppresses rejected citation ids', () => {
+  const suppressedCitationId = buildCampaignKnowledgeCitationId(
+    'pack_market',
+    'marketTruth',
+    'Players need a clear payoff quickly.',
+  );
+  const context = deriveCampaignKnowledgeContext(packs, ['pack_market', 'pack_tone'], {
+    suppressedCitationIds: [suppressedCitationId],
+  });
+
+  assert.equal(context.marketTruth.includes('Players need a clear payoff quickly.'), false);
+  assert.equal(context.citations.some((citation) => citation.citationId === suppressedCitationId), false);
+  assert.match(context.hookCandidates.join(' '), /payoff first/i);
 });

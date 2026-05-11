@@ -1,17 +1,25 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import {
+  CAMPAIGN_KNOWLEDGE_CITATION_FEEDBACK_STATES,
   type CampaignKnowledgePackType,
+  type CampaignKnowledgeCitationFeedbackState,
   buildKnowledgePackId,
   buildKnowledgeSourceId,
   isCampaignKnowledgePackType,
   isSafeKnowledgeId,
+  listCampaignKnowledgeCitationFeedback,
   listCampaignKnowledgePacks,
+  saveCampaignKnowledgeCitationFeedback,
   saveCampaignKnowledgeSource,
   upsertCampaignKnowledgePack,
 } from '../services/campaignKnowledgeStore.js';
 import { importCampaignKnowledgeTemplate } from '../services/campaignKnowledgeImport.js';
-import { createEmptyDerivedCampaignKnowledgeContext, deriveCampaignKnowledgeContext } from '../services/campaignKnowledgeDerivation.js';
+import {
+  CAMPAIGN_KNOWLEDGE_CITATION_SECTIONS,
+  createEmptyDerivedCampaignKnowledgeContext,
+  deriveCampaignKnowledgeContext,
+} from '../services/campaignKnowledgeDerivation.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 const router = Router();
@@ -36,6 +44,28 @@ function parseContentLines(content: string): string[] {
     .split(/\r?\n|,|;|，|；/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function parseFeedbackState(raw: unknown): CampaignKnowledgeCitationFeedbackState | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return CAMPAIGN_KNOWLEDGE_CITATION_FEEDBACK_STATES.includes(trimmed as CampaignKnowledgeCitationFeedbackState)
+    ? (trimmed as CampaignKnowledgeCitationFeedbackState)
+    : undefined;
+}
+
+function parseCitationSection(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return CAMPAIGN_KNOWLEDGE_CITATION_SECTIONS.includes(trimmed as typeof CAMPAIGN_KNOWLEDGE_CITATION_SECTIONS[number])
+    ? trimmed
+    : undefined;
+}
+
+function parseOptionalText(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, 1000) : undefined;
 }
 
 function buildSummary(content: string): string {
@@ -83,6 +113,69 @@ router.post('/games/:gameId/import-template', async (req, res) => {
   } catch (error) {
     console.error('[campaign-knowledge:import-template]', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unable to import knowledge template' });
+  }
+});
+
+router.get('/games/:gameId/citation-feedback', async (req, res) => {
+  const gameId = getSafeGameId(req.params.gameId);
+  if (!gameId) {
+    res.status(400).json({ error: 'Please provide a valid gameId' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const feedback = await listCampaignKnowledgeCitationFeedback(username, gameId);
+    res.json({ gameId, feedback });
+  } catch (error) {
+    console.error('[campaign-knowledge:list-citation-feedback]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unable to list citation feedback' });
+  }
+});
+
+router.post('/games/:gameId/citation-feedback', async (req, res) => {
+  const gameId = getSafeGameId(req.params.gameId);
+  if (!gameId) {
+    res.status(400).json({ error: 'Please provide a valid gameId' });
+    return;
+  }
+
+  const body = req.body as {
+    citationId?: unknown;
+    state?: unknown;
+    packId?: unknown;
+    section?: unknown;
+    value?: unknown;
+    note?: unknown;
+  };
+  const citationId = typeof body.citationId === 'string' ? body.citationId.trim() : '';
+  const state = parseFeedbackState(body.state);
+  const packId = typeof body.packId === 'string' ? body.packId.trim() : undefined;
+  const section = parseCitationSection(body.section);
+
+  if (!citationId || !isSafeKnowledgeId(citationId) || !state) {
+    res.status(400).json({ error: 'Please provide a valid citationId and feedback state' });
+    return;
+  }
+  if (packId && !isSafeKnowledgeId(packId)) {
+    res.status(400).json({ error: 'Please provide a valid packId' });
+    return;
+  }
+
+  try {
+    const username = sanitizeUsername(req.user?.username);
+    const feedback = await saveCampaignKnowledgeCitationFeedback(username, gameId, {
+      citationId,
+      state,
+      packId,
+      section,
+      value: parseOptionalText(body.value),
+      note: parseOptionalText(body.note),
+    });
+    res.json({ gameId, feedback });
+  } catch (error) {
+    console.error('[campaign-knowledge:save-citation-feedback]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unable to save citation feedback' });
   }
 });
 
@@ -169,10 +262,14 @@ router.post('/games/:gameId/derive-context', async (req, res) => {
   try {
     const username = sanitizeUsername(req.user?.username);
     const packs = await listCampaignKnowledgePacks(username, gameId);
+    const feedback = await listCampaignKnowledgeCitationFeedback(username, gameId);
+    const suppressedCitationIds = feedback
+      .filter((item) => item.state === 'do_not_use_again')
+      .map((item) => item.citationId);
     res.json({
       gameId,
       context: selectedPackIds.length > 0
-        ? deriveCampaignKnowledgeContext(packs, selectedPackIds)
+        ? deriveCampaignKnowledgeContext(packs, selectedPackIds, { suppressedCitationIds })
         : createEmptyDerivedCampaignKnowledgeContext(),
     });
   } catch (error) {

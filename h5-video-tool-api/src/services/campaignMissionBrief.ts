@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { jsonrepair } from 'jsonrepair';
 import {
+  listRejectedKnowledgeCitationIds,
   listCampaignKnowledgePacks,
   type CampaignKnowledgePack,
 } from './campaignKnowledgeStore.js';
@@ -49,6 +50,7 @@ type ChatCompletion = typeof compassChatCompletion;
 interface GenerateCampaignMissionBriefOptions {
   username: string;
   packs?: CampaignKnowledgePack[];
+  suppressedCitationIds?: string[];
   chatCompletion?: ChatCompletion;
 }
 
@@ -321,8 +323,10 @@ export async function generateCampaignMissionBrief(
   const warnings: string[] = [];
   const packs = options.packs ?? await listCampaignKnowledgePacks(options.username, GOLD_AND_GLORY_CAMPAIGN_GAME_ID);
   const routedKnowledgePackIds = pickReadyKnowledgePackIds(packs);
+  const suppressedCitationIds = options.suppressedCitationIds
+    ?? await listRejectedKnowledgeCitationIds(options.username, GOLD_AND_GLORY_CAMPAIGN_GAME_ID);
   const knowledgeContext = routedKnowledgePackIds.length > 0
-    ? deriveCampaignKnowledgeContext(packs, routedKnowledgePackIds)
+    ? deriveCampaignKnowledgeContext(packs, routedKnowledgePackIds, { suppressedCitationIds })
     : createEmptyDerivedCampaignKnowledgeContext();
 
   if (routedKnowledgePackIds.length === 0) {

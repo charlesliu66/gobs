@@ -1,4 +1,8 @@
 import type { ChangeEvent } from 'react';
+import type {
+  CampaignKnowledgeCitation,
+  CampaignKnowledgeCitationFeedbackState,
+} from '../../api/campaignKnowledge.ts';
 import type { CampaignCreativeFormState } from './model';
 
 interface GeneratedBriefReviewProps {
@@ -6,11 +10,19 @@ interface GeneratedBriefReviewProps {
   sourceLabel: string;
   warnings: string[];
   routedPackCount: number;
+  knowledgeCitations?: CampaignKnowledgeCitation[];
+  knowledgeFeedbackById?: Record<string, CampaignKnowledgeCitationFeedbackState>;
   copy: {
     title: string;
     subtitle: string;
     source: string;
     routedBrain: string;
+    knowledgeCitationsTitle: string;
+    knowledgeCitationsSubtitle: string;
+    knowledgeNoCitations: string;
+    feedbackUseful: string;
+    feedbackInaccurate: string;
+    feedbackDoNotUseAgain: string;
     objective: string;
     objectivePlaceholder: string;
     sellingPoints: string;
@@ -30,6 +42,10 @@ interface GeneratedBriefReviewProps {
   };
   onChange: (patch: Partial<CampaignCreativeFormState>) => void;
   onConfirm: () => void;
+  onKnowledgeFeedback?: (
+    citation: CampaignKnowledgeCitation,
+    state: CampaignKnowledgeCitationFeedbackState,
+  ) => void;
 }
 
 export function GeneratedBriefReview({
@@ -37,9 +53,12 @@ export function GeneratedBriefReview({
   sourceLabel,
   warnings,
   routedPackCount,
+  knowledgeCitations = [],
+  knowledgeFeedbackById = {},
   copy,
   onChange,
   onConfirm,
+  onKnowledgeFeedback,
 }: GeneratedBriefReviewProps) {
   const handleInput =
     (field: keyof CampaignCreativeFormState) =>
@@ -71,6 +90,54 @@ export function GeneratedBriefReview({
           ))}
         </div>
       ) : null}
+
+      <div className="mt-5 rounded-2xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/8 p-4" data-section="knowledgeCitations">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-[var(--color-text)]">{copy.knowledgeCitationsTitle}</div>
+            <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">
+              {knowledgeCitations.length > 0 ? copy.knowledgeCitationsSubtitle : copy.knowledgeNoCitations}
+            </p>
+          </div>
+          <span className="rounded-full border border-[var(--color-border)]/55 px-3 py-1 text-xs text-[var(--color-text-muted)]">
+            {knowledgeCitations.length}
+          </span>
+        </div>
+        {knowledgeCitations.length > 0 ? (
+          <div className="mt-4 grid gap-3">
+            {knowledgeCitations.map((citation) => (
+              <div key={citation.citationId} className="rounded-xl border border-[var(--color-border)]/45 bg-[var(--color-surface)] px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/10 px-2.5 py-1 text-xs font-medium text-[var(--color-primary)]">
+                    {citation.section}
+                  </span>
+                  <span className="text-xs text-[var(--color-text-subtle)]">{citation.packTitle}</span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{citation.value}</p>
+                {onKnowledgeFeedback ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <FeedbackButton
+                      active={knowledgeFeedbackById[citation.citationId] === 'useful'}
+                      label={copy.feedbackUseful}
+                      onClick={() => onKnowledgeFeedback(citation, 'useful')}
+                    />
+                    <FeedbackButton
+                      active={knowledgeFeedbackById[citation.citationId] === 'inaccurate'}
+                      label={copy.feedbackInaccurate}
+                      onClick={() => onKnowledgeFeedback(citation, 'inaccurate')}
+                    />
+                    <FeedbackButton
+                      active={knowledgeFeedbackById[citation.citationId] === 'do_not_use_again'}
+                      label={copy.feedbackDoNotUseAgain}
+                      onClick={() => onKnowledgeFeedback(citation, 'do_not_use_again')}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-6 grid gap-5">
         <label className="grid gap-2">
@@ -155,5 +222,29 @@ export function GeneratedBriefReview({
         {copy.confirm}
       </button>
     </section>
+  );
+}
+
+function FeedbackButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs transition ${
+        active
+          ? 'border-[var(--color-primary)]/45 bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+          : 'border-[var(--color-border)]/55 text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/35'
+      }`}
+    >
+      {label}
+    </button>
   );
 }

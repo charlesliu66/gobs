@@ -355,6 +355,16 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
           status: 'produced',
           gobsCanProduce: true,
           outputAssetIds: ['banner_prompt_item_cross_platform_banner_1'],
+          knowledgeReferences: [
+            {
+              citationId: 'kref_aa_123',
+              packId: 'pack_market',
+              packTitle: 'Market',
+              section: 'approvedAngles',
+              sourceField: 'facts',
+              value: 'Lead with gameplay proof.',
+            },
+          ],
           producedOutputs: [
             {
               id: 'banner_prompt_item_cross_platform_banner_1',
@@ -374,6 +384,16 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
               reviewerId: 'campaign_operator',
               campaignId: 'campaign_banner_prompt',
               briefId: 'brief_banner_prompt',
+              knowledgeReferences: [
+                {
+                  citationId: 'kref_aa_123',
+                  packId: 'pack_market',
+                  packTitle: 'Market',
+                  section: 'approvedAngles',
+                  sourceField: 'facts',
+                  value: 'Lead with gameplay proof.',
+                },
+              ],
               createdAt: '2026-05-10T00:00:00.000Z',
             },
           ],
@@ -390,6 +410,7 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
 
     assert.equal(created.response.status, 201);
     const output = created.json.items[0].producedOutputs[0];
+    assert.equal(created.json.items[0].knowledgeReferences[0].citationId, 'kref_aa_123');
     assert.equal(output.kind, 'banner_prompt');
     assert.equal(output.qualityStatus, 'needs_fix');
     assert.equal(output.parentOutputId, 'banner_prompt_parent');
@@ -401,6 +422,7 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
     assert.equal(output.reviewerId, 'campaign_operator');
     assert.equal(output.campaignId, 'campaign_banner_prompt');
     assert.equal(output.briefId, 'brief_banner_prompt');
+    assert.equal(output.knowledgeReferences[0].value, 'Lead with gameplay proof.');
   });
 });
 

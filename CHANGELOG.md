@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.191 - 2026-05-11
+**Knowledge traceability**
+**Campaign Creative / Knowledge Brain:**
+- Added deterministic knowledge citation IDs to routed Gold and Glory Brain context so Campaign Brief review can show the exact source entries that informed a generation.
+- Added citation feedback persistence with `useful`, `inaccurate`, and `do_not_use_again`; future mission-brief generation suppresses entries explicitly marked do not use again.
+- Added Campaign Output Plan knowledge references on planned items and produced drafts, with Workbench labels showing which knowledge supported selling points, hooks, or guardrails.
+**Tests / Build:**
+- Added backend derivation/store/mission-brief/output-plan coverage plus frontend API/helper/output-plan tests; rebuilt both API and frontend production bundles.
+
 ## v0.190 - 2026-05-11
 **Distribution final mile**
 **Distribution Center:**

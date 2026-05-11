@@ -18,6 +18,12 @@ export const CAMPAIGN_KNOWLEDGE_PACK_TYPES = [
 export type CampaignKnowledgePackType = (typeof CAMPAIGN_KNOWLEDGE_PACK_TYPES)[number];
 export type CampaignKnowledgeSourceType = 'upload' | 'fastpublish-template' | 'manual';
 export type CampaignKnowledgePackStatus = 'draft' | 'ready' | 'archived';
+export const CAMPAIGN_KNOWLEDGE_CITATION_FEEDBACK_STATES = [
+  'useful',
+  'inaccurate',
+  'do_not_use_again',
+] as const;
+export type CampaignKnowledgeCitationFeedbackState = (typeof CAMPAIGN_KNOWLEDGE_CITATION_FEEDBACK_STATES)[number];
 
 export interface CampaignKnowledgeSource {
   sourceId: string;
@@ -46,6 +52,18 @@ export interface CampaignKnowledgePack {
   sourceIds: string[];
   templateId?: string;
   updatedAt: string;
+}
+
+export interface CampaignKnowledgeCitationFeedback {
+  citationId: string;
+  gameId: string;
+  state: CampaignKnowledgeCitationFeedbackState;
+  packId?: string;
+  section?: string;
+  value?: string;
+  note?: string;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 interface CampaignKnowledgeManifest {
@@ -110,6 +128,10 @@ function getSourcePath(username: string, gameId: string, sourceId: string): stri
     throw new Error('Invalid sourceId');
   }
   return path.join(getGameDir(username, gameId), 'sources', `${sourceId}.json`);
+}
+
+function getCitationFeedbackPath(username: string, gameId: string): string {
+  return path.join(getGameDir(username, gameId), 'citation-feedback.json');
 }
 
 async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
@@ -185,6 +207,35 @@ function normalizePack(gameId: string, raw: unknown): CampaignKnowledgePack | un
   };
 }
 
+function isCampaignKnowledgeCitationFeedbackState(value: string): value is CampaignKnowledgeCitationFeedbackState {
+  return CAMPAIGN_KNOWLEDGE_CITATION_FEEDBACK_STATES.includes(value as CampaignKnowledgeCitationFeedbackState);
+}
+
+function normalizeCitationFeedback(
+  gameId: string,
+  raw: unknown,
+): CampaignKnowledgeCitationFeedback | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const payload = raw as Record<string, unknown>;
+  const citationId = trimText(payload.citationId);
+  const state = trimText(payload.state);
+  if (!citationId || !isSafeKnowledgeId(citationId) || !state || !isCampaignKnowledgeCitationFeedbackState(state)) {
+    return undefined;
+  }
+  const packId = trimText(payload.packId);
+  return {
+    citationId,
+    gameId,
+    state,
+    packId: packId && isSafeKnowledgeId(packId) ? packId : undefined,
+    section: trimText(payload.section),
+    value: trimText(payload.value),
+    note: trimText(payload.note),
+    updatedAt: trimText(payload.updatedAt) ?? nowIso(),
+    updatedBy: sanitizeUsername(trimText(payload.updatedBy)),
+  };
+}
+
 async function readManifest(username: string, gameId: string): Promise<CampaignKnowledgeManifest> {
   const manifestPath = getManifestPath(username, gameId);
   try {
@@ -193,6 +244,78 @@ async function readManifest(username: string, gameId: string): Promise<CampaignK
   } catch {
     return normalizeManifest(gameId, undefined);
   }
+}
+
+export async function listCampaignKnowledgeCitationFeedback(
+  username: string,
+  gameId: string,
+): Promise<CampaignKnowledgeCitationFeedback[]> {
+  if (!isSafeKnowledgeId(gameId)) {
+    throw new Error('Invalid gameId');
+  }
+  try {
+    const raw = await fs.readFile(getCitationFeedbackPath(username, gameId), 'utf-8');
+    const parsed = JSON.parse(raw);
+    const items = Array.isArray(parsed) ? parsed : [];
+    return items
+      .map((item) => normalizeCitationFeedback(gameId, item))
+      .filter((item): item is CampaignKnowledgeCitationFeedback => Boolean(item))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCampaignKnowledgeCitationFeedback(
+  username: string,
+  gameId: string,
+  input: Omit<CampaignKnowledgeCitationFeedback, 'gameId' | 'updatedAt' | 'updatedBy'> & {
+    updatedAt?: string;
+    updatedBy?: string;
+  },
+): Promise<CampaignKnowledgeCitationFeedback> {
+  if (!isSafeKnowledgeId(gameId)) {
+    throw new Error('Invalid gameId');
+  }
+  const citationId = trimText(input.citationId);
+  if (!citationId || !isSafeKnowledgeId(citationId)) {
+    throw new Error('Invalid citationId');
+  }
+  if (!isCampaignKnowledgeCitationFeedbackState(input.state)) {
+    throw new Error('Invalid feedback state');
+  }
+  const packId = trimText(input.packId);
+  if (packId && !isSafeKnowledgeId(packId)) {
+    throw new Error('Invalid packId');
+  }
+  const next: CampaignKnowledgeCitationFeedback = {
+    citationId,
+    gameId,
+    state: input.state,
+    packId: packId || undefined,
+    section: trimText(input.section),
+    value: trimText(input.value),
+    note: trimText(input.note),
+    updatedAt: input.updatedAt ?? nowIso(),
+    updatedBy: sanitizeUsername(input.updatedBy ?? username),
+  };
+  const current = await listCampaignKnowledgeCitationFeedback(username, gameId);
+  const merged = [next, ...current.filter((item) => item.citationId !== citationId)]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  await writeJsonAtomic(getCitationFeedbackPath(username, gameId), merged);
+  return next;
+}
+
+export async function listRejectedKnowledgeCitationIds(
+  username: string,
+  gameId: string,
+): Promise<string[]> {
+  const feedback = await listCampaignKnowledgeCitationFeedback(username, gameId);
+  return uniqueStrings(
+    feedback
+      .filter((item) => item.state === 'do_not_use_again')
+      .map((item) => item.citationId),
+  );
 }
 
 async function writeManifest(

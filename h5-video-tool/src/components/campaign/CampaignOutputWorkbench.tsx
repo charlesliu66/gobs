@@ -9,6 +9,7 @@ import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 import { canOpenProductionItemInStudio } from './studioBridge.ts';
 import { BannerOutputCard } from './BannerOutputCard.tsx';
 import { CreativeQualityPanel } from './CreativeQualityPanel.tsx';
+import { summarizeKnowledgeReferences } from './knowledgeTraceability.ts';
 
 type Copy = {
   emptyTitle: string;
@@ -29,6 +30,7 @@ type Copy = {
   blocked: string;
   requiredAssets: string;
   nextAction: string;
+  knowledgeReferences: string;
   openAssetLibrary: string;
   openQuickFilm: string;
   openInStudio: string;
@@ -261,6 +263,7 @@ function ProductionItemCard({
 }) {
   const itemRequirements = requirements.filter((asset) => item.requiredSourceAssetIds.includes(asset.id));
   const studioReady = canOpenProductionItemInStudio(item);
+  const knowledgeReferenceSummaries = summarizeKnowledgeReferences(item.knowledgeReferences);
   return (
     <article className="rounded-2xl border border-[var(--color-border)]/45 bg-[var(--color-surface)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -278,6 +281,9 @@ function ProductionItemCard({
         <InfoLine label={copy.requiredAssets} value={itemRequirements.map((asset) => asset.label).join(', ') || '-'} />
         <InfoLine label={copy.nextAction} value={item.humanAction?.label ?? (item.gobsCanProduce ? copy.confirmProduction : '-')} />
       </div>
+      {knowledgeReferenceSummaries.length > 0 ? (
+        <KnowledgeReferenceList title={copy.knowledgeReferences} items={knowledgeReferenceSummaries} />
+      ) : null}
       {item.type === 'banner' ? (
         <BannerOutputCard
           item={item}
@@ -309,6 +315,12 @@ function ProductionItemCard({
                   <div className="mt-2 text-xs leading-5 text-[var(--color-text-subtle)]">
                     {output.variants.join(' / ')}
                   </div>
+                ) : null}
+                {summarizeKnowledgeReferences(output.knowledgeReferences).length > 0 ? (
+                  <KnowledgeReferenceList
+                    title={copy.knowledgeReferences}
+                    items={summarizeKnowledgeReferences(output.knowledgeReferences)}
+                  />
                 ) : null}
                 <CreativeQualityPanel
                   item={item}
@@ -348,6 +360,23 @@ function ProductionItemCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function KnowledgeReferenceList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="mt-4 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/8 px-3 py-3" data-section="knowledgeReferences">
+      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
+        {title}
+      </div>
+      <ul className="mt-2 grid gap-1.5">
+        {items.map((item) => (
+          <li key={item} className="text-xs leading-5 text-[var(--color-text-muted)]">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

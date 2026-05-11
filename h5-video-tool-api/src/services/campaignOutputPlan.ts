@@ -103,6 +103,24 @@ const BANNER_OUTPUT_SPEC_IDS = [
   'story_9_16',
   'landscape_16_9',
 ] as const;
+const KNOWLEDGE_REFERENCE_SECTIONS = [
+  'marketTruth',
+  'audienceTension',
+  'toneRules',
+  'forbiddenClaims',
+  'approvedAngles',
+  'hookCandidates',
+  'visualCues',
+  'rationaleNotes',
+] as const;
+const KNOWLEDGE_REFERENCE_SOURCE_FIELDS = [
+  'summary',
+  'facts',
+  'preferences',
+  'avoid',
+  'hookSeeds',
+  'visualCues',
+] as const;
 
 export type CampaignOutputPlanStatus = (typeof CAMPAIGN_OUTPUT_PLAN_STATUSES)[number];
 
@@ -272,6 +290,24 @@ function normalizeHumanAction(value: unknown, field: string): UnknownRecord | un
   };
 }
 
+function normalizeKnowledgeReferences(value: unknown, field: string): UnknownRecord[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) {
+    throw new CampaignOutputPlanValidationError(`${field} must be an array`);
+  }
+  return value.map((item, index) => {
+    const raw = requireObject(item, `${field}[${index}]`);
+    return {
+      citationId: requireSafeIdentifier(raw.citationId, `${field}[${index}].citationId`),
+      packId: requireSafeIdentifier(raw.packId, `${field}[${index}].packId`),
+      packTitle: requireText(raw.packTitle, `${field}[${index}].packTitle`),
+      section: requireEnum(raw.section, `${field}[${index}].section`, KNOWLEDGE_REFERENCE_SECTIONS),
+      sourceField: requireEnum(raw.sourceField, `${field}[${index}].sourceField`, KNOWLEDGE_REFERENCE_SOURCE_FIELDS),
+      value: requireText(raw.value, `${field}[${index}].value`),
+    };
+  });
+}
+
 function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
@@ -313,6 +349,7 @@ function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[
       reviewerId: normalizeOptionalSafeIdentifier(raw.reviewerId, `${field}[${index}].reviewerId`),
       campaignId: normalizeOptionalSafeIdentifier(raw.campaignId, `${field}[${index}].campaignId`),
       briefId: normalizeOptionalSafeIdentifier(raw.briefId, `${field}[${index}].briefId`),
+      knowledgeReferences: normalizeKnowledgeReferences(raw.knowledgeReferences, `${field}[${index}].knowledgeReferences`),
       createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
     };
   });
@@ -348,6 +385,7 @@ function normalizeProductionItems(value: unknown): UnknownRecord[] {
         `items[${index}].distributionPackageIds`,
       ),
       producedOutputs: normalizeProducedOutputs(raw.producedOutputs, `items[${index}].producedOutputs`),
+      knowledgeReferences: normalizeKnowledgeReferences(raw.knowledgeReferences, `items[${index}].knowledgeReferences`),
       humanAction: normalizeHumanAction(raw.humanAction, `items[${index}].humanAction`),
     };
   });

@@ -26,7 +26,8 @@
 - Quality Review And Next Version is merged/deployed at `e90c11e`, implementing Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs.
 - Motion Transfer Validation is merged/deployed at `352e8bb`, implementing Run 5: 10-sample validation ledger, experimental/pause/continue decision, and Studio experimental entry hint.
 - Character Showcase Validation is merged/deployed at `02d65fc`, implementing Run 6: 10-sample 5-character validation ledger, constrained continue decision, and Studio Character Showcase entry/preset guidance.
-- Distribution Final Mile is active at `docs/workflow/runs/2026-05-11-distribution-final-mile/`, implementing Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance.
+- Distribution Final Mile is merged/deployed at `bc693a7`, implementing Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance.
+- Knowledge Traceability is active at `docs/workflow/runs/2026-05-11-knowledge-traceability/`, implementing Run 8: visible knowledge citations, citation feedback, rejected-citation suppression, and Output Plan knowledge references.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -41,6 +42,7 @@
   - `docs/plans/2026-05-10-motion-transfer-validation.md`
   - `docs/plans/2026-05-10-character-showcase-validation.md`
   - `docs/plans/2026-05-10-distribution-final-mile.md`
+  - `docs/plans/2026-05-11-knowledge-traceability.md`
 
 > 最后更新：2026-05-11
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
@@ -87,7 +89,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-11-distribution-final-mile` | Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance | Builder/Verifier in progress on branch `codex/2026-05-11-distribution-final-mile`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-knowledge-traceability` | Run 8: visible knowledge citations, citation feedback save/list, rejected-citation suppression, and Output Plan knowledge references | Builder/Verifier in progress on branch `codex/2026-05-11-knowledge-traceability`; this window is also acting as Release Owner per user instruction |
+| `2026-05-11-distribution-final-mile` | Run 7: active context restore, recent package/config reuse, account-group preview/update, latest-batch summary, and actionable failure guidance | Merged/deployed @ `bc693a7`; Run 8 starts from this base |
 | `2026-05-11-character-showcase-validation` | Run 6: 10-sample Character Showcase validation ledger, constrained continue decision, and Studio entry/preset guidance | Merged/deployed @ `02d65fc`; Run 7 starts from this base |
 | `2026-05-11-motion-transfer-validation` | Run 5: 10-sample Motion Transfer validation ledger, experimental/pause/continue decision, and Studio experimental entry hint | Merged/deployed @ `352e8bb`; Run 6 starts from this base |
 | `2026-05-10-quality-review-next-version` | Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs | Merged/deployed via Release Owner @ `e90c11e`; this run is the base for Run 5 |

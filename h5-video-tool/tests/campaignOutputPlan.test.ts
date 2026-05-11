@@ -7,6 +7,7 @@ import {
   buildCampaignOutputPlan,
   inferSourceAssetTypesForLibraryAsset,
   markProducedOutputQuality,
+  produceSupportedCampaignOutputs,
   sourceAssetFilterType,
   updateSourceAssetRequirementMatches,
 } from '../src/components/campaign/outputPlan.ts';
@@ -14,6 +15,7 @@ import type {
   CampaignCreativeBrief,
   CampaignCreativeStrategy,
 } from '../src/components/campaign/model.ts';
+import type { DerivedCampaignKnowledgeContext } from '../src/api/campaignKnowledge.ts';
 
 function createBrief(patch: Partial<CampaignCreativeBrief> = {}): CampaignCreativeBrief {
   return {
@@ -62,6 +64,46 @@ function createStrategy(patch: Partial<CampaignCreativeStrategy> = {}): Campaign
   };
 }
 
+function createKnowledgeContext(): DerivedCampaignKnowledgeContext {
+  return {
+    selectedPackIds: ['gold-market'],
+    marketTruth: ['Players react to visible power spikes.'],
+    audienceTension: ['They need proof the hero feels strong.'],
+    toneRules: ['Keep claims concrete.'],
+    forbiddenClaims: ['No guaranteed rewards'],
+    approvedAngles: ['lead with gameplay proof'],
+    hookCandidates: ['watch the skill land'],
+    visualCues: ['hero skill burst'],
+    rationaleNotes: [],
+    citations: [
+      {
+        citationId: 'kref_aa_1',
+        packId: 'gold-market',
+        packTitle: 'Market',
+        section: 'approvedAngles',
+        sourceField: 'facts',
+        value: 'lead with gameplay proof',
+      },
+      {
+        citationId: 'kref_hc_1',
+        packId: 'gold-market',
+        packTitle: 'Market',
+        section: 'hookCandidates',
+        sourceField: 'hookSeeds',
+        value: 'watch the skill land',
+      },
+      {
+        citationId: 'kref_mt_1',
+        packId: 'gold-market',
+        packTitle: 'Market',
+        section: 'marketTruth',
+        sourceField: 'facts',
+        value: 'Players react to visible power spikes.',
+      },
+    ],
+  };
+}
+
 test('buildCampaignOutputPlan creates visible deliverables with source asset requirements', () => {
   const plan = buildCampaignOutputPlan({
     mission: 'Promote the new hero launch',
@@ -75,6 +117,36 @@ test('buildCampaignOutputPlan creates visible deliverables with source asset req
   assert.equal(plan.items.some((item) => item.type === 'caption_set'), true);
   assert.equal(plan.sourceAssetRequirements.some((asset) => asset.assetType === 'character_art'), true);
   assert.equal(plan.capabilityGaps.some((gap) => gap.gapType === 'source_asset_missing'), true);
+});
+
+test('buildCampaignOutputPlan marks outputs with knowledge references', () => {
+  const plan = buildCampaignOutputPlan({
+    mission: 'Promote the new hero launch',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    selectedVariantId: 'variant_hero',
+    knowledgeContext: createKnowledgeContext(),
+  });
+
+  const caption = plan.items.find((item) => item.type === 'caption_set');
+  assert.equal((caption?.knowledgeReferences ?? []).length >= 3, true);
+  assert.equal(caption?.knowledgeReferences?.[0]?.citationId, 'kref_aa_1');
+
+  const availablePlan = applySourceAssetSelectionOverrides(plan, {
+    src_gameplay_recording: ['asset_gameplay'],
+    src_game_logo: ['asset_logo'],
+    src_character_art: ['asset_character'],
+    src_key_art: ['asset_key_art'],
+  });
+  const produced = produceSupportedCampaignOutputs({
+    plan: availablePlan,
+    mission: 'Promote the new hero launch',
+    brief: createBrief(),
+    strategy: createStrategy(),
+    knowledgeContext: createKnowledgeContext(),
+  });
+  const producedCaption = produced.items.find((item) => item.type === 'caption_set')?.producedOutputs?.[0];
+  assert.equal(producedCaption?.knowledgeReferences?.some((reference) => reference.citationId === 'kref_aa_1'), true);
 });
 
 test('buildCampaignOutputPlan includes Banner specs and resolves Run 1 Asset Library categories', () => {

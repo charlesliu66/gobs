@@ -5,6 +5,12 @@ import {
   type CampaignMissionBriefResponse,
   type DerivedCampaignKnowledgeContext,
 } from '../api/campaignCreative.ts';
+import {
+  saveKnowledgeCitationFeedback,
+  listKnowledgeCitationFeedback,
+  type CampaignKnowledgeCitation,
+  type CampaignKnowledgeCitationFeedbackState,
+} from '../api/campaignKnowledge.ts';
 import { listAssets, recordUsage, type LibraryAsset } from '../api/assetLibraryApi.ts';
 import { createCampaignDistributionPackage } from '../api/campaignDistribution.ts';
 import { createCampaignOutputPlan, updateCampaignOutputPlan } from '../api/campaignOutputPlan.ts';
@@ -37,6 +43,12 @@ import {
   type ProductionItem,
 } from '../components/campaign/outputPlan.ts';
 import { appendNextVersionDraftToPlan } from '../components/campaign/feedback/creativeFeedbackActions.ts';
+import {
+  buildFeedbackByCitationId,
+  GOLD_AND_GLORY_CAMPAIGN_GAME_ID,
+  selectVisibleKnowledgeCitations,
+  type KnowledgeFeedbackByCitationId,
+} from '../components/campaign/knowledgeTraceability.ts';
 import type { CreativeFeedbackInput } from '../components/campaign/feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from '../components/campaign/quality/creativeQualityTypes.ts';
 import type {
@@ -211,6 +223,7 @@ export function CampaignCreative() {
   const [campaignPlan, setCampaignPlan] = useState<CampaignPlan | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [knowledgeContext, setKnowledgeContext] = useState<DerivedCampaignKnowledgeContext | null>(null);
+  const [knowledgeFeedbackById, setKnowledgeFeedbackById] = useState<KnowledgeFeedbackByCitationId>({});
   const [distributionPackageLoading, setDistributionPackageLoading] = useState(false);
   const [distributionPackageError, setDistributionPackageError] = useState<string | null>(null);
   const [createdDistributionPackage, setCreatedDistributionPackage] = useState<CampaignDistributionPackage | null>(null);
@@ -255,6 +268,18 @@ export function CampaignCreative() {
       .catch(() => {
         if (!cancelled) setAssetLibraryAssets([]);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    listKnowledgeCitationFeedback(GOLD_AND_GLORY_CAMPAIGN_GAME_ID)
+      .then((result) => {
+        if (!cancelled) setKnowledgeFeedbackById(buildFeedbackByCitationId(result.feedback));
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -339,9 +364,15 @@ export function CampaignCreative() {
       selectedVariantId,
       requestedPlatforms: ['tiktok', 'facebook'],
       availableSourceAssets,
+      knowledgeContext,
     });
     return applySourceAssetSelectionOverrides(draft, sourceAssetSelections);
-  }, [availableSourceAssets, brief, mission, selectedVariantId, sourceAssetSelections, strategy, variantPack]);
+  }, [availableSourceAssets, brief, knowledgeContext, mission, selectedVariantId, sourceAssetSelections, strategy, variantPack]);
+
+  const visibleKnowledgeCitations = useMemo(
+    () => selectVisibleKnowledgeCitations(missionBriefResult?.knowledgeContext ?? knowledgeContext, 6),
+    [knowledgeContext, missionBriefResult],
+  );
 
   const brainStatus = useMemo(() => {
     if (missionBriefLoading) {
@@ -364,6 +395,34 @@ export function CampaignCreative() {
       detail: t('campaignCreative.mission.brainReadyDetail'),
     };
   }, [missionBriefError, missionBriefLoading, t]);
+
+  const handleKnowledgeFeedback = async (
+    citation: CampaignKnowledgeCitation,
+    state: CampaignKnowledgeCitationFeedbackState,
+  ) => {
+    setKnowledgeFeedbackById((current) => ({
+      ...current,
+      [citation.citationId]: state,
+    }));
+    try {
+      const result = await saveKnowledgeCitationFeedback(GOLD_AND_GLORY_CAMPAIGN_GAME_ID, {
+        citationId: citation.citationId,
+        state,
+        packId: citation.packId,
+        section: citation.section,
+        value: citation.value,
+      });
+      setKnowledgeFeedbackById((current) => ({
+        ...current,
+        [result.feedback.citationId]: result.feedback.state,
+      }));
+    } catch {
+      const refreshed = await listKnowledgeCitationFeedback(GOLD_AND_GLORY_CAMPAIGN_GAME_ID).catch(() => null);
+      if (refreshed) {
+        setKnowledgeFeedbackById(buildFeedbackByCitationId(refreshed.feedback));
+      }
+    }
+  };
 
   const handleFormChange = (patch: Partial<CampaignCreativeFormState>) => {
     setFormState((prev) => ({ ...prev, ...patch }));
@@ -615,6 +674,7 @@ export function CampaignCreative() {
         strategy,
         variantPack,
         selectedVariantId,
+        knowledgeContext,
       });
       let confirmedPlan: CampaignOutputPlan;
       if (createdOutputPlan) {
@@ -764,11 +824,20 @@ export function CampaignCreative() {
               }
               warnings={missionBriefResult.warnings}
               routedPackCount={missionBriefResult.routedKnowledgePackIds.length}
+              knowledgeCitations={visibleKnowledgeCitations}
+              knowledgeFeedbackById={knowledgeFeedbackById}
+              onKnowledgeFeedback={handleKnowledgeFeedback}
               copy={{
                 title: t('campaignCreative.review.title'),
                 subtitle: t('campaignCreative.review.subtitle'),
                 source: t('campaignCreative.review.source'),
                 routedBrain: t('campaignCreative.review.routedBrain'),
+                knowledgeCitationsTitle: t('campaignCreative.review.knowledgeCitationsTitle'),
+                knowledgeCitationsSubtitle: t('campaignCreative.review.knowledgeCitationsSubtitle'),
+                knowledgeNoCitations: t('campaignCreative.review.knowledgeNoCitations'),
+                feedbackUseful: t('campaignCreative.review.feedbackUseful'),
+                feedbackInaccurate: t('campaignCreative.review.feedbackInaccurate'),
+                feedbackDoNotUseAgain: t('campaignCreative.review.feedbackDoNotUseAgain'),
                 objective: t('campaignCreative.form.objective'),
                 objectivePlaceholder: t('campaignCreative.form.objectivePlaceholder'),
                 sellingPoints: t('campaignCreative.form.sellingPoints'),
@@ -833,6 +902,7 @@ export function CampaignCreative() {
               blocked: t('campaignCreative.outputWorkbench.blocked'),
               requiredAssets: t('campaignCreative.outputWorkbench.requiredAssets'),
               nextAction: t('campaignCreative.outputWorkbench.nextAction'),
+              knowledgeReferences: t('campaignCreative.outputWorkbench.knowledgeReferences'),
               openAssetLibrary: t('campaignCreative.outputWorkbench.openAssetLibrary'),
               openQuickFilm: t('campaignCreative.outputWorkbench.openQuickFilm'),
               openInStudio: uiLocale === 'en' ? 'Open in Advanced Studio' : '送入 Advanced Studio',

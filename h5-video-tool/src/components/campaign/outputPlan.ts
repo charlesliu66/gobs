@@ -3,6 +3,10 @@ import type {
   CampaignCreativeStrategy,
   CampaignCreativeVariantPack,
 } from './model.ts';
+import type {
+  CampaignKnowledgeCitation,
+  DerivedCampaignKnowledgeContext,
+} from '../../api/campaignKnowledge.ts';
 import type { CreativeFeedbackTag } from './feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 import type { CreativeIssueTag } from './quality/creativeQualityTypes.ts';
@@ -108,6 +112,7 @@ export interface ProducedOutputDraft {
   reviewerId?: string;
   campaignId?: string;
   briefId?: string;
+  knowledgeReferences?: CampaignKnowledgeCitation[];
   createdAt: string;
 }
 
@@ -126,6 +131,7 @@ export interface ProductionItem {
   distributionPackageIds: string[];
   bannerDetails?: BannerOutputDetails;
   producedOutputs?: ProducedOutputDraft[];
+  knowledgeReferences?: CampaignKnowledgeCitation[];
   humanAction?: {
     type: 'confirm' | 'provide_source_asset' | 'review_risk' | 'external_production';
     label: string;
@@ -208,6 +214,7 @@ export interface BuildCampaignOutputPlanArgs {
   selectedVariantId?: string | null;
   requestedPlatforms?: string[];
   availableSourceAssets?: AvailableSourceAsset[];
+  knowledgeContext?: DerivedCampaignKnowledgeContext | null;
 }
 
 export interface ProduceSupportedCampaignOutputsArgs {
@@ -218,6 +225,7 @@ export interface ProduceSupportedCampaignOutputsArgs {
   variantPack?: CampaignCreativeVariantPack | null;
   selectedVariantId?: string | null;
   selectedVariantTitle?: string | null;
+  knowledgeContext?: DerivedCampaignKnowledgeContext | null;
 }
 
 const SOURCE_ASSET_LABELS: Record<string, string> = {
@@ -245,6 +253,30 @@ function slugify(value: string): string {
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => value?.trim() || '').filter(Boolean))];
+}
+
+function uniqueKnowledgeReferences(
+  references: Array<CampaignKnowledgeCitation | undefined>,
+): CampaignKnowledgeCitation[] {
+  const seen = new Set<string>();
+  const result: CampaignKnowledgeCitation[] = [];
+  references.forEach((reference) => {
+    if (!reference || seen.has(reference.citationId)) return;
+    seen.add(reference.citationId);
+    result.push(reference);
+  });
+  return result;
+}
+
+function knowledgeReferencesForSections(
+  context: DerivedCampaignKnowledgeContext | null | undefined,
+  sections: CampaignKnowledgeCitation['section'][],
+  limit = 4,
+): CampaignKnowledgeCitation[] {
+  const citations = context?.citations ?? [];
+  return uniqueKnowledgeReferences(
+    sections.flatMap((section) => citations.filter((citation) => citation.section === section)),
+  ).slice(0, limit);
 }
 
 function safeSentence(value: string | null | undefined, fallback: string): string {
@@ -362,6 +394,7 @@ function makeItem(input: {
   requirements: Map<string, GameSourceAssetRequirement>;
   fallbackReview?: boolean;
   bannerDetails?: BannerOutputDetails;
+  knowledgeReferences?: CampaignKnowledgeCitation[];
 }): ProductionItem {
   const requiredSourceAssetIds = (input.requiredAssetTypes ?? []).map(sourceRequirementId);
   const status = itemStatusForRequirementIds(requiredSourceAssetIds, input.requirements);
@@ -380,6 +413,7 @@ function makeItem(input: {
     distributionPackageIds: [],
     bannerDetails: input.bannerDetails,
     producedOutputs: [],
+    knowledgeReferences: input.knowledgeReferences,
   };
   if (input.fallbackReview) {
     item.humanAction = {
@@ -718,7 +752,7 @@ function producedDraft(
   body: string,
   variants: string[],
   createdAt: string,
-  extras: Partial<Pick<ProducedOutputDraft, 'bannerSpecIds' | 'sourceAssetIds'>> = {},
+  extras: Partial<Pick<ProducedOutputDraft, 'bannerSpecIds' | 'sourceAssetIds' | 'knowledgeReferences'>> = {},
 ): ProducedOutputDraft {
   return {
     id: kind === 'banner_prompt' ? bannerOutputId(item) : outputId(item, index),
@@ -770,6 +804,7 @@ function buildBannerPromptForItem(
       {
         bannerSpecIds: item.bannerDetails.specs,
         sourceAssetIds,
+        knowledgeReferences: item.knowledgeReferences,
       },
     ),
   ];
@@ -797,15 +832,21 @@ function buildProducedOutputsForItem(
   switch (item.type) {
     case 'caption_set':
       return [
-        producedDraft(item, 'caption', 0, 'Caption variants', captionVariants[0], captionVariants, createdAt),
+        producedDraft(item, 'caption', 0, 'Caption variants', captionVariants[0], captionVariants, createdAt, {
+          knowledgeReferences: item.knowledgeReferences,
+        }),
       ];
     case 'headline_set':
       return [
-        producedDraft(item, 'headline', 0, 'Headline variants', headlineVariants[0], headlineVariants, createdAt),
+        producedDraft(item, 'headline', 0, 'Headline variants', headlineVariants[0], headlineVariants, createdAt, {
+          knowledgeReferences: item.knowledgeReferences,
+        }),
       ];
     case 'hashtag_set':
       return [
-        producedDraft(item, 'hashtag', 0, 'Hashtag set', hashtags.join(' '), hashtags, createdAt),
+        producedDraft(item, 'hashtag', 0, 'Hashtag set', hashtags.join(' '), hashtags, createdAt, {
+          knowledgeReferences: item.knowledgeReferences,
+        }),
       ];
     case 'fb_post': {
       const postBodies = Array.from({ length: Math.max(1, item.quantity) }, (_, index) => {
@@ -813,7 +854,9 @@ function buildProducedOutputsForItem(
         return `${opener} ${signals.proof}.`;
       });
       return postBodies.map((body, index) =>
-        producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt),
+        producedDraft(item, 'post_copy', index, `Facebook post ${index + 1}`, body, [body], createdAt, {
+          knowledgeReferences: item.knowledgeReferences,
+        }),
       );
     }
     case 'banner':
@@ -917,6 +960,25 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
   const platforms = normalizePlatforms(args.brief, args.requestedPlatforms);
   const requiredTypes = new Set<string>();
   const hasStrategy = Boolean(args.strategy);
+  const copyReferences = knowledgeReferencesForSections(args.knowledgeContext, [
+    'approvedAngles',
+    'hookCandidates',
+    'marketTruth',
+    'audienceTension',
+    'toneRules',
+  ]);
+  const videoReferences = knowledgeReferencesForSections(args.knowledgeContext, [
+    'hookCandidates',
+    'approvedAngles',
+    'visualCues',
+    'marketTruth',
+  ]);
+  const bannerReferences = knowledgeReferencesForSections(args.knowledgeContext, [
+    'approvedAngles',
+    'visualCues',
+    'hookCandidates',
+    'marketTruth',
+  ]);
 
   platforms.forEach((platform) => {
     if (platform === 'tiktok') {
@@ -950,6 +1012,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       capability: 'supported',
       requirements,
       fallbackReview: !hasStrategy,
+      knowledgeReferences: copyReferences,
     }),
     makeItem({
       type: 'headline_set',
@@ -960,6 +1023,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       capability: 'supported',
       requirements,
       fallbackReview: !hasStrategy,
+      knowledgeReferences: copyReferences,
     }),
     makeItem({
       type: 'hashtag_set',
@@ -970,6 +1034,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       capability: 'supported',
       requirements,
       fallbackReview: !hasStrategy,
+      knowledgeReferences: copyReferences,
     }),
   ];
 
@@ -991,6 +1056,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       capability: 'supported_with_source_assets',
       requirements,
       fallbackReview: !hasStrategy,
+      knowledgeReferences: videoReferences,
     }));
   }
 
@@ -1006,6 +1072,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       capability: fbRequiredTypes.length > 0 ? 'supported_with_source_assets' : 'supported',
       requirements,
       fallbackReview: !hasStrategy,
+      knowledgeReferences: copyReferences,
     }));
   }
 
@@ -1022,6 +1089,7 @@ export function buildCampaignOutputPlan(args: BuildCampaignOutputPlanArgs): Camp
       requirements,
       bannerDetails: bannerDetailsForPlan(args, bannerMainVisualType),
       fallbackReview: !hasStrategy,
+      knowledgeReferences: bannerReferences,
     }));
   }
 

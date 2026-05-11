@@ -134,3 +134,44 @@ test('upserting the same template pack id stays deterministic instead of duplica
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('campaign knowledge citation feedback persists and de-duplicates by citation id', async () => {
+  const previousApiDataDir = process.env.API_DATA_DIR;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'qas-campaign-knowledge-feedback-'));
+  process.env.API_DATA_DIR = tmp;
+
+  try {
+    const store = await import('../src/services/campaignKnowledgeStore.ts');
+
+    await store.saveCampaignKnowledgeCitationFeedback('market_admin', 'g1', {
+      citationId: 'kref_mt_abc123',
+      state: 'useful',
+      packId: 'pack_market',
+      section: 'marketTruth',
+      value: 'Players need fast payoff.',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+      updatedBy: 'market_admin',
+    });
+    await store.saveCampaignKnowledgeCitationFeedback('market_admin', 'g1', {
+      citationId: 'kref_mt_abc123',
+      state: 'do_not_use_again',
+      packId: 'pack_market',
+      section: 'marketTruth',
+      value: 'Players need fast payoff.',
+      updatedAt: '2026-05-11T00:01:00.000Z',
+      updatedBy: 'market_admin',
+    });
+
+    const feedback = await store.listCampaignKnowledgeCitationFeedback('market_admin', 'g1');
+    assert.equal(feedback.length, 1);
+    assert.equal(feedback[0]?.state, 'do_not_use_again');
+    assert.deepEqual(await store.listRejectedKnowledgeCitationIds('market_admin', 'g1'), ['kref_mt_abc123']);
+  } finally {
+    if (previousApiDataDir === undefined) {
+      delete process.env.API_DATA_DIR;
+    } else {
+      process.env.API_DATA_DIR = previousApiDataDir;
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

@@ -4,6 +4,7 @@ import {
   generateCampaignMissionBrief,
   GOLD_AND_GLORY_CAMPAIGN_GAME_ID,
 } from '../src/services/campaignMissionBrief.ts';
+import { buildCampaignKnowledgeCitationId } from '../src/services/campaignKnowledgeDerivation.ts';
 import type { CampaignKnowledgePack } from '../src/services/campaignKnowledgeStore.ts';
 
 const packs: CampaignKnowledgePack[] = [
@@ -244,6 +245,43 @@ test('generateCampaignMissionBrief compacts verbose routed context before callin
   assert.equal(result.generationSource, 'llm');
   assert.equal(result.warnings.length, 0);
   assert.equal(result.brief.cta, 'Download Gold and Glory now');
+});
+
+test('generateCampaignMissionBrief excludes suppressed citation ids from routed context', async () => {
+  const suppressedCitationId = buildCampaignKnowledgeCitationId(
+    'ready_market',
+    'marketTruth',
+    'Show the gold payoff in the first three seconds.',
+  );
+  const seenUserText: string[] = [];
+  const result = await generateCampaignMissionBrief(
+    {
+      mission: 'Make a new player reward push',
+      mode: 'tiktok_ua',
+      uiLocale: 'en',
+    },
+    {
+      username: 'tester',
+      packs,
+      suppressedCitationIds: [suppressedCitationId],
+      chatCompletion: async ({ userText }) => {
+        seenUserText.push(userText);
+        return `{
+          "objective": "Make a new player reward push",
+          "audience": "Mobile RPG players",
+          "sellingPoints": ["Fast entry", "Clear upgrade path", "Reward reveal"],
+          "cta": "Download Gold and Glory now",
+          "referenceStyle": "Fast native pacing",
+          "region": "Global",
+          "forbiddenClaims": []
+        }`;
+      },
+    },
+  );
+
+  assert.equal(result.knowledgeContext.marketTruth.includes('Show the gold payoff in the first three seconds.'), false);
+  assert.equal(result.knowledgeContext.citations.some((citation) => citation.citationId === suppressedCitationId), false);
+  assert.equal(seenUserText.some((text) => /gold payoff in the first three seconds/i.test(text)), false);
 });
 
 test('generateCampaignMissionBrief rejects empty mission input', async () => {
