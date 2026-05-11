@@ -8,6 +8,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pageSource = readFileSync(resolve(__dirname, '../src/pages/CampaignCreative.tsx'), 'utf-8');
 const workbenchSource = readFileSync(resolve(__dirname, '../src/components/campaign/CampaignOutputWorkbench.tsx'), 'utf-8');
 const bannerCardSource = readFileSync(resolve(__dirname, '../src/components/campaign/BannerOutputCard.tsx'), 'utf-8');
+const qualityPanelSource = readFileSync(resolve(__dirname, '../src/components/campaign/CreativeQualityPanel.tsx'), 'utf-8');
+const feedbackActionsSource = readFileSync(resolve(__dirname, '../src/components/campaign/feedback/creativeFeedbackActions.ts'), 'utf-8');
 
 test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmation', () => {
   assert.match(pageSource, /CampaignOutputWorkbench/);
@@ -19,6 +21,8 @@ test('CampaignCreative integrates CampaignOutputWorkbench after brief confirmati
   assert.match(pageSource, /createCampaignOutputPlan/);
   assert.match(pageSource, /buildCampaignDistributionCreateInputFromProductionItem/);
   assert.match(pageSource, /handleMarkBannerQuality/);
+  assert.match(pageSource, /handleCreateNextVersion/);
+  assert.match(pageSource, /appendNextVersionDraftToPlan/);
 });
 
 test('CampaignCreative confirms production from the draft plan on the first primary action', () => {
@@ -55,6 +59,17 @@ test('CampaignOutputWorkbench includes the Banner card and three-state quality c
   assert.match(bannerCardSource, /usable/);
   assert.match(bannerCardSource, /needs_fix/);
   assert.match(bannerCardSource, /unusable/);
+});
+
+test('CampaignOutputWorkbench includes quality review panel and next-version feedback loop', () => {
+  assert.match(workbenchSource, /CreativeQualityPanel/);
+  assert.match(workbenchSource, /onCreateNextVersion/);
+  assert.match(feedbackActionsSource, /human marks, selected feedback tags, and static rules only/);
+  assert.match(qualityPanelSource, /CreateNextVersion/);
+  assert.match(qualityPanelSource, /nextVersionUnsupported/);
+  assert.match(feedbackActionsSource, /parentOutputId/);
+  assert.match(feedbackActionsSource, /feedbackTagIds/);
+  assert.match(feedbackActionsSource, /briefId/);
 });
 
 test('CampaignCreative keeps system plan and strategy controls secondary', () => {

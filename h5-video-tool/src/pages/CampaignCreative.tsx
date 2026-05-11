@@ -36,6 +36,8 @@ import {
   type GameSourceAssetRequirement,
   type ProductionItem,
 } from '../components/campaign/outputPlan.ts';
+import { appendNextVersionDraftToPlan } from '../components/campaign/feedback/creativeFeedbackActions.ts';
+import type { CreativeFeedbackInput } from '../components/campaign/feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from '../components/campaign/quality/creativeQualityTypes.ts';
 import type {
   CampaignCreativeBrief,
@@ -658,6 +660,36 @@ export function CampaignCreative() {
     }
   };
 
+  const handleCreateNextVersion = async (
+    item: ProductionItem,
+    output: NonNullable<ProductionItem['producedOutputs']>[number],
+    feedback: CreativeFeedbackInput,
+  ) => {
+    if (!createdOutputPlan || outputPlanLoading) return;
+    const feedbackInput = {
+      ...feedback,
+      reviewerId: 'campaign_operator',
+      createdAt: new Date().toISOString(),
+    };
+    const nextPlan = appendNextVersionDraftToPlan(createdOutputPlan, item.id, output.id, feedbackInput);
+    setCreatedOutputPlan(nextPlan);
+    setOutputPlanLoading(true);
+    setOutputPlanError(null);
+    try {
+      const confirmedPlan = await updateCampaignOutputPlan(createdOutputPlan.id, {
+        status: nextPlan.status,
+        items: nextPlan.items,
+        sourceAssetRequirements: nextPlan.sourceAssetRequirements,
+        capabilityGaps: nextPlan.capabilityGaps,
+      });
+      setCreatedOutputPlan(confirmedPlan);
+    } catch (error) {
+      setOutputPlanError(error instanceof Error ? error.message : t('campaignCreative.outputWorkbench.error'));
+    } finally {
+      setOutputPlanLoading(false);
+    }
+  };
+
   const handleOpenDistribution = () => {
     if (!createdDistributionPackage) return;
     navigate(`/distribute?package=${encodeURIComponent(createdDistributionPackage.id)}`);
@@ -780,6 +812,7 @@ export function CampaignCreative() {
               })
             }
             onMarkBannerQuality={handleMarkBannerQuality}
+            onCreateNextVersion={handleCreateNextVersion}
             assetNamesById={assetNamesById}
             copy={{
               emptyTitle: t('campaignCreative.outputWorkbench.emptyTitle'),
@@ -821,6 +854,26 @@ export function CampaignCreative() {
               qualityUsable: t('campaignCreative.outputWorkbench.qualityUsable'),
               qualityNeedsFix: t('campaignCreative.outputWorkbench.qualityNeedsFix'),
               qualityUnusable: t('campaignCreative.outputWorkbench.qualityUnusable'),
+              qualityPanelTitle: t('campaignCreative.outputWorkbench.qualityPanelTitle'),
+              qualityPanelSubtitle: t('campaignCreative.outputWorkbench.qualityPanelSubtitle'),
+              currentQuality: t('campaignCreative.outputWorkbench.currentQuality'),
+              feedbackSignals: t('campaignCreative.outputWorkbench.feedbackSignals'),
+              issueTags: t('campaignCreative.outputWorkbench.issueTags'),
+              recommendation: t('campaignCreative.outputWorkbench.recommendation'),
+              feedbackTags: t('campaignCreative.outputWorkbench.feedbackTags'),
+              nextVersionNote: t('campaignCreative.outputWorkbench.nextVersionNote'),
+              nextVersionNotePlaceholder: t('campaignCreative.outputWorkbench.nextVersionNotePlaceholder'),
+              createNextVersion: t('campaignCreative.outputWorkbench.createNextVersion'),
+              nextVersionUnsupported: t('campaignCreative.outputWorkbench.nextVersionUnsupported'),
+              statusNotReviewed: t('campaignCreative.outputWorkbench.statusNotReviewed'),
+              feedbackSellingPoint: t('campaignCreative.outputWorkbench.feedbackSellingPoint'),
+              feedbackFirstThreeSeconds: t('campaignCreative.outputWorkbench.feedbackFirstThreeSeconds'),
+              feedbackSlowPacing: t('campaignCreative.outputWorkbench.feedbackSlowPacing'),
+              feedbackInaccurateCharacter: t('campaignCreative.outputWorkbench.feedbackInaccurateCharacter'),
+              feedbackReferenceMotion: t('campaignCreative.outputWorkbench.feedbackReferenceMotion'),
+              feedbackCopyStrength: t('campaignCreative.outputWorkbench.feedbackCopyStrength'),
+              feedbackBetterTikTok: t('campaignCreative.outputWorkbench.feedbackBetterTikTok'),
+              feedbackBetterFacebook: t('campaignCreative.outputWorkbench.feedbackBetterFacebook'),
             }}
           />
 

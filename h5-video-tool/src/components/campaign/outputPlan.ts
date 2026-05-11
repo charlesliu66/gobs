@@ -3,7 +3,9 @@ import type {
   CampaignCreativeStrategy,
   CampaignCreativeVariantPack,
 } from './model.ts';
+import type { CreativeFeedbackTag } from './feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
+import type { CreativeIssueTag } from './quality/creativeQualityTypes.ts';
 
 export type ProductionItemType =
   | 'fb_post'
@@ -97,8 +99,15 @@ export interface ProducedOutputDraft {
   platform: string;
   status: ProducedOutputStatus;
   qualityStatus?: CreativeQualityStatus;
+  parentOutputId?: string;
   bannerSpecIds?: BannerOutputSpecId[];
   sourceAssetIds?: string[];
+  feedbackTagIds?: CreativeFeedbackTag[];
+  feedbackIssueTags?: CreativeIssueTag[];
+  feedbackNote?: string;
+  reviewerId?: string;
+  campaignId?: string;
+  briefId?: string;
   createdAt: string;
 }
 

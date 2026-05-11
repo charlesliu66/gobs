@@ -2,6 +2,17 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.187 - 2026-05-11
+**Quality review and next-version MVP**
+**Campaign Output Workbench:**
+- Added a produced-output quality review panel that summarizes existing human marks, selected feedback tags, and static Run 0 rules without claiming automatic video understanding.
+- Added fixed Run 4 feedback buttons for weak selling point, weak first 3 seconds, slow pacing, character mismatch, reference-motion mismatch, weak copy, and TikTok/Facebook fit.
+- Added next-version draft creation for Banner prompts and platform copy outputs, preserving `parentOutputId`, Campaign/Brief context, inherited source asset IDs, feedback tags, issue tags, reviewer notes, and reviewer metadata.
+- Kept video next-version wording as follow-up task/prompt only; this run does not do local video partial regeneration or provider calls.
+**Tests / Build:**
+- Added frontend feedback-action coverage for next-version traceability, repeated child draft IDs, copy/Banner support, fixed tag filtering, and Workbench wiring.
+- Added backend output-plan persistence validation for feedback metadata round-trip and invalid feedback-tag rejection.
+
 ## v0.186 - 2026-05-10
 **Banner Output MVP**
 **Campaign Output / Distribution Prep:**

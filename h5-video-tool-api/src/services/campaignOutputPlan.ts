@@ -75,6 +75,28 @@ const CREATIVE_QUALITY_STATUSES = [
   'needs_fix',
   'unusable',
 ] as const;
+const CREATIVE_FEEDBACK_TAGS = [
+  'selling_point_not_prominent',
+  'first_three_seconds_weak',
+  'slow_pacing',
+  'inaccurate_character',
+  'reference_motion_mismatch',
+  'copy_not_strong_enough',
+  'better_for_tiktok',
+  'better_for_facebook',
+] as const;
+const CREATIVE_ISSUE_TAGS = [
+  'weak_opening',
+  'slow_pacing',
+  'unclear_selling_point',
+  'weak_ending',
+  'inaccurate_character',
+  'reference_motion_mismatch',
+  'copy_not_strong_enough',
+  'composition_issue',
+  'source_asset_issue',
+  'platform_fit_issue',
+] as const;
 const BANNER_OUTPUT_SPEC_IDS = [
   'square_1_1',
   'portrait_4_5',
@@ -270,12 +292,27 @@ function normalizeProducedOutputs(value: unknown, field: string): UnknownRecord[
         `${field}[${index}].qualityStatus`,
         CREATIVE_QUALITY_STATUSES,
       ),
+      parentOutputId: normalizeOptionalSafeIdentifier(raw.parentOutputId, `${field}[${index}].parentOutputId`),
       bannerSpecIds: normalizeOptionalEnumList(
         raw.bannerSpecIds,
         `${field}[${index}].bannerSpecIds`,
         BANNER_OUTPUT_SPEC_IDS,
       ),
       sourceAssetIds: normalizeSafeIdentifierList(raw.sourceAssetIds, `${field}[${index}].sourceAssetIds`),
+      feedbackTagIds: normalizeOptionalEnumList(
+        raw.feedbackTagIds,
+        `${field}[${index}].feedbackTagIds`,
+        CREATIVE_FEEDBACK_TAGS,
+      ),
+      feedbackIssueTags: normalizeOptionalEnumList(
+        raw.feedbackIssueTags,
+        `${field}[${index}].feedbackIssueTags`,
+        CREATIVE_ISSUE_TAGS,
+      ),
+      feedbackNote: cleanText(raw.feedbackNote),
+      reviewerId: normalizeOptionalSafeIdentifier(raw.reviewerId, `${field}[${index}].reviewerId`),
+      campaignId: normalizeOptionalSafeIdentifier(raw.campaignId, `${field}[${index}].campaignId`),
+      briefId: normalizeOptionalSafeIdentifier(raw.briefId, `${field}[${index}].briefId`),
       createdAt: requireText(raw.createdAt, `${field}[${index}].createdAt`),
     };
   });

@@ -22,7 +22,8 @@
 - Quality and Data Contract Foundation is merged at `a62a774`, giving Window B the three-state creative quality vocabulary plus Campaign/Asset/Output/Review/Package contracts.
 - Story Video Review Capture is merged/deployed at `0c5134e`, implementing Window B Run 3 from the 2026-05-10 optimization checklist: human story-video quality marks, fixed issue tags, and Run 0 `ReviewContract`-compatible result-page review history.
 - Asset Library Reuse MVP is merged/deployed at `9595f23`, implementing Window A Run 1 with team categories, preprocessing metadata, manual category correction, and `assetId`-based Run 0 `AssetContract` mapping.
-- Banner Output MVP is active at `docs/workflow/runs/2026-05-10-banner-output-mvp/`, implementing Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable distribution package context.
+- Banner Output MVP is merged/deployed at `ce212be`, implementing Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable distribution package context.
+- Quality Review And Next Version is active at `docs/workflow/runs/2026-05-10-quality-review-next-version/`, implementing Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs.
 - Source docs:
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-design.md`
   - `docs/plans/2026-05-08-campaign-output-workbench-game-source-assets-plan.md`
@@ -33,8 +34,9 @@
   - `docs/plans/2026-05-10-creative-quality-and-data-contract.md`
   - `docs/plans/2026-05-10-asset-library-reuse-mvp.md`
   - `docs/plans/2026-05-10-banner-output-mvp.md`
+  - `docs/plans/2026-05-10-quality-review-next-version.md`
 
-> 最后更新：2026-05-10
+> 最后更新：2026-05-11
 > 用途：作为当前项目入口，快速判断“现在该看什么、主线往哪里走、哪些 run 仍然有效”。
 
 ---
@@ -79,7 +81,8 @@
 
 | Run | 作用 | 状态 |
 |---|---|---|
-| `2026-05-10-banner-output-mvp` | Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable Distribution Package context | Builder/Verifier in progress on branch `codex/2026-05-10-banner-output-mvp`; deployment deferred to Release Owner |
+| `2026-05-10-quality-review-next-version` | Window A Run 4: human-signal quality diagnostics, fixed feedback tags, and traceable next-version drafts for Banner/copy outputs | Builder/Verifier in progress on branch `codex/2026-05-10-quality-review-next-version`; deployment deferred to Release Owner |
+| `2026-05-10-banner-output-mvp` | Window A Run 2: Banner specs, Asset Library source IDs, prompt placeholders, three-state quality marking, and non-publishable Distribution Package context | Merged/deployed via Release Owner @ `ce212be`; this run is the base for Run 4 |
 | `2026-05-10-asset-library-reuse-mvp` | Window A Run 1: Asset Library team categories, preprocessing metadata, manual category correction, and Run 0 `AssetContract` references by `assetId` | Merged/deployed via Release Owner @ `9595f23`; this run is the base for Run 2 |
 | `2026-05-10-story-video-review-capture` | Window B Run 3: human story-video quality marks, fixed issue tags, and Run 0 `ReviewContract`-compatible result-page review history | Merged/deployed via Release Owner @ `0c5134e` |
 | `2026-05-10-quality-data-contract-foundation` | Window A Run 0: minimal creative quality states, five-entity data contract, fixtures, and validation tests before Asset Library/Banner/Review work | Merged to `origin/main` @ `a62a774`; deployment remains Release Owner responsibility |

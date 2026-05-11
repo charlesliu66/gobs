@@ -365,8 +365,15 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
               platform: 'cross_platform',
               status: 'needs_review',
               qualityStatus: 'needs_fix',
+              parentOutputId: 'banner_prompt_parent',
               bannerSpecIds: ['square_1_1', 'story_9_16'],
               sourceAssetIds: ['asset_key_art', 'asset_logo'],
+              feedbackTagIds: ['selling_point_not_prominent', 'copy_not_strong_enough'],
+              feedbackIssueTags: ['unclear_selling_point', 'copy_not_strong_enough'],
+              feedbackNote: 'Make the reward payoff visible before the CTA.',
+              reviewerId: 'campaign_operator',
+              campaignId: 'campaign_banner_prompt',
+              briefId: 'brief_banner_prompt',
               createdAt: '2026-05-10T00:00:00.000Z',
             },
           ],
@@ -385,8 +392,15 @@ test('POST /plans round-trips Banner prompt placeholders and quality status', as
     const output = created.json.items[0].producedOutputs[0];
     assert.equal(output.kind, 'banner_prompt');
     assert.equal(output.qualityStatus, 'needs_fix');
+    assert.equal(output.parentOutputId, 'banner_prompt_parent');
     assert.deepEqual(output.bannerSpecIds, ['square_1_1', 'story_9_16']);
     assert.deepEqual(output.sourceAssetIds, ['asset_key_art', 'asset_logo']);
+    assert.deepEqual(output.feedbackTagIds, ['selling_point_not_prominent', 'copy_not_strong_enough']);
+    assert.deepEqual(output.feedbackIssueTags, ['unclear_selling_point', 'copy_not_strong_enough']);
+    assert.equal(output.feedbackNote, 'Make the reward payoff visible before the CTA.');
+    assert.equal(output.reviewerId, 'campaign_operator');
+    assert.equal(output.campaignId, 'campaign_banner_prompt');
+    assert.equal(output.briefId, 'brief_banner_prompt');
   });
 });
 
@@ -530,6 +544,33 @@ test('routes reject malformed output plan payloads with 400-level errors', async
     });
     assert.equal(invalidQualityStatus.response.status, 400);
     assert.match(String(invalidQualityStatus.json?.error ?? ''), /qualityStatus/i);
+
+    const invalidFeedbackTag = await requestJson(baseUrl, {
+      method: 'PATCH',
+      path: `/plans/${created.json.id}`,
+      username: 'validator',
+      body: {
+        items: [
+          {
+            ...created.json.items[0],
+            producedOutputs: [
+              {
+                id: 'banner_prompt_bad_feedback',
+                kind: 'banner_prompt',
+                title: 'Bad feedback output',
+                body: 'This should not validate.',
+                variants: ['Square 1:1'],
+                platform: 'cross_platform',
+                feedbackTagIds: ['excellent_but_wrong'],
+                createdAt: '2026-05-10T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(invalidFeedbackTag.response.status, 400);
+    assert.match(String(invalidFeedbackTag.json?.error ?? ''), /feedbackTagIds/i);
   });
 });
 

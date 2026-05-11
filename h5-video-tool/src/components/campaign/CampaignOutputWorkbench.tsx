@@ -4,9 +4,11 @@ import type {
   ProducedOutputDraft,
   ProductionItem,
 } from './outputPlan.ts';
+import type { CreativeFeedbackInput } from './feedback/creativeFeedbackTypes.ts';
 import type { CreativeQualityStatus } from './quality/creativeQualityTypes.ts';
 import { canOpenProductionItemInStudio } from './studioBridge.ts';
 import { BannerOutputCard } from './BannerOutputCard.tsx';
+import { CreativeQualityPanel } from './CreativeQualityPanel.tsx';
 
 type Copy = {
   emptyTitle: string;
@@ -48,6 +50,26 @@ type Copy = {
   qualityUsable: string;
   qualityNeedsFix: string;
   qualityUnusable: string;
+  qualityPanelTitle: string;
+  qualityPanelSubtitle: string;
+  currentQuality: string;
+  feedbackSignals: string;
+  issueTags: string;
+  recommendation: string;
+  feedbackTags: string;
+  nextVersionNote: string;
+  nextVersionNotePlaceholder: string;
+  createNextVersion: string;
+  nextVersionUnsupported: string;
+  statusNotReviewed: string;
+  feedbackSellingPoint: string;
+  feedbackFirstThreeSeconds: string;
+  feedbackSlowPacing: string;
+  feedbackInaccurateCharacter: string;
+  feedbackReferenceMotion: string;
+  feedbackCopyStrength: string;
+  feedbackBetterTikTok: string;
+  feedbackBetterFacebook: string;
 };
 
 interface CampaignOutputWorkbenchProps {
@@ -64,6 +86,7 @@ interface CampaignOutputWorkbenchProps {
   onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onUploadSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onMarkBannerQuality?: (item: ProductionItem, output: ProducedOutputDraft, status: CreativeQualityStatus) => void;
+  onCreateNextVersion?: (item: ProductionItem, output: ProducedOutputDraft, feedback: CreativeFeedbackInput) => void;
   assetNamesById?: Record<string, string>;
 }
 
@@ -81,6 +104,7 @@ export function CampaignOutputWorkbench({
   onChooseSourceAsset,
   onUploadSourceAsset,
   onMarkBannerQuality,
+  onCreateNextVersion,
   assetNamesById = {},
 }: CampaignOutputWorkbenchProps) {
   const activePlan = createdPlan ?? plan;
@@ -123,6 +147,7 @@ export function CampaignOutputWorkbench({
               onChooseSourceAsset={onChooseSourceAsset}
               onOpenInStudio={onOpenInStudio}
               onMarkBannerQuality={onMarkBannerQuality}
+              onCreateNextVersion={onCreateNextVersion}
             />
           ))}
         </div>
@@ -223,6 +248,7 @@ function ProductionItemCard({
   onChooseSourceAsset,
   onOpenInStudio,
   onMarkBannerQuality,
+  onCreateNextVersion,
 }: {
   item: ProductionItem;
   requirements: GameSourceAssetRequirement[];
@@ -231,6 +257,7 @@ function ProductionItemCard({
   onChooseSourceAsset: (asset: GameSourceAssetRequirement) => void;
   onOpenInStudio?: (item: ProductionItem) => void;
   onMarkBannerQuality?: (item: ProductionItem, output: ProducedOutputDraft, status: CreativeQualityStatus) => void;
+  onCreateNextVersion?: (item: ProductionItem, output: ProducedOutputDraft, feedback: CreativeFeedbackInput) => void;
 }) {
   const itemRequirements = requirements.filter((asset) => item.requiredSourceAssetIds.includes(asset.id));
   const studioReady = canOpenProductionItemInStudio(item);
@@ -283,6 +310,38 @@ function ProductionItemCard({
                     {output.variants.join(' / ')}
                   </div>
                 ) : null}
+                <CreativeQualityPanel
+                  item={item}
+                  output={output}
+                  copy={{
+                    qualityPanelTitle: copy.qualityPanelTitle,
+                    qualityPanelSubtitle: copy.qualityPanelSubtitle,
+                    currentQuality: copy.currentQuality,
+                    feedbackSignals: copy.feedbackSignals,
+                    issueTags: copy.issueTags,
+                    recommendation: copy.recommendation,
+                    feedbackTags: copy.feedbackTags,
+                    nextVersionNote: copy.nextVersionNote,
+                    nextVersionNotePlaceholder: copy.nextVersionNotePlaceholder,
+                    createNextVersion: copy.createNextVersion,
+                    nextVersionUnsupported: copy.nextVersionUnsupported,
+                    statusNotReviewed: copy.statusNotReviewed,
+                    statusUsable: copy.qualityUsable,
+                    statusNeedsFix: copy.qualityNeedsFix,
+                    statusUnusable: copy.qualityUnusable,
+                    feedbackTagLabels: {
+                      selling_point_not_prominent: copy.feedbackSellingPoint,
+                      first_three_seconds_weak: copy.feedbackFirstThreeSeconds,
+                      slow_pacing: copy.feedbackSlowPacing,
+                      inaccurate_character: copy.feedbackInaccurateCharacter,
+                      reference_motion_mismatch: copy.feedbackReferenceMotion,
+                      copy_not_strong_enough: copy.feedbackCopyStrength,
+                      better_for_tiktok: copy.feedbackBetterTikTok,
+                      better_for_facebook: copy.feedbackBetterFacebook,
+                    },
+                  }}
+                  onCreateNextVersion={onCreateNextVersion}
+                />
               </div>
             ))}
           </div>
