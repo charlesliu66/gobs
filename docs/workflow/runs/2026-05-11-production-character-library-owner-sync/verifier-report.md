@@ -8,6 +8,7 @@
 ## 2) Coverage Checklist
 - Happy path: Saving a character writes the entry and creates visible Asset Library records for the same owner.
 - Portrait preview path: Saving from the portrait preview modal persists the current preview image into the synchronized payload.
+- URL-backed preview path: Saving a character whose image references are `/api/production/image?path=...` still creates visible Asset Library records for the same owner.
 - Edge cases: Base/state/look can share identical image content without creating uncontrolled duplicates in the same save action.
 - Loading state: Not applicable on backend; frontend still uses existing save spinners.
 - Empty state: Character Library empty state now explains that Advanced Studio saves also land in the current account's Asset Library.
@@ -22,9 +23,10 @@
 | Owner isolation | `owner_a` save cannot be listed or fetched by `owner_b` | PASS | `node --import tsx --test tests/characterLibraryOwnerSync.test.ts` |
 | Asset Library visibility | Saved images become `character_image` assets for the same owner | PASS | Regression test asserts `/api/asset-library/assets` returns one `character_image` asset for `owner_a` and zero for `owner_b`. |
 | Preview save payload | Replace/branch/no-preview portrait saves normalize to the correct active image before sync | PASS | `npx tsx --test tests/characterLibrarySaveSheet.test.ts` |
+| URL-backed sync | Production-image URL references from Advanced Studio preview saves still synchronize into Asset Library | PASS | `node --import tsx --test tests/characterLibraryOwnerSync.test.ts` covers `/api/production/image?path=...` image inputs. |
 | Duplicate handling | Same image reused across base/state/look yields one unique asset row in the test scenario | PASS | Regression test checks `assetCount=1` and DB row count is one for the owner. |
 | Build | API and frontend production builds | PASS | `npm run build` in `h5-video-tool-api` and `h5-video-tool`. |
-| Release docs | Product + changelog updated | PASS | `PRODUCT.md` and `CHANGELOG.md` include the v0.202 follow-up note for portrait-preview save correctness. |
+| Release docs | Product + changelog updated | PASS | `PRODUCT.md` and `CHANGELOG.md` include the v0.203 follow-up note for URL-backed preview-save sync correctness. |
 
 ## 4) Failed Items (Defect List)
 | Defect ID | Severity (P0-P3) | Title | Repro Steps | Expected | Actual | Suggested Fix Order |
@@ -46,3 +48,11 @@
 - Gate 3 status: GO.
 - Gate 4 blocking defects (P0/P1): 0.
 - Release recommendation: GO to commit, push, staging deploy, staging smoke, release-ready marking, and prod promotion by the Release Owner window.
+
+## Addendum - v0.203 verification follow-up
+- Newly verified bug: URL-backed production images saved from the Advanced Studio preview modal now synchronize into Asset Library instead of being skipped.
+- Evidence:
+  - `node --import tsx --test tests/characterLibraryOwnerSync.test.ts` now covers both inline base64 and `/api/production/image?path=...` inputs and passed locally.
+  - Prod data inspection before the fix showed owner-scoped character JSON with empty `assetBindings` and zero `character_image` rows for the affected account, matching the user-facing failure exactly.
+- Residual user action note:
+  - Saves created before this fix will need either a one-time re-save or an explicit backfill after deployment because those older records were stored before URL-backed sync existed.

@@ -5,7 +5,7 @@
 - Goal: Fix Advanced Studio character saves so saved appearances are owner-scoped and synchronized into the same account's Asset Library.
 - Owner: codex
 - Branch or commit context: `main` working tree follow-up after `c83dfe6`
-- Last updated: 2026-05-11T12:55:00Z
+- Last updated: 2026-05-11T14:25:00Z
 
 ## Acceptance Criteria Snapshot
 - AC-01: Character Library save/list/get/delete/share/import are all bound to the current authenticated account, not a shared cross-account directory.
@@ -14,14 +14,17 @@
 - AC-04: Frontend save feedback clearly confirms Asset Library sync and surfaces save failures.
 - AC-05: Local regression evidence proves account isolation and Asset Library visibility for the saved character assets.
 - AC-06: Saving from the portrait preview modal persists the current preview look, not a stale pre-preview base image.
+- AC-07: Asset sync accepts Advanced Studio's saved `/api/production/image?path=...` image references as well as inline base64 payloads.
 
 ## Editable Files (Builder Ownership)
 - docs/workflow/runs/2026-05-11-production-character-library-owner-sync/
 - CHANGELOG.md
 - PRODUCT.md
 - h5-video-tool-api/src/routes/characterLibrary.ts
+- h5-video-tool-api/src/routes/productionPersist.ts
 - h5-video-tool-api/src/services/characterLibraryAssetSync.ts
 - h5-video-tool-api/tests/characterLibraryOwnerSync.test.ts
+- h5-video-tool-api/src/utils/productionImagePath.ts
 - h5-video-tool/src/api/characterLibrary.ts
 - h5-video-tool/src/components/CharacterLibraryPanel.tsx
 - h5-video-tool/src/components/production/CharacterPortraitEditorModal.tsx
@@ -46,6 +49,7 @@
 - No redesign of Asset Library filtering, layout, or bulk-management flows.
 - No migration of legacy `/api/assets` history surfaces.
 - No automatic deletion of Asset Library files when a Character Library entry is deleted.
+- No unrelated production image upload UX changes beyond what is needed to read existing saved preview image references.
 
 ## Progress Checklist
 - [x] Planner approved

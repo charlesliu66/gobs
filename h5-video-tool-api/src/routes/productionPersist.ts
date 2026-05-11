@@ -16,6 +16,10 @@ import { getApiDataDir, getDefaultVideoOutputDir } from '../config/apiDataDir.js
 import { getJobById } from '../services/batchJobsQueue.js';
 import { mergeExecutionSegmentsForSave } from '../services/productionExecutionSegments.js';
 import { resolveProductionProjectSaveTitle } from '../services/projectPersistenceGuards.js';
+import {
+  getLegacyProductionImageDirs,
+  getProductionImageDir,
+} from '../utils/productionImagePath.js';
 import { sanitizeUsername } from '../utils/safeUsername.js';
 
 export const productionPersistRouter = Router();
@@ -23,7 +27,7 @@ export const productionPersistRouter = Router();
 const OUTPUT_BASE = getDefaultVideoOutputDir();
 
 function getProductionImgDir(username: string): string {
-  return path.join(OUTPUT_BASE, 'production', 'images', sanitizeUsername(username));
+  return getProductionImageDir(username);
 }
 
 function getProductionProjDir(username: string): string {
@@ -42,14 +46,7 @@ function getLegacyProductionProjDirs(username: string): string[] {
 }
 
 function getLegacyProductionImgDirs(username: string): string[] {
-  const safeUser = sanitizeUsername(username);
-  const candidates = [
-    path.resolve(process.cwd(), 'output', 'production', 'images', safeUser),
-    path.resolve(process.cwd(), '..', '..', 'api', 'output', 'production', 'images', safeUser),
-  ];
-  return [...new Set(candidates.map((item) => path.normalize(item)))].filter(
-    (item) => item !== path.normalize(getProductionImgDir(username)),
-  );
+  return getLegacyProductionImageDirs(username);
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {

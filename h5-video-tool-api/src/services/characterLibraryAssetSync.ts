@@ -7,6 +7,7 @@ import { resolvePath } from '../infra/storage/resolver.js';
 import { applyRuleTags } from './assetTaggingService.js';
 import { ensureThumbnail } from './assetThumbnailService.js';
 import { AI_CATEGORIES } from '../types/assetLibrary.js';
+import { resolveProductionImageReference } from '../utils/productionImagePath.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,6 +26,17 @@ const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
   'image/bmp': '.bmp',
   'image/heic': '.heic',
   'image/heif': '.heif',
+};
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
 };
 
 export interface CharacterLibraryStateAssetInput {
@@ -105,6 +117,31 @@ function parseImageDataUrl(dataUrl: string | undefined): ParsedDataUrl | null {
   const buffer = Buffer.from(match[2]!, 'base64');
   if (buffer.length === 0) return null;
   return { buffer, mimeType, extension };
+}
+
+function parseProductionImageReference(imageRef: string | undefined, username: string): ParsedDataUrl | null {
+  if (!imageRef) return null;
+  const readablePath = resolveProductionImageReference(imageRef, username);
+  if (!readablePath) return null;
+
+  try {
+    const buffer = fs.readFileSync(readablePath);
+    if (buffer.length === 0) return null;
+
+    const extension = path.extname(readablePath).toLowerCase() || '.png';
+    const mimeType = IMAGE_MIME_BY_EXTENSION[extension] ?? 'image/png';
+    return {
+      buffer,
+      mimeType,
+      extension,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseImageSource(imageRef: string | undefined, username: string): ParsedDataUrl | null {
+  return parseImageDataUrl(imageRef) ?? parseProductionImageReference(imageRef, username);
 }
 
 function sha256(buffer: Buffer): string {
@@ -369,7 +406,7 @@ export function syncCharacterLibraryAssets(
   const hashBindings = new Map<string, CharacterLibraryAssetBinding>();
 
   for (const slot of slots) {
-    const parsed = parseImageDataUrl(slot.imageDataUrl);
+    const parsed = parseImageSource(slot.imageDataUrl, input.username);
     if (!parsed) continue;
 
     const contentHash = sha256(parsed.buffer);

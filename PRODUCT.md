@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.202)*
+*Last updated: 2026-05-11 (v0.203)*
 
-**Latest update - v0.202**
+**Latest update - v0.203**
+- Advanced Studio character-library asset sync now accepts both inline `data:image/...` payloads and saved `/api/production/image?path=...` production-image URLs, so saving a generated portrait from the preview modal writes a real `character_image` asset into the same account's Asset Library instead of silently skipping sync.
+- Production image path parsing is now shared and owner-scoped, which keeps sync limited to the current account's own `output/production/images/<username>/...` files while still supporting legacy readable locations.
+- Added backend regression coverage for URL-backed character saves, mirroring the exact "save current preview into character library" path used by Advanced Studio.
+
+**Previous update - v0.202**
 - Advanced Studio portrait preview modal now saves the current preview image itself when you click "Save to Character Library", instead of re-saving the older character base state, so the exact preview you just generated can appear in the same account's Asset Library.
 - Portrait-preview saves now normalize the outgoing character sheet before sync: replace saves overwrite the targeted look, branch saves append a new look-tree branch, and both paths align `baseImageDataUrl` with the active look that will be synchronized.
 - Wardrobe-side saves now also resolve the effective active look image before sync, avoiding stale `baseImageDataUrl` values that could keep the wrong image out of the Asset Library after a later save.

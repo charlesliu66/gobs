@@ -43,3 +43,7 @@
 2. Push the release candidate SHA to `origin/main`.
 3. Deploy staging, run staging smoke, and mark the verified SHA as release-ready.
 4. Deploy prod, run prod smoke, and restore prod deployment state to `idle`.
+
+## Addendum - v0.203 release note
+- Follow-up release scope: patch URL-backed production-image sync for Character Library saves so Advanced Studio preview-modal saves create real owner-scoped Asset Library rows.
+- Extra release consideration: if operators need already-saved preview characters to appear without manually saving again, run a one-time backfill against existing owner-scoped Character Library JSON after the code deploy.

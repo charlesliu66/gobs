@@ -2,6 +2,15 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.203 - 2026-05-11
+**Advanced Studio character image URL asset sync**
+**Advanced Studio / Character Library / Asset Library:**
+- Fixed character-library asset sync so it now ingests both inline `data:image/...` payloads and saved `/api/production/image?path=...` production-image URLs, matching the real image format produced by the Advanced Studio preview save flow.
+- Kept production-image sync owner-scoped by resolving only the current account's readable production image paths, so saved portraits can enter the same account's Asset Library without reopening cross-account access.
+- Added backend regression coverage for URL-backed portrait saves to make sure preview-modal saves create `character_image` assets instead of silently returning zero synced assets.
+**Tests / Build:**
+- Reran backend owner-sync regression with both base64 and production-image URL inputs, then rebuilt backend/frontend production bundles.
+
 ## v0.201 - 2026-05-11
 **Advanced Studio character library owner sync**
 **Advanced Studio / Character Library / Asset Library:**

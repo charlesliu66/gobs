@@ -12,6 +12,10 @@ process.env.API_DATA_DIR = tempApiDataDir;
 const ONE_BY_ONE_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1EAAAAASUVORK5CYII=';
 
+function oneByOnePngBuffer(): Buffer {
+  return Buffer.from(ONE_BY_ONE_PNG.replace(/^data:image\/png;base64,/, ''), 'base64');
+}
+
 test.after(async () => {
   const dbModule = await import('../src/db/assetDb.ts').catch(() => undefined);
   if (dbModule?.default && typeof (dbModule.default as { close?: () => void }).close === 'function') {
@@ -230,4 +234,58 @@ test('character library save stays owner-scoped and syncs assets into the same a
   assert.equal(rows[0]?.username, 'owner_a');
   assert.equal(rows[0]?.team_category, 'character_image');
   assert.equal(rows[0]?.project_id, 'character-library');
+});
+
+test('character library save syncs production image URLs into the same owner asset library', async () => {
+  const username = 'owner_url';
+  const relativeImagePath = `output/production/images/${username}/portrait.png`;
+  const absoluteImagePath = path.join(tempApiDataDir, relativeImagePath);
+  fs.mkdirSync(path.dirname(absoluteImagePath), { recursive: true });
+  fs.writeFileSync(absoluteImagePath, oneByOnePngBuffer());
+
+  await withServer(async (baseUrl) => {
+    const save = await requestJson<{ id: string; assetCount: number }>(baseUrl, {
+      method: 'POST',
+      path: '/api/character-library/save',
+      username,
+      body: {
+        name: 'URL 角色',
+        baseImageDataUrl: `/api/production/image?path=${encodeURIComponent(relativeImagePath)}`,
+        baseConfirmed: true,
+        lookTree: [
+          {
+            id: 'look-root',
+            parentId: null,
+            label: '默认形象',
+            imageDataUrl: `/api/production/image?path=${encodeURIComponent(relativeImagePath)}`,
+          },
+        ],
+        activeLookId: 'look-root',
+      },
+    });
+
+    assert.equal(save.response.status, 200);
+    assert.equal(save.json.assetCount, 1);
+
+    const characterPath = findCharacterJsonPath(save.json.id);
+    assert.ok(characterPath, 'character json should be written to disk');
+
+    const savedCharacter = JSON.parse(fs.readFileSync(characterPath!, 'utf-8')) as {
+      assetBindings?: Record<string, { assetId: string }>;
+    };
+    assert.ok(savedCharacter.assetBindings?.base?.assetId);
+    assert.ok(savedCharacter.assetBindings?.['look:look-root']?.assetId);
+
+    const ownerAssets = await requestJson<{ assets: Array<{ id: string; team_category?: string }>; total: number }>(
+      baseUrl,
+      {
+        method: 'GET',
+        path: '/api/asset-library/assets?pageSize=20',
+        username,
+      },
+    );
+    assert.equal(ownerAssets.response.status, 200);
+    assert.equal(ownerAssets.json.total, 1);
+    assert.equal(ownerAssets.json.assets[0]?.team_category, 'character_image');
+  });
 });
