@@ -2,8 +2,8 @@
 
 > Date: 2026-05-11
 > Audience: GOBS 内部开发 / OpenClaw Review
-> Status: Review Draft
-> Based on: `2026-05-11-campaign-production-coverage-and-team-assets-plan.md` + OpenClaw 代码审查反馈
+> Status: Final Review Draft
+> Based on: `2026-05-11-campaign-production-coverage-and-team-assets-plan.md` + OpenClaw 两轮代码审查反馈
 
 ## 1. 这次为什么要调整
 
@@ -64,7 +64,19 @@ Campaign 素材生产覆盖率提升
 
 第一阶段不做大迁移，不重命名已有类型，不新建同名模块。
 
-### 2.3 覆盖率口径要拆开
+### 2.3 已定死的关键决策
+
+为避免开工后继续争论类型边界，以下决策在 Run 0 中只复核代码影响，不再重新摇摆：
+
+| 决策 | 结论 | 理由 |
+|---|---|---|
+| `ProductionCapability` | 不替换，只做 UI readiness 映射 | 已有前后端白名单和落库数据依赖 |
+| `cta_set` | 不新增 `ProductionItemType`，新增 `ProducedOutputKind = 'cta'` | CTA 没有独立生产动作，和 caption/headline 同生产、同分发路径 |
+| `platform_post_pack` | 不落库，纯 UI 分组 | 它只是按 platform 聚合 caption/headline/CTA/hashtag/post copy |
+| Banner 第一版 | 只做 prompt，不做预览 | 先验证字段、素材引用和 prompt 是否可用 |
+| `brief_ready` | 不计入 True Production Coverage | 用户感知是“系统给制作说明”，不是“平台帮我做完” |
+
+### 2.4 覆盖率口径要拆开
 
 原方案的 `Campaign Output Coverage Rate = 可推进产物数 / 总产物数` 需要细分，否则 `brief_ready` 会把指标虚高。
 
@@ -263,8 +275,8 @@ hashtag_set
 
 | V1 建议类型 | V2 处理方式 |
 |---|---|
-| `cta_set` | 可新增，但先确认是否应作为 `caption_set/headline_set` 的 produced output kind，还是独立 item type |
-| `platform_post_pack` | 第一版不要落库为新 type，先作为 `fb_post` / `tiktok_video` / caption/headline 的 UI 分组 |
+| `cta_set` | 不新增 item type。直接新增 `ProducedOutputKind = 'cta'` |
+| `platform_post_pack` | 不落库，纯 UI 分组。按 platform 聚合 caption / headline / CTA / hashtag / post copy |
 | `campaign_banner` | 不新增，沿用现有 `banner` |
 | `thumbnail_cover` | 暂不新增，可作为 `banner` 的 subtype 或 produced output kind |
 | `short_video_brief` | 不新增，沿用 `short_video` + `manual_recommended` / `brief_ready` 映射 |
@@ -293,7 +305,11 @@ cta
 platform_post_copy variants
 ```
 
-但要先检查它们是否更适合放在 `post_copy` 的结构里，而不是直接扩 `ProductionItemType`。
+最终规则：
+
+- `cta` 作为 `ProducedOutputKind` 新值实现；Run 0 只审计影响面，不再重新讨论是否新增 item type。
+- `platform_post_pack` 只能是 UI grouping，不进入 `ProductionItemType`，不进入后端白名单。
+- 如果后端需要保存分组结果，保存为 produced output metadata，不新增 Campaign output item type。
 
 ## 5. 修订后的 Run 拆解
 
@@ -310,6 +326,40 @@ platform_post_copy variants
 - output type 映射表。
 - 真实或样例 Campaign Output Plan 的产物分布统计。
 - 第一批开发文件白名单。
+
+#### 审计表格式
+
+Run 0 必须输出一份 markdown 表，固定使用以下列，不能只写自由文本总结：
+
+| 文件路径 | 现状 | V2 改动 | 风险等级 | 修改方式 | Owner |
+|---|---|---|---|---|---|
+| `h5-video-tool/src/components/campaign/outputPlan.ts` | 已有 `ProductionItemType` / `ProductionCapability` / `ProducedOutputKind` | 只允许增量补 output kind 或 helper，不替换 capability | 高 | 增量 / 测试保护 | Window A |
+| `h5-video-tool-api/src/db/assetDb.ts` | 已有 assets 表和多列 ALTER 迁移 | 只允许 ADD COLUMN，不改已有列含义 | 中 | 增量 migration guard | Window B |
+
+字段说明：
+
+- `现状`：写当前代码已经有什么，不写愿望。
+- `V2 改动`：写本阶段要改什么，尽量具体到字段 / helper / UI。
+- `风险等级`：高 / 中 / 低。
+- `修改方式`：增强现有文件 / 新增小模块 / 只读引用 / 禁止修改。
+- `Owner`：Window A / Window B / Release Owner / 不修改。
+
+#### Run 3 缺口 Checklist
+
+Run 0 还必须把 Asset Preprocessing 的问题从“是否足够好”改成可勾选 checklist，供 Run 3 只做缺失项：
+
+| 项目 | 当前是否已有 | 证据文件/接口 | Run 3 是否要做 |
+|---|---|---|---|
+| 按文件类型筛选 | TBD | TBD | TBD |
+| 按比例 / 方向筛选 | TBD | TBD | TBD |
+| 按 team category 筛选 | TBD | TBD | TBD |
+| 重复文件 sha256 提示 | TBD | TBD | TBD |
+| 人工修正 team category | TBD | TBD | TBD |
+| Banner 主视觉候选识别 | TBD | TBD | TBD |
+| Logo / gameplay screenshot 候选识别 | TBD | TBD | TBD |
+| Drive 导入后复用预处理 | TBD | TBD | TBD |
+
+Run 3 只实现 `Run 3 是否要做 = yes` 的项，不再泛化重做 preprocessing。
 
 #### 必查文件
 
@@ -353,6 +403,7 @@ rg -n "CampaignOutputWorkbench|ProducedOutputKind|banner_prompt|post_copy" h5-vi
 - 增加 `ProductionReadiness` UI 映射。
 - 增加 coverage summary。
 - 增加 blocked / assistive / true coverage 分口径展示。
+- 增加轻量 `logCoverageEvent`，只记录 readiness 聚合计数。
 - 增强现有 `CampaignOutputWorkbench.tsx`，不要新建平行页面。
 
 #### 建议文件
@@ -375,6 +426,7 @@ h5-video-tool/tests/campaignOutputWorkbenchIntegration.test.ts
 - Workbench 顶部展示 `True Production Coverage / Assistive Coverage / Blocked`。
 - `manual_recommended` 显示为“可生成制作说明”，不算进 true coverage。
 - `supported_with_source_assets` 缺素材时显示具体缺口和下一步。
+- Coverage event 只记录聚合计数，不记录 prompt、素材文件名或用户输入正文。
 
 ### Run 1B - Text Production Pack Prompt Strategy
 
@@ -419,6 +471,76 @@ knowledge citations if available
 - 每条文案要可编辑、可标记 `draft / needs_review / approved`。
 - 风险词和夸大承诺必须从 Campaign brief / knowledge guardrails 中继承。
 
+#### Caption Prompt Template 样例
+
+Run 1B 的 builder 不能只写“让 AI 生成几条文案”的泛 prompt，至少要实现一个接近下面结构的模板：
+
+```text
+You are writing paid/social creative copy for a mobile game campaign.
+
+Game:
+{{gameName}}
+
+Campaign objective:
+{{objective}}
+
+Target audience:
+{{audience}}
+
+Platform:
+{{platform}}
+
+Creative angle:
+{{angle}}
+
+Tone:
+{{tone}}
+
+Selling points to use:
+{{sellingPoints}}
+
+Forbidden or risky claims:
+{{forbiddenClaims}}
+
+Knowledge references:
+{{knowledgeReferences}}
+
+Task:
+Generate {{variantCount}} caption variants for this platform.
+Each variant must:
+- Start with a concrete player situation or benefit, not a generic slogan.
+- Use only the provided selling points.
+- Avoid every forbidden or risky claim.
+- Fit the selected platform behavior.
+- Include a short reason explaining why this variant matches the angle.
+
+Return JSON only:
+{
+  "platform": "{{platform}}",
+  "angle": "{{angle}}",
+  "variants": [
+    {
+      "text": "...",
+      "usage": "tiktok_hook | fb_feed_caption | ig_caption | community_post",
+      "ctaIntent": "install | play_now | learn_more | join_event",
+      "sourceSellingPoint": "...",
+      "riskCheck": "passed | needs_review",
+      "reason": "..."
+    }
+  ]
+}
+```
+
+Few-shot 方向第一版只需要 1 个正例和 1 个反例：
+
+```text
+Good: "Stuck choosing upgrades before the dungeon timer runs out? Build your squad, grab the loot, and push one floor deeper tonight."
+Why good: concrete player situation, clear gameplay loop, no unsupported reward promise.
+
+Bad: "The best RPG ever. Download now and get guaranteed legendary rewards."
+Why bad: generic, unsupported superlative, guaranteed reward claim.
+```
+
 #### 建议文件
 
 ```text
@@ -440,6 +562,7 @@ h5-video-tool/tests/campaignOutputProductionAdapter.test.ts
 - 一个 Campaign 至少能得到 caption/headline/CTA/hashtag/post copy 的结构化草稿。
 - 每条文本都保留来源 brief / angle / platform。
 - 文本产物能进入 Distribution Package 的候选文案。
+- 至少有一个 prompt template 测试覆盖 forbidden claims、selling point 绑定和 JSON 输出字段。
 
 ### Run 2 - Team Asset Visibility & Storage Guard
 
@@ -481,6 +604,54 @@ default-team
 - 不能在业务代码各处散落硬编码 `default-team`。
 - 文档里写清楚：未来真实 team 系统上线时，`default-team` 数据如何迁移或归属。
 
+迁移草案：
+
+```sql
+-- 真实 team 系统上线后，用用户组织关系回填历史 team assets。
+-- 具体 users/team_members 表名以届时真实 schema 为准。
+UPDATE assets
+SET team_id = (
+  SELECT team_members.team_id
+  FROM team_members
+  WHERE team_members.username = assets.username
+  LIMIT 1
+)
+WHERE team_id = 'default-team'
+  AND visibility = 'team'
+  AND EXISTS (
+    SELECT 1 FROM team_members WHERE team_members.username = assets.username
+  );
+```
+
+如果某个 owner 没有组织关系，则继续留在 `default-team`，并在迁移报告里列出来人工处理。
+
+#### SQLite schema guard
+
+生产环境 SQLite 已经有 `assets` 表，不能指望 `CREATE TABLE IF NOT EXISTS` 自动补新列。
+
+新增字段必须走增量迁移：
+
+```ts
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN team_id TEXT DEFAULT 'default-team'`);
+} catch { /* column already exists */ }
+```
+
+建议封装成 `addColumnIfMissing(table, column, ddl)` 或同等 helper，避免后续继续复制 try/catch。若本轮时间允许，可以增加极简 `schema_migrations` 记录；如果不加，也必须保证每个新增列都是幂等 ALTER。
+
+第一版只允许：
+
+- `ALTER TABLE ADD COLUMN`。
+- 给新列设置安全默认值。
+- 新增索引。
+
+第一版不允许：
+
+- 改已有列类型。
+- 改已有列含义。
+- 删除列。
+- 重建 `assets` 表。
+
 #### 存储保护建议
 
 第一版用当前云服务器存储，但必须加保护：
@@ -518,6 +689,7 @@ h5-video-tool/src/pages/AssetLibraryPage/*
 - Private Assets 仍只对 owner 可见。
 - 查询层有统一 owner/team helper。
 - 超过文件大小或容量限制时有明确错误文案。
+- 新增 schema 字段全部通过 `ALTER TABLE ADD COLUMN` guard，已有数据可启动、可查询、可回滚到旧逻辑。
 
 ### Run 3 - Asset Preprocessing Gap Fill
 
@@ -544,11 +716,13 @@ reuse service
 
 #### 下一步只补缺口
 
-- 前端筛选和展示是否足够好。
-- 重复素材提示是否能被用户理解。
-- team category 是否能人工修正。
-- Banner 是否能识别可用主视觉、Logo、玩法截图。
-- Drive 导入后是否复用同一套预处理。
+Run 3 不再用开放式问题定义范围，只执行 Run 0 checklist 中明确标记为缺失的项。候选缺口如下：
+
+- 前端缺少某个筛选维度。
+- 重复素材没有用户可理解的提示。
+- team category 不能人工修正或修正后不能被 Campaign/Banner 读取。
+- Banner 不能识别可用主视觉、Logo、玩法截图。
+- Drive 导入后没有复用同一套预处理。
 
 #### 建议文件
 
@@ -644,7 +818,9 @@ h5-video-tool/src/components/campaign/outputPlan.ts
 
 #### 进入条件
 
-- Run 4 中至少 5 个 Campaign Banner prompt 被人工标记为可用或需小修。
+- Run 4 中至少 5 个 Campaign Banner prompt 被人工标记为 `usable` 或 `needs_fix`。
+- 标记者必须是实际使用者或项目 owner，不使用模型自评作为进入条件。
+- 5 个样例必须至少覆盖 2 个 Campaign 和 2 个 Banner spec，避免只验证单一场景。
 - 用户明确认为“看不到预览”影响判断效率。
 
 ### Run 5 - Output To Distribution Bridge Upgrade
@@ -762,6 +938,13 @@ visibility = team
 | Window A | Run 0 + Run 1A + Run 1B | 都围绕 Campaign Output Plan / Workbench / 文本生产，文件边界接近 |
 | Window B | Run 2 + Run 3 | 都围绕 Asset Library / 后端 asset schema / 前端素材库，文件边界接近 |
 
+并行限制：
+
+- `h5-video-tool/src/components/campaign/outputPlan.ts` 由 Window A 负责，Window B 不改。
+- `h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx` 由 Window A 负责，Window B 只通过已定义的 Asset API / contract 对接。
+- `h5-video-tool-api/src/db/assetDb.ts`、Asset Library routes/services 由 Window B 负责，Window A 不改。
+- 如 Run 4 需要同时碰 Campaign 和 Asset Library，必须等 Run 1A/1B/2 的 commit 都合入后再开。
+
 等 Window B 的 Team Assets 基本可用后，再开：
 
 | 窗口 | 负责内容 |
@@ -784,6 +967,8 @@ Run 5 Distribution Bridge 建议单独做，避免同时改 Campaign 和 Distrib
 - 不接对象存储 / EMC。
 - 不让 Google Drive 成为主存储。
 - 不碰 AGENTS.md 禁止修改的底层视频生成服务。
+- 不在 SQLite 里改已有列含义或重建 `assets` 表。
+- 不用模型自评替代人工标记来决定 Banner Preview 是否进入 Run 4.5。
 
 ## 9. 主要风险和处理方式
 
@@ -794,24 +979,55 @@ Run 5 Distribution Bridge 建议单独做，避免同时改 Campaign 和 Distrib
 | Coverage 指标虚高 | 中 | True coverage 不包含 `brief_ready` |
 | Banner MVP 变成设计器 | 中 | Run 4 只做 prompt，不做预览；预览放 Run 4.5 |
 | `default-team` 形成技术债 | 中 | 所有 team 逻辑通过 helper，保留迁移说明 |
+| SQLite schema 变更难回滚 | 中 | 只做 ADD COLUMN + 默认值 + 索引，不改旧列、不重建表 |
 | 文本产物变成泛泛 AI 文案 | 中 | 强制绑定 platform / angle / selling point / forbidden claims / citations |
+| 两窗口同时改核心 Campaign 文件 | 中 | `outputPlan.ts` / `CampaignOutputWorkbench.tsx` 归 Window A，Asset Library 归 Window B |
 | 服务器磁盘增长过快 | 中 | 单文件上限、team 容量软限制、容量展示、后续对象存储迁移 |
 | Drive 文件变化影响生产链路 | 低 | 导入时复制到 GOBS，本地 assetId 成为主引用 |
+| Coverage 无法回看趋势 | 低 | Workbench 加轻量 `logCoverageEvent`，只记录计数和 readiness，不记录敏感素材内容 |
 
-## 10. OpenClaw Review 问题清单
+## 10. OpenClaw Review 结论固化
 
-请 OpenClaw 重点帮忙确认以下问题：
+第二轮 review 已把上一版问题转成以下执行结论：
 
-1. 现有 `ProductionCapability` 是否已经有历史数据依赖？如果有，V2 的 UI 映射方案是否足够安全？
-2. `cta_set` 应该作为新的 `ProductionItemType`，还是作为 `ProducedOutputKind` / `post_copy` 内部字段？
-3. `platform_post_pack` 是否应该只是 UI 分组，而不是落库类型？
-4. 当前 `assetDb.ts` 中是否已经有 production 环境迁移风险？新增 `team_id / visibility / storage_provider / source_provider` 是否需要单独 migration guard？
-5. `default-team` MVP 是否可接受？如果不可接受，最小 team model 应该是什么？
-6. Banner Prompt MVP 不做预览是否足够支撑第一轮验证？
-7. True Production Coverage 排除 `brief_ready` 是否合理？
-8. Drive 导入是否只需要补“写入 Team Asset”这一段？现有 Drive Browser 是否可直接复用？
+| # | 结论 | 执行动作 |
+|---|---|---|
+| 1 | `ProductionCapability` 有历史数据和白名单依赖 | 不替换，使用 UI readiness 映射 |
+| 2 | CTA 不需要独立生产动作 | 新增 `ProducedOutputKind = 'cta'`，不新增 item type |
+| 3 | `platform_post_pack` 只是用户视角分组 | 纯 UI grouping，不落库 |
+| 4 | SQLite 新字段必须有 migration guard | `assetDb.ts` 只用 `ALTER TABLE ADD COLUMN` + 默认值 |
+| 5 | `default-team` MVP 可接受 | 通过 `resolveTeamId()` helper 使用，并保留迁移脚本草案 |
+| 6 | Banner Prompt 不做预览足够支撑第一轮 | Run 4 验证字段和 prompt，Run 4.5 由人工标记门控 |
+| 7 | `brief_ready` 不应计入 True Coverage | 单独作为 Assistive Coverage 展示 |
+| 8 | Drive 导入主要缺写入 Team Asset | 复用现有 Drive Browser/cache/download，补 asset ingest 和 metadata |
 
-## 11. 下一步可执行动作
+## 11. Coverage 事件记录建议
+
+Run 1A 可以加一个很轻的 coverage event helper，方便后续判断覆盖率是否真的提升。
+
+第一版只记录聚合计数，不记录 prompt、素材文件名、用户输入全文：
+
+```ts
+type CampaignCoverageEvent = {
+  campaignId?: string;
+  outputPlanId?: string;
+  totalItems: number;
+  autoReady: number;
+  templateReady: number;
+  briefReady: number;
+  needsSourceAsset: number;
+  unsupported: number;
+  createdAt: string;
+};
+```
+
+落地方式可以先选最轻的：
+
+- 前端 console/debug helper + 单元测试。
+- 或后端 Output Plan metadata 字段。
+- 不要为了这个指标单独新建 analytics 系统。
+
+## 12. 下一步可执行动作
 
 建议下一次开发从这个 run 开始：
 
@@ -834,4 +1050,3 @@ Run 1B - Text Production Pack Prompt Strategy
 ```
 
 这样可以避免一上来就改 enum、改 schema、改 Workbench，稳一点。不是保守，是别让系统在地基上玩极限运动。
-
