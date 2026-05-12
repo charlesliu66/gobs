@@ -43,3 +43,18 @@ Notes:
 - `Editable Files (Builder Ownership)` is the primary scope input for workflow guard checks.
 - `Additional Forbidden Paths` are merged with the global forbidden list from `AGENTS.md`.
 - Keep `Read-Only References` focused so future agents do not reload the whole repo.
+
+Optional extension for Codex main-thread orchestration:
+
+```markdown
+## Orchestration Snapshot
+- Main thread owner:
+- Agent A assignment:
+- Agent B assignment:
+- Agent C assignment:
+- Heartbeat cadence:
+- Last heartbeat review:
+- Blocked lanes:
+```
+
+Use this block only when one main thread is coordinating multiple sub-agents or windows for the same run family. Keep it compact and treat it as a live status snapshot, not a full narrative log.

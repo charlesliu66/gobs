@@ -128,6 +128,17 @@ Only one release owner should execute:
 
 This avoids the "one person built it, another person half-released it" drift that already caused confusion in prior runs.
 
+## Codex Main-Thread Variant
+
+When you want one Codex conversation to coordinate multiple lanes internally, use:
+
+- `docs/guides/2026-05-11-main-thread-subagent-heartbeat-runbook.md`
+  - repo-specific operating model for one main thread, two Dev Worker sub-agents, one Release Owner sub-agent, plus a thread heartbeat
+- `docs/workflow/prompts/main-thread-subagent-heartbeat-orchestrator.md`
+  - reusable prompt for the main dispatch thread
+
+This variant is for sub-agents inside one thread. If you are coordinating fully separate windows, keep using shared run artifacts plus the existing handoff guide instead of expecting cross-window auto-dispatch.
+
 ## Recommended Escalations
 
 Escalate to the user only when:

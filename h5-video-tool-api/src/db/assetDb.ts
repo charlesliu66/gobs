@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Database = require('better-sqlite3');
 
+const DEFAULT_TEAM_ID = 'default-team';
+
 const dbPath = resolvePath('db', 'assets.db');
 
 // 确保目录存在
@@ -42,6 +44,13 @@ db.exec(`
     ai_category TEXT DEFAULT '未分类',
     ai_description TEXT,
     team_category TEXT,
+    team_id TEXT DEFAULT '${DEFAULT_TEAM_ID}',
+    visibility TEXT DEFAULT 'private',
+    storage_provider TEXT DEFAULT 'local',
+    storage_key TEXT,
+    source_provider TEXT DEFAULT 'upload',
+    source_external_id TEXT,
+    source_name TEXT,
     folder_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -116,6 +125,27 @@ try {
   db.exec(`ALTER TABLE assets ADD COLUMN team_category TEXT`);
 } catch { /* column already exists */ }
 try {
+  db.exec(`ALTER TABLE assets ADD COLUMN team_id TEXT DEFAULT '${DEFAULT_TEAM_ID}'`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN visibility TEXT DEFAULT 'private'`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN storage_provider TEXT DEFAULT 'local'`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN storage_key TEXT`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN source_provider TEXT DEFAULT 'upload'`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN source_external_id TEXT`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE assets ADD COLUMN source_name TEXT`);
+} catch { /* column already exists */ }
+try {
   db.exec(`ALTER TABLE assets ADD COLUMN folder_id TEXT`);
 } catch { /* column already exists */ }
 
@@ -131,8 +161,67 @@ try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_team_category ON assets(team_category)`);
 } catch { /* index or column issue */ }
 try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_team_id ON assets(team_id)`);
+} catch { /* index or column issue */ }
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_visibility ON assets(visibility)`);
+} catch { /* index or column issue */ }
+try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_deleted ON assets(deleted_at)`);
 } catch { /* index or column issue */ }
+
+try {
+  db.exec(`
+    UPDATE assets
+    SET team_id = '${DEFAULT_TEAM_ID}'
+    WHERE team_id IS NULL OR trim(team_id) = ''
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET visibility = 'private'
+    WHERE visibility IS NULL OR visibility NOT IN ('private', 'team')
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET storage_provider = 'local'
+    WHERE storage_provider IS NULL OR trim(storage_provider) = ''
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET storage_key = filepath
+    WHERE storage_key IS NULL OR trim(storage_key) = ''
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET source_provider = CASE
+      WHEN project_id = 'character-library' THEN 'generated'
+      ELSE 'upload'
+    END
+    WHERE source_provider IS NULL OR trim(source_provider) = ''
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET source_name = filename
+    WHERE source_name IS NULL OR trim(source_name) = ''
+  `);
+} catch { /* column may not exist yet */ }
+try {
+  db.exec(`
+    UPDATE assets
+    SET source_provider = 'generated'
+    WHERE project_id = 'character-library' AND source_provider = 'upload'
+  `);
+} catch { /* column may not exist yet */ }
 
 export default db;
 export { Database };

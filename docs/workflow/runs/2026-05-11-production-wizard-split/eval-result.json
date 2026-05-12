@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-11-production-wizard-split",
+  "timestamp": "2026-05-12T01:43:23Z",
+  "checks": {
+    "backend_build": { "status": "fail", "error": "npm run build failed" },
+    "frontend_build": { "status": "pass", "error": "" },
+    "typescript": { "status": "fail", "errors": ["src/routes/assetLibrary.ts(514,48): error TS1002: Unterminated string literal.\r\nsrc/routes/assetLibrary.ts(515,5): error TS1005: ',' expected.\r\nsrc/routes/assetLibrary.ts(515,11): error TS1005: ':' expected.\r\nsrc/routes/assetLibrary.ts(517,3): error TS1005: ',' expected.\r\nsrc/routes/assetLibrary.ts(531,2): error TS1128: Declaration or statement expected."] },
+    "api_health": { "status": "skip", "code": 0 },
+    "smoke_tests": []
+  },
+  "verdict": "P0_FAIL"
+}

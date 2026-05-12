@@ -76,6 +76,8 @@ Campaign 素材生产覆盖率提升
 | Banner 第一版 | 只做 prompt，不做预览 | 先验证字段、素材引用和 prompt 是否可用 |
 | `brief_ready` | 不计入 True Production Coverage | 用户感知是“系统给制作说明”，不是“平台帮我做完” |
 
+补充约束：Banner 在当前阶段如果只产出 `prompt placeholder / structured prompt`，即使已经可以交付给图像模型或设计同学，也只能归入 `template_ready`，不能和 caption / headline / CTA 这类 `auto_ready` 文本产物按同强度计算。
+
 ### 2.4 覆盖率口径要拆开
 
 原方案的 `Campaign Output Coverage Rate = 可推进产物数 / 总产物数` 需要细分，否则 `brief_ready` 会把指标虚高。
@@ -92,11 +94,15 @@ V2 采用三个指标：
 
 ```text
 True Production Coverage = auto_ready + template_ready
+Direct Production Coverage = auto_ready
+Template Production Coverage = template_ready
 Assistive Coverage = brief_ready
 Blocked = needs_source_asset + unsupported
 ```
 
 `brief_ready` 不能算进真实覆盖率，只能单独展示为“可辅助推进”。
+
+Workbench 第一版至少要同时展示 `True Production Coverage`、`Direct Production Coverage` 和 `Template Production Coverage`。这样即使对外保留一个总指标，内部也不会把“可直接生成文本”和“可交付 Banner prompt”混成同一档次。
 
 ## 3. 当前代码事实盘点
 
@@ -211,6 +217,27 @@ h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx
 ```
 
 下一步应增强这个 Workbench，而不是新建一个平行 Workbench。
+
+### 3.5 Banner Output 基础已存在
+
+现有运行基础已经包括：
+
+```text
+h5-video-tool/src/components/campaign/outputPlan.ts
+h5-video-tool/src/components/campaign/CampaignOutputWorkbench.tsx
+h5-video-tool-api/src/services/campaignOutputPlan.ts
+h5-video-tool-api/tests/campaignOutputPlan.test.ts
+h5-video-tool/tests/campaignOutputPlan.test.ts
+```
+
+当前已经存在的事实：
+
+- Banner spec 已有 1:1 / 4:5 / 9:16 / 16:9。
+- Banner 已可引用 Asset Library `assetId` 作为 source asset。
+- Banner 已有 prompt placeholder、produced output 和 quality mark。
+- Distribution Package 已能携带 Banner prompt context，但它不是可直接发布的真实图片产物。
+
+所以 Run 4 不应再定义为“从 0 到 1 的 Banner MVP”，而应定义为“基于现有 Banner path 的 prompt hardening / coverage reclassification / asset-fit 加固”。
 
 ## 4. 兼容策略
 
@@ -604,6 +631,12 @@ default-team
 - 不能在业务代码各处散落硬编码 `default-team`。
 - 文档里写清楚：未来真实 team 系统上线时，`default-team` 数据如何迁移或归属。
 
+边界再写死一层：
+
+- Run 2 第一版只服务“单共享 team MVP”，不把 `default-team` 误写成正式 team model。
+- 如果在真实使用中出现第二个 team、跨 team 可见性、或按 team 做配额隔离的要求，必须停在当前 MVP，单独开 team model run。
+- `default-team` 只能出现在 helper、迁移脚本和测试 fixture 中，不能直接出现在页面业务逻辑和查询拼装里。
+
 迁移草案：
 
 ```sql
@@ -746,15 +779,17 @@ h5-video-tool/src/pages/AssetLibraryPage/*
 - 重复文件能提示“已存在 / 可复用”。
 - Campaign/Banner 选择素材时能优先看到适配素材。
 
-### Run 4 - Campaign Banner Prompt MVP
+### Run 4 - Campaign Banner Prompt Hardening
 
 #### 目标
 
-补齐 Banner 生产链路的第一步：让用户能从 Campaign brief + Team Asset 生成可交付给图像模型或设计同事的 Banner prompt。
+不是重做 Banner MVP，而是在已有 Banner Output path 上加固 prompt 可交付性、资产匹配度和 coverage 口径，让用户能从 Campaign brief + Team Asset 稳定得到可交付给图像模型或设计同事的 Banner prompt。
 
 #### 关键范围收缩
 
 原方案提到“前端模板预览”，V2 第一版先不做。
+
+本轮默认以 `ce212be` 已经合入的 Banner Output MVP 为基础，只允许在现有 `banner` item type、produced output 和 package context 上做增量加固。
 
 Run 4 只做：
 
@@ -782,10 +817,11 @@ prompt
 - 不做拖拽图层。
 - 不做复杂模板预览。
 - 不承诺直接生成最终 Banner 图片。
+- 不把 Banner prompt-only 产物标记成 `auto_ready`。
 
 #### 为什么要这么卡范围
 
-当前最紧急的问题是“Campaign 拆出来的 Banner 任务无法推进”，不是“Banner 设计器不够强”。Prompt MVP 可以先让 Banner 从 unsupported / manual 进入可推进状态，并验证字段是否够用。
+当前最紧急的问题不是“没有 Banner 占位”，而是“现有 Banner path 还不够稳定地被交付给下游”。这轮目标是把现有 banner prompt path 从“有 placeholder”提升到“可稳定交付”，而不是把它扩展成半个设计工具。
 
 #### 建议文件
 
@@ -802,6 +838,7 @@ h5-video-tool/src/components/campaign/outputPlan.ts
 - 能生成结构化 Banner prompt。
 - Banner prompt 能保存为 produced output。
 - Banner prompt 能进入 Distribution Package 作为素材包上下文。
+- Workbench / coverage summary 里 Banner prompt 必须显示为 `template_ready`，不能和 `caption/headline/cta` 同档计入 `auto_ready`。
 
 ### Run 4.5 - Banner Template Preview
 
@@ -908,7 +945,7 @@ visibility = team
 
 1. Run 2 - Team Asset Visibility & Storage Guard
 2. Run 3 - Asset Preprocessing Gap Fill
-3. Run 4 - Campaign Banner Prompt MVP
+3. Run 4 - Campaign Banner Prompt Hardening
 
 说明：Run 2/3 优先级高于 Banner，因为 Banner 必须引用可靠素材。Run 4 不等 Drive 导入，可以先用上传素材和现有素材跑通。
 
@@ -917,7 +954,7 @@ visibility = team
 1. Run 5 - Output To Distribution Bridge Upgrade
 2. Run 6 - Google Drive Import Into Team Library
 
-说明：Drive 导入是素材来源增强，不是 Banner MVP 的硬前置。
+说明：Drive 导入是素材来源增强，不是 Run 4 Banner Prompt Hardening 的硬前置。
 
 ### 可选后续
 
@@ -949,7 +986,7 @@ visibility = team
 
 | 窗口 | 负责内容 |
 |---|---|
-| Window A 或新窗口 | Run 4 Banner Prompt MVP |
+| Window A 或新窗口 | Run 4 Banner Prompt Hardening |
 | Window B | Run 6 Drive Import Into Team Library |
 
 Run 5 Distribution Bridge 建议单独做，避免同时改 Campaign 和 Distribution 两端导致冲突。
@@ -963,12 +1000,14 @@ Run 5 Distribution Bridge 建议单独做，避免同时改 Campaign 和 Distrib
 - 不新建与现有 `assetDb.ts` / `assetLibrary.ts` / `DriveBrowser.tsx` 同名或同职责模块。
 - 不做复杂 Banner 设计器。
 - 不做 Banner 自由画布 / 拖拽图层。
+- 不把 Banner prompt-only 产物算成 `auto_ready` 或等同于“已完成视觉产物”。
 - 不把 `brief_ready` 算进真实生产覆盖率。
 - 不接对象存储 / EMC。
 - 不让 Google Drive 成为主存储。
 - 不碰 AGENTS.md 禁止修改的底层视频生成服务。
 - 不在 SQLite 里改已有列含义或重建 `assets` 表。
 - 不用模型自评替代人工标记来决定 Banner Preview 是否进入 Run 4.5。
+- 如果出现第二个真实 team 或跨 team 权限要求，不继续在 `default-team` MVP 上外推，而是单独开 team model run。
 
 ## 9. 主要风险和处理方式
 
@@ -977,8 +1016,8 @@ Run 5 Distribution Bridge 建议单独做，避免同时改 Campaign 和 Distrib
 | 枚举迁移破坏已有数据 | 高 | 只做 UI readiness 映射，不替换落库 capability |
 | 重复建设已有模块 | 高 | Run 0 先做代码审计，后续 Run 必须标明复用文件 |
 | Coverage 指标虚高 | 中 | True coverage 不包含 `brief_ready` |
-| Banner MVP 变成设计器 | 中 | Run 4 只做 prompt，不做预览；预览放 Run 4.5 |
-| `default-team` 形成技术债 | 中 | 所有 team 逻辑通过 helper，保留迁移说明 |
+| Banner Hardening 变成设计器 | 中 | Run 4 只做 prompt，不做预览；预览放 Run 4.5 |
+| `default-team` 形成技术债 | 中 | 所有 team 逻辑通过 helper，保留迁移说明；如果出现第二个真实 team 需求，立即停止外推 MVP，单独开 team model run |
 | SQLite schema 变更难回滚 | 中 | 只做 ADD COLUMN + 默认值 + 索引，不改旧列、不重建表 |
 | 文本产物变成泛泛 AI 文案 | 中 | 强制绑定 platform / angle / selling point / forbidden claims / citations |
 | 两窗口同时改核心 Campaign 文件 | 中 | `outputPlan.ts` / `CampaignOutputWorkbench.tsx` 归 Window A，Asset Library 归 Window B |
@@ -1050,3 +1089,5 @@ Run 1B - Text Production Pack Prompt Strategy
 ```
 
 这样可以避免一上来就改 enum、改 schema、改 Workbench，稳一点。不是保守，是别让系统在地基上玩极限运动。
+
+如果 Run 0 被采纳为正式下一阶段主线，同步更新 `docs/TASK-INDEX.md` 和 `docs/plans/README.md`，把“Campaign 素材生产覆盖率 V2”明确写成当前承接主线，避免任务入口仍然沿用 05-08 / 05-09 那批旧主线表述。

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TASK-A: 资产中台路由
  * 前缀: /api/asset-library
  * 全部需要 JWT 鉴权（由全局 jwtAuthMiddleware 保障）
@@ -25,6 +25,16 @@ import {
   searchAssets,
   getFacets,
 } from '../services/assetSearchService.js';
+import {
+  canActorReadAsset,
+  normalizeAssetOwnershipScope,
+  normalizeAssetSourceProvider,
+  normalizeAssetStorageProvider,
+  normalizeAssetVisibility,
+  resolveActorTeamId,
+  type AssetOwnershipScope,
+  type AssetVisibility,
+} from '../services/assetLibrary.js';
 import { getHighlightCandidates } from '../services/assetHighlightService.js';
 import { getThumbPath, ensureThumbnail } from '../services/assetThumbnailService.js';
 import { buildAssetReuseFields, isTeamAssetCategory } from '../services/assetReuseService.js';
@@ -85,13 +95,111 @@ function requireUser(req: Request, res: Response): string | null {
   return username;
 }
 
-function addAssetResponseFields(item: Record<string, unknown>, token: string) {
+function getUsernameFromRequestOrToken(req: Request, res: Response): string | null {
+  if (req.user?.username) {
+    return req.user.username;
+  }
+
+  const queryToken = req.query.token as string | undefined;
+  if (!queryToken) {
+    res.status(401).json({ error: '未鉴权' });
+    return null;
+  }
+
+  const secret = process.env.JWT_SECRET || 'gobs-secret-change-in-production';
+  try {
+    const payload = jwt.verify(queryToken, secret) as { username: string };
+    return payload.username;
+  } catch {
+    res.status(401).json({ error: 'token 无效或已过期' });
+    return null;
+  }
+}
+
+interface ActorContext {
+  username: string;
+  teamId: string;
+}
+
+function getActorContext(username: string): ActorContext {
+  return {
+    username,
+    teamId: resolveActorTeamId(username),
+  };
+}
+
+function parseVisibilityParam(value: unknown): AssetVisibility | undefined {
+  if (value !== 'private' && value !== 'team') {
+    return undefined;
+  }
+  return normalizeAssetVisibility(value);
+}
+
+function buildAssetReadConditions(
+  alias: string,
+  actor: ActorContext,
+  scope: AssetOwnershipScope,
+  visibility?: AssetVisibility,
+): { conditions: string[]; params: Record<string, string> } {
+  const prefix = alias ? `${alias}.` : '';
+  const conditions: string[] = [];
+  const params: Record<string, string> = {
+    username: actor.username,
+    actorTeamId: actor.teamId,
+  };
+
+  if (scope === 'team') {
+    conditions.push(`${prefix}visibility = 'team'`);
+    conditions.push(`${prefix}team_id = @actorTeamId`);
+  } else if (scope === 'all') {
+    conditions.push(`(${prefix}username = @username OR (${prefix}visibility = 'team' AND ${prefix}team_id = @actorTeamId))`);
+  } else {
+    conditions.push(`${prefix}username = @username`);
+  }
+
+  if (visibility) {
+    conditions.push(`${prefix}visibility = @visibility`);
+    params.visibility = visibility;
+  }
+
+  return { conditions, params };
+}
+
+function canActorReadAssetRecord(item: Record<string, unknown>, actor: ActorContext): boolean {
+  return canActorReadAsset(
+    {
+      ownerId: typeof item.username === 'string' ? item.username : undefined,
+      teamId: typeof item.team_id === 'string' ? item.team_id : undefined,
+      visibility: typeof item.visibility === 'string' ? normalizeAssetVisibility(item.visibility) : undefined,
+    },
+    actor,
+  );
+}
+
+function addAssetResponseFields(item: Record<string, unknown>, token: string, actor: ActorContext) {
   const id = item.id as string;
   const fileUrl = `/api/asset-library/assets/${id}/file?token=${encodeURIComponent(token)}`;
   const thumbUrl = `/api/asset-library/assets/${id}/thumb?token=${encodeURIComponent(token)}`;
   const thumbExists = item.filepath ? fs.existsSync(getThumbPath(item.filepath as string)) : false;
+  const ownerId = typeof item.username === 'string' ? item.username : '';
+  const sourceProvider = normalizeAssetSourceProvider(
+    item.source_provider ?? (item.project_id === 'character-library' ? 'generated' : 'upload'),
+  );
   return {
     ...item,
+    owner_id: ownerId,
+    team_id: typeof item.team_id === 'string' && item.team_id.trim() ? item.team_id : resolveActorTeamId(ownerId),
+    visibility: normalizeAssetVisibility(item.visibility),
+    storage_provider: normalizeAssetStorageProvider(item.storage_provider),
+    storage_key: typeof item.storage_key === 'string' && item.storage_key.trim()
+      ? item.storage_key
+      : (item.filepath as string | undefined) ?? '',
+    source_provider: sourceProvider,
+    source_external_id: typeof item.source_external_id === 'string' ? item.source_external_id : null,
+    source_name: typeof item.source_name === 'string' && item.source_name.trim()
+      ? item.source_name
+      : (item.filename as string | undefined) ?? '',
+    owned_by_actor: ownerId === actor.username,
     ...buildAssetReuseFields(item as never, { thumbnailReady: thumbExists }),
     file_url: fileUrl,
     thumbnail_url: thumbExists ? thumbUrl : fileUrl,
@@ -175,9 +283,12 @@ function attachTags(items: Array<Record<string, unknown>>): Array<Record<string,
 router.get('/assets', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '20', 10)));
+  const scope = normalizeAssetOwnershipScope(req.query.scope);
+  const visibility = parseVisibilityParam(req.query.visibility);
 
   const aiCategory = typeof req.query.ai_category === 'string' ? req.query.ai_category : '';
   const folderId = typeof req.query.folder_id === 'string' ? req.query.folder_id : '';
@@ -195,6 +306,9 @@ router.get('/assets', (req: Request, res: Response) => {
     username, page, pageSize, filters,
     aiCategory: aiCategory || undefined,
     folderId: folderId || undefined,
+    actorTeamId: actor.teamId,
+    scope,
+    visibility,
   });
 
   const token = req.headers.authorization?.slice(7) ?? '';
@@ -206,7 +320,7 @@ router.get('/assets', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token),
+    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token, actor),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
@@ -233,16 +347,19 @@ router.get('/assets/:id/thumb', (req: Request, res: Response) => {
       return;
     }
   }
+  const actor = getActorContext(username);
 
   const { id: assetId } = req.params;
   const asset = db.prepare(
-    `SELECT id, username, filepath, mimetype FROM assets WHERE id = @id`
-  ).get({ id: assetId }) as { id: string; username: string; filepath: string; mimetype: string } | undefined;
+    `SELECT id, username, team_id, visibility, filepath, mimetype FROM assets WHERE id = @id`
+  ).get({ id: assetId }) as Record<string, unknown> | undefined;
 
   if (!asset) { res.status(404).json({ error: '资产不存在' }); return; }
-  if (asset.username !== username) { res.status(403).json({ error: '无权访问' }); return; }
+  if (!canActorReadAssetRecord(asset, actor)) { res.status(403).json({ error: '无权访问' }); return; }
 
-  const thumbPath = getThumbPath(asset.filepath);
+  const filepath = asset.filepath as string;
+  const mimetype = (asset.mimetype as string) || 'application/octet-stream';
+  const thumbPath = getThumbPath(filepath);
   if (fs.existsSync(thumbPath)) {
     res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Cache-Control', 'private, max-age=86400');
@@ -255,11 +372,11 @@ router.get('/assets/:id/thumb', (req: Request, res: Response) => {
   }
 
   // 缩略图不存在时异步生成并回退到原文件
-  void ensureThumbnail(asset.filepath, asset.mimetype);
-  if (fs.existsSync(asset.filepath)) {
-    res.setHeader('Content-Type', asset.mimetype || 'application/octet-stream');
+  void ensureThumbnail(filepath, mimetype);
+  if (fs.existsSync(filepath)) {
+    res.setHeader('Content-Type', mimetype);
     res.setHeader('Cache-Control', 'private, max-age=3600');
-    const stream = fs.createReadStream(asset.filepath);
+    const stream = fs.createReadStream(filepath);
     stream.pipe(res);
     stream.on('error', () => {
       if (!res.headersSent) res.status(500).json({ error: '文件读取失败' });
@@ -291,29 +408,33 @@ router.get('/assets/:id/file', (req: Request, res: Response) => {
       return;
     }
   }
+  const actor = getActorContext(username);
 
   const { id: assetId } = req.params;
   const asset = db.prepare(
-    `SELECT id, username, filepath, mimetype, filename FROM assets WHERE id = @id`
-  ).get({ id: assetId }) as { id: string; username: string; filepath: string; mimetype: string; filename: string } | undefined;
+    `SELECT id, username, team_id, visibility, filepath, mimetype, filename FROM assets WHERE id = @id`
+  ).get({ id: assetId }) as Record<string, unknown> | undefined;
 
   if (!asset) {
     res.status(404).json({ error: '资产不存在' });
     return;
   }
-  if (asset.username !== username) {
+  if (!canActorReadAssetRecord(asset, actor)) {
     res.status(403).json({ error: '无权访问他人资产' });
     return;
   }
-  if (!fs.existsSync(asset.filepath)) {
+  const filepath = asset.filepath as string;
+  const mimetype = (asset.mimetype as string) || 'application/octet-stream';
+  const filename = (asset.filename as string) || 'asset';
+  if (!fs.existsSync(filepath)) {
     res.status(404).json({ error: '文件不存在' });
     return;
   }
 
-  res.setHeader('Content-Type', asset.mimetype || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.filename)}"`);
+  res.setHeader('Content-Type', mimetype);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');
-  const stream = fs.createReadStream(asset.filepath);
+  const stream = fs.createReadStream(filepath);
   stream.pipe(res);
   stream.on('error', () => {
     if (!res.headersSent) res.status(500).json({ error: '文件读取失败' });
@@ -326,19 +447,20 @@ router.get('/assets/:id/file', (req: Request, res: Response) => {
 router.get('/assets/:id/highlights', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const { id: assetId } = req.params;
 
   // 验证资产归属
-  const asset = db.prepare(`SELECT id, username FROM assets WHERE id = @id`).get({ id: assetId }) as
-    | { id: string; username: string }
+  const asset = db.prepare(`SELECT id, username, team_id, visibility FROM assets WHERE id = @id`).get({ id: assetId }) as
+    | Record<string, unknown>
     | undefined;
 
   if (!asset) {
     res.status(404).json({ error: '资产不存在' });
     return;
   }
-  if (asset.username !== username) {
+  if (!canActorReadAssetRecord(asset, actor)) {
     res.status(403).json({ error: '无权访问他人资产' });
     return;
   }
@@ -422,6 +544,7 @@ router.patch('/assets/:id/tags', (req: Request, res: Response) => {
 router.patch('/assets/:id/category', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const { id: assetId } = req.params;
   const { teamCategory, team_category: snakeTeamCategory } = req.body as {
@@ -465,7 +588,7 @@ router.patch('/assets/:id/category', (req: Request, res: Response) => {
 
   const updated = db.prepare(`SELECT * FROM assets WHERE id = @id`).get({ id: assetId }) as Record<string, unknown>;
   const token = req.headers.authorization?.slice(7) ?? '';
-  const withTags = attachTags([addAssetResponseFields(updated, token)])[0];
+  const withTags = attachTags([addAssetResponseFields(updated, token, actor)])[0];
   res.json({ ok: true, asset: withTags });
 });
 
@@ -584,11 +707,14 @@ router.get('/pending-tags', (req: Request, res: Response) => {
 router.get('/search', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '20', 10)));
   const aiCategory = typeof req.query.ai_category === 'string' ? req.query.ai_category : '';
+  const scope = normalizeAssetOwnershipScope(req.query.scope);
+  const visibility = parseVisibilityParam(req.query.visibility);
 
   const FILTER_KEYS = ['ratio', 'type', 'orientation', 'duration_range', 'quality', 'character', 'scene', 'purpose'];
   const filters: Record<string, string> = {};
@@ -599,7 +725,17 @@ router.get('/search', (req: Request, res: Response) => {
     }
   }
 
-  const result = searchAssets({ username, q, page, pageSize, filters, aiCategory });
+  const result = searchAssets({
+    username,
+    q,
+    page,
+    pageSize,
+    filters,
+    aiCategory,
+    actorTeamId: actor.teamId,
+    scope,
+    visibility,
+  });
   const token = req.headers.authorization?.slice(7) ?? '';
 
   const favoriteSet = new Set(
@@ -609,7 +745,7 @@ router.get('/search', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = result.items.map((item) => ({
-    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token),
+    ...addAssetResponseFields(item as unknown as Record<string, unknown>, token, actor),
     is_favorite: favoriteSet.has(item.id),
   }));
   const assetsWithTags = attachTags(itemsWithUrl as Array<Record<string, unknown>>);
@@ -621,8 +757,16 @@ router.get('/search', (req: Request, res: Response) => {
 router.get('/facets', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
+  const scope = normalizeAssetOwnershipScope(req.query.scope);
+  const visibility = parseVisibilityParam(req.query.visibility);
 
-  const result = getFacets(username);
+  const result = getFacets({
+    username,
+    actorTeamId: actor.teamId,
+    scope,
+    visibility,
+  });
   res.json(result);
 });
 
@@ -632,13 +776,18 @@ router.get('/facets', (req: Request, res: Response) => {
 router.get('/categories', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
+  const scope = normalizeAssetOwnershipScope(req.query.scope);
+  const visibility = parseVisibilityParam(req.query.visibility);
+  const scoped = buildAssetReadConditions('', actor, scope, visibility);
 
   const rows = db.prepare(`
     SELECT COALESCE(team_category, ai_category, '未分类') as category, COUNT(*) as count
-    FROM assets WHERE username = @username AND deleted_at IS NULL
+    FROM assets
+    WHERE deleted_at IS NULL AND ${scoped.conditions.join(' AND ')}
     GROUP BY COALESCE(team_category, ai_category, '未分类')
     ORDER BY count DESC
-  `).all({ username }) as Array<{ category: string; count: number }>;
+  `).all(scoped.params) as Array<{ category: string; count: number }>;
 
   const total = rows.reduce((s, r) => s + r.count, 0);
   res.json({ categories: rows, total });
@@ -650,12 +799,17 @@ router.get('/categories', (req: Request, res: Response) => {
 router.post('/favorites/:assetId', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const { assetId } = req.params;
-  const asset = db.prepare(`SELECT id FROM assets WHERE id = @id AND username = @username`)
-    .get({ id: assetId, username }) as { id: string } | undefined;
+  const asset = db.prepare(`SELECT id, username, team_id, visibility FROM assets WHERE id = @id`)
+    .get({ id: assetId }) as Record<string, unknown> | undefined;
   if (!asset) {
     res.status(404).json({ error: '素材不存在' });
+    return;
+  }
+  if (!canActorReadAssetRecord(asset, actor)) {
+    res.status(403).json({ error: '无权访问' });
     return;
   }
 
@@ -741,6 +895,7 @@ router.delete('/favorites/:assetId', (req: Request, res: Response) => {
 router.get('/favorites', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || '24', 10)));
@@ -749,20 +904,22 @@ router.get('/favorites', (req: Request, res: Response) => {
   const total = (db.prepare(`
     SELECT COUNT(*) as cnt FROM asset_favorites f
     JOIN assets a ON f.asset_id = a.id
-    WHERE f.user_id = @username AND a.username = @username
-  `).get({ username }) as { cnt: number }).cnt;
+    WHERE f.user_id = @username
+      AND (a.username = @username OR (a.visibility = 'team' AND a.team_id = @actorTeamId))
+  `).get({ username, actorTeamId: actor.teamId }) as { cnt: number }).cnt;
 
   const items = db.prepare(`
     SELECT a.* FROM assets a
     JOIN asset_favorites f ON f.asset_id = a.id
-    WHERE f.user_id = @username AND a.username = @username
+    WHERE f.user_id = @username
+      AND (a.username = @username OR (a.visibility = 'team' AND a.team_id = @actorTeamId))
     ORDER BY f.created_at DESC
     LIMIT @limit OFFSET @offset
-  `).all({ username, limit: pageSize, offset }) as Array<Record<string, unknown>>;
+  `).all({ username, actorTeamId: actor.teamId, limit: pageSize, offset }) as Array<Record<string, unknown>>;
 
   const token = req.headers.authorization?.slice(7) ?? '';
   const itemsWithUrl = items.map((item) => ({
-    ...addAssetResponseFields(item, token),
+    ...addAssetResponseFields(item, token, actor),
     is_favorite: true,
   }));
   const assetsWithTags = attachTags(itemsWithUrl);
@@ -776,10 +933,21 @@ router.get('/favorites', (req: Request, res: Response) => {
 router.post('/usage', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const { assetId, context } = req.body as { assetId?: string; context?: string };
   if (!assetId) {
     res.status(400).json({ error: '缺少 assetId' });
+    return;
+  }
+  const asset = db.prepare(`SELECT id, username, team_id, visibility FROM assets WHERE id = @id`)
+    .get({ id: assetId }) as Record<string, unknown> | undefined;
+  if (!asset) {
+    res.status(404).json({ error: '素材不存在' });
+    return;
+  }
+  if (!canActorReadAssetRecord(asset, actor)) {
+    res.status(403).json({ error: '无权访问' });
     return;
   }
 
@@ -797,17 +965,19 @@ router.post('/usage', (req: Request, res: Response) => {
 router.get('/recent', (req: Request, res: Response) => {
   const username = requireUser(req, res);
   if (!username) return;
+  const actor = getActorContext(username);
 
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string || '50', 10)));
 
   const items = db.prepare(`
     SELECT a.*, MAX(u.used_at) as last_used_at FROM assets a
     JOIN asset_usage_log u ON u.asset_id = a.id
-    WHERE u.user_id = @username AND a.username = @username
+    WHERE u.user_id = @username
+      AND (a.username = @username OR (a.visibility = 'team' AND a.team_id = @actorTeamId))
     GROUP BY a.id
     ORDER BY last_used_at DESC
     LIMIT @limit
-  `).all({ username, limit }) as Array<Record<string, unknown>>;
+  `).all({ username, actorTeamId: actor.teamId, limit }) as Array<Record<string, unknown>>;
 
   const token = req.headers.authorization?.slice(7) ?? '';
 
@@ -818,7 +988,7 @@ router.get('/recent', (req: Request, res: Response) => {
   );
 
   const itemsWithUrl = items.map((item) => ({
-    ...addAssetResponseFields(item, token),
+    ...addAssetResponseFields(item, token, actor),
     is_favorite: favoriteSet.has(item.id as string),
   }));
   const assetsWithTags = attachTags(itemsWithUrl);

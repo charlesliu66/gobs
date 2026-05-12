@@ -11,6 +11,16 @@ import { getApiDataDir } from '../config/apiDataDir.js';
 import type { ProductionShot } from './studioPipeline.js';
 
 export type AssetType = 'character' | 'scene' | 'prop' | 'style';
+export type AssetVisibility = 'private' | 'team';
+export type AssetStorageProvider = 'local' | 'object_storage';
+export type AssetSourceProvider = 'upload' | 'google_drive' | 'generated' | 'imported';
+export type AssetOwnershipScope = 'my' | 'team' | 'all';
+
+export const DEFAULT_ASSET_TEAM_ID = 'default-team';
+
+const ASSET_VISIBILITY_SET = new Set<AssetVisibility>(['private', 'team']);
+const ASSET_STORAGE_PROVIDER_SET = new Set<AssetStorageProvider>(['local', 'object_storage']);
+const ASSET_SOURCE_PROVIDER_SET = new Set<AssetSourceProvider>(['upload', 'google_drive', 'generated', 'imported']);
 
 export interface Asset {
   id: string;
@@ -23,6 +33,15 @@ export interface Asset {
   gameVersion: string;
   description: string;
   thumbnailBase64?: string;
+  ownerId?: string;
+  teamId?: string;
+  visibility?: AssetVisibility;
+  storageProvider?: AssetStorageProvider;
+  storageKey?: string;
+  sourceProvider?: AssetSourceProvider;
+  sourceExternalId?: string;
+  sourceName?: string;
+  ownedByActor?: boolean;
 }
 
 export interface AssetIndex {
@@ -42,6 +61,110 @@ function getIndexPath(): string {
   return path.join(getApiDataDir(), 'asset-index.json');
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function resolveActorTeamId(_username?: string): string {
+  return DEFAULT_ASSET_TEAM_ID;
+}
+
+export function normalizeAssetVisibility(
+  value: unknown,
+  fallback: AssetVisibility = 'private',
+): AssetVisibility {
+  return ASSET_VISIBILITY_SET.has(value as AssetVisibility) ? value as AssetVisibility : fallback;
+}
+
+export function normalizeAssetStorageProvider(value: unknown): AssetStorageProvider {
+  return ASSET_STORAGE_PROVIDER_SET.has(value as AssetStorageProvider)
+    ? value as AssetStorageProvider
+    : 'local';
+}
+
+export function normalizeAssetSourceProvider(value: unknown): AssetSourceProvider {
+  return ASSET_SOURCE_PROVIDER_SET.has(value as AssetSourceProvider)
+    ? value as AssetSourceProvider
+    : 'upload';
+}
+
+export function normalizeAssetOwnershipScope(value: unknown): AssetOwnershipScope {
+  return value === 'team' || value === 'all' ? value : 'my';
+}
+
+export function normalizeLegacyAsset(
+  asset: Asset,
+  actorUsername?: string,
+): Asset {
+  const raw = asset as Asset & Record<string, unknown>;
+  const ownerId = readString(raw.ownerId) ?? readString(raw.owner_id);
+  const driveFileId = readString(raw.driveFileId) ?? readString(raw.drive_file_id);
+  const visibility = normalizeAssetVisibility(raw.visibility, ownerId ? 'private' : 'team');
+  const teamId = readString(raw.teamId) ?? readString(raw.team_id) ?? DEFAULT_ASSET_TEAM_ID;
+  const storageProvider = normalizeAssetStorageProvider(raw.storageProvider ?? raw.storage_provider);
+  const storageKey = readString(raw.storageKey) ?? readString(raw.storage_key) ?? raw.localPath ?? raw.file;
+  const sourceProvider = normalizeAssetSourceProvider(
+    raw.sourceProvider ?? raw.source_provider ?? (driveFileId ? 'google_drive' : 'upload'),
+  );
+  const sourceExternalId = readString(raw.sourceExternalId) ?? readString(raw.source_external_id) ?? driveFileId;
+  const sourceName = readString(raw.sourceName) ?? readString(raw.source_name) ?? raw.name;
+
+  return {
+    ...asset,
+    driveFileId,
+    ownerId,
+    teamId,
+    visibility,
+    storageProvider,
+    storageKey,
+    sourceProvider,
+    sourceExternalId,
+    sourceName,
+    ownedByActor: actorUsername ? ownerId === actorUsername : undefined,
+  };
+}
+
+export function canActorReadAsset(
+  asset: Pick<Asset, 'ownerId' | 'teamId' | 'visibility'>,
+  actor: { username: string; teamId?: string | null },
+): boolean {
+  if (asset.ownerId && asset.ownerId === actor.username) {
+    return true;
+  }
+  return normalizeAssetVisibility(asset.visibility, 'private') === 'team'
+    && (asset.teamId ?? DEFAULT_ASSET_TEAM_ID) === (actor.teamId ?? DEFAULT_ASSET_TEAM_ID);
+}
+
+export function filterVisibleLegacyAssets(
+  index: AssetIndex,
+  actorUsername: string,
+  scope: AssetOwnershipScope,
+): AssetIndex {
+  const actorTeamId = resolveActorTeamId(actorUsername);
+  const assets = index.assets
+    .map((asset) => normalizeLegacyAsset(asset, actorUsername))
+    .filter((asset) => {
+      const ownedByActor = asset.ownedByActor === true;
+      const teamVisible = canActorReadAsset(asset, {
+        username: actorUsername,
+        teamId: actorTeamId,
+      });
+
+      if (scope === 'team') {
+        return asset.visibility === 'team' && asset.teamId === actorTeamId;
+      }
+      if (scope === 'all') {
+        return teamVisible;
+      }
+      return ownedByActor;
+    });
+
+  return {
+    ...index,
+    assets,
+  };
+}
+
 export async function loadAssetIndex(): Promise<AssetIndex> {
   const indexPath = getIndexPath();
   if (!fs.existsSync(indexPath)) {
@@ -49,7 +172,12 @@ export async function loadAssetIndex(): Promise<AssetIndex> {
   }
   try {
     const raw = fs.readFileSync(indexPath, 'utf-8');
-    return JSON.parse(raw) as AssetIndex;
+    const parsed = JSON.parse(raw) as AssetIndex;
+    return {
+      version: parsed.version ?? '1.0',
+      updatedAt: parsed.updatedAt ?? new Date().toISOString().slice(0, 10),
+      assets: Array.isArray(parsed.assets) ? parsed.assets.map((asset) => normalizeLegacyAsset(asset)) : [],
+    };
   } catch {
     return { version: '1.0', updatedAt: new Date().toISOString().slice(0, 10), assets: [] };
   }

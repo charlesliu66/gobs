@@ -4,6 +4,13 @@
  */
 import db from '../db/assetDb.js';
 import type { AssetRecord, SearchQuery, FacetResult } from '../types/assetLibrary.js';
+import {
+  normalizeAssetOwnershipScope,
+  normalizeAssetVisibility,
+  resolveActorTeamId,
+  type AssetOwnershipScope,
+  type AssetVisibility,
+} from './assetLibrary.js';
 
 // 维度筛选键白名单（防止 SQL 注入）
 const ALLOWED_FILTER_KEYS = new Set([
@@ -18,18 +25,57 @@ interface PagedResult {
   pageSize: number;
 }
 
+interface ScopedSearchQuery extends SearchQuery {
+  actorTeamId?: string;
+  scope?: AssetOwnershipScope;
+  visibility?: AssetVisibility;
+}
+
+function applyVisibilityScope(
+  alias: string,
+  query: ScopedSearchQuery,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params: Record<string, any>,
+  conditions: string[],
+): void {
+  const scope = normalizeAssetOwnershipScope(query.scope);
+  const actorTeamId = query.actorTeamId ?? resolveActorTeamId(query.username);
+  const visibility = query.visibility ? normalizeAssetVisibility(query.visibility) : undefined;
+  const prefix = alias ? `${alias}.` : '';
+
+  if (scope !== 'my') {
+    params.actorTeamId = actorTeamId;
+  }
+
+  if (scope === 'team') {
+    conditions.push(`${prefix}visibility = 'team'`);
+    conditions.push(`${prefix}team_id = @actorTeamId`);
+  } else if (scope === 'all') {
+    conditions.push(`(${prefix}username = @username OR (${prefix}visibility = 'team' AND ${prefix}team_id = @actorTeamId))`);
+  } else {
+    conditions.push(`${prefix}username = @username`);
+  }
+
+  if (visibility) {
+    conditions.push(`${prefix}visibility = @visibility`);
+    params.visibility = visibility;
+  }
+}
+
 /**
  * 按维度标签筛选资产（分页），支持 ai_category 直接筛选
  */
-export function listAssets(query: SearchQuery): PagedResult {
+export function listAssets(query: ScopedSearchQuery): PagedResult {
   const { username, page = 1, pageSize = 20, filters, aiCategory, folderId } = query;
   const offset = (page - 1) * pageSize;
 
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  const conditions: string[] = ['a.username = @username', 'a.deleted_at IS NULL'];
+  const conditions: string[] = ['a.deleted_at IS NULL'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, limit: pageSize, offset };
+
+  applyVisibilityScope('a', query, params, conditions);
 
   if (aiCategory) {
     conditions.push('(a.team_category = @aiCategory OR (a.team_category IS NULL AND a.ai_category = @aiCategory))');
@@ -73,16 +119,18 @@ export function listAssets(query: SearchQuery): PagedResult {
 /**
  * 关键词搜索（filename + ai_description + tag value LIKE），支持 ai_category 筛选
  */
-export function searchAssets(query: SearchQuery): PagedResult {
+export function searchAssets(query: ScopedSearchQuery): PagedResult {
   const { username, q = '', page = 1, pageSize = 20, filters, aiCategory } = query;
   const offset = (page - 1) * pageSize;
   const likeQ = `%${q}%`;
 
   const filterKeys = Object.keys(filters).filter(k => ALLOWED_FILTER_KEYS.has(k));
 
-  const conditions: string[] = ['a.username = @username', 'a.deleted_at IS NULL'];
+  const conditions: string[] = ['a.deleted_at IS NULL'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: Record<string, any> = { username, q: likeQ, limit: pageSize, offset };
+
+  applyVisibilityScope('a', query, params, conditions);
 
   if (aiCategory) {
     conditions.push('(a.team_category = @aiCategory OR (a.team_category IS NULL AND a.ai_category = @aiCategory))');
@@ -131,15 +179,31 @@ export function searchAssets(query: SearchQuery): PagedResult {
 /**
  * Facets 统计：各维度 key 的 value 计数
  */
-export function getFacets(username: string): FacetResult {
+export function getFacets(query: {
+  username: string;
+  actorTeamId?: string;
+  scope?: AssetOwnershipScope;
+  visibility?: AssetVisibility;
+}): FacetResult {
+  const conditions: string[] = ['a.deleted_at IS NULL', `t.status != 'rejected'`];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const params: Record<string, any> = { username: query.username };
+  applyVisibilityScope('a', {
+    username: query.username,
+    filters: {},
+    actorTeamId: query.actorTeamId,
+    scope: query.scope,
+    visibility: query.visibility,
+  }, params, conditions);
+
   const rows = db.prepare(`
     SELECT t.key, t.value, COUNT(*) as cnt
     FROM asset_tags t
     JOIN assets a ON t.asset_id = a.id
-    WHERE a.username = @username AND a.deleted_at IS NULL AND t.status != 'rejected'
+    WHERE ${conditions.join(' AND ')}
     GROUP BY t.key, t.value
     ORDER BY t.key, cnt DESC
-  `).all({ username }) as Array<{ key: string; value: string; cnt: number }>;
+  `).all(params) as Array<{ key: string; value: string; cnt: number }>;
 
   const result: FacetResult = {};
   for (const row of rows) {

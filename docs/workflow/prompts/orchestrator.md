@@ -19,6 +19,13 @@ Rules:
 7. Only one release owner exists for a run. The release owner is responsible for `staging -> mark_release_ready -> prod -> idle`.
 8. Escalate to the user only for forbidden-file changes, new env vars, product tradeoffs, or prod-release approval.
 
+If one Codex main thread is coordinating multiple sub-agents internally, also use:
+
+- `docs/guides/2026-05-11-main-thread-subagent-heartbeat-runbook.md`
+- `docs/workflow/prompts/main-thread-subagent-heartbeat-orchestrator.md`
+
+That variant adds A/B/C role separation plus a thread heartbeat without changing the underlying gate rules.
+
 Recommended loop:
 1. Create the run with `python scripts/init_workflow_run.py ...`
 2. Finalize `planner-spec.md` and `SESSION-ANCHOR.md`
