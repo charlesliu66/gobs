@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-11 (v0.203)*
+*Last updated: 2026-05-15 (v0.204)*
 
-**Latest update - v0.203**
+**Latest update - v0.204**
+- Advanced Studio video generation now follows the same compact reference-asset flow across Quick Single, Motion Transfer, and Character Showcase, with local uploads available per reference slot and Asset Library selection kept in the same component.
+- Seedance single-generation duration options are capped at 4-15 seconds across the three modes, and Ark Seedance backend submission now clamps duration to the same 4-15 second range.
+- Seedance reference constraints are shared in frontend config: images `jpg/jpeg/png/webp` up to 9, videos `mp4/mov` up to 3, audio `mp3/wav` up to 3, 12 total, and audio cannot be the only all-in-one reference.
+
+**Previous update - v0.203**
 - Advanced Studio character-library asset sync now accepts both inline `data:image/...` payloads and saved `/api/production/image?path=...` production-image URLs, so saving a generated portrait from the preview modal writes a real `character_image` asset into the same account's Asset Library instead of silently skipping sync.
 - Production image path parsing is now shared and owner-scoped, which keeps sync limited to the current account's own `output/production/images/<username>/...` files while still supporting legacy readable locations.
 - Added backend regression coverage for URL-backed character saves, mirroring the exact "save current preview into character library" path used by Advanced Studio.
@@ -158,6 +163,7 @@
 - 鏀寔灏侀潰甯ф埅鍙?
 - **Advanced Studio template cleanup (v0.169)**: `/studio` creation now starts from Quick Single, Motion Transfer, and Character Showcase only; Short Drama/Cat Harem are removed from active Studio, and `cg-trailer` is reserved for a future Production Wizard promo preset path.
 - **Campaign to Studio bridge (v0.171)**: Campaign Output video items can open `/studio` with the right creation mode, seeded production prompt, matched Asset Library image references, unified reference slots, and prompt-only quality presets for marketer production.
+- **Advanced Studio Seedance reference flow (v0.204)**: Quick Single, Motion Transfer, and Character Showcase share the same reference-slot selector, support one-off local uploads, use Seedance file/count constraints, and expose only 4-15 second single-generation duration choices.
 - **Campaign Production Loop closeout (v0.173)**: Studio video results generated from a linked Campaign package can now update that package into a publishable Distribution draft and keep the Result page's Distribution CTA package-aware.
 
 **浣跨敤鏂规硶锛?*
@@ -323,6 +329,7 @@
 - **Banner Prompt Hardening (v0.198)**: Banner prompts are now structured template-ready artifacts with persisted `bannerPromptContext`, asset-fit warnings, source/spec lineage, and Workbench coverage split from direct/auto text outputs.
 - **Motion Transfer validation (v0.188)**: Advanced Studio now marks Motion Transfer as experimental based on a 10-sample validation ledger and a strict 2/10 usable-rate conclusion.
 - **Character Showcase validation (v0.189)**: Advanced Studio now marks Character Showcase as constrained continue based on a 10-sample validation ledger, with preset guidance focused on single-character reveal, skill payoff, and simple reward payoff.
+- **Advanced Studio Seedance reference flow (v0.204)**: Quick Single, Motion Transfer, and Character Showcase now use unified reference slots with local upload or Asset Library selection, while Seedance duration and reference constraints are enforced consistently.
 - **Distribution final mile (v0.190)**: `/distribute` now restores active publish context after refresh, supports account-group previews/updates, and pairs publish failure reasons with next-step guidance.
 - **Knowledge traceability (v0.191)**: Campaign Brief review now displays routed Brain citations with feedback controls, suppresses `do_not_use_again` citation IDs in later generation, and carries knowledge references into Output Workbench items.
 - **Data contract hardening (v0.192)**: Campaign Output, Studio handoff, and Distribution Package payloads now carry Campaign/Brief/Output/Package lineage, restore Studio handoff from backend IDs after refresh, and surface compact link-health status.

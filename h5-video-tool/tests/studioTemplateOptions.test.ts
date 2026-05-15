@@ -23,12 +23,17 @@ test('filterVisibleStudioTemplates keeps only Phase 1 Studio templates', () => {
   assert.deepEqual(visible.map((template) => template.id), ['viral-dance', 'boss-showcase']);
 });
 
-test('template duration options match the Advanced Studio Phase 1 plan', () => {
-  assert.deepEqual(getStudioTemplateDurationOptions('custom', false), [4, 6, 8, 10]);
-  assert.deepEqual(getStudioTemplateDurationOptions('viral-dance'), [5, 8, 10]);
-  assert.deepEqual(getStudioTemplateDurationOptions('boss-showcase'), [15]);
+test('template duration options stay within the Seedance single-generation range', () => {
+  assert.deepEqual(getStudioTemplateDurationOptions('custom', false), [4, 5, 8, 10, 15]);
+  assert.deepEqual(getStudioTemplateDurationOptions('custom', true), [4, 5, 8, 10, 15]);
+  assert.deepEqual(getStudioTemplateDurationOptions('viral-dance'), [5, 8, 10, 15]);
+  assert.deepEqual(getStudioTemplateDurationOptions('boss-showcase'), [10, 15]);
+  for (const templateId of ['custom', 'viral-dance', 'boss-showcase']) {
+    assert.equal(getStudioTemplateDurationOptions(templateId).every((duration) => duration >= 4 && duration <= 15), true);
+  }
   assert.equal(isValidStudioDuration('viral-dance', 10), true);
-  assert.equal(isValidStudioDuration('viral-dance', 15), false);
+  assert.equal(isValidStudioDuration('viral-dance', 15), true);
+  assert.equal(isValidStudioDuration('boss-showcase', 30), false);
 });
 
 test('template aspect ratio options preserve flexible user choices', () => {
@@ -39,9 +44,9 @@ test('template aspect ratio options preserve flexible user choices', () => {
 });
 
 test('template display meta communicates marketer-facing capabilities', () => {
-  assert.equal(getStudioTemplateDisplayMeta({ id: 'custom' }), '4-10s · 9:16 / 16:9 / 1:1');
-  assert.equal(getStudioTemplateDisplayMeta({ id: 'viral-dance' }), '5-10s · 9:16');
-  assert.equal(getStudioTemplateDisplayMeta({ id: 'boss-showcase' }), '15s · 9:16 / 16:9');
+  assert.equal(getStudioTemplateDisplayMeta({ id: 'custom' }), '4-15s · 9:16 / 16:9 / 1:1');
+  assert.equal(getStudioTemplateDisplayMeta({ id: 'viral-dance' }), '5-15s · 9:16');
+  assert.equal(getStudioTemplateDisplayMeta({ id: 'boss-showcase' }), '10-15s · 9:16 / 16:9');
 });
 
 test('Motion Transfer template carries experimental validation notice', () => {

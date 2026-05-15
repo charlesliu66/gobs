@@ -71,6 +71,30 @@ test('buildArkSeedanceCreatePayload maps multimodal reference images and audio g
   ]);
 });
 
+test('buildArkSeedanceCreatePayload clamps Seedance duration into 4 to 15 seconds', () => {
+  const tooShort = buildArkSeedanceCreatePayload({
+    providerModel: 'Doubao-Seedance-2.0',
+    submitParams: {
+      storyboardText: 'Short duration',
+      aspectRatio: '16:9',
+      duration: 2,
+      model: 'dreamina-text2video',
+    },
+  });
+  const tooLong = buildArkSeedanceCreatePayload({
+    providerModel: 'Doubao-Seedance-2.0',
+    submitParams: {
+      storyboardText: 'Long duration',
+      aspectRatio: '16:9',
+      duration: 60,
+      model: 'dreamina-text2video',
+    },
+  });
+
+  assert.equal(tooShort.duration, 4);
+  assert.equal(tooLong.duration, 15);
+});
+
 test('normalizeArkSeedanceTask converts succeeded tasks into compatibility payloads', () => {
   const normalized = normalizeArkSeedanceTask({
     id: 'task_success_1',

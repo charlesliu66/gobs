@@ -3,6 +3,12 @@ import type { DreaminaMultimodalItem } from '../context/CreateFlowContext';
 import { AssetPicker } from './AssetPicker';
 import { buildAssetFileUrl, recordUsage } from '../api/assetLibraryApi';
 import type { LibraryAsset } from '../api/assetLibraryApi';
+import {
+  getSeedanceAcceptString,
+  inferSeedanceMediaKind,
+  isSeedanceReferenceFileSupported,
+  validateSeedanceReferenceSet,
+} from '../config/seedanceSourceConstraints';
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -15,14 +21,6 @@ function fileToBase64(file: File): Promise<string> {
     r.onerror = () => reject(new Error('读取文件失败'));
     r.readAsDataURL(file);
   });
-}
-
-function kindFromFile(file: File): 'image' | 'video' | 'audio' | null {
-  const t = file.type || '';
-  if (t.startsWith('image/')) return 'image';
-  if (t.startsWith('video/')) return 'video';
-  if (t.startsWith('audio/')) return 'audio';
-  return null;
 }
 
 function labelForItem(
@@ -56,15 +54,10 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
       const next = [...items];
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
-        const kind = kindFromFile(file);
-        if (!kind) continue;
-        const ic = next.filter((x) => x.kind === 'image').length;
-        const vc = next.filter((x) => x.kind === 'video').length;
-        const ac = next.filter((x) => x.kind === 'audio').length;
-        if (kind === 'image' && ic >= 9) continue;
-        if (kind === 'video' && vc >= 3) continue;
-        if (kind === 'audio' && ac >= 3) continue;
-        if (next.length >= 12) break;
+        const kind = inferSeedanceMediaKind(file);
+        if (!kind || !isSeedanceReferenceFileSupported(file, kind)) continue;
+        const validation = validateSeedanceReferenceSet([...next.map((x) => ({ kind: x.kind })), { kind }]);
+        if (!validation.ok) continue;
         const base64 = await fileToBase64(file);
         next.push({
           id: `${Date.now()}_${i}_${file.name}`,
@@ -85,17 +78,10 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
       const next = [...items];
       for (const asset of assets) {
         const mime = asset.mimetype ?? asset.mime_type ?? '';
-        const kind = mime.startsWith('image/') ? 'image' as const
-          : mime.startsWith('video/') ? 'video' as const
-          : mime.startsWith('audio/') ? 'audio' as const : null;
-        if (!kind) continue;
-        const ic = next.filter((x) => x.kind === 'image').length;
-        const vc = next.filter((x) => x.kind === 'video').length;
-        const ac = next.filter((x) => x.kind === 'audio').length;
-        if (kind === 'image' && ic >= 9) continue;
-        if (kind === 'video' && vc >= 3) continue;
-        if (kind === 'audio' && ac >= 3) continue;
-        if (next.length >= 12) break;
+        const kind = inferSeedanceMediaKind({ filename: asset.filename, mimeType: mime });
+        if (!kind || !isSeedanceReferenceFileSupported({ filename: asset.filename, mimeType: mime }, kind)) continue;
+        const validation = validateSeedanceReferenceSet([...next.map((x) => ({ kind: x.kind })), { kind }]);
+        if (!validation.ok) continue;
         try {
           const url = asset.file_url ?? buildAssetFileUrl(asset.id);
           const resp = await fetch(url);
@@ -171,14 +157,14 @@ export function DreaminaMultimodalRefs({ items, onChange }: DreaminaMultimodalRe
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-2">
       <p className="text-sm font-medium text-[var(--color-text)]">全能参考素材</p>
       <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-        支持 1–12 个素材（图最多 9、视频最多 3、音频最多 3）。在上方「故事/分镜」里用&nbsp;
+        可选补充参考：图最多 9、视频最多 3、音频最多 3，总数最多 12。音频不能单独生成。在上方「故事/分镜」里用&nbsp;
         <strong>@图片1</strong>、<strong>@视频1</strong>、<strong>@音频1</strong>
-        等引用，编号按下方各类型上传顺序分别计数（与即梦 Seedance 全能参考一致）。可点「主角/场景」两下修正自动匹配。
+        等引用。
       </p>
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,video/*,audio/*"
+        accept={[getSeedanceAcceptString('image'), getSeedanceAcceptString('video'), getSeedanceAcceptString('audio')].join(',')}
         multiple
         className="hidden"
         onChange={(e) => void addFiles(e.target.files)}

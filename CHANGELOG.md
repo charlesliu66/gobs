@@ -2,6 +2,17 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.204 - 2026-05-15
+**Advanced Studio Seedance reference flow**
+**Advanced Studio / Seedance:**
+- Unified the reference-asset intake across Quick Single, Motion Transfer, and Character Showcase so each mode shows only its own required slots and supports both one-off local upload and Asset Library selection.
+- Added shared Seedance constraints for accepted formats, per-kind counts, total references, and the audio-only invalid case; local uploads remain generation-only and are not imported into Asset Library.
+- Capped visible single-generation duration choices at 4-15 seconds and changed Ark Seedance backend clamping from 60 seconds to 15 seconds.
+**UX / Legacy compatibility:**
+- Shortened the page copy around creative description, reference assets, parameters, and generation confirmation; legacy Drive matching/manual browse and external motion links now live behind "More asset sources".
+**Tests / Build:**
+- Added/updated frontend tests for duration options, reference constraints, unified selector presence, and locale copy; updated Ark Seedance duration clamp coverage and rebuilt frontend/API bundles.
+
 ## v0.203 - 2026-05-11
 **Advanced Studio character image URL asset sync**
 **Advanced Studio / Character Library / Asset Library:**

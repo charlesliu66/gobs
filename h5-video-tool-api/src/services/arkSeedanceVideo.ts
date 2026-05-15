@@ -84,7 +84,7 @@ function normalizeAspectRatio(aspectRatio?: string): string {
 
 function normalizeDuration(duration?: number): number {
   if (!Number.isFinite(duration)) return 5;
-  return Math.min(60, Math.max(4, Math.round(duration ?? 5)));
+  return Math.min(15, Math.max(4, Math.round(duration ?? 5)));
 }
 
 function isFastModelName(value?: string | null): boolean {

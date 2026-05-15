@@ -16,8 +16,7 @@ import { ViralDanceMaterialPicker } from '../components/ViralDanceMaterialPicker
 import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
-import { AssetPicker } from '../components/AssetPicker';
-import { UnifiedAssetSelector, type UnifiedAssetSlot } from '../components/UnifiedAssetSelector';
+import { UnifiedAssetSelector, type UnifiedAssetSlot, type UnifiedAssetSourceSelection } from '../components/UnifiedAssetSelector';
 import { RunningStatus } from '../components/RunningStatus';
 import { buildAssetFileUrl, recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
 import { useLocale } from '../i18n/LocaleContext.tsx';
@@ -35,6 +34,12 @@ import {
   localizedPresetPrompt,
   type StudioPresetLocale,
 } from '../config/studioQualityPresets';
+import {
+  inferSeedanceMediaKind,
+  isSeedanceReferenceFileSupported,
+  validateSeedanceReferenceSet,
+  type SeedanceMediaKind,
+} from '../config/seedanceSourceConstraints';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -71,6 +76,14 @@ function absoluteAssetUrl(asset: LibraryAsset): string {
   return new URL(assetFileUrl(asset), window.location.origin).toString();
 }
 
+function assetPreviewUrl(asset: LibraryAsset): string {
+  return asset.thumbnail_url || asset.file_url || buildAssetFileUrl(asset.id);
+}
+
+function dreaminaSlotItemId(slot: UnifiedAssetSlot): string {
+  return `studio-slot-${slot.id}`;
+}
+
 function readBlobAsBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -90,7 +103,7 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
       {
         id: 'viral-character',
         title: isEn ? 'Character image' : '角色图',
-        description: isEn ? 'Maps to @image1 for the moving subject.' : '对应 @图片1，作为动作迁移的主体角色。',
+        description: isEn ? 'The subject that will perform the motion.' : '动作迁移的主体角色。',
         mediaType: 'image',
         semanticRole: 'role',
         initialQuery: 'character hero',
@@ -98,18 +111,19 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
       },
       {
         id: 'viral-scene',
-        title: isEn ? 'Optional scene' : '可选场景',
-        description: isEn ? 'Maps to @image2 for the environment or mood.' : '对应 @图片2，可补充场景或氛围。',
+        title: isEn ? 'Scene image' : '场景图',
+        description: isEn ? 'Optional background or mood reference.' : '可选，用于补充背景或氛围。',
         mediaType: 'image',
         semanticRole: 'scene',
         initialQuery: 'scene background',
       },
       {
         id: 'viral-motion',
-        title: isEn ? 'Reference motion video' : '参考动作视频',
-        description: isEn ? 'Sets the Motion Transfer reference video URL.' : '填入 Motion Transfer 的参考视频直链。',
+        title: isEn ? 'Motion video' : '动作参考视频',
+        description: isEn ? 'The movement source for motion transfer.' : '动作迁移的节奏和动作来源。',
         mediaType: 'video',
         initialQuery: 'motion dance gameplay',
+        required: true,
       },
     ];
   }
@@ -117,8 +131,8 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
     return [
       {
         id: 'showcase-character',
-        title: isEn ? 'Hero or boss art' : '角色 / Boss 图',
-        description: isEn ? 'Primary approved character reference.' : '主角色参考图，优先使用已授权素材。',
+        title: isEn ? 'Character or boss' : '角色 / Boss',
+        description: isEn ? 'The main subject to showcase.' : '角色展示的主体素材。',
         mediaType: 'image',
         semanticRole: 'role',
         initialQuery: 'character boss hero',
@@ -127,7 +141,7 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
       {
         id: 'showcase-scene',
         title: isEn ? 'Scene mood' : '场景氛围',
-        description: isEn ? 'Key art, gameplay frame, or environment mood.' : '主视觉、玩法截图或环境氛围参考。',
+        description: isEn ? 'Optional key art or environment mood.' : '可选，主视觉或环境氛围。',
         mediaType: 'image',
         semanticRole: 'scene',
         initialQuery: 'key art scene gameplay',
@@ -138,16 +152,17 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
     return [
       {
         id: 'quick-primary-reference',
-        title: isEn ? 'Primary reference' : '主参考图',
-        description: isEn ? 'Game character, key art, or product visual.' : '角色、主视觉或产品素材的主参考图。',
+        title: isEn ? 'Subject asset' : '主体素材',
+        description: isEn ? 'Character, key art, or product visual.' : '角色、主视觉或产品素材。',
         mediaType: 'image',
         semanticRole: 'role',
         initialQuery: 'character key art',
+        required: true,
       },
       {
         id: 'quick-scene-reference',
         title: isEn ? 'Scene or mood reference' : '场景 / 氛围参考',
-        description: isEn ? 'Optional image for background, setting, or mood.' : '可选，用于补充背景、场景或画面情绪。',
+        description: isEn ? 'Optional background or mood image.' : '可选，用于补充背景或画面情绪。',
         mediaType: 'image',
         semanticRole: 'scene',
         initialQuery: 'scene mood background',
@@ -242,18 +257,17 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const { files, loading, error, search, listFolder } = useGoogleDrive(accessToken);
   /** 默认模板：在文件夹树中手动勾选（不依赖关键词搜索） */
   const [showDriveManualBrowse, setShowDriveManualBrowse] = useState(false);
+  const [showMoreAssetSources, setShowMoreAssetSources] = useState(false);
   const selectedIds = new Set(selectedOrder.map((f) => f.id));
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tipsExpanded, setTipsExpanded] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [expertMode, setExpertMode] = useState(false);
-  /** TASK-D: 资产选择器状态 */
-  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
-  const [assetPickerMode, setAssetPickerMode] = useState<'image' | 'video'>('image');
-  const [unifiedSlotAssets, setUnifiedSlotAssets] = useState<Record<string, LibraryAsset | null>>({});
+  const [unifiedSources, setUnifiedSources] = useState<Record<string, UnifiedAssetSourceSelection | null>>({});
   const [unifiedAssetError, setUnifiedAssetError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const localPreviewUrlsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -264,6 +278,20 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const revokeLocalPreview = useCallback((slotId: string) => {
+    const previewUrl = localPreviewUrlsRef.current[slotId];
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      delete localPreviewUrlsRef.current[slotId];
+    }
+  }, []);
+
+  const revokeAllLocalPreviews = useCallback(() => {
+    Object.keys(localPreviewUrlsRef.current).forEach((slotId) => revokeLocalPreview(slotId));
+  }, [revokeLocalPreview]);
+
+  useEffect(() => () => revokeAllLocalPreviews(), [revokeAllLocalPreviews]);
 
   useEffect(() => {
     if (expertMode) {
@@ -297,8 +325,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setShotFrames({});
     setMultiShotEnabled(false);
     setDreaminaMultimodalItems([]);
-    setUnifiedSlotAssets({});
+    revokeAllLocalPreviews();
+    setUnifiedSources({});
     setUnifiedAssetError(null);
+    setShowMoreAssetSources(false);
+    setShowDriveManualBrowse(false);
     if (templateId !== 'viral-dance') setViralDanceReferenceVideoUrl('');
   }, [
     templateId,
@@ -310,6 +341,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setShotFrames,
     setShots,
     setViralDanceReferenceVideoUrl,
+    revokeAllLocalPreviews,
   ]);
 
   /** Motion Transfer + 参考视频自动预填 prompt（越懒越好） */
@@ -450,61 +482,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setShowGenerationFlow(true);
   }, []);
 
-  /** TASK-D: 从资产库选中素材后处理 */
-  const handleAssetPickerSelect = useCallback(
-    async (assets: LibraryAsset[]) => {
-      if (assets.length === 0) return;
-      const asset = assets[0];
-      const mime = asset.mimetype ?? asset.mime_type ?? '';
-      const fileUrl = assetFileUrl(asset);
-      // 记录素材使用，更新「最近使用」
-      for (const a of assets) void recordUsage(a.id, 'generate');
-
-      if (mime.startsWith('video/') || assetPickerMode === 'video') {
-        // 视频参考：直接设置 URL（用于 viralDanceReferenceVideoUrl）
-        setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
-      } else {
-        // 图片参考：fetch → base64 → dreaminaMultimodalItems
-        try {
-          const resp = await fetch(fileUrl);
-          const blob = await resp.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(',')[1] ?? dataUrl;
-            const mimeType = blob.type || 'image/jpeg';
-            setDreaminaMultimodalItems((prev) => {
-              // 多选：追加；单选：替换第一个位置
-              if (assets.length > 1) {
-                const next = assets.map((a, i) => ({
-                  id: `asset-${a.id}-${i}`,
-                  kind: 'image' as const,
-                  base64,
-                  mimeType,
-                  fileName: a.filename,
-                }));
-                return next;
-              }
-              const next = [...prev];
-              next[0] = {
-                id: `asset-${asset.id}`,
-                kind: 'image' as const,
-                base64,
-                mimeType,
-                fileName: asset.filename,
-              };
-              return next;
-            });
-          };
-          reader.readAsDataURL(blob);
-        } catch {
-          // 静默失败
-        }
-      }
-    },
-    [assetPickerMode, setViralDanceReferenceVideoUrl, setDreaminaMultimodalItems],
-  );
-
   const presetLocale: StudioPresetLocale = contentLocale === 'en' ? 'en' : 'zh';
   const unifiedAssetSlots = getUnifiedAssetSlots(templateId, presetLocale);
   const qualityPresetGroups = getStudioQualityPresetGroups(templateId, presetLocale);
@@ -517,53 +494,199 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     [prompt, setHasPolishedPrompt, setPrompt],
   );
 
+  const formatSeedanceValidationError = useCallback(
+    (reason: ReturnType<typeof validateSeedanceReferenceSet>['reason']) => {
+      if (contentLocale === 'en') {
+        const messages: Record<typeof reason, string> = {
+          ok: '',
+          'missing-visual-reference': 'Add at least one image or video reference for Seedance all-in-one mode.',
+          'audio-only': 'Audio can be a supplement, but cannot be the only Seedance reference.',
+          'too-many-images': 'Seedance supports up to 9 image references.',
+          'too-many-videos': 'Seedance supports up to 3 video references.',
+          'too-many-audios': 'Seedance supports up to 3 audio references.',
+          'too-many-total': 'Seedance supports up to 12 total references.',
+        };
+        return messages[reason];
+      }
+      const messages: Record<typeof reason, string> = {
+        ok: '',
+        'missing-visual-reference': 'Seedance 全能参考至少需要 1 张图片或 1 段视频。',
+        'audio-only': '音频只能作为补充，不能单独作为 Seedance 参考素材。',
+        'too-many-images': 'Seedance 最多支持 9 张图片参考。',
+        'too-many-videos': 'Seedance 最多支持 3 段视频参考。',
+        'too-many-audios': 'Seedance 最多支持 3 段音频参考。',
+        'too-many-total': 'Seedance 最多支持 12 个参考素材。',
+      };
+      return messages[reason];
+    },
+    [contentLocale],
+  );
+
+  const validateNextDreaminaSlot = useCallback(
+    (slot: UnifiedAssetSlot, kind: SeedanceMediaKind): boolean => {
+      const itemId = dreaminaSlotItemId(slot);
+      const validation = validateSeedanceReferenceSet([
+        ...dreaminaMultimodalItems.filter((item) => item.id !== itemId).map((item) => ({ kind: item.kind })),
+        { kind },
+      ]);
+      if (!validation.ok) {
+        setUnifiedAssetError(formatSeedanceValidationError(validation.reason));
+        return false;
+      }
+      return true;
+    },
+    [dreaminaMultimodalItems, formatSeedanceValidationError],
+  );
+
+  const handleUnifiedSourceClear = useCallback(
+    (slot: UnifiedAssetSlot) => {
+      revokeLocalPreview(slot.id);
+      setUnifiedSources((current) => ({ ...current, [slot.id]: null }));
+      setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== dreaminaSlotItemId(slot)));
+      if (slot.mediaType === 'video') setViralDanceReferenceVideoUrl('');
+      setUnifiedAssetError(null);
+    },
+    [revokeLocalPreview, setDreaminaMultimodalItems, setViralDanceReferenceVideoUrl],
+  );
+
   const handleUnifiedAssetSelect = useCallback(
     async (slot: UnifiedAssetSlot, asset: LibraryAsset | null) => {
-      const itemId = `studio-slot-${slot.id}`;
+      const itemId = dreaminaSlotItemId(slot);
       setUnifiedAssetError(null);
-      setUnifiedSlotAssets((current) => ({ ...current, [slot.id]: asset }));
 
       if (!asset) {
-        setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== itemId));
-        if (slot.mediaType === 'video') setViralDanceReferenceVideoUrl('');
+        handleUnifiedSourceClear(slot);
         return;
       }
 
-      if (slot.mediaType === 'video') {
-        setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
-        void recordUsage(asset.id, `studio-unified-slot:${slot.id}`);
+      const assetMime = asset.mimetype ?? asset.mime_type ?? '';
+      if (!isSeedanceReferenceFileSupported({ filename: asset.filename, mimeType: assetMime }, slot.mediaType)) {
+        setUnifiedAssetError(
+          contentLocale === 'en'
+            ? 'This file type is not supported by Seedance for this slot.'
+            : '该素材类型不符合 Seedance 对这个参考位的要求。',
+        );
         return;
       }
 
       try {
         const resp = await fetch(assetFileUrl(asset));
         const blob = await resp.blob();
-        if (!blob.type.startsWith('image/')) {
-          throw new Error('Selected asset is not an image');
+        const kind = inferSeedanceMediaKind({ filename: asset.filename, mimeType: blob.type || assetMime });
+        if (!kind || kind !== slot.mediaType) {
+          throw new Error('Unsupported reference asset type');
+        }
+        if (!validateNextDreaminaSlot(slot, kind)) {
+          return;
         }
         const base64 = await readBlobAsBase64(blob);
+        revokeLocalPreview(slot.id);
         setDreaminaMultimodalItems((prev) => [
           ...prev.filter((item) => item.id !== itemId),
           {
             id: itemId,
-            kind: 'image',
+            kind,
             base64,
-            mimeType: blob.type || asset.mimetype || asset.mime_type || 'image/jpeg',
+            mimeType: blob.type || assetMime || (kind === 'image' ? 'image/jpeg' : 'video/mp4'),
             fileName: asset.filename,
             semanticRole: slot.semanticRole,
           },
         ]);
+        setUnifiedSources((current) => ({
+          ...current,
+          [slot.id]: {
+            id: `library-${asset.id}`,
+            source: 'library',
+            kind,
+            filename: asset.filename,
+            mimeType: blob.type || assetMime,
+            previewUrl: assetPreviewUrl(asset),
+            assetId: asset.id,
+          },
+        }));
+        if (kind === 'video') setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
         void recordUsage(asset.id, `studio-unified-slot:${slot.id}`);
       } catch {
         setUnifiedAssetError(
           contentLocale === 'en'
-            ? 'Asset selected, but Studio could not load it as a reference. Try another file or use the legacy picker.'
-            : '素材已选择，但 Studio 无法把它加载为参考图。可以换一个文件，或使用原有素材选择入口。',
+            ? 'Studio could not load this asset as a Seedance reference. Try another file.'
+            : 'Studio 无法把该素材加载为 Seedance 参考，请换一个文件。',
         );
         setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== itemId));
       }
     },
-    [contentLocale, setDreaminaMultimodalItems, setViralDanceReferenceVideoUrl],
+    [
+      contentLocale,
+      handleUnifiedSourceClear,
+      revokeLocalPreview,
+      setDreaminaMultimodalItems,
+      setViralDanceReferenceVideoUrl,
+      validateNextDreaminaSlot,
+    ],
+  );
+
+  const handleUnifiedLocalFileSelect = useCallback(
+    async (slot: UnifiedAssetSlot, file: File) => {
+      const itemId = dreaminaSlotItemId(slot);
+      setUnifiedAssetError(null);
+
+      const kind = inferSeedanceMediaKind(file);
+      if (!kind || kind !== slot.mediaType || !isSeedanceReferenceFileSupported(file, slot.mediaType)) {
+        setUnifiedAssetError(
+          contentLocale === 'en'
+            ? 'This local file type is not supported by Seedance for this slot.'
+            : '该本地文件类型不符合 Seedance 对这个参考位的要求。',
+        );
+        return;
+      }
+      if (!validateNextDreaminaSlot(slot, kind)) {
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      try {
+        const base64 = await readBlobAsBase64(file);
+        revokeLocalPreview(slot.id);
+        localPreviewUrlsRef.current[slot.id] = previewUrl;
+        setDreaminaMultimodalItems((prev) => [
+          ...prev.filter((item) => item.id !== itemId),
+          {
+            id: itemId,
+            kind,
+            base64,
+            mimeType: file.type || (kind === 'image' ? 'image/jpeg' : 'video/mp4'),
+            fileName: file.name,
+            semanticRole: slot.semanticRole,
+          },
+        ]);
+        setUnifiedSources((current) => ({
+          ...current,
+          [slot.id]: {
+            id: `local-${slot.id}-${Date.now()}`,
+            source: 'local',
+            kind,
+            filename: file.name,
+            mimeType: file.type,
+            previewUrl,
+          },
+        }));
+        if (kind === 'video') setViralDanceReferenceVideoUrl('');
+      } catch {
+        URL.revokeObjectURL(previewUrl);
+        setUnifiedAssetError(
+          contentLocale === 'en'
+            ? 'Studio could not read this local file.'
+            : 'Studio 无法读取该本地文件。',
+        );
+      }
+    },
+    [
+      contentLocale,
+      revokeLocalPreview,
+      setDreaminaMultimodalItems,
+      setViralDanceReferenceVideoUrl,
+      validateNextDreaminaSlot,
+    ],
   );
 
   const maxDuration = currentTemplate?.duration ?? videoDuration;
@@ -574,10 +697,15 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const hasValidPrompt = multiShotEnabled
     ? shotsValid
     : hasPolishedPrompt || prompt.trim().length > 0;
-  const hasUnifiedReferenceImage = dreaminaMultimodalItems.some((item) => item.kind === 'image');
-  const materialOk = isViralDanceTemplate
-    ? selectedOrder.length >= 1 || hasUnifiedReferenceImage  // @图片1 必填；Asset Library refs can satisfy Dreamina flow
-    : !hasMatchedMaterials || selectedOrder.length >= 1;
+  const seedanceReferenceValidation = validateSeedanceReferenceSet(
+    dreaminaMultimodalItems.map((item) => ({ kind: item.kind })),
+  );
+  const requiredUnifiedSourcesReady =
+    videoModel !== 'dreamina-multimodal' ||
+    unifiedAssetSlots.every((slot) => !slot.required || Boolean(unifiedSources[slot.id]));
+  const seedanceReferencesReady = videoModel !== 'dreamina-multimodal' || seedanceReferenceValidation.canGenerate;
+  const driveMaterialReady = !hasMatchedMaterials || selectedOrder.length >= 1;
+  const materialOk = requiredUnifiedSourcesReady && seedanceReferencesReady && driveMaterialReady;
   const canStartGenerate = hasValidPrompt && materialOk;
   const durationOptions = getStudioTemplateDurationOptions(templateId, multiShotEnabled);
   const aspectRatioOptions = getStudioTemplateAspectRatioOptions(templateId, multiShotEnabled);
@@ -723,36 +851,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 </div>
               </div>
             )}
-            {isViralDanceTemplate && (
-              <div className="rounded-xl border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 p-4 space-y-3 mt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🎵</span>
-                  <span className="text-sm font-semibold text-[var(--color-text)]">{t('generate.tiktokReferenceVideo')}</span>
-                  <span className="ml-auto text-[10px] text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5">@视频1</span>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={viralDanceReferenceVideoUrl}
-                    onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
-                    placeholder={t('generate.tiktokUrlPlaceholder')}
-                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
-                  />
-                  {viralDanceReferenceVideoUrl.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setViralDanceReferenceVideoUrl('')}
-                      className="px-2 py-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-[var(--color-text-muted)]">
-                  {t('generate.tiktokReferenceHint')}
-                </p>
-              </div>
-            )}
           </>
         )}
         {/* 写稿要点 */}
@@ -829,22 +927,27 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4" data-section="unifiedAssetSelector">
           <div className="mb-3">
             <p className="text-sm font-medium text-[var(--color-text)]">
-              {contentLocale === 'en' ? 'Studio source assets' : 'Studio 源素材'}
+              {t('generate.referenceAssetsTitle')}
             </p>
             <p className="text-xs leading-5 text-[var(--color-text-muted)]">
-              {contentLocale === 'en'
-                ? 'Use approved Asset Library files as structured Studio references. Legacy Drive selection remains available below.'
-                : '直接把素材中台的已授权文件装配成 Studio 参考位；下方 Google Drive 旧流程仍保留。'}
+              {t('generate.referenceAssetsDesc')}
             </p>
           </div>
           <UnifiedAssetSelector
             slots={unifiedAssetSlots}
-            selectedAssets={unifiedSlotAssets}
+            selectedSources={unifiedSources}
             locale={presetLocale}
             onSelectAsset={(slot, asset) => void handleUnifiedAssetSelect(slot, asset)}
+            onSelectLocalFile={(slot, file) => void handleUnifiedLocalFileSelect(slot, file)}
+            onClearSource={handleUnifiedSourceClear}
           />
           {unifiedAssetError ? (
             <p className="mt-3 text-sm text-[var(--color-error)]">{unifiedAssetError}</p>
+          ) : null}
+          {videoModel === 'dreamina-multimodal' && !seedanceReferenceValidation.canGenerate ? (
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+              {formatSeedanceValidationError(seedanceReferenceValidation.reason)}
+            </p>
           ) : null}
         </section>
       )}
@@ -1013,35 +1116,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             )}
           </div>
         )}
-        {!isViralDanceTemplate && (
-          <>
-            <button
-              type="button"
-              onClick={handleOneClickMatch}
-              disabled={matchLoading || loading}
-              className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {matchLoading || loading ? t('generate.matchingAssets') : t('generate.matchAssets')}
-            </button>
-            {verifiedFolderId && (
-              <button
-                type="button"
-                onClick={() => setShowDriveManualBrowse((v) => !v)}
-                className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
-              >
-                {showDriveManualBrowse ? t('generate.hideManualDriveSelect') : t('generate.showManualDriveSelect')}
-              </button>
-            )}
-            {/* TASK-D: 从资产库选参考图 */}
-            <button
-              type="button"
-              onClick={() => { setAssetPickerMode('image'); setAssetPickerOpen(true); }}
-              className="px-5 py-2.5 border border-[var(--color-primary)]/50 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
-            >
-              {t('generate.chooseReferenceFromLibrary')}
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={() => setShowMoreAssetSources((v) => !v)}
+          className="px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors"
+        >
+          {t('generate.moreAssetSources')}
+        </button>
         <button
           type="button"
           onClick={handleStartGenerate}
@@ -1081,132 +1162,155 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
 
       {/* 关键词仅用于 一键匹配素材，不展示给用户；对话框中只显示优化后的创意描述 */}
 
-      {/* 结果区：素材选择 */}
-      {verifiedFolderId && (
+      {showMoreAssetSources && (
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-          <p className="text-sm font-medium text-[var(--color-text)] mb-2">
-            {isViralDanceTemplate ? t('generate.viralAssetsTitle') : t('generate.libraryAssetsTitle')}
-          </p>
-          {isViralDanceTemplate ? (
-            <>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                {formatText('generate.viralBindingHint', { folderName: verifiedFolderName ?? '' })}
-              </p>
-              <ViralDanceMaterialPicker
-                accessToken={accessToken}
-                verifiedFolderId={verifiedFolderId}
-                verifiedFolderName={verifiedFolderName}
-                listFolder={listFolder}
-                selectedOrder={selectedOrder}
-                setSelectedOrder={setSelectedOrder}
-                onLogin={() => login()}
-                onLoadCharacterLibrary={async () => {
-                  const { characters } = await listCharacterLibrary();
-                  return characters
-                    .filter((c) => c.baseImageDataUrl)
-                    .map((c) => ({
-                      id: c.id,
-                      name: c.name,
-                      imageUrl: c.baseImageDataUrl || '',
-                    }));
-                }}
-                onCharacterSelected={async (imageUrl: string) => {
-                  try {
-                    // fetch → base64 → 设为 dreaminaMultimodalItems[0]（@图片1）
-                    const resp = await fetch(imageUrl);
-                    const blob = await resp.blob();
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const dataUrl = reader.result as string;
-                      // data:image/jpeg;base64,XXXX → 去掉前缀
-                      const base64 = dataUrl.split(',')[1] ?? dataUrl;
-                      const mimeType = blob.type || 'image/jpeg';
-                      setDreaminaMultimodalItems((prev) => {
-                        const next = [...prev];
-                        next[0] = {
-                          id: `lib-char-${Date.now()}`,
+          <p className="text-sm font-medium text-[var(--color-text)] mb-1">{t('generate.moreAssetSources')}</p>
+          <p className="text-xs text-[var(--color-text-muted)] mb-3">{t('generate.moreAssetSourcesHint')}</p>
+
+          {isViralDanceTemplate && (
+            <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+              <p className="mb-2 text-xs font-medium text-[var(--color-text)]">{t('generate.tiktokReferenceVideo')}</p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={viralDanceReferenceVideoUrl}
+                  onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
+                  placeholder={t('generate.tiktokUrlPlaceholder')}
+                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
+                />
+                {viralDanceReferenceVideoUrl.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setViralDanceReferenceVideoUrl('')}
+                    className="rounded-lg px-2 py-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)]"
+                  >
+                    x
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">{t('generate.tiktokReferenceHint')}</p>
+            </div>
+          )}
+
+          {verifiedFolderId ? (
+            isViralDanceTemplate ? (
+              <>
+                <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                  {formatText('generate.viralBindingHint', { folderName: verifiedFolderName ?? '' })}
+                </p>
+                <ViralDanceMaterialPicker
+                  accessToken={accessToken}
+                  verifiedFolderId={verifiedFolderId}
+                  verifiedFolderName={verifiedFolderName}
+                  listFolder={listFolder}
+                  selectedOrder={selectedOrder}
+                  setSelectedOrder={setSelectedOrder}
+                  onLogin={() => login()}
+                  onLoadCharacterLibrary={async () => {
+                    const { characters } = await listCharacterLibrary();
+                    return characters
+                      .filter((c) => c.baseImageDataUrl)
+                      .map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                        imageUrl: c.baseImageDataUrl || '',
+                      }));
+                  }}
+                  onCharacterSelected={async (imageUrl: string) => {
+                    try {
+                      const resp = await fetch(imageUrl);
+                      const blob = await resp.blob();
+                      const base64 = await readBlobAsBase64(blob);
+                      setDreaminaMultimodalItems((prev) => [
+                        ...prev.filter((item) => item.id !== 'legacy-drive-character'),
+                        {
+                          id: 'legacy-drive-character',
                           kind: 'image',
                           base64,
-                          mimeType,
+                          mimeType: blob.type || 'image/jpeg',
                           fileName: 'character.jpg',
-                        };
-                        return next;
-                      });
-                    };
-                    reader.readAsDataURL(blob);
-                  } catch {
-                    // 静默失败，用户可手动选图
-                  }
-                }}
-              />
-              {selectedOrder.length > 0 ? (
-                <p className="mt-3 text-sm text-[var(--color-success)]">
-                  {selectedOrder.length === 1 ? t('generate.viralBindingReadySingle') : t('generate.viralBindingReadyBoth')}
-                </p>
-              ) : (
-                <p className="mt-3 text-sm text-[var(--color-error)]">
-                  ⚠️ {t('generate.viralBindingMissingCharacter')}
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                {formatText('generate.librarySelectionHint', { folderName: verifiedFolderName ?? '' })}
-              </p>
-              <DriveMaterialPicker
-                keywords={keywords}
-                accessToken={accessToken}
-                onLogin={() => login()}
-                files={files}
-                loading={loading}
-                error={error}
-                onSearch={(kw) => void search(kw, verifiedFolderId)}
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-                selectedOrder={selectedOrder}
-                onReorder={() => {}}
-                folderId={verifiedFolderId}
-              />
-              {showDriveManualBrowse && verifiedFolderId && verifiedFolderName && (
-                <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                  <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                    {t('generate.driveExplorerHint')}
+                        },
+                      ]);
+                    } catch {
+                      // User can still use the unified reference slots above.
+                    }
+                  }}
+                />
+                {selectedOrder.length > 0 && (
+                  <p className="mt-3 text-sm text-[var(--color-success)]">
+                    {selectedOrder.length === 1 ? t('generate.viralBindingReadySingle') : t('generate.viralBindingReadyBoth')}
                   </p>
-                  <DriveExplorer
-                    rootFolderId={verifiedFolderId}
-                    rootFolderName={verifiedFolderName}
-                    accessToken={accessToken}
-                    onLogin={() => login()}
-                    selectable
-                    selectedIds={selectedIds}
-                    onToggleSelect={handleToggleFromExplorer}
-                  />
+                )}
+              </>
+            ) : (
+              <>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOneClickMatch}
+                    disabled={matchLoading || loading}
+                    className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {matchLoading || loading ? t('generate.matchingAssets') : t('generate.matchAssets')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDriveManualBrowse((v) => !v)}
+                    className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                  >
+                    {showDriveManualBrowse ? t('generate.hideManualDriveSelect') : t('generate.showManualDriveSelect')}
+                  </button>
                 </div>
-              )}
-              {selectedOrder.length > 0 && (
-                <p className="mt-3 text-sm text-[var(--color-success)]">
-                  {formatText('generate.selectedAssetCount', { count: selectedOrder.length })}
+                <p className="text-xs text-[var(--color-text-muted)] mb-3">
+                  {formatText('generate.librarySelectionHint', { folderName: verifiedFolderName ?? '' })}
                 </p>
-              )}
-            </>
+                <DriveMaterialPicker
+                  keywords={keywords}
+                  accessToken={accessToken}
+                  onLogin={() => login()}
+                  files={files}
+                  loading={loading}
+                  error={error}
+                  onSearch={(kw) => void search(kw, verifiedFolderId)}
+                  selectedIds={selectedIds}
+                  onToggleSelect={handleToggleSelect}
+                  selectedOrder={selectedOrder}
+                  onReorder={() => {}}
+                  folderId={verifiedFolderId}
+                />
+                {showDriveManualBrowse && verifiedFolderId && verifiedFolderName && (
+                  <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+                    <p className="text-xs text-[var(--color-text-muted)] mb-3">{t('generate.driveExplorerHint')}</p>
+                    <DriveExplorer
+                      rootFolderId={verifiedFolderId}
+                      rootFolderName={verifiedFolderName}
+                      accessToken={accessToken}
+                      onLogin={() => login()}
+                      selectable
+                      selectedIds={selectedIds}
+                      onToggleSelect={handleToggleFromExplorer}
+                    />
+                  </div>
+                )}
+                {selectedOrder.length > 0 && (
+                  <p className="mt-3 text-sm text-[var(--color-success)]">
+                    {formatText('generate.selectedAssetCount', { count: selectedOrder.length })}
+                  </p>
+                )}
+              </>
+            )
+          ) : (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+              <p className="text-sm text-[var(--color-text-muted)] mb-2">{t('generate.configureDriveHint')}</p>
+              <Link
+                to="/materials"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+              >
+                {t('generate.goConfigureMaterials')}
+              </Link>
+            </div>
           )}
         </section>
-      )}
-
-      {/* 未设置素材库时的引导（含去设置链接） */}
-      {!verifiedFolderId && (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
-          <p className="text-sm text-[var(--color-text-muted)] mb-2">
-            {t('generate.configureDriveHint')}
-          </p>
-          <Link
-            to="/materials"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors text-sm font-medium"
-          >
-            {t('generate.goConfigureMaterials')}
-          </Link>
-        </div>
       )}
 
       {/* 开始生成后内联展示：生成视频 */}
@@ -1226,15 +1330,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             setSaveModalOpen(false);
             onBrowseTemplates?.();
           }}
-        />
-      )}
-
-      {/* TASK-D: 资产库选择器弹窗 */}
-      {assetPickerOpen && (
-        <AssetPicker
-          filterType={assetPickerMode}
-          onSelect={(assets) => void handleAssetPickerSelect(assets)}
-          onClose={() => setAssetPickerOpen(false)}
         />
       )}
     </div>

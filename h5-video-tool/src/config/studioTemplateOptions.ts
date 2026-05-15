@@ -1,5 +1,6 @@
 import { getCharacterShowcaseValidationNotice } from '../studio/characterShowcaseValidation.ts';
 import { getMotionTransferValidationNotice } from '../studio/motionTransferValidation.ts';
+import { SEEDANCE_DURATION_OPTIONS } from './seedanceSourceConstraints.ts';
 
 export const ACTIVE_STUDIO_TEMPLATE_IDS = ['viral-dance', 'boss-showcase'] as const;
 export const REMOVED_STUDIO_TEMPLATE_IDS = ['short-drama', 'cat-harem', 'cg-trailer'] as const;
@@ -18,10 +19,11 @@ export function filterVisibleStudioTemplates<T extends TemplateLike>(templates: 
 }
 
 export function getStudioTemplateDurationOptions(templateId: string, multiShotEnabled = false): number[] {
-  if (templateId === 'custom') return multiShotEnabled ? [10, 15, 30, 60] : [4, 6, 8, 10];
-  if (templateId === 'viral-dance') return [5, 8, 10];
-  if (templateId === 'boss-showcase') return [15];
-  return [4, 5, 6, 7, 8, 10, 15, 30, 60];
+  void multiShotEnabled;
+  if (templateId === 'custom') return [...SEEDANCE_DURATION_OPTIONS];
+  if (templateId === 'viral-dance') return [5, 8, 10, 15];
+  if (templateId === 'boss-showcase') return [10, 15];
+  return [...SEEDANCE_DURATION_OPTIONS];
 }
 
 export function getStudioTemplateAspectRatioOptions(templateId: string, multiShotEnabled = false): string[] {
@@ -40,9 +42,9 @@ export function isValidStudioAspectRatio(templateId: string, aspectRatio: string
 }
 
 export function getStudioTemplateDisplayMeta(template: TemplateLike): string {
-  if (template.id === 'custom') return '4-10s · 9:16 / 16:9 / 1:1';
-  if (template.id === 'viral-dance') return '5-10s · 9:16';
-  if (template.id === 'boss-showcase') return '15s · 9:16 / 16:9';
+  if (template.id === 'custom') return '4-15s · 9:16 / 16:9 / 1:1';
+  if (template.id === 'viral-dance') return '5-15s · 9:16';
+  if (template.id === 'boss-showcase') return '10-15s · 9:16 / 16:9';
   return `${template.duration ?? '-'}s · ${template.aspectRatio ?? '-'}`;
 }
 

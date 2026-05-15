@@ -671,10 +671,15 @@ export function StepVideo() {
 
   return (
     <section className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)]">
-      <h2 className="text-sm font-medium text-[var(--color-text)] mb-4">生成视频</h2>
+      <h2 className="text-sm font-medium text-[var(--color-text)] mb-4">生成确认</h2>
       <div className="space-y-4">
         {isDreaminaMultimodalModelId(videoModel) && (
-          <DreaminaMultimodalRefs items={dreaminaMultimodalItems} onChange={setDreaminaMultimodalItems} />
+          <details className="space-y-3">
+            <summary className="cursor-pointer text-sm font-medium text-[var(--color-text)]">
+              高级补充参考素材
+            </summary>
+            <DreaminaMultimodalRefs items={dreaminaMultimodalItems} onChange={setDreaminaMultimodalItems} />
+          </details>
         )}
         <button
           type="button"
