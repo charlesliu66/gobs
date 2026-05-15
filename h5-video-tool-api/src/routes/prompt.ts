@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   type CaptionCampaignContext,
+  type PromptReferenceAsset,
   polishPrompt,
   generateCaptionForPost,
   translateCaptionForPost,
@@ -35,6 +36,27 @@ function readCampaignPhraseList(...values: unknown[]): string[] {
     }
   }
   return phrases;
+}
+
+function normalizePromptReferenceAssetsInput(value: unknown): PromptReferenceAsset[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const assets: PromptReferenceAsset[] = [];
+  for (const item of value) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const asset: PromptReferenceAsset = {
+      slotId: readTrimmedString(record.slotId),
+      title: readTrimmedString(record.title),
+      kind: readTrimmedString(record.kind),
+      filename: readTrimmedString(record.filename),
+      token: readTrimmedString(record.token),
+      semanticRole: readTrimmedString(record.semanticRole),
+    };
+    if (asset.slotId || asset.title || asset.kind || asset.filename || asset.token || asset.semanticRole) {
+      assets.push(asset);
+    }
+  }
+  return assets.length > 0 ? assets : undefined;
 }
 
 export function normalizeCaptionCampaignContextInput(body: Record<string, unknown>): CaptionCampaignContext | undefined {
@@ -122,27 +144,37 @@ promptRouter.get('/short-drama-presets', (_req: Request, res: Response) => {
 
 /**
  * POST /api/prompt/polish
- * Body: { prompt: string, templateId?: string, style?: string, multishot?: boolean, duration?: number, aspectRatio?: string }
+ * Body: { prompt: string, templateId?: string, style?: string, multishot?: boolean, duration?: number, aspectRatio?: string, mode?: string, referenceAssets?: [...] }
  * Response: { polishedPrompt, searchKeywords, folderHints?, template?, shots? }
  *
  * templateId 优先于 style。传入 templateId 时按模板优化。
  * 自定义模式 + multishot：仅用导演知识生成多镜分镜。
  */
 promptRouter.post('/polish', async (req: Request, res: Response) => {
-  const { prompt, templateId, style, multishot, duration, aspectRatio } = req.body as {
+  const { prompt, templateId, style, multishot, duration, aspectRatio, mode, referenceAssets } = req.body as {
     prompt?: string;
     templateId?: string;
     style?: string;
     multishot?: boolean;
     duration?: number;
     aspectRatio?: string;
+    mode?: string;
+    referenceAssets?: unknown;
   };
   const raw = typeof prompt === 'string' ? prompt : '';
   if (!raw.trim()) {
     res.status(400).json({ error: '请提供 prompt' });
     return;
   }
-  let opts: { templateId?: string; styleId?: string; multishot?: boolean; duration?: number; aspectRatio?: string } | undefined;
+  let opts: {
+    templateId?: string;
+    styleId?: string;
+    multishot?: boolean;
+    duration?: number;
+    aspectRatio?: string;
+    mode?: string;
+    referenceAssets?: PromptReferenceAsset[];
+  } | undefined;
   if (typeof templateId === 'string' && templateId) {
     opts = { templateId };
   } else if (typeof style === 'string' && style) {
@@ -150,6 +182,11 @@ promptRouter.post('/polish', async (req: Request, res: Response) => {
   }
   if (multishot === true) {
     opts = { ...(opts ?? {}), multishot: true, duration: typeof duration === 'number' ? duration : 30, aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : '16:9' };
+  }
+  const normalizedMode = readTrimmedString(mode);
+  const normalizedReferenceAssets = normalizePromptReferenceAssetsInput(referenceAssets);
+  if (normalizedMode || normalizedReferenceAssets?.length) {
+    opts = { ...(opts ?? {}), mode: normalizedMode, referenceAssets: normalizedReferenceAssets };
   }
   try {
     const result = await polishPrompt(raw, opts);

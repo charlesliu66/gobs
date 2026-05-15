@@ -5,6 +5,7 @@ import {
   buildPromptRequestHeaders,
   getShortDramaPresets,
   getTemplates,
+  polishPrompt,
 } from '../src/api/promptPolish.ts';
 
 test('buildPromptRequestHeaders includes JSON content type and bearer token when provided', () => {
@@ -69,6 +70,47 @@ test('legacy short-drama presets fallback is empty after Studio cleanup', async 
 
   try {
     assert.deepEqual(await getShortDramaPresets(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('polishPrompt sends mode and reference asset context for one-click prompt optimization', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      polishedPrompt: '用 @图片1 和 @图片2 优化后的 prompt',
+      searchKeywords: ['hero'],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+
+  try {
+    await polishPrompt('基础 prompt', {
+      mode: 'custom',
+      referenceAssets: [
+        {
+          slotId: 'role',
+          title: '主角参考',
+          kind: 'image',
+          filename: 'hero.png',
+          token: '@图片1',
+          semanticRole: 'role',
+        },
+      ],
+    });
+    assert.equal(capturedBody?.mode, 'custom');
+    assert.deepEqual(capturedBody?.referenceAssets, [
+      {
+        slotId: 'role',
+        title: '主角参考',
+        kind: 'image',
+        filename: 'hero.png',
+        token: '@图片1',
+        semanticRole: 'role',
+      },
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

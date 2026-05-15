@@ -1,10 +1,11 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { Link } from 'react-router-dom';
 import {
   polishPrompt,
   getTemplates,
   type PromptTemplate,
+  type PromptReferenceAsset,
 } from '../api/promptPolish';
 import { listCharacterLibrary } from '../api/characterLibrary';
 import { useGoogleDrive, type DriveFile } from '../hooks/useGoogleDrive';
@@ -28,18 +29,19 @@ import {
   isValidStudioDuration,
 } from '../config/studioTemplateOptions';
 import { PROMPT_INSPIRATIONS } from '../config/promptInspirations';
-import {
-  getStudioQualityPresetGroups,
-  localizedPresetLabel,
-  localizedPresetPrompt,
-  type StudioPresetLocale,
-} from '../config/studioQualityPresets';
+import type { StudioPresetLocale } from '../config/studioQualityPresets';
 import {
   inferSeedanceMediaKind,
   isSeedanceReferenceFileSupported,
   validateSeedanceReferenceSet,
   type SeedanceMediaKind,
 } from '../config/seedanceSourceConstraints';
+import type { DreaminaMultimodalItem } from '../context/CreateFlowContext';
+import {
+  assignPromptReferenceTokens,
+  getPromptReferenceUsage,
+  insertPromptReferenceToken,
+} from '../utils/promptReferenceTokens';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -61,13 +63,6 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
-/** Prompt 风格选项，id 需与后端 STYLE_HINTS 对应；后续可改为从 API 或配置加载 */
-const LOCALIZED_PROMPT_STYLE_KEYS = [
-  { id: 'viral', labelKey: 'generate.styleViral' },
-  { id: 'formal', labelKey: 'generate.styleFormal' },
-  { id: 'story', labelKey: 'generate.styleStory' },
-] as const;
-
 function assetFileUrl(asset: LibraryAsset): string {
   return asset.file_url || buildAssetFileUrl(asset.id);
 }
@@ -82,6 +77,40 @@ function assetPreviewUrl(asset: LibraryAsset): string {
 
 function dreaminaSlotItemId(slot: UnifiedAssetSlot): string {
   return `studio-slot-${slot.id}`;
+}
+
+function sortDreaminaItemsBySlotOrder(items: DreaminaMultimodalItem[], slots: UnifiedAssetSlot[]): DreaminaMultimodalItem[] {
+  const order = new Map(slots.map((slot, index) => [dreaminaSlotItemId(slot), index]));
+  return [...items].sort((a, b) => {
+    const aIndex = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bIndex = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return aIndex - bIndex;
+  });
+}
+
+function upsertDreaminaSlotItem(
+  previous: DreaminaMultimodalItem[],
+  slot: UnifiedAssetSlot,
+  item: DreaminaMultimodalItem,
+  slots: UnifiedAssetSlot[],
+): DreaminaMultimodalItem[] {
+  return sortDreaminaItemsBySlotOrder(
+    [...previous.filter((current) => current.id !== dreaminaSlotItemId(slot)), item],
+    slots,
+  );
+}
+
+function buildUnifiedSourceTokenMap(
+  slots: UnifiedAssetSlot[],
+  sources: Record<string, UnifiedAssetSourceSelection | null>,
+): Record<string, string> {
+  const sourceList = slots.flatMap((slot) => {
+    const source = sources[slot.id];
+    if (!source || source.status === 'error') return [];
+    return [{ ...source, id: slot.id }];
+  });
+  const withTokens = assignPromptReferenceTokens(sourceList);
+  return Object.fromEntries(withTokens.map((source) => [source.id, source.token]));
 }
 
 function readBlobAsBase64(blob: Blob): Promise<string> {
@@ -172,6 +201,53 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
   return [];
 }
 
+function normalizeUnifiedAssetSlots(slots: UnifiedAssetSlot[], locale: StudioPresetLocale): UnifiedAssetSlot[] {
+  const isEn = locale === 'en';
+  const copyById: Record<string, Pick<UnifiedAssetSlot, 'title' | 'description'>> = {
+    'viral-character': {
+      title: isEn ? 'Character reference' : '主角/产品参考',
+      description: isEn ? 'Keeps the subject consistent. Maps to @图片1.' : '决定角色或产品一致性，会映射到 @图片1。',
+    },
+    'viral-motion': {
+      title: isEn ? 'Motion reference' : '动作参考视频',
+      description: isEn ? 'Supplies rhythm and body movement. Maps to @视频1.' : '提供动作节奏与肢体细节，会映射到 @视频1。',
+    },
+    'viral-scene': {
+      title: isEn ? 'Environment reference' : '环境/氛围参考',
+      description: isEn ? 'Optional background or mood. Maps to @图片2.' : '补充背景、光线和画面情绪，会映射到 @图片2。',
+    },
+    'showcase-character': {
+      title: isEn ? 'Character or boss reference' : '主角/Boss 参考',
+      description: isEn ? 'Keeps the showcased subject consistent. Maps to @图片1.' : '决定展示主体的一致性，会映射到 @图片1。',
+    },
+    'showcase-scene': {
+      title: isEn ? 'Environment reference' : '环境/氛围参考',
+      description: isEn ? 'Optional key art, background, or mood. Maps to @图片2.' : '补充背景、光线和展示氛围，会映射到 @图片2。',
+    },
+    'quick-primary-reference': {
+      title: isEn ? 'Subject reference' : '主角/产品参考',
+      description: isEn ? 'Character, key art, or product visual. Maps to @图片1.' : '决定角色或产品一致性，会映射到 @图片1。',
+    },
+    'quick-scene-reference': {
+      title: isEn ? 'Environment reference' : '环境/氛围参考',
+      description: isEn ? 'Optional background, lighting, or mood image. Maps to @图片2.' : '补充背景、光线和画面情绪，会映射到 @图片2。',
+    },
+  };
+  const order = new Map([
+    ['viral-character', 0],
+    ['viral-motion', 1],
+    ['viral-scene', 2],
+    ['showcase-character', 0],
+    ['showcase-scene', 1],
+    ['quick-primary-reference', 0],
+    ['quick-scene-reference', 1],
+  ]);
+
+  return [...slots]
+    .sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99))
+    .map((slot) => ({ ...slot, ...(copyById[slot.id] ?? {}) }));
+}
+
 interface TabGenerateProps {
   onBrowseTemplates?: () => void;
   /** 返回功能选择（重新选择模板） */
@@ -190,10 +266,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   }, [t]);
   const localizedSeedanceModels = LOCALIZED_SEEDANCE_MODEL_KEYS.map((item) => ({
     value: item.value,
-    label: t(item.labelKey),
-  }));
-  const localizedPromptStyles = LOCALIZED_PROMPT_STYLE_KEYS.map((item) => ({
-    id: item.id,
     label: t(item.labelKey),
   }));
   const {
@@ -260,24 +332,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [showMoreAssetSources, setShowMoreAssetSources] = useState(false);
   const selectedIds = new Set(selectedOrder.map((f) => f.id));
 
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [tipsExpanded, setTipsExpanded] = useState(false);
+  const [quickInspirationsExpanded, setQuickInspirationsExpanded] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [expertMode, setExpertMode] = useState(false);
   const [unifiedSources, setUnifiedSources] = useState<Record<string, UnifiedAssetSourceSelection | null>>({});
   const [unifiedAssetError, setUnifiedAssetError] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const localPreviewUrlsRef = useRef<Record<string, string>>({});
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const revokeLocalPreview = useCallback((slotId: string) => {
     const previewUrl = localPreviewUrlsRef.current[slotId];
@@ -314,6 +375,60 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     getTemplates().then(setTemplates).catch(() => {});
   }, []);
 
+  const presetLocale: StudioPresetLocale = contentLocale === 'en' ? 'en' : 'zh';
+  const unifiedAssetSlots = useMemo(
+    () => normalizeUnifiedAssetSlots(getUnifiedAssetSlots(templateId, presetLocale), presetLocale),
+    [templateId, presetLocale],
+  );
+  const unifiedSourceTokenMap = useMemo(
+    () => buildUnifiedSourceTokenMap(unifiedAssetSlots, unifiedSources),
+    [unifiedAssetSlots, unifiedSources],
+  );
+  const selectedUnifiedSources = useMemo<Record<string, UnifiedAssetSourceSelection | null>>(
+    () => Object.fromEntries(
+      Object.entries(unifiedSources).map(([slotId, source]) => [
+        slotId,
+        source ? { ...source, token: unifiedSourceTokenMap[slotId] } : null,
+      ]),
+    ),
+    [unifiedSourceTokenMap, unifiedSources],
+  );
+  const promptReferenceAssets = useMemo<PromptReferenceAsset[]>(
+    () => unifiedAssetSlots.flatMap((slot) => {
+      const source = selectedUnifiedSources[slot.id];
+      if (!source?.token || source.status === 'reading' || source.status === 'error') return [];
+      return [{
+        slotId: slot.id,
+        title: slot.title,
+        kind: source.kind,
+        filename: source.filename,
+        token: source.token,
+        semanticRole: slot.semanticRole,
+      }];
+    }),
+    [selectedUnifiedSources, unifiedAssetSlots],
+  );
+  const promptReferenceUsage = useMemo(
+    () => getPromptReferenceUsage(prompt, promptReferenceAssets),
+    [prompt, promptReferenceAssets],
+  );
+  const handleInsertPromptToken = useCallback(
+    (selection: UnifiedAssetSourceSelection) => {
+      if (!selection.token) return;
+      const textarea = promptTextareaRef.current;
+      const start = textarea?.selectionStart ?? prompt.length;
+      const end = textarea?.selectionEnd ?? start;
+      const next = insertPromptReferenceToken(prompt, selection.token, start, end);
+      setPrompt(next.value);
+      setHasPolishedPrompt(false);
+      window.requestAnimationFrame(() => {
+        promptTextareaRef.current?.focus();
+        promptTextareaRef.current?.setSelectionRange(next.cursor, next.cursor);
+      });
+    },
+    [prompt, setHasPolishedPrompt, setPrompt],
+  );
+
   /** 模板切换时清理模板专属状态，避免旧素材或分镜误带到新模板。 */
   useEffect(() => {
     setShowGenerationFlow(false);
@@ -349,14 +464,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim() && !prompt.trim()) {
       setPrompt(
         contentLocale === 'en'
-          ? 'The character in @图片1 follows the motion from @视频1 inside the optional scene from @图片2. Smooth rhythm, consistent character design, vertical 9:16, energetic.'
-          : '角色（@图片1）在参考场景（@图片2，可选）中，跟随参考视频（@视频1）的动作节奏动起来，动作清晰，角色造型保持一致，竖屏 9:16',
+          ? 'The subject in @\u56fe\u72471 follows the motion from @\u89c6\u98911, with @\u56fe\u72472 as the optional environment reference. Smooth rhythm, consistent subject design, vertical 9:16.'
+          : '\u4e3b\u4f53\u53c2\u8003 @\u56fe\u72471 \u8ddf\u968f\u52a8\u4f5c\u53c2\u8003 @\u89c6\u98911 \u7684\u8282\u594f\u5b8c\u6210\u52a8\u4f5c\uff1b\u5982\u6709 @\u56fe\u72472\uff0c\u5219\u4f5c\u4e3a\u73af\u5883\u4e0e\u6c1b\u56f4\u53c2\u8003\u3002\u52a8\u4f5c\u6e05\u6670\uff0c\u4e3b\u4f53\u9020\u578b\u4fdd\u6301\u4e00\u81f4\uff0c\u7ad6\u5c4f 9:16\u3002',
       );
     }
   }, [contentLocale, prompt, setPrompt, templateId, viralDanceReferenceVideoUrl]);
 
   const handleOneClickPrompt = useCallback(
-    async (styleId?: string) => {
+    async () => {
       let effectivePrompt = prompt;
       if (templateId === 'viral-dance' && viralDanceReferenceVideoUrl.trim()) {
         const referenceVideoHeader =
@@ -366,21 +481,30 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         effectivePrompt = `${referenceVideoHeader}\n${viralDanceReferenceVideoUrl.trim()}\n\n${effectivePrompt}`;
       }
       if (!effectivePrompt.trim()) return;
-      setDropdownOpen(false);
       setPolishLoading(true);
       setPolishError(null);
+
       try {
         // 自定义模式：不传 templateId，仅用导演知识；多镜头时传 multishot 获取分镜
-        let opts: { templateId?: string; styleId?: string; multishot?: boolean; duration?: number; aspectRatio?: string } | undefined;
+        let opts: {
+          templateId?: string;
+          mode?: 'custom' | 'viral-dance' | 'boss-showcase';
+          multishot?: boolean;
+          duration?: number;
+          aspectRatio?: string;
+          referenceAssets?: PromptReferenceAsset[];
+        } = {
+          mode: templateId === 'viral-dance' || templateId === 'boss-showcase' ? templateId : 'custom',
+          referenceAssets: promptReferenceAssets,
+        };
         if (templateId === 'custom') {
-          opts = styleId ? { styleId } : undefined;
           if (multiShotEnabled) {
             opts = { ...(opts ?? {}), multishot: true, duration: videoDuration, aspectRatio: videoAspectRatio };
           }
         } else if (templateId) {
-          opts = { templateId };
+          opts = { ...opts, templateId };
         } else {
-          opts = styleId ? { styleId } : undefined;
+          opts = { ...opts };
         }
         const { polishedPrompt, searchKeywords, folderHints: hints, template, shots: polishedShots } = await polishPrompt(effectivePrompt, opts);
         setKeywords(searchKeywords);
@@ -415,6 +539,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       videoAspectRatio,
       viralDanceReferenceVideoUrl,
       contentLocale,
+      promptReferenceAssets,
       setPrompt,
       setKeywords,
       setFolderHints,
@@ -481,18 +606,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const handleStartGenerate = useCallback(() => {
     setShowGenerationFlow(true);
   }, []);
-
-  const presetLocale: StudioPresetLocale = contentLocale === 'en' ? 'en' : 'zh';
-  const unifiedAssetSlots = getUnifiedAssetSlots(templateId, presetLocale);
-  const qualityPresetGroups = getStudioQualityPresetGroups(templateId, presetLocale);
-
-  const handleAppendPresetPrompt = useCallback(
-    (hint: string) => {
-      setPrompt(prompt.trim() ? `${prompt.trim()}\n\n${hint}` : hint);
-      setHasPolishedPrompt(false);
-    },
-    [prompt, setHasPolishedPrompt, setPrompt],
-  );
 
   const formatSeedanceValidationError = useCallback(
     (reason: ReturnType<typeof validateSeedanceReferenceSet>['reason']) => {
@@ -570,6 +683,19 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       }
 
       try {
+        setUnifiedSources((current) => ({
+          ...current,
+          [slot.id]: {
+            id: `library-${asset.id}`,
+            source: 'library',
+            kind: slot.mediaType,
+            filename: asset.filename,
+            mimeType: assetMime,
+            previewUrl: assetPreviewUrl(asset),
+            assetId: asset.id,
+            status: 'reading',
+          },
+        }));
         const resp = await fetch(assetFileUrl(asset));
         const blob = await resp.blob();
         const kind = inferSeedanceMediaKind({ filename: asset.filename, mimeType: blob.type || assetMime });
@@ -577,12 +703,14 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           throw new Error('Unsupported reference asset type');
         }
         if (!validateNextDreaminaSlot(slot, kind)) {
+          setUnifiedSources((current) => ({ ...current, [slot.id]: null }));
           return;
         }
         const base64 = await readBlobAsBase64(blob);
         revokeLocalPreview(slot.id);
-        setDreaminaMultimodalItems((prev) => [
-          ...prev.filter((item) => item.id !== itemId),
+        setDreaminaMultimodalItems((prev) => upsertDreaminaSlotItem(
+          prev,
+          slot,
           {
             id: itemId,
             kind,
@@ -591,7 +719,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             fileName: asset.filename,
             semanticRole: slot.semanticRole,
           },
-        ]);
+          unifiedAssetSlots,
+        ));
         setUnifiedSources((current) => ({
           ...current,
           [slot.id]: {
@@ -602,16 +731,30 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             mimeType: blob.type || assetMime,
             previewUrl: assetPreviewUrl(asset),
             assetId: asset.id,
+            status: 'ready',
           },
         }));
         if (kind === 'video') setViralDanceReferenceVideoUrl(absoluteAssetUrl(asset));
         void recordUsage(asset.id, `studio-unified-slot:${slot.id}`);
       } catch {
-        setUnifiedAssetError(
-          contentLocale === 'en'
-            ? 'Studio could not load this asset as a Seedance reference. Try another file.'
-            : 'Studio 无法把该素材加载为 Seedance 参考，请换一个文件。',
-        );
+        const errorMessage = contentLocale === 'en'
+          ? 'Studio could not load this asset as a Seedance reference. Try another file.'
+          : '无法读取这个资产，请换一个文件。';
+        setUnifiedAssetError(errorMessage);
+        setUnifiedSources((current) => ({
+          ...current,
+          [slot.id]: {
+            id: `library-${asset.id}`,
+            source: 'library',
+            kind: slot.mediaType,
+            filename: asset.filename,
+            mimeType: assetMime,
+            previewUrl: assetPreviewUrl(asset),
+            assetId: asset.id,
+            status: 'error',
+            error: errorMessage,
+          },
+        }));
         setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== itemId));
       }
     },
@@ -621,6 +764,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       revokeLocalPreview,
       setDreaminaMultimodalItems,
       setViralDanceReferenceVideoUrl,
+      unifiedAssetSlots,
       validateNextDreaminaSlot,
     ],
   );
@@ -644,12 +788,25 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       }
 
       const previewUrl = URL.createObjectURL(file);
+      setUnifiedSources((current) => ({
+        ...current,
+        [slot.id]: {
+          id: `local-${slot.id}-${Date.now()}`,
+          source: 'local',
+          kind,
+          filename: file.name,
+          mimeType: file.type,
+          previewUrl,
+          status: 'reading',
+        },
+      }));
       try {
         const base64 = await readBlobAsBase64(file);
         revokeLocalPreview(slot.id);
         localPreviewUrlsRef.current[slot.id] = previewUrl;
-        setDreaminaMultimodalItems((prev) => [
-          ...prev.filter((item) => item.id !== itemId),
+        setDreaminaMultimodalItems((prev) => upsertDreaminaSlotItem(
+          prev,
+          slot,
           {
             id: itemId,
             kind,
@@ -658,7 +815,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             fileName: file.name,
             semanticRole: slot.semanticRole,
           },
-        ]);
+          unifiedAssetSlots,
+        ));
         setUnifiedSources((current) => ({
           ...current,
           [slot.id]: {
@@ -668,16 +826,28 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
             filename: file.name,
             mimeType: file.type,
             previewUrl,
+            status: 'ready',
           },
         }));
         if (kind === 'video') setViralDanceReferenceVideoUrl('');
       } catch {
         URL.revokeObjectURL(previewUrl);
-        setUnifiedAssetError(
-          contentLocale === 'en'
-            ? 'Studio could not read this local file.'
-            : 'Studio 无法读取该本地文件。',
-        );
+        const errorMessage = contentLocale === 'en'
+          ? 'Studio could not read this local file.'
+          : '\u65e0\u6cd5\u8bfb\u53d6\u8fd9\u4e2a\u672c\u5730\u6587\u4ef6\u3002';
+        setUnifiedAssetError(errorMessage);
+        setUnifiedSources((current) => ({
+          ...current,
+          [slot.id]: {
+            id: `local-${slot.id}-${Date.now()}`,
+            source: 'local',
+            kind,
+            filename: file.name,
+            mimeType: file.type,
+            status: 'error',
+            error: errorMessage,
+          },
+        }));
       }
     },
     [
@@ -685,6 +855,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       revokeLocalPreview,
       setDreaminaMultimodalItems,
       setViralDanceReferenceVideoUrl,
+      unifiedAssetSlots,
       validateNextDreaminaSlot,
     ],
   );
@@ -702,7 +873,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   );
   const requiredUnifiedSourcesReady =
     videoModel !== 'dreamina-multimodal' ||
-    unifiedAssetSlots.every((slot) => !slot.required || Boolean(unifiedSources[slot.id]));
+    unifiedAssetSlots.every((slot) => !slot.required || selectedUnifiedSources[slot.id]?.status === 'ready');
   const seedanceReferencesReady = videoModel !== 'dreamina-multimodal' || seedanceReferenceValidation.canGenerate;
   const driveMaterialReady = !hasMatchedMaterials || selectedOrder.length >= 1;
   const materialOk = requiredUnifiedSourcesReady && seedanceReferencesReady && driveMaterialReady;
@@ -809,8 +980,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         ) : (
           <>
             <textarea
+              ref={promptTextareaRef}
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                setHasPolishedPrompt(false);
+              }}
               rows={7}
               placeholder={
                 isViralDanceTemplate
@@ -819,12 +994,47 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
               }
               className="w-full px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-border-focus)] focus:outline-none resize-none"
             />
+            {promptReferenceUsage.length > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2" data-section="promptReferencePreview">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
+                  {contentLocale === 'en' ? 'Prompt references' : '\u5df2\u5f15\u7528\u7d20\u6750'}
+                </span>
+                {promptReferenceUsage.map(({ source, referenced }) => (
+                  <button
+                    key={`${source.slotId}-${source.token}`}
+                    type="button"
+                    onClick={() => handleInsertPromptToken({
+                      id: source.slotId ?? source.token,
+                      source: 'local',
+                      kind: source.kind,
+                      filename: source.filename ?? source.title ?? source.token,
+                      token: source.token,
+                    })}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      referenced
+                        ? 'border-[var(--color-success)]/50 bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                        : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)]'
+                    }`}
+                  >
+                    {source.token} - {referenced ? (contentLocale === 'en' ? 'referenced' : '\u5df2\u5199\u5165 Prompt') : (contentLocale === 'en' ? 'not in Prompt' : '\u672a\u5199\u5165 Prompt')}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {isCustomMode && (
               <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-[var(--color-text)]">{t('generate.quickInspirationTitle')}</p>
-                  <p className="text-[11px] text-[var(--color-text-muted)]">{t('generate.quickInspirationDesc')}</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setQuickInspirationsExpanded((value) => !value)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <span>
+                    <span className="block text-xs font-semibold text-[var(--color-text)]">{t('generate.quickInspirationTitle')}</span>
+                    <span className="block text-[11px] text-[var(--color-text-muted)]">{t('generate.quickInspirationDesc')}</span>
+                  </span>
+                  <ChevronIcon className={`h-4 w-4 shrink-0 transition-transform ${quickInspirationsExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                {quickInspirationsExpanded ? (
                 <div className="space-y-2">
                   {PROMPT_INSPIRATIONS.map((category) => (
                     <div key={category.id} className="space-y-1.5">
@@ -849,78 +1059,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                     </div>
                   ))}
                 </div>
+                ) : null}
               </div>
             )}
           </>
         )}
         {/* 写稿要点 */}
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setTipsExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <ChevronIcon className={`w-3.5 h-3.5 transition-transform ${tipsExpanded ? 'rotate-180' : ''}`} />
-            {isViralDanceTemplate
-              ? t('generate.viralDanceTipsTitle')
-              : t('generate.veoTipsTitle')}
-          </button>
-          {tipsExpanded && (
-            <div className="mt-2 p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-muted)] space-y-2">
-              {isViralDanceTemplate ? (
-                <>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipMotionLabel')}:</strong> {t('generate.viralTipMotionBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipOrderLabel')}:</strong> {t('generate.viralTipOrderBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipPromptLabel')}:</strong> {t('generate.viralTipPromptBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipLinkLabel')}:</strong> {t('generate.viralTipLinkBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.viralTipComplianceLabel')}:</strong> {t('generate.viralTipComplianceBody')}</p>
-                </>
-              ) : (
-                <>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipStructureLabel')}:</strong> {t('generate.veoTipStructureBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipTechniqueLabel')}:</strong> {t('generate.veoTipTechniqueBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipCameraLabel')}:</strong> {t('generate.veoTipCameraBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipStyleLabel')}:</strong> {t('generate.veoTipStyleBody')}</p>
-                  <p><strong className="text-[var(--color-text)]">{t('generate.veoTipReferenceLabel')}:</strong> {t('generate.veoTipReferenceBody')}</p>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {qualityPresetGroups.length > 0 && (
-          <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3" data-section="studioQualityPresets">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-text)]">
-                {contentLocale === 'en' ? 'Quality presets' : '质量预设'}
-              </p>
-              <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">
-                {contentLocale === 'en'
-                  ? 'Append production-ready direction without changing provider settings.'
-                  : '把制片方向追加到 prompt，不改底层生成参数。'}
-              </p>
-            </div>
-            <div className="mt-3 space-y-3">
-              {qualityPresetGroups.map((group) => (
-                <div key={group.id} className="space-y-1.5" data-preset-group={group.id}>
-                  <p className="text-[11px] font-medium text-[var(--color-text-muted)]">{group.title}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {group.presets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleAppendPresetPrompt(localizedPresetPrompt(preset, presetLocale))}
-                        className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-left text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text)]"
-                      >
-                        {localizedPresetLabel(preset, presetLocale)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
 
       {unifiedAssetSlots.length > 0 && (
@@ -935,11 +1079,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           </div>
           <UnifiedAssetSelector
             slots={unifiedAssetSlots}
-            selectedSources={unifiedSources}
+            selectedSources={selectedUnifiedSources}
             locale={presetLocale}
             onSelectAsset={(slot, asset) => void handleUnifiedAssetSelect(slot, asset)}
             onSelectLocalFile={(slot, file) => void handleUnifiedLocalFileSelect(slot, file)}
             onClearSource={handleUnifiedSourceClear}
+            onInsertToken={handleInsertPromptToken}
           />
           {unifiedAssetError ? (
             <p className="mt-3 text-sm text-[var(--color-error)]">{unifiedAssetError}</p>
@@ -1069,53 +1214,18 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
 
       {/* 操作按钮 */}
       <section className="flex flex-wrap gap-3 items-center">
-        {templateId && !isCustomMode ? (
-          <button
-            type="button"
-            onClick={() => handleOneClickPrompt()}
-            disabled={polishLoading || !prompt.trim()}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {polishLoading ? t('generate.optimizing') : formatText('generate.optimizePromptWithTemplate', { template: visibleTemplates.find((t) => t.id === templateId)?.name ?? t('generate.templateFallback') })}
-          </button>
-        ) : (
-          <div className="relative" ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => setDropdownOpen((v) => !v)}
-              disabled={polishLoading || !prompt.trim()}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {polishLoading ? t('generate.optimizing') : t('generate.optimizePrompt')}
-              <ChevronIcon className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-1 py-1 min-w-[160px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-lg z-10">
-                {isCustomMode && (
-                  <button
-                    type="button"
-                    onClick={() => handleOneClickPrompt()}
-                    disabled={polishLoading || !prompt.trim()}
-                    className="w-full px-4 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-                  >
-                    {t('generate.promptDefaultMode')}
-                  </button>
-                )}
-                {localizedPromptStyles.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleOneClickPrompt(s.id)}
-                    disabled={polishLoading || !prompt.trim()}
-                    className="w-full px-4 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => handleOneClickPrompt()}
+          disabled={polishLoading || !prompt.trim()}
+          className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {polishLoading
+            ? t('generate.optimizing')
+            : templateId && !isCustomMode
+              ? formatText('generate.optimizePromptWithTemplate', { template: visibleTemplates.find((t) => t.id === templateId)?.name ?? t('generate.templateFallback') })
+              : t('generate.optimizePrompt')}
+        </button>
         <button
           type="button"
           onClick={() => setShowMoreAssetSources((v) => !v)}

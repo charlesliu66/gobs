@@ -347,7 +347,172 @@ function safeJsonParse<T>(raw: string): T | null {
   }
 }
 
-export type PolishOptions = { styleId?: string; templateId?: string; multishot?: boolean; duration?: number; aspectRatio?: string };
+export type PromptReferenceAssetKind = 'image' | 'video' | 'audio' | string;
+
+export interface PromptReferenceAsset {
+  slotId?: string;
+  title?: string;
+  kind?: PromptReferenceAssetKind;
+  filename?: string;
+  token?: string;
+  semanticRole?: string;
+}
+
+export type PolishOptions = {
+  styleId?: string;
+  templateId?: string;
+  multishot?: boolean;
+  duration?: number;
+  aspectRatio?: string;
+  mode?: string;
+  referenceAssets?: PromptReferenceAsset[];
+};
+
+type NormalizedPromptReferenceAsset = {
+  slotId?: string;
+  title: string;
+  kind: 'image' | 'video' | 'audio';
+  filename?: string;
+  token: string;
+  semanticRole?: string;
+};
+
+const MATERIAL_TOKEN_RE = /@(图片|视频|音频)\d+/g;
+
+function normalizeReferenceText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized || undefined;
+}
+
+function inferReferenceKind(kind?: string, token?: string): 'image' | 'video' | 'audio' | undefined {
+  const k = (kind || '').toLowerCase().trim();
+  if (/image|img|photo|picture|still|图片|图像/.test(k)) return 'image';
+  if (/video|motion|clip|footage|视频/.test(k)) return 'video';
+  if (/audio|music|sound|voice|音频|音乐|声音/.test(k)) return 'audio';
+  if (token?.startsWith('@图片')) return 'image';
+  if (token?.startsWith('@视频')) return 'video';
+  if (token?.startsWith('@音频')) return 'audio';
+  return undefined;
+}
+
+function isTokenCompatibleWithKind(token: string, kind: 'image' | 'video' | 'audio'): boolean {
+  return (
+    (kind === 'image' && token.startsWith('@图片')) ||
+    (kind === 'video' && token.startsWith('@视频')) ||
+    (kind === 'audio' && token.startsWith('@音频'))
+  );
+}
+
+function normalizePromptReferenceAssets(referenceAssets?: PromptReferenceAsset[]): NormalizedPromptReferenceAsset[] {
+  if (!Array.isArray(referenceAssets)) return [];
+  const normalized: NormalizedPromptReferenceAsset[] = [];
+  const seenTokens = new Set<string>();
+  for (const asset of referenceAssets) {
+    if (!asset || typeof asset !== 'object') continue;
+    const token = normalizeReferenceText(asset.token);
+    const tokenMatch = token?.match(/^@(图片|视频|音频)([1-9]\d*)$/);
+    if (!token || !tokenMatch || seenTokens.has(token)) continue;
+    const kind = inferReferenceKind(asset.kind, token);
+    if (!kind || !isTokenCompatibleWithKind(token, kind)) continue;
+    const title =
+      normalizeReferenceText(asset.title) ||
+      normalizeReferenceText(asset.semanticRole) ||
+      normalizeReferenceText(asset.filename) ||
+      token;
+    seenTokens.add(token);
+    normalized.push({
+      slotId: normalizeReferenceText(asset.slotId),
+      title,
+      kind,
+      filename: normalizeReferenceText(asset.filename),
+      token,
+      semanticRole: normalizeReferenceText(asset.semanticRole),
+    });
+  }
+  return normalized;
+}
+
+function formatReferenceKind(kind: NormalizedPromptReferenceAsset['kind']): string {
+  if (kind === 'image') return 'image / 图片';
+  if (kind === 'video') return 'video / 视频';
+  return 'audio / 音频';
+}
+
+function referenceRoleText(asset: NormalizedPromptReferenceAsset): string {
+  const role = asset.semanticRole?.toLowerCase() || '';
+  if (asset.kind === 'video') {
+    if (/motion|action|dance|动作|节奏/.test(role)) return `动作源视频（${asset.title}）`;
+    return `视频参考（${asset.title}）`;
+  }
+  if (asset.kind === 'audio') return `音频/节奏参考（${asset.title}）`;
+  if (/scene|background|environment|场景|背景/.test(role)) return `场景参考（${asset.title}）`;
+  if (/role|character|subject|hero|角色|主体|人物/.test(role)) return `角色参考（${asset.title}）`;
+  if (/first|start|首帧/.test(role)) return `首帧参考（${asset.title}）`;
+  if (/last|end|尾帧/.test(role)) return `尾帧参考（${asset.title}）`;
+  return `视觉参考（${asset.title}）`;
+}
+
+function cleanupMaterialTokenResidue(value: string): string {
+  return value
+    .replace(/[ \t]+([，。！？、,.!?;；:：])/g, '$1')
+    .replace(/([（(【[])\s+/g, '$1')
+    .replace(/\s+([）)】\]])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function buildReferenceContextBlock(
+  referenceAssets?: PromptReferenceAsset[],
+  options?: { mode?: string },
+): string {
+  const mode = normalizeReferenceText(options?.mode) || 'default';
+  const refs = normalizePromptReferenceAssets(referenceAssets);
+  const lines = [
+    '## Advanced Studio reference asset guidance',
+    `Mode: ${mode}`,
+    'Project context: GOBS/QAS Advanced Studio passes selected media separately; the text prompt binds those media only through exact material tokens.',
+    'Director guidance: write a production-ready camera/action/lighting prompt, use clear subject + action + scene, and keep Seedance-style safety wording by softening violent creature/combat terms into cinematic tension.',
+    'Short-video/ad structure: make the first 3 seconds hook-first with a visible payoff, then keep the action readable for social vertical ads or creator posts.',
+    'Material token rules: use only the available tokens listed below; never invent @图片N, @视频N, or @音频N; never convert them into file paths; if a selected asset is relevant, keep its exact token with its semantic role.',
+  ];
+  if (refs.length === 0) {
+    lines.push('Available material tokens: none. Do not write any @图片N, @视频N, or @音频N token.');
+  } else {
+    lines.push('Available material tokens:');
+    for (const ref of refs) {
+      const details = [
+        formatReferenceKind(ref.kind),
+        ref.semanticRole ? `role=${ref.semanticRole}` : undefined,
+        ref.filename ? `filename=${ref.filename}` : undefined,
+      ].filter(Boolean);
+      lines.push(`- ${ref.token}: ${ref.title}${details.length ? ` (${details.join(', ')})` : ''}`);
+    }
+  }
+  lines.push('Keep the existing JSON response contract exactly.');
+  return lines.join('\n');
+}
+
+export function normalizePolishedPromptReferences(
+  polishedPrompt: string,
+  referenceAssets?: PromptReferenceAsset[],
+  options?: { mode?: string },
+): string {
+  const refs = normalizePromptReferenceAssets(referenceAssets);
+  const availableTokens = new Set(refs.map((ref) => ref.token));
+  let text = String(polishedPrompt ?? '').replace(/\\n/g, '\n').trim();
+  text = text.replace(MATERIAL_TOKEN_RE, (token) => (availableTokens.has(token) ? token : ''));
+  text = cleanupMaterialTokenResidue(text);
+  if (refs.length === 0) return text;
+
+  const missingRefs = refs.filter((ref) => !text.includes(ref.token));
+  if (missingRefs.length === 0) return text;
+  const materialSentence = `参考素材：${missingRefs
+    .map((ref) => `${ref.token}作为${referenceRoleText(ref)}`)
+    .join('，')}。`;
+  return cleanupMaterialTokenResidue(text ? `${materialSentence}\n${text}` : materialSentence);
+}
 
 export async function polishPrompt(
   rawPrompt: string,
@@ -358,6 +523,7 @@ export async function polishPrompt(
   const useCustomMultishot = !template && opts.multishot === true;
   const targetDuration = opts.duration ?? 30;
   const targetAspectRatio = opts.aspectRatio ?? '16:9';
+  const mode = opts.mode || template?.id || (useCustomMultishot ? 'custom-multishot' : opts.styleId || 'custom');
 
   const userText = rawPrompt.trim() || '请输入视频创意';
 
@@ -384,6 +550,9 @@ ${styleHint}`;
       : '';
     systemPrompt = FALLBACK_STYLE_SYSTEM + styleHint;
   }
+  if (opts.referenceAssets?.length || opts.mode) {
+    systemPrompt = `${systemPrompt}\n\n${buildReferenceContextBlock(opts.referenceAssets, { mode })}`;
+  }
 
   const rawText = await compassChatCompletion({
     systemPrompt,
@@ -402,6 +571,7 @@ ${styleHint}`;
     };
     let polishedPrompt = typeof parsed.polishedPrompt === 'string' ? parsed.polishedPrompt : rawPrompt;
     polishedPrompt = polishedPrompt.replace(/\\n/g, '\n').trim();
+    polishedPrompt = normalizePolishedPromptReferences(polishedPrompt, opts.referenceAssets, { mode });
     const searchKeywords = Array.isArray(parsed.searchKeywords)
       ? parsed.searchKeywords.filter((k): k is string => typeof k === 'string' && k.length > 0)
       : [];
@@ -438,7 +608,11 @@ ${styleHint}`;
       let normalized = parsed.shots
         .map((s) => ({
           duration: Math.min(8, Math.max(5, Number(s.duration) || 5)),
-          prompt: (typeof s.prompt === 'string' ? s.prompt : '').replace(/\\n/g, '\n').trim(),
+          prompt: normalizePolishedPromptReferences(
+            (typeof s.prompt === 'string' ? s.prompt : '').replace(/\\n/g, '\n').trim(),
+            opts.referenceAssets,
+            { mode },
+          ),
         }))
         .filter((s) => s.prompt.length > 0);
       // BOSS 展示：强制 3 镜 × 5s = 15s
@@ -457,7 +631,11 @@ ${styleHint}`;
   } catch {
     const m = rawText.match(/"polishedPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
     if (m) {
-      const extracted = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      const extracted = normalizePolishedPromptReferences(
+        m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+        opts.referenceAssets,
+        { mode },
+      );
       const result: PolishResult = {
         polishedPrompt: extracted || rawPrompt,
         searchKeywords: [rawPrompt],
@@ -472,7 +650,7 @@ ${styleHint}`;
       return result;
     }
     return {
-      polishedPrompt: rawPrompt,
+      polishedPrompt: normalizePolishedPromptReferences(rawPrompt, opts.referenceAssets, { mode }) || rawPrompt,
       searchKeywords: [rawPrompt],
       template: template
         ? { duration: template.duration, aspectRatio: template.aspectRatio, pipelineMode: template.pipelineMode }

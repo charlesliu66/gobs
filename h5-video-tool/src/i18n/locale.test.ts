@@ -167,6 +167,14 @@ test('locale source does not contain common mojibake markers', () => {
   assert.equal(MOJIBAKE_PATTERN.test(source), false);
 });
 
+test('Advanced Studio locale no longer exposes legacy prompt helper labels', () => {
+  const source = readFileSync(new URL('./messages.ts', import.meta.url), 'utf8');
+  assert.equal(source.includes('Veo 写稿要点'), false);
+  assert.equal(source.includes('质量预设'), false);
+  assert.equal(source.includes('默认（仅导演知识）'), false);
+  assert.equal(source.includes('Default (director knowledge only)'), false);
+});
+
 test('formatDateTime supports custom formatting options', () => {
   const value = new Date('2026-04-23T08:30:00.000Z');
   const formatted = formatDateTime(value, 'en', {

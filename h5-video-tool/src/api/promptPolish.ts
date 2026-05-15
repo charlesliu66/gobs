@@ -44,6 +44,15 @@ export interface PolishResult {
   characters?: string[];
 }
 
+export interface PromptReferenceAsset {
+  slotId?: string;
+  title?: string;
+  kind: 'image' | 'video' | 'audio';
+  filename?: string;
+  token: string;
+  semanticRole?: 'role' | 'scene' | string;
+}
+
 async function safeParseJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text?.trim()) return {} as T;
@@ -102,7 +111,15 @@ const POLISH_TIMEOUT_MS = 90000; // 90 秒，Gemini 可能较慢
 
 export async function polishPrompt(
   raw: string,
-  options?: { styleId?: string; templateId?: string; multishot?: boolean; duration?: number; aspectRatio?: string }
+  options?: string | {
+    styleId?: string;
+    templateId?: string;
+    mode?: 'custom' | 'viral-dance' | 'boss-showcase';
+    multishot?: boolean;
+    duration?: number;
+    aspectRatio?: string;
+    referenceAssets?: PromptReferenceAsset[];
+  }
 ): Promise<PolishResult> {
   const opts = typeof options === 'string' ? { styleId: options } : options ?? {};
   const body: Record<string, unknown> = { prompt: raw };
@@ -111,6 +128,8 @@ export async function polishPrompt(
   if (opts.multishot) body.multishot = true;
   if (opts.duration != null) body.duration = opts.duration;
   if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio;
+  if (opts.mode) body.mode = opts.mode;
+  if (opts.referenceAssets?.length) body.referenceAssets = opts.referenceAssets;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), POLISH_TIMEOUT_MS);

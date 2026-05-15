@@ -2,6 +2,18 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.205 - 2026-05-15
+**Advanced Studio prompt references and one-click optimization**
+**Advanced Studio UX:**
+- Added upload feedback to unified reference slots: reading state, preview, filename, ready/error state, material token, and one-click insertion into the Prompt editor.
+- Added a Prompt reference preview strip so operators can see which selected `@图片n` / `@视频n` tokens are already written into the prompt and click missing ones into place.
+- Collapsed Quick Inspirations by default and removed visible Veo writing tips, quality preset controls, and the custom prompt-style dropdown from the generation page.
+**Prompt optimization:**
+- Extended `/api/prompt/polish` and frontend `polishPrompt` with mode and reference-asset context so one-click Prompt can bind real selected materials without inventing unavailable tokens.
+- Internalized director, Seedance, short-video hook, ad-creative, and social publishing guidance into the backend optimizer while keeping third-party skills out of runtime dependencies.
+**Tests / Build:**
+- Added frontend token-helper and prompt-polish request tests plus backend prompt-reference normalization tests; reran targeted frontend/backend coverage before production builds.
+
 ## v0.204 - 2026-05-15
 **Advanced Studio Seedance reference flow**
 **Advanced Studio / Seedance:**

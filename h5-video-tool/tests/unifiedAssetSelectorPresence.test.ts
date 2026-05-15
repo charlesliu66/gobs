@@ -15,21 +15,34 @@ test('UnifiedAssetSelector wraps AssetPicker and local upload with template-awar
   assert.match(source, /filterType=\{activeSlot\.mediaType\}/);
   assert.match(source, /selectedSources/);
   assert.match(source, /onSelectLocalFile/);
+  assert.match(source, /onInsertToken/);
+  assert.match(source, /data-source-status=\{status\}/);
   assert.match(source, /data-source-action="upload-local"/);
+  assert.match(source, /data-source-action="insert-token"/);
+  assert.match(source, /status\?: 'ready' \| 'reading' \| 'error'/);
+  assert.match(source, /token\?: string/);
+  assert.match(source, /error\?: string/);
+  assert.match(source, /Reading file\.\.\.|正在读取文件/);
   assert.match(source, /onSelectAsset\(activeSlot, assets\[0\] \?\? null\)/);
 });
 
-test('TabGenerate wires the unified selector and quality presets into Studio creation', () => {
+test('TabGenerate wires the unified selector, local upload status, and prompt references into Studio creation', () => {
   const source = readFileSync(resolve(__dirname, '../src/pages/TabGenerate.tsx'), 'utf-8');
 
   assert.match(source, /getUnifiedAssetSlots/);
-  assert.match(source, /studioQualityPresets/);
   assert.match(source, /unifiedAssetSelector/);
   assert.match(source, /handleUnifiedAssetSelect/);
   assert.match(source, /handleUnifiedLocalFileSelect/);
+  assert.match(source, /promptReferencePreview/);
+  assert.match(source, /handleInsertPromptToken/);
+  assert.match(source, /referenceAssets: promptReferenceAssets/);
+  assert.match(source, /status: 'reading'/);
+  assert.match(source, /status: 'ready'/);
   assert.match(source, /quick-primary-reference/);
   assert.match(source, /viral-motion/);
   assert.match(source, /showcase-character/);
   assert.match(source, /studio-slot-\$\{slot\.id\}/);
+  assert.doesNotMatch(source, /data-section="studioQualityPresets"/);
+  assert.doesNotMatch(source, /localizedPromptStyles/);
   assert.doesNotMatch(source, /setAssetPickerOpen/);
 });
