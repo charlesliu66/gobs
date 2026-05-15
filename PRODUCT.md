@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-15 (v0.207)*
+*Last updated: 2026-05-15 (v0.208)*
 
-**Latest update - v0.207**
+**Latest update - v0.208**
+- Advanced Studio Quick Single no longer gets stuck behind Seedance all-in-one reference validation when operators only enter text; it now enables "开始生成" and switches that no-reference path to Seedance text-to-video on start.
+- Motion Transfer and Character Showcase keep the stricter visual-reference requirement, and audio-only reference uploads remain blocked instead of being silently ignored.
+- One-click Prompt now treats "empty input / please provide a creative idea" cloud responses as unstable when the operator already typed a prompt, so the local fallback produces an editable prompt instead of showing a dead-end response.
+
+**Previous update - v0.207**
 - Advanced Studio one-click Prompt now falls back to a local, editable video prompt when the cloud optimizer times out or returns unstable text, so the button always ends with a usable result and visible feedback.
 - The Prompt polish API now has a 40-second route deadline and returns `PROMPT_POLISH_TIMEOUT`, preventing slow upstream Compass/Gemini requests from leaving operators in an endless loading state.
 - Local reference uploads in Advanced Studio now expose "保存到素材库" on each ready local slot, using the existing Asset Library import job while keeping generation unblocked.

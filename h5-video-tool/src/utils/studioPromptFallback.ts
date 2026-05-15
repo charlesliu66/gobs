@@ -27,6 +27,8 @@ function stripReferenceVideoHeader(raw: string): string {
 export function isWeakPolishedPrompt(value: string | undefined | null, rawPrompt = ''): boolean {
   const text = String(value ?? '').trim();
   if (!text) return true;
+  const rawHasPrompt = rawPrompt.trim().length >= 6;
+  if (rawHasPrompt && /(当前输入为空|请提供您的视频创意|missing creative idea|empty input)/i.test(text)) return true;
   const meaningful = text.replace(/[?\uff1f\ufffd\s.,;:!'"()[\]{}<>/\\|`~_-]/g, '');
   if (meaningful.length < 6 && rawPrompt.trim().length >= 6) return true;
   const questionMarks = (text.match(/[?\uff1f]/g) ?? []).length;

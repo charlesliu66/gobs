@@ -9,6 +9,13 @@ import {
 test('isWeakPolishedPrompt catches empty and mojibake-like cloud responses', () => {
   assert.equal(isWeakPolishedPrompt('', 'hero walks out'), true);
   assert.equal(isWeakPolishedPrompt('?????????????????????', 'hero walks out'), true);
+  assert.equal(
+    isWeakPolishedPrompt(
+      '\u8bf7\u63d0\u4f9b\u60a8\u7684\u89c6\u9891\u521b\u610f\u3002\u5f53\u524d\u8f93\u5165\u4e3a\u7a7a\u3002',
+      'hero walks out',
+    ),
+    true,
+  );
   assert.equal(isWeakPolishedPrompt('A cinematic hero reveal with @图片1 as the subject reference.', 'hero'), false);
 });
 

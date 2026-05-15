@@ -54,6 +54,11 @@ import {
   insertPromptReferenceToken,
 } from '../utils/promptReferenceTokens';
 import { buildStudioPromptFallback, isWeakPolishedPrompt } from '../utils/studioPromptFallback';
+import {
+  isCustomTextOnlyFallbackAllowed,
+  isStudioSeedanceReferenceReady,
+  resolveStudioGenerationModel,
+} from '../utils/studioGenerationReadiness';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -219,7 +224,6 @@ function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): U
         mediaType: 'image',
         semanticRole: 'role',
         initialQuery: 'character key art',
-        required: true,
       },
       {
         id: 'quick-scene-reference',
@@ -458,6 +462,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     () => getPromptReferenceUsage(prompt, promptReferenceAssets),
     [prompt, promptReferenceAssets],
   );
+  const seedanceVisualReferenceCount = useMemo(
+    () => dreaminaMultimodalItems.filter((item) => item.kind === 'image' || item.kind === 'video').length,
+    [dreaminaMultimodalItems],
+  );
+  const seedanceReferenceCount = dreaminaMultimodalItems.length;
   const handleInsertPromptToken = useCallback(
     (selection: UnifiedAssetSourceSelection) => {
       if (!selection.token) return;
@@ -710,8 +719,12 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   );
 
   const handleStartGenerate = useCallback(() => {
+    const nextModel = resolveStudioGenerationModel(templateId, videoModel, seedanceReferenceCount);
+    if (nextModel !== videoModel) {
+      setVideoModel(nextModel);
+    }
     setShowGenerationFlow(true);
-  }, []);
+  }, [seedanceReferenceCount, setVideoModel, templateId, videoModel]);
 
   const formatSeedanceValidationError = useCallback(
     (reason: ReturnType<typeof validateSeedanceReferenceSet>['reason']) => {
@@ -1037,10 +1050,21 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const seedanceReferenceValidation = validateSeedanceReferenceSet(
     dreaminaMultimodalItems.map((item) => ({ kind: item.kind })),
   );
+  const allowCustomTextOnlyFallback = isCustomTextOnlyFallbackAllowed(
+    templateId,
+    videoModel,
+    seedanceReferenceCount,
+  );
   const requiredUnifiedSourcesReady =
     videoModel !== 'dreamina-multimodal' ||
     unifiedAssetSlots.every((slot) => !slot.required || selectedUnifiedSources[slot.id]?.status === 'ready');
-  const seedanceReferencesReady = videoModel !== 'dreamina-multimodal' || seedanceReferenceValidation.canGenerate;
+  const seedanceReferencesReady = isStudioSeedanceReferenceReady({
+    templateId,
+    videoModel,
+    referenceCount: seedanceReferenceCount,
+    visualReferenceCount: seedanceVisualReferenceCount,
+    validationCanGenerate: seedanceReferenceValidation.canGenerate,
+  });
   const driveMaterialReady = !hasMatchedMaterials || selectedOrder.length >= 1;
   const materialOk = requiredUnifiedSourcesReady && seedanceReferencesReady && driveMaterialReady;
   const canStartGenerate = hasValidPrompt && materialOk;
@@ -1289,7 +1313,13 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           {unifiedAssetError ? (
             <p className="mt-3 text-sm text-[var(--color-error)]">{unifiedAssetError}</p>
           ) : null}
-          {videoModel === 'dreamina-multimodal' && !seedanceReferenceValidation.canGenerate ? (
+          {allowCustomTextOnlyFallback ? (
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+              {contentLocale === 'en'
+                ? 'No reference asset selected. Studio will use Seedance text-to-video when you start generation.'
+                : '未选择参考素材时，开始生成会自动使用 Seedance 文生视频。'}
+            </p>
+          ) : videoModel === 'dreamina-multimodal' && !seedanceReferenceValidation.canGenerate ? (
             <p className="mt-3 text-xs text-[var(--color-text-muted)]">
               {formatSeedanceValidationError(seedanceReferenceValidation.reason)}
             </p>
