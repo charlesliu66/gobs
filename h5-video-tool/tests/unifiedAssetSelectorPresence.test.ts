@@ -46,6 +46,7 @@ test('TabGenerate wires the unified selector, local upload status, and prompt re
   assert.match(source, /buildStudioPromptFallback/);
   assert.match(source, /isWeakPolishedPrompt/);
   assert.match(source, /polishNotice/);
+  assert.match(source, /data-action="one-click-prompt"/);
   assert.match(source, /status: 'reading'/);
   assert.match(source, /status: 'ready'/);
   assert.match(source, /data-section="viralReferenceVideoUrl"/);

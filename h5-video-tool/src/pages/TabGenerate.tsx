@@ -1416,6 +1416,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       <section className="flex flex-wrap gap-3 items-center">
         <button
           type="button"
+          data-action="one-click-prompt"
           onClick={() => handleOneClickPrompt()}
           disabled={polishLoading || !prompt.trim()}
           className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
