@@ -2,6 +2,14 @@
 
 > Product overview lives in `PRODUCT.md`. This file tracks recent release history.
 
+## v0.206 - 2026-05-15
+**Advanced Studio local upload hotfix**
+**Advanced Studio / Reference assets:**
+- Fixed local reference uploads being immediately cleared after file selection, which made the slot appear unchanged after choosing an image.
+- Stabilized Create Flow context setter callbacks so render-time updates from local upload do not retrigger the template-change cleanup effect.
+**Tests / Build:**
+- Added regression coverage for stable Create Flow setters that protect Studio upload effects.
+
 ## v0.205 - 2026-05-15
 **Advanced Studio prompt references and one-click optimization**
 **Advanced Studio UX:**

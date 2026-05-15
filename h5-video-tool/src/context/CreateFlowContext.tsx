@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { DriveFile } from '../hooks/useGoogleDrive';
 import type { CampaignStudioHandoffState } from '../components/campaign/studioBridge.ts';
 
@@ -125,6 +125,25 @@ const CreateFlowContext = createContext<CreateFlowContextValue | null>(null);
 export function CreateFlowProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CreateFlowState>(initialState);
 
+  const setPrompt = useCallback((v: string) => {
+    setState((s) => ({ ...s, prompt: v }));
+  }, []);
+
+  const setKeywords = useCallback((v: string[]) => {
+    setState((s) => ({ ...s, keywords: v }));
+  }, []);
+
+  const setFolderHints = useCallback((v: string[]) => {
+    setState((s) => ({ ...s, folderHints: v }));
+  }, []);
+
+  const setSelectedOrder = useCallback((v: DriveFile[] | ((prev: DriveFile[]) => DriveFile[])) => {
+    setState((s) => ({
+      ...s,
+      selectedOrder: typeof v === 'function' ? v(s.selectedOrder) : v,
+    }));
+  }, []);
+
   const setStoryboardText = useCallback((v: string | null) => {
     setState((s) => ({ ...s, storyboardText: v }));
   }, []);
@@ -133,52 +152,137 @@ export function CreateFlowProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, videoUrl: url, taskId, videoPath: videoPath ?? null }));
   }, []);
 
+  const setTemplateId = useCallback((v: string) => {
+    setState((s) => ({ ...s, templateId: v }));
+  }, []);
+
+  const setVideoModel = useCallback((v: string) => {
+    setState((s) => ({ ...s, videoModel: v }));
+  }, []);
+
+  const setDreaminaModelVersion = useCallback((v: string) => {
+    setState((s) => ({ ...s, dreaminaModelVersion: v }));
+  }, []);
+
+  const setVideoAspectRatio = useCallback((v: string) => {
+    setState((s) => ({ ...s, videoAspectRatio: v }));
+  }, []);
+
+  const setVideoDuration = useCallback((v: number) => {
+    setState((s) => ({ ...s, videoDuration: v }));
+  }, []);
+
+  const setVideoResolution = useCallback((v: string) => {
+    setState((s) => ({ ...s, videoResolution: v }));
+  }, []);
+
+  const setHasPolishedPrompt = useCallback((v: boolean) => {
+    setState((s) => ({ ...s, hasPolishedPrompt: v }));
+  }, []);
+
+  const setHasMatchedMaterials = useCallback((v: boolean) => {
+    setState((s) => ({ ...s, hasMatchedMaterials: v }));
+  }, []);
+
+  const setShots = useCallback((v: ShotItem[] | ((prev: ShotItem[]) => ShotItem[])) => {
+    setState((s) => ({
+      ...s,
+      shots: typeof v === 'function' ? v(s.shots) : v,
+    }));
+  }, []);
+
+  const setMultiShotEnabled = useCallback((v: boolean) => {
+    setState((s) => ({ ...s, multiShotEnabled: v }));
+  }, []);
+
+  const setShotFrames = useCallback(
+    (v: Record<number, ShotFramePreview> | ((prev: Record<number, ShotFramePreview>) => Record<number, ShotFramePreview>)) => {
+      setState((s) => ({
+        ...s,
+        shotFrames: typeof v === 'function' ? v(s.shotFrames) : v,
+      }));
+    },
+    [],
+  );
+
+  const setCharacters = useCallback((v: string[]) => {
+    setState((s) => ({ ...s, characters: v }));
+  }, []);
+
+  const setViralDanceReferenceVideoUrl = useCallback((v: string) => {
+    setState((s) => ({ ...s, viralDanceReferenceVideoUrl: v }));
+  }, []);
+
+  const setDreaminaMultimodalItems = useCallback((v: DreaminaMultimodalItem[] | ((prev: DreaminaMultimodalItem[]) => DreaminaMultimodalItem[])) => {
+    setState((s) => ({
+      ...s,
+      dreaminaMultimodalItems: typeof v === 'function' ? v(s.dreaminaMultimodalItems) : v,
+    }));
+  }, []);
+
+  const setCampaignStudioHandoff = useCallback((v: CampaignStudioHandoffState | null) => {
+    setState((s) => ({ ...s, campaignStudioHandoff: v }));
+  }, []);
+
+  const clearCampaignStudioHandoff = useCallback(() => {
+    setState((s) => ({ ...s, campaignStudioHandoff: null }));
+  }, []);
+
   const resetFlow = useCallback(() => {
     setState(initialState);
   }, []);
 
-  const value: CreateFlowContextValue = {
+  const value = useMemo<CreateFlowContextValue>(() => ({
     ...state,
-    setPrompt: (v) => setState((s) => ({ ...s, prompt: v })),
-    setKeywords: (v) => setState((s) => ({ ...s, keywords: v })),
-    setFolderHints: (v) => setState((s) => ({ ...s, folderHints: v })),
-    setSelectedOrder: (v) =>
-      setState((s) => ({
-        ...s,
-        selectedOrder: typeof v === 'function' ? v(s.selectedOrder) : v,
-      })),
+    setPrompt,
+    setKeywords,
+    setFolderHints,
+    setSelectedOrder,
     setStoryboardText,
     setVideoResult,
-    setTemplateId: (v) => setState((s) => ({ ...s, templateId: v })),
-    setVideoModel: (v) => setState((s) => ({ ...s, videoModel: v })),
-    setDreaminaModelVersion: (v) => setState((s) => ({ ...s, dreaminaModelVersion: v })),
-    setVideoAspectRatio: (v) => setState((s) => ({ ...s, videoAspectRatio: v })),
-    setVideoDuration: (v) => setState((s) => ({ ...s, videoDuration: v })),
-    setVideoResolution: (v) => setState((s) => ({ ...s, videoResolution: v })),
-    setHasPolishedPrompt: (v) => setState((s) => ({ ...s, hasPolishedPrompt: v })),
-    setHasMatchedMaterials: (v) => setState((s) => ({ ...s, hasMatchedMaterials: v })),
-    setShots: (v) =>
-      setState((s) => ({
-        ...s,
-        shots: typeof v === 'function' ? v(s.shots) : v,
-      })),
-    setMultiShotEnabled: (v) => setState((s) => ({ ...s, multiShotEnabled: v })),
-    setShotFrames: (v) =>
-      setState((s) => ({
-        ...s,
-        shotFrames: typeof v === 'function' ? v(s.shotFrames) : v,
-      })),
-    setCharacters: (v) => setState((s) => ({ ...s, characters: v })),
-    setViralDanceReferenceVideoUrl: (v) => setState((s) => ({ ...s, viralDanceReferenceVideoUrl: v })),
-    setDreaminaMultimodalItems: (v) =>
-      setState((s) => ({
-        ...s,
-        dreaminaMultimodalItems: typeof v === 'function' ? v(s.dreaminaMultimodalItems) : v,
-      })),
-    setCampaignStudioHandoff: (v) => setState((s) => ({ ...s, campaignStudioHandoff: v })),
-    clearCampaignStudioHandoff: () => setState((s) => ({ ...s, campaignStudioHandoff: null })),
+    setTemplateId,
+    setVideoModel,
+    setDreaminaModelVersion,
+    setVideoAspectRatio,
+    setVideoDuration,
+    setVideoResolution,
+    setHasPolishedPrompt,
+    setHasMatchedMaterials,
+    setShots,
+    setMultiShotEnabled,
+    setShotFrames,
+    setCharacters,
+    setViralDanceReferenceVideoUrl,
+    setDreaminaMultimodalItems,
+    setCampaignStudioHandoff,
+    clearCampaignStudioHandoff,
     resetFlow,
-  };
+  }), [
+    state,
+    setPrompt,
+    setKeywords,
+    setFolderHints,
+    setSelectedOrder,
+    setStoryboardText,
+    setVideoResult,
+    setTemplateId,
+    setVideoModel,
+    setDreaminaModelVersion,
+    setVideoAspectRatio,
+    setVideoDuration,
+    setVideoResolution,
+    setHasPolishedPrompt,
+    setHasMatchedMaterials,
+    setShots,
+    setMultiShotEnabled,
+    setShotFrames,
+    setCharacters,
+    setViralDanceReferenceVideoUrl,
+    setDreaminaMultimodalItems,
+    setCampaignStudioHandoff,
+    clearCampaignStudioHandoff,
+    resetFlow,
+  ]);
 
   return (
     <CreateFlowContext.Provider value={value}>{children}</CreateFlowContext.Provider>

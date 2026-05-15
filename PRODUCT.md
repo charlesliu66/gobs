@@ -3,9 +3,13 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-15 (v0.205)*
+*Last updated: 2026-05-15 (v0.206)*
 
-**Latest update - v0.205**
+**Latest update - v0.206**
+- Fixed Advanced Studio local reference uploads so selecting a file keeps the slot state, shows the preview, filename, ready state, and `@图片n` token instead of being cleared by a render-time template reset.
+- Stabilized Create Flow context setter callbacks so Studio effects only reset reference materials when the template actually changes.
+
+**Previous update - v0.205**
 - Advanced Studio reference slots now show local-upload reading state, previews, filenames, stable `@图片n` / `@视频n` prompt tags, insert-to-Prompt actions, and a Prompt reference preview that makes missing references obvious.
 - Quick Single, Motion Transfer, and Character Showcase now pass selected reference-asset summaries into one-click Prompt optimization, so the optimizer preserves real tokens and does not invent unavailable material references.
 - The Advanced Studio page removes visible Veo writing tips, quality preset buttons, and prompt-style dropdown choices; quick inspirations are collapsed by default and legacy Drive sources stay behind the "More asset sources" drawer.
