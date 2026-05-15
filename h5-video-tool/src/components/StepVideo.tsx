@@ -401,6 +401,11 @@ export function StepVideo() {
     };
   };
 
+  const buildKlingReferenceImages = () =>
+    dreaminaMultimodalItems
+      .filter((i) => i.kind === 'image')
+      .map((i) => ({ base64: i.base64, mimeType: i.mimeType }));
+
   /** 🌙 夜间批量提交：遍历所有分镜，逐个调用 submitDreaminaAsync，收集 submitId 后存入后端队列 */
   const handleBatchNight = async () => {
     if (shots.length === 0) return;
@@ -604,6 +609,7 @@ export function StepVideo() {
             duration: videoDuration,
             aspectRatio: videoAspectRatio,
             model: videoModel || undefined,
+            referenceImages: buildKlingReferenceImages(),
             ...(templateId === 'viral-dance' && refUrl
               ? { referenceVideoUrl: refUrl, referenceVideoReferType: 'feature' as const, referenceVideoKeepSound: 'no' as const }
               : {}),
@@ -624,6 +630,18 @@ export function StepVideo() {
         aspectRatio: videoAspectRatio,
         resolution: videoResolution,
         model: videoModel || undefined,
+        ...(isKlingModelId(videoModel)
+          ? {
+              referenceImages: buildKlingReferenceImages(),
+              ...(templateId === 'viral-dance' && viralDanceReferenceVideoUrl?.trim()
+                ? {
+                    referenceVideoUrl: viralDanceReferenceVideoUrl.trim(),
+                    referenceVideoReferType: 'feature' as const,
+                    referenceVideoKeepSound: 'no' as const,
+                  }
+                : {}),
+            }
+          : {}),
         ...(isDreaminaMultimodalModelId(videoModel) && !useMock
           ? {
               multimodalImages: dreaminaMultimodalItems

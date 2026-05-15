@@ -26,24 +26,33 @@ export interface UnifiedAssetSourceSelection {
   error?: string;
 }
 
+export interface UnifiedAssetLibrarySaveState {
+  status: 'idle' | 'saving' | 'saved' | 'error';
+  message?: string;
+}
+
 interface UnifiedAssetSelectorProps {
   slots: UnifiedAssetSlot[];
   selectedSources: Record<string, UnifiedAssetSourceSelection | null>;
+  librarySaveStatuses?: Record<string, UnifiedAssetLibrarySaveState | undefined>;
   locale?: 'zh' | 'en';
   onSelectAsset: (slot: UnifiedAssetSlot, asset: LibraryAsset | null) => void;
   onSelectLocalFile: (slot: UnifiedAssetSlot, file: File) => void;
   onClearSource: (slot: UnifiedAssetSlot) => void;
   onInsertToken?: (selection: UnifiedAssetSourceSelection) => void;
+  onSaveLocalToLibrary?: (slot: UnifiedAssetSlot, selection: UnifiedAssetSourceSelection) => void;
 }
 
 export function UnifiedAssetSelector({
   slots,
   selectedSources,
+  librarySaveStatuses = {},
   locale = 'zh',
   onSelectAsset,
   onSelectLocalFile,
   onClearSource,
   onInsertToken,
+  onSaveLocalToLibrary,
 }: UnifiedAssetSelectorProps) {
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -66,6 +75,9 @@ export function UnifiedAssetSelector({
         pickerTitle: 'Choose reference asset',
         confirm: 'Use asset',
         insertToken: 'Insert to Prompt',
+        saveToLibrary: 'Save to Library',
+        savingLibrary: 'Saving...',
+        savedLibrary: 'Saved',
         reading: 'Reading file...',
         ready: 'Ready',
         failed: 'Failed',
@@ -84,6 +96,9 @@ export function UnifiedAssetSelector({
         pickerTitle: '选择参考素材',
         confirm: '使用素材',
         insertToken: '插入到 Prompt',
+        saveToLibrary: '保存到素材库',
+        savingLibrary: '保存中...',
+        savedLibrary: '已保存',
         reading: '正在读取文件...',
         ready: '已就绪',
         failed: '读取失败',
@@ -94,6 +109,7 @@ export function UnifiedAssetSelector({
       {slots.map((slot) => {
         const selected = selectedSources[slot.id] ?? null;
         const status = selected?.status ?? (selected ? 'ready' : undefined);
+        const librarySave = librarySaveStatuses[slot.id];
         const isVideo = selected ? selected.kind === 'video' : slot.mediaType === 'video';
         return (
           <article
@@ -151,6 +167,15 @@ export function UnifiedAssetSelector({
                   {selected.error ? (
                     <p className="mt-2 text-[11px] text-[var(--color-error)]">{selected.error}</p>
                   ) : null}
+                  {librarySave?.message ? (
+                    <p
+                      className={`mt-2 text-[11px] ${
+                        librarySave.status === 'error' ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'
+                      }`}
+                    >
+                      {librarySave.message}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -164,6 +189,21 @@ export function UnifiedAssetSelector({
                   className="rounded-lg border border-[var(--color-primary)]/50 px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
                 >
                   {copy.insertToken}
+                </button>
+              ) : null}
+              {selected?.source === 'local' && status === 'ready' && onSaveLocalToLibrary ? (
+                <button
+                  type="button"
+                  data-source-action="save-to-library"
+                  onClick={() => onSaveLocalToLibrary(slot, selected)}
+                  disabled={librarySave?.status === 'saving' || librarySave?.status === 'saved'}
+                  className="rounded-lg border border-[var(--color-primary)]/50 px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {librarySave?.status === 'saving'
+                    ? copy.savingLibrary
+                    : librarySave?.status === 'saved'
+                      ? copy.savedLibrary
+                      : copy.saveToLibrary}
                 </button>
               ) : null}
               <button

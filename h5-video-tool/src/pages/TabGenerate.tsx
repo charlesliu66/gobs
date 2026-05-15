@@ -17,9 +17,20 @@ import { ViralDanceMaterialPicker } from '../components/ViralDanceMaterialPicker
 import { MultiShotPromptInput } from '../components/MultiShotPromptInput';
 import { StepVideo } from '../components/StepVideo';
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal';
-import { UnifiedAssetSelector, type UnifiedAssetSlot, type UnifiedAssetSourceSelection } from '../components/UnifiedAssetSelector';
+import {
+  UnifiedAssetSelector,
+  type UnifiedAssetLibrarySaveState,
+  type UnifiedAssetSlot,
+  type UnifiedAssetSourceSelection,
+} from '../components/UnifiedAssetSelector';
 import { RunningStatus } from '../components/RunningStatus';
-import { buildAssetFileUrl, recordUsage, type LibraryAsset } from '../api/assetLibraryApi';
+import {
+  buildAssetFileUrl,
+  getJobStatus,
+  importAssets,
+  recordUsage,
+  type LibraryAsset,
+} from '../api/assetLibraryApi';
 import { useLocale } from '../i18n/LocaleContext.tsx';
 import {
   filterVisibleStudioTemplates,
@@ -42,6 +53,7 @@ import {
   getPromptReferenceUsage,
   insertPromptReferenceToken,
 } from '../utils/promptReferenceTokens';
+import { buildStudioPromptFallback, isWeakPolishedPrompt } from '../utils/studioPromptFallback';
 
 const LOCALIZED_SEEDANCE_MODEL_KEYS = [
   { value: 'dreamina-multimodal', labelKey: 'generate.modelMultimodal' },
@@ -123,6 +135,27 @@ function readBlobAsBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(new Error('Failed to read asset file'));
     reader.readAsDataURL(blob);
   });
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForAssetImportDone(jobId: string): Promise<void> {
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    const job = await getJobStatus(jobId);
+    if (job.status === 'done') {
+      if (job.failed > 0 && job.processed === 0 && job.skipped === 0) {
+        throw new Error(job.errors?.[0] || 'Asset import failed');
+      }
+      return;
+    }
+    if (job.status === 'error') {
+      throw new Error(job.errors?.[0] || 'Asset import failed');
+    }
+    await wait(1000);
+  }
+  throw new Error('Asset import is still processing. Check Asset Library later.');
 }
 
 function getUnifiedAssetSlots(templateId: string, locale: StudioPresetLocale): UnifiedAssetSlot[] {
@@ -337,8 +370,11 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const [expertMode, setExpertMode] = useState(false);
   const [unifiedSources, setUnifiedSources] = useState<Record<string, UnifiedAssetSourceSelection | null>>({});
   const [unifiedAssetError, setUnifiedAssetError] = useState<string | null>(null);
+  const [librarySaveStatuses, setLibrarySaveStatuses] = useState<Record<string, UnifiedAssetLibrarySaveState>>({});
+  const [polishNotice, setPolishNotice] = useState<string | null>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const localPreviewUrlsRef = useRef<Record<string, string>>({});
+  const localSourceFilesRef = useRef<Record<string, File>>({});
 
   const revokeLocalPreview = useCallback((slotId: string) => {
     const previewUrl = localPreviewUrlsRef.current[slotId];
@@ -351,6 +387,16 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const revokeAllLocalPreviews = useCallback(() => {
     Object.keys(localPreviewUrlsRef.current).forEach((slotId) => revokeLocalPreview(slotId));
   }, [revokeLocalPreview]);
+
+  const clearLocalSourceFile = useCallback((slotId: string) => {
+    delete localSourceFilesRef.current[slotId];
+    setLibrarySaveStatuses((current) => {
+      if (!current[slotId]) return current;
+      const next = { ...current };
+      delete next[slotId];
+      return next;
+    });
+  }, []);
 
   useEffect(() => () => revokeAllLocalPreviews(), [revokeAllLocalPreviews]);
 
@@ -433,6 +479,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   useEffect(() => {
     setShowGenerationFlow(false);
     setPolishError(null);
+    setPolishNotice(null);
     setHasPolishedPrompt(false);
     setHasMatchedMaterials(false);
     setSelectedOrder([]);
@@ -441,7 +488,9 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     setMultiShotEnabled(false);
     setDreaminaMultimodalItems([]);
     revokeAllLocalPreviews();
+    localSourceFilesRef.current = {};
     setUnifiedSources({});
+    setLibrarySaveStatuses({});
     setUnifiedAssetError(null);
     setShowMoreAssetSources(false);
     setShowDriveManualBrowse(false);
@@ -483,6 +532,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
       if (!effectivePrompt.trim()) return;
       setPolishLoading(true);
       setPolishError(null);
+      setPolishNotice(null);
 
       try {
         // 自定义模式：不传 templateId，仅用导演知识；多镜头时传 multishot 获取分镜
@@ -507,6 +557,26 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           opts = { ...opts };
         }
         const { polishedPrompt, searchKeywords, folderHints: hints, template, shots: polishedShots } = await polishPrompt(effectivePrompt, opts);
+        if (isWeakPolishedPrompt(polishedPrompt, effectivePrompt)) {
+          const fallbackPrompt = buildStudioPromptFallback(effectivePrompt, {
+            mode: opts.mode,
+            duration: videoDuration,
+            aspectRatio: videoAspectRatio,
+            locale: contentLocale === 'en' ? 'en' : 'zh',
+            referenceAssets: promptReferenceAssets,
+            referenceVideoUrl: viralDanceReferenceVideoUrl,
+          });
+          setKeywords([prompt.trim() || fallbackPrompt.slice(0, 80)]);
+          setFolderHints([]);
+          setHasPolishedPrompt(true);
+          setPrompt(fallbackPrompt);
+          setPolishNotice(
+            contentLocale === 'en'
+              ? 'Cloud prompt polish returned unstable text. Studio used local rules, and you can keep editing.'
+              : '云端优化返回不稳定，已用本地规则整理，可继续编辑或直接生成。',
+          );
+          return;
+        }
         setKeywords(searchKeywords);
         setFolderHints(hints || []);
         setHasPolishedPrompt(true);
@@ -526,7 +596,24 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           setPrompt(polishedPrompt);
         }
       } catch (e) {
-        setPolishError(e instanceof Error ? e.message : t('generate.promptPolishFailedError'));
+        const fallbackPrompt = buildStudioPromptFallback(effectivePrompt, {
+          mode: templateId === 'viral-dance' || templateId === 'boss-showcase' ? templateId : 'custom',
+          duration: videoDuration,
+          aspectRatio: videoAspectRatio,
+          locale: contentLocale === 'en' ? 'en' : 'zh',
+          referenceAssets: promptReferenceAssets,
+          referenceVideoUrl: viralDanceReferenceVideoUrl,
+        });
+        setKeywords([prompt.trim() || fallbackPrompt.slice(0, 80)]);
+        setFolderHints([]);
+        setHasPolishedPrompt(true);
+        setPrompt(fallbackPrompt);
+        setPolishNotice(
+          contentLocale === 'en'
+            ? 'Cloud prompt polish was slow or unavailable. Studio used local rules, and you can keep editing.'
+            : '云端优化暂时不可用，已用本地规则整理，可继续编辑或直接生成。',
+        );
+        setPolishError(null);
       } finally {
         setPolishLoading(false);
       }
@@ -554,6 +641,25 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
 
   const isCustomMode = templateId === 'custom';
   const isViralDanceTemplate = templateId === 'viral-dance';
+  const expertVideoModels = useMemo(() => {
+    const models = [...veoModels];
+    const isSeedanceModel = LOCALIZED_SEEDANCE_MODEL_KEYS.some((item) => item.value === videoModel);
+    if (videoModel && !isSeedanceModel && !models.includes(videoModel)) models.unshift(videoModel);
+    return models;
+  }, [veoModels, videoModel]);
+
+  const handleViralDanceReferenceUrlChange = useCallback(
+    (nextUrl: string) => {
+      setViralDanceReferenceVideoUrl(nextUrl);
+      if (nextUrl.trim()) {
+        setExpertMode(true);
+        if (!videoModel.toLowerCase().startsWith('kling')) {
+          setVideoModel('kling-v3-omni');
+        }
+      }
+    },
+    [setVideoModel, setViralDanceReferenceVideoUrl, videoModel],
+  );
 
   const handleOneClickMatch = useCallback(async () => {
     if (!verifiedFolderId || !accessToken) return;
@@ -654,18 +760,20 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
   const handleUnifiedSourceClear = useCallback(
     (slot: UnifiedAssetSlot) => {
       revokeLocalPreview(slot.id);
+      clearLocalSourceFile(slot.id);
       setUnifiedSources((current) => ({ ...current, [slot.id]: null }));
       setDreaminaMultimodalItems((prev) => prev.filter((item) => item.id !== dreaminaSlotItemId(slot)));
       if (slot.mediaType === 'video') setViralDanceReferenceVideoUrl('');
       setUnifiedAssetError(null);
     },
-    [revokeLocalPreview, setDreaminaMultimodalItems, setViralDanceReferenceVideoUrl],
+    [clearLocalSourceFile, revokeLocalPreview, setDreaminaMultimodalItems, setViralDanceReferenceVideoUrl],
   );
 
   const handleUnifiedAssetSelect = useCallback(
     async (slot: UnifiedAssetSlot, asset: LibraryAsset | null) => {
       const itemId = dreaminaSlotItemId(slot);
       setUnifiedAssetError(null);
+      clearLocalSourceFile(slot.id);
 
       if (!asset) {
         handleUnifiedSourceClear(slot);
@@ -760,6 +868,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     },
     [
       contentLocale,
+      clearLocalSourceFile,
       handleUnifiedSourceClear,
       revokeLocalPreview,
       setDreaminaMultimodalItems,
@@ -787,6 +896,8 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         return;
       }
 
+      clearLocalSourceFile(slot.id);
+      localSourceFilesRef.current[slot.id] = file;
       const previewUrl = URL.createObjectURL(file);
       setUnifiedSources((current) => ({
         ...current,
@@ -832,6 +943,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         if (kind === 'video') setViralDanceReferenceVideoUrl('');
       } catch {
         URL.revokeObjectURL(previewUrl);
+        clearLocalSourceFile(slot.id);
         const errorMessage = contentLocale === 'en'
           ? 'Studio could not read this local file.'
           : '\u65e0\u6cd5\u8bfb\u53d6\u8fd9\u4e2a\u672c\u5730\u6587\u4ef6\u3002';
@@ -852,12 +964,66 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
     },
     [
       contentLocale,
+      clearLocalSourceFile,
       revokeLocalPreview,
       setDreaminaMultimodalItems,
       setViralDanceReferenceVideoUrl,
       unifiedAssetSlots,
       validateNextDreaminaSlot,
     ],
+  );
+
+  const handleSaveLocalSourceToLibrary = useCallback(
+    async (slot: UnifiedAssetSlot, selection: UnifiedAssetSourceSelection) => {
+      const file = localSourceFilesRef.current[slot.id];
+      if (!file || selection.source !== 'local') {
+        setLibrarySaveStatuses((current) => ({
+          ...current,
+          [slot.id]: {
+            status: 'error',
+            message: contentLocale === 'en'
+              ? 'Choose a local file first.'
+              : '请先选择本地文件。',
+          },
+        }));
+        return;
+      }
+      setLibrarySaveStatuses((current) => ({
+        ...current,
+        [slot.id]: {
+          status: 'saving',
+          message: contentLocale === 'en'
+            ? 'Saving to Asset Library...'
+            : '正在保存到素材库...',
+        },
+      }));
+      try {
+        const { jobId } = await importAssets([file]);
+        await waitForAssetImportDone(jobId);
+        setLibrarySaveStatuses((current) => ({
+          ...current,
+          [slot.id]: {
+            status: 'saved',
+            message: contentLocale === 'en'
+              ? 'Saved. You can reuse it from Asset Library.'
+              : '已保存到素材库，可在资产库复用。',
+          },
+        }));
+      } catch (error) {
+        setLibrarySaveStatuses((current) => ({
+          ...current,
+          [slot.id]: {
+            status: 'error',
+            message: error instanceof Error
+              ? error.message
+              : contentLocale === 'en'
+                ? 'Failed to save to Asset Library.'
+                : '保存到素材库失败。',
+          },
+        }));
+      }
+    },
+    [contentLocale],
   );
 
   const maxDuration = currentTemplate?.duration ?? videoDuration;
@@ -1080,12 +1246,46 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
           <UnifiedAssetSelector
             slots={unifiedAssetSlots}
             selectedSources={selectedUnifiedSources}
+            librarySaveStatuses={librarySaveStatuses}
             locale={presetLocale}
             onSelectAsset={(slot, asset) => void handleUnifiedAssetSelect(slot, asset)}
             onSelectLocalFile={(slot, file) => void handleUnifiedLocalFileSelect(slot, file)}
             onClearSource={handleUnifiedSourceClear}
             onInsertToken={handleInsertPromptToken}
+            onSaveLocalToLibrary={(slot, selection) => void handleSaveLocalSourceToLibrary(slot, selection)}
           />
+          {isViralDanceTemplate ? (
+            <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" data-section="viralReferenceVideoUrl">
+              <p className="mb-1 text-xs font-medium text-[var(--color-text)]">
+                {contentLocale === 'en' ? 'Motion reference link' : '动作参考链接'}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  data-field="viral-reference-video-url"
+                  value={viralDanceReferenceVideoUrl}
+                  onChange={(e) => handleViralDanceReferenceUrlChange(e.target.value)}
+                  placeholder={t('generate.tiktokUrlPlaceholder')}
+                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
+                />
+                {viralDanceReferenceVideoUrl.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setViralDanceReferenceVideoUrl('')}
+                    className="rounded-lg px-2 py-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)]"
+                    aria-label={contentLocale === 'en' ? 'Clear motion reference link' : '清除动作参考链接'}
+                  >
+                    x
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">
+                {contentLocale === 'en'
+                  ? 'Paste a TikTok/Douyin/public video URL to use it as the motion source. Studio switches to Kling for URL references; uploaded videos still work with Seedance multimodal.'
+                  : '可粘贴 TikTok/抖音/公开视频链接作为动作来源。使用链接时会自动切到可灵；上传视频仍按 Seedance 全能参考使用。'}
+              </p>
+            </div>
+          ) : null}
           {unifiedAssetError ? (
             <p className="mt-3 text-sm text-[var(--color-error)]">{unifiedAssetError}</p>
           ) : null}
@@ -1161,7 +1361,7 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
                 {m.label}
               </option>
             ))}
-            {expertMode && veoModels.map((m) => (
+            {expertMode && expertVideoModels.map((m) => (
               <option key={m} value={m}>
                 {VIDEO_MODEL_LABELS[m] ?? m}
               </option>
@@ -1257,6 +1457,19 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
 
       <RunningStatus active={polishLoading} label={t('generate.runningPromptPolish')} stallAfterSec={15} scene="writers-room" />
 
+      {polishNotice && (
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-[var(--color-success)]">{polishNotice}</p>
+          <button
+            type="button"
+            onClick={() => setPolishNotice(null)}
+            className="text-sm text-[var(--color-primary)] hover:underline"
+          >
+            {t('common.close')}
+          </button>
+        </div>
+      )}
+
       {polishError && (
         <div className="flex items-center gap-2">
           <p className="text-sm text-[var(--color-error)]">{polishError}</p>
@@ -1276,31 +1489,6 @@ export function TabGenerate({ onBrowseTemplates, onBackToPicker }: TabGeneratePr
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4">
           <p className="text-sm font-medium text-[var(--color-text)] mb-1">{t('generate.moreAssetSources')}</p>
           <p className="text-xs text-[var(--color-text-muted)] mb-3">{t('generate.moreAssetSourcesHint')}</p>
-
-          {isViralDanceTemplate && (
-            <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-              <p className="mb-2 text-xs font-medium text-[var(--color-text)]">{t('generate.tiktokReferenceVideo')}</p>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={viralDanceReferenceVideoUrl}
-                  onChange={(e) => setViralDanceReferenceVideoUrl(e.target.value)}
-                  placeholder={t('generate.tiktokUrlPlaceholder')}
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-primary)] focus:outline-none"
-                />
-                {viralDanceReferenceVideoUrl.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setViralDanceReferenceVideoUrl('')}
-                    className="rounded-lg px-2 py-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)]"
-                  >
-                    x
-                  </button>
-                )}
-              </div>
-              <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">{t('generate.tiktokReferenceHint')}</p>
-            </div>
-          )}
 
           {verifiedFolderId ? (
             isViralDanceTemplate ? (

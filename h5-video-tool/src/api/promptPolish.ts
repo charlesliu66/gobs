@@ -107,7 +107,7 @@ const FALLBACK_TEMPLATES: PromptTemplate[] = [
   { id: 'boss-showcase', name: 'Character Showcase', nameZh: '角色展示', description: '15秒，角色/皮肤/装备电影级展示，支持横竖屏', duration: 15, aspectRatio: '9:16', pipelineMode: 'multishot' },
 ];
 
-const POLISH_TIMEOUT_MS = 90000; // 90 秒，Gemini 可能较慢
+const POLISH_TIMEOUT_MS = 45000;
 
 export async function polishPrompt(
   raw: string,
@@ -153,7 +153,7 @@ export async function polishPrompt(
   } catch (e) {
     clearTimeout(timeoutId);
     if (e instanceof Error && e.name === 'AbortError') {
-      throw new Error('请求超时（约 90 秒），请检查网络或稍后重试。也可直接选择下方镜头预设。');
+      throw new Error('Prompt 优化超时，已切换到本地规则整理。');
     }
     throw e;
   }

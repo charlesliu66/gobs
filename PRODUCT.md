@@ -3,9 +3,14 @@
 > 鏈枃浠惰褰曞钩鍙版墍鏈夊姛鑳芥ā鍧楀強鍏剁敤娉曪紝骞惰拷韪瘡娆″彂甯冪殑鍙樻洿鍘嗗彶銆?
 > 缁存姢瑙勫垯锛氭瘡娆″姛鑳戒笂绾挎垨 bug 淇鍚庯紝鍚屾鏇存柊 Changelog 绔犺妭銆?
 
-*Last updated: 2026-05-15 (v0.206)*
+*Last updated: 2026-05-15 (v0.207)*
 
-**Latest update - v0.206**
+**Latest update - v0.207**
+- Advanced Studio one-click Prompt now falls back to a local, editable video prompt when the cloud optimizer times out or returns unstable text, so the button always ends with a usable result and visible feedback.
+- Local reference uploads in Advanced Studio now expose "保存到素材库" on each ready local slot, using the existing Asset Library import job while keeping generation unblocked.
+- Motion Transfer brings the TikTok/Douyin/public video URL field back into the main reference flow and routes URL-based motion references through Kling with uploaded subject images attached as reference images.
+
+**Previous update - v0.206**
 - Fixed Advanced Studio local reference uploads so selecting a file keeps the slot state, shows the preview, filename, ready state, and `@图片n` token instead of being cleared by a render-time template reset.
 - Stabilized Create Flow context setter callbacks so Studio effects only reset reference materials when the template actually changes.
 
@@ -173,6 +178,7 @@
 - **Advanced Studio template cleanup (v0.169)**: `/studio` creation now starts from Quick Single, Motion Transfer, and Character Showcase only; Short Drama/Cat Harem are removed from active Studio, and `cg-trailer` is reserved for a future Production Wizard promo preset path.
 - **Campaign to Studio bridge (v0.171)**: Campaign Output video items can open `/studio` with the right creation mode, seeded production prompt, matched Asset Library image references, unified reference slots, and prompt-only quality presets for marketer production.
 - **Advanced Studio Seedance reference flow (v0.204)**: Quick Single, Motion Transfer, and Character Showcase share the same reference-slot selector, support one-off local uploads, use Seedance file/count constraints, and expose only 4-15 second single-generation duration choices.
+- **Advanced Studio generation UX reliability (v0.207)**: one-click Prompt has a local fallback when cloud optimization is slow or unstable, local reference uploads can be saved into Asset Library from the slot card, and Motion Transfer exposes public video URL references in the main flow.
 - **Campaign Production Loop closeout (v0.173)**: Studio video results generated from a linked Campaign package can now update that package into a publishable Distribution draft and keep the Result page's Distribution CTA package-aware.
 
 **浣跨敤鏂规硶锛?*
