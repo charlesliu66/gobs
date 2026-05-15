@@ -7,6 +7,7 @@
 
 **Latest update - v0.207**
 - Advanced Studio one-click Prompt now falls back to a local, editable video prompt when the cloud optimizer times out or returns unstable text, so the button always ends with a usable result and visible feedback.
+- The Prompt polish API now has a 40-second route deadline and returns `PROMPT_POLISH_TIMEOUT`, preventing slow upstream Compass/Gemini requests from leaving operators in an endless loading state.
 - Local reference uploads in Advanced Studio now expose "保存到素材库" on each ready local slot, using the existing Asset Library import job while keeping generation unblocked.
 - Motion Transfer brings the TikTok/Douyin/public video URL field back into the main reference flow and routes URL-based motion references through Kling with uploaded subject images attached as reference images.
 

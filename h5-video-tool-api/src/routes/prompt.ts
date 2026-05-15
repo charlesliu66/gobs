@@ -13,6 +13,23 @@ import {
 import { getTemplates, getShortDramaPresets } from '../config/prompt-templates/index.js';
 
 export const promptRouter = Router();
+export const PROMPT_POLISH_ROUTE_TIMEOUT_MS = 40_000;
+
+export class PromptPolishTimeoutError extends Error {
+  code = 'PROMPT_POLISH_TIMEOUT' as const;
+
+  constructor(timeoutMs: number) {
+    super(`Prompt polish timed out after ${timeoutMs}ms`);
+    this.name = 'PromptPolishTimeoutError';
+  }
+}
+
+export function withPromptPolishDeadline<T>(work: Promise<T>, timeoutMs = PROMPT_POLISH_ROUTE_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new PromptPolishTimeoutError(timeoutMs)), timeoutMs);
+    work.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -189,10 +206,17 @@ promptRouter.post('/polish', async (req: Request, res: Response) => {
     opts = { ...(opts ?? {}), mode: normalizedMode, referenceAssets: normalizedReferenceAssets };
   }
   try {
-    const result = await polishPrompt(raw, opts);
+    const result = await withPromptPolishDeadline(polishPrompt(raw, opts));
     res.json(result);
   } catch (err) {
     console.error('[prompt/polish]', err);
+    if (err instanceof PromptPolishTimeoutError) {
+      res.status(504).json({
+        error: 'Prompt 优化超时，已切换到本地规则整理。',
+        code: err.code,
+      });
+      return;
+    }
     const msg = err instanceof Error ? err.message : '优化失败';
     res.status(500).json({ error: msg });
   }
